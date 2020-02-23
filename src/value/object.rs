@@ -2,7 +2,7 @@ use crate::{
     value::{self, rf::JsObjectRef},
     Ctx, Error, FromJs, ToJs, Value,
 };
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]

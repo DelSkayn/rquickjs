@@ -1,6 +1,6 @@
 use crate::context::Ctx;
 use derivative::Derivative;
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 use std::{marker::PhantomData, mem};
 
 /// A owned reference to a javascript object

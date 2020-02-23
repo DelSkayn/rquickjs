@@ -1,5 +1,5 @@
 use crate::{context::Ctx, Error};
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 use std::{ffi::CStr, ptr};
 
 mod module;

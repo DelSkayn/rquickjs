@@ -3,7 +3,7 @@ use crate::{
     value::{self, rf::JsStringRef},
     Error, Result,
 };
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 use std::{ffi::CStr, mem, ptr};
 
 /// Rust representation of a javascript string.

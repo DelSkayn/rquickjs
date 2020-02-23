@@ -1,5 +1,5 @@
 use crate::{value::rf::JsObjectRef, Ctx, Error, FromJs, Value};
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 use std::ffi::CStr;
 
 /// Rust representation of a javascript array.

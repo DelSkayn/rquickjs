@@ -4,7 +4,7 @@ use crate::{
     value::{self, String},
     Error, FromJs, Module, Object, Result, Runtime, Value,
 };
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,

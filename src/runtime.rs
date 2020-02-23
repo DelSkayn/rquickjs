@@ -1,5 +1,5 @@
 use crate::Error;
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 use std::{
     cell::RefCell,
     ffi::CString,

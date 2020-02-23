@@ -1,5 +1,5 @@
 use crate::{value::rf::JsModuleRef, Ctx};
-use quickjs_sys as qjs;
+use rquickjs_sys as qjs;
 
 /// A module with certain exports and imports
 #[derive(Debug, PartialEq)]
