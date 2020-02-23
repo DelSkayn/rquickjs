@@ -1,5 +1,8 @@
 # rquickjs
 
+[![Latest Version](https://img.shields.io/crates/v/rquickjs.svg)](https://crates.io/crates/rquickjs)
+[![Documentation](https://docs.rs/rquickjs/badge.svg?version=0.0.1)](https://docs.rs/rquickjs)
+
 This library is a high level wrapper around the C quickjs javascript engine.
 Its goal is to be an easy to use, and safe wrapper similar to the rlua library.
 
