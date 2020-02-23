@@ -4,7 +4,7 @@ version = "0.0.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2018"
 license-file = "LICENSE"
-discription = "High level bindings to the quickjs javascript engine"
+description = "High level bindings to the quickjs javascript engine"
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
