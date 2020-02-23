@@ -14,13 +14,15 @@
 //! [`Runtime`]: struct.Runtime.html
 //! [`Context`]: struct.Context.html
 
+#![allow(clippy::needless_lifetimes)]
+
 use quick_error::quick_error;
 use std::{ffi::NulError, str};
 
 mod runtime;
 pub use runtime::Runtime;
 pub mod context;
-pub use context::{Context, ContextBuilder, Ctx, Globals};
+pub use context::{Context, ContextBuilder, Ctx};
 mod markers;
 mod value;
 use std::result::Result as StdResult;
@@ -28,8 +30,10 @@ use std::string::String as StdString;
 pub use value::*;
 
 quick_error! {
+    /// Error type of the library
     #[derive(Debug,Clone,PartialEq)]
     pub enum Error{
+        /// A problem with allocation
         Allocation{
             display("Allocation failed while creating object")
         }

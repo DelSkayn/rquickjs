@@ -4,7 +4,7 @@ use crate::{
     Error, Result,
 };
 use rquickjs_sys as qjs;
-use std::{ffi::CStr, mem, ptr};
+use std::ffi::CStr;
 
 /// Rust representation of a javascript string.
 #[derive(Debug, Clone, PartialEq)]
@@ -20,15 +20,15 @@ impl<'js> String<'js> {
     }
 
     // Save because using the JSValue is unsafe
-    pub(crate) fn to_js_value(&self) -> qjs::JSValue {
-        self.0.to_js_value()
+    pub(crate) fn as_js_value(&self) -> qjs::JSValue {
+        self.0.as_js_value()
     }
 
     /// Convert the javascript string to a rust string.
     pub fn to_str(&self) -> Result<&str> {
         unsafe {
-            let c_str = qjs::JS_ToCString(self.0.ctx.ctx, self.to_js_value());
-            if c_str == ptr::null_mut() {
+            let c_str = qjs::JS_ToCString(self.0.ctx.ctx, self.as_js_value());
+            if c_str.is_null() {
                 // Might not ever happen but I am not 100% sure
                 // so just incase check it.
                 return Err(Error::Unknown);
@@ -40,7 +40,7 @@ impl<'js> String<'js> {
     pub fn from_str(ctx: Ctx<'js>, s: &str) -> Result<Self> {
         unsafe {
             let len = s.len();
-            let bytes = mem::transmute(s.as_ptr());
+            let bytes = s.as_ptr() as *const i8;
             let js_val = qjs::JS_NewStringLen(ctx.ctx, bytes, len as u64);
             let js_val = value::handle_exception(ctx, js_val)?;
             assert_eq!(js_val.tag, qjs::JS_TAG_STRING as i64);

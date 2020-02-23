@@ -1,7 +1,7 @@
 use crate::context::Ctx;
 use derivative::Derivative;
 use rquickjs_sys as qjs;
-use std::{marker::PhantomData, mem};
+use std::marker::PhantomData;
 
 /// A owned reference to a javascript object
 #[derive(Derivative)]
@@ -23,7 +23,7 @@ impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
         }
     }
 
-    pub fn to_js_value(&self) -> qjs::JSValue {
+    pub fn as_js_value(&self) -> qjs::JSValue {
         qjs::JSValue {
             u: qjs::JSValueUnion { ptr: self.ptr },
             tag: Ty::TAG,
@@ -34,7 +34,7 @@ impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
 impl<'js, Ty: JsRefType> Clone for JsRef<'js, Ty> {
     fn clone(&self) -> Self {
         unsafe {
-            let p: *mut qjs::JSRefCountHeader = mem::transmute(self.ptr);
+            let p = self.ptr as *mut qjs::JSRefCountHeader;
             (*p).ref_count += 1;
         }
         JsRef {
@@ -48,10 +48,10 @@ impl<'js, Ty: JsRefType> Clone for JsRef<'js, Ty> {
 impl<Ty: JsRefType> Drop for JsRef<'_, Ty> {
     fn drop(&mut self) {
         unsafe {
-            let p: *mut qjs::JSRefCountHeader = mem::transmute(self.ptr);
+            let p = self.ptr as *mut qjs::JSRefCountHeader;
             (*p).ref_count -= 1;
             if (*p).ref_count <= 0 {
-                let v = self.to_js_value();
+                let v = self.as_js_value();
                 qjs::__JS_FreeValue(self.ctx.ctx, v);
             }
         }
@@ -80,6 +80,13 @@ impl JsRefType for JsModuleType {
     const TAG: i64 = qjs::JS_TAG_MODULE as i64;
 }
 
+pub struct JsSymbolType;
+
+impl JsRefType for JsSymbolType {
+    const TAG: i64 = qjs::JS_TAG_SYMBOL as i64;
+}
+
 pub type JsStringRef<'js> = JsRef<'js, JsStringType>;
 pub type JsObjectRef<'js> = JsRef<'js, JsObjectType>;
 pub type JsModuleRef<'js> = JsRef<'js, JsModuleType>;
+pub type JsSymbolRef<'js> = JsRef<'js, JsSymbolType>;

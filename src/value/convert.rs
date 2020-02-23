@@ -106,13 +106,11 @@ impl<'js> FromJs<'js> for String<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         match value {
             Value::String(x) => Ok(x),
-            x => {
-                return Err(Error::FromJsConversion {
-                    from: x.type_name(),
-                    to: "string",
-                    message: None,
-                })
-            }
+            x => Err(Error::FromJsConversion {
+                from: x.type_name(),
+                to: "string",
+                message: None,
+            }),
         }
     }
 }
@@ -121,13 +119,11 @@ impl<'js> FromJs<'js> for Object<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         match value {
             Value::Object(x) => Ok(x),
-            x => {
-                return Err(Error::FromJsConversion {
-                    from: x.type_name(),
-                    to: "object",
-                    message: None,
-                })
-            }
+            x => Err(Error::FromJsConversion {
+                from: x.type_name(),
+                to: "object",
+                message: None,
+            }),
         }
     }
 }

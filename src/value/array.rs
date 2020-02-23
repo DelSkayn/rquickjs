@@ -18,25 +18,29 @@ impl<'js> Array<'js> {
     }
 
     // Save because using the JSValue is unsafe
-    pub(crate) fn to_js_value(&self) -> qjs::JSValue {
-        self.0.to_js_value()
+    pub(crate) fn as_js_value(&self) -> qjs::JSValue {
+        self.0.as_js_value()
     }
 
     /// Get the lenght of the javascript array.
-    pub fn length(&self) -> usize {
-        let v = self.to_js_value();
+    pub fn len(&self) -> usize {
+        let v = self.as_js_value();
         unsafe {
             let prop = CStr::from_bytes_with_nul(b"length\0").unwrap();
             let val = qjs::JS_GetPropertyStr(self.0.ctx.ctx, v, prop.as_ptr());
             assert!(qjs::JS_IsInt(val));
-            return qjs::JS_VALUE_GET_INT!(val) as usize;
+            qjs::JS_VALUE_GET_INT!(val) as usize
         }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     /// Get the value at a index in the javascript array.
     pub fn get<V: FromJs<'js>>(&self, idx: u32) -> Result<V, Error> {
         unsafe {
-            let v = self.to_js_value();
+            let v = self.as_js_value();
             let val = qjs::JS_GetPropertyUint32(self.0.ctx.ctx, v, idx);
             let val = Value::from_js_value(self.0.ctx, val)?;
             V::from_js(self.0.ctx, val)
@@ -61,9 +65,9 @@ mod test {
                 "#,
             );
             if let Ok(Value::Array(x)) = val {
-                assert_eq!(x.length(), 11);
-                assert_eq!(x.get(3), Ok(Value::Int(4)));
-                assert_eq!(x.get(4), Ok(Value::Int(10)));
+                assert_eq!(x.len(), 11);
+                assert_eq!(x.get(3), Ok(4));
+                assert_eq!(x.get(4), Ok(10));
                 if let Ok(Value::Object(_)) = x.get(6) {
                 } else {
                     panic!();

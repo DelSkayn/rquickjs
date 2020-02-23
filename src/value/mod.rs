@@ -1,6 +1,6 @@
 use crate::{context::Ctx, Error};
 use rquickjs_sys as qjs;
-use std::{ffi::CStr, ptr};
+use std::ffi::CStr;
 
 mod module;
 pub use module::Module;
@@ -10,6 +10,8 @@ mod object;
 pub use object::Object;
 mod array;
 pub use array::Array;
+mod symbol;
+pub use symbol::Symbol;
 mod convert;
 pub use convert::*;
 mod rf;
@@ -17,12 +19,7 @@ mod rf;
 /// Any javascript value
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value<'js> {
-    // TODO for now just using the JSValueUnion
-    // Should eventually be updated once we figure
-    // out what a symbol represents and how it
-    // functions
-    // Might leak currently...
-    Symbol,
+    Symbol(Symbol<'js>),
     String(String<'js>),
     Object(Object<'js>),
     Array(Array<'js>),
@@ -50,7 +47,7 @@ pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
     let exception_val = qjs::JS_GetException(ctx.ctx);
     let is_error = qjs::JS_IsError(ctx.ctx, exception_val);
     let s = qjs::JS_ToCString(ctx.ctx, exception_val);
-    if s == ptr::null_mut() {
+    if s.is_null() {
         return Error::Unknown;
     }
     let mut exception_text = CStr::from_ptr(s).to_string_lossy().into_owned();
@@ -85,13 +82,9 @@ impl<'js> Value<'js> {
             qjs::JS_TAG_NULL => Ok(Value::Null),
             qjs::JS_TAG_UNDEFINED => Ok(Value::Undefined),
             qjs::JS_TAG_UNINITIALIZED => Ok(Value::Uninitialized),
-            // TODO maybe make this an error?
             qjs::JS_TAG_FLOAT64 => Ok(Value::Float(qjs::JS_VALUE_GET_FLOAT64!(v))),
             qjs::JS_TAG_STRING => Ok(Value::String(String::new(ctx, v))),
-            qjs::JS_TAG_SYMBOL => {
-                println!("{:?}", v.u.ptr);
-                Ok(Value::Symbol)
-            }
+            qjs::JS_TAG_SYMBOL => Ok(Value::Symbol(Symbol::new(ctx, v))),
             qjs::JS_TAG_OBJECT => {
                 if qjs::JS_IsArray(ctx.ctx, v) == 1 {
                     Ok(Value::Array(Array::new(ctx, v)))
@@ -99,11 +92,21 @@ impl<'js> Value<'js> {
                     Ok(Value::Object(Object::new(ctx, v)))
                 }
             }
-            _ => panic!("got unmatched js value type tag"),
+            qjs::JS_TAG_MODULE => {
+                // Just to make sure things are properly cleaned up;
+                Module::new(ctx, v);
+                panic!("recieved module JSValue for Value, Value should not handle modules.")
+            }
+            _ => {
+                // Can we possibly leak here?
+                // We should have catched all the possible
+                // types which are reference counted so it should be fine.
+                panic!("got unmatched js value type tag")
+            }
         }
     }
 
-    pub(crate) fn to_js_value(&self) -> qjs::JSValue {
+    pub(crate) fn as_js_value(&self) -> qjs::JSValue {
         match *self {
             Value::Int(ref x) => qjs::JSValue {
                 u: qjs::JSValueUnion { int32: *x },
@@ -131,10 +134,10 @@ impl<'js> Value<'js> {
                 u: qjs::JSValueUnion { float64: *x },
                 tag: qjs::JS_TAG_FLOAT64 as i64,
             },
-            Value::Symbol => panic!(),
-            Value::String(ref x) => x.to_js_value(),
-            Value::Object(ref x) => x.to_js_value(),
-            Value::Array(ref x) => x.to_js_value(),
+            Value::Symbol(ref x) => x.as_js_value(),
+            Value::String(ref x) => x.as_js_value(),
+            Value::Object(ref x) => x.as_js_value(),
+            Value::Array(ref x) => x.as_js_value(),
         }
     }
 
@@ -146,7 +149,7 @@ impl<'js> Value<'js> {
             Value::Undefined => "undefined",
             Value::Uninitialized => "uninitialized",
             Value::Float(_) => "float",
-            Value::Symbol => "symbol",
+            Value::Symbol(_) => "symbol",
             Value::String(_) => "string",
             Value::Object(_) => "object",
             Value::Array(_) => "array",

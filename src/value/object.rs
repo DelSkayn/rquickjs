@@ -18,8 +18,8 @@ impl<'js> Object<'js> {
     }
 
     // Save because using the JSValue is unsafe
-    pub(crate) fn to_js_value(&self) -> qjs::JSValue {
-        self.0.to_js_value()
+    pub(crate) fn as_js_value(&self) -> qjs::JSValue {
+        self.0.as_js_value()
     }
 
     pub fn get<K: ToJs<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V, Error> {
@@ -29,11 +29,11 @@ impl<'js> Object<'js> {
                 Value::Int(x) => {
                     // TODO is this correct. Integers are signed and the index here is unsigned
                     // Soo...
-                    qjs::JS_GetPropertyUint32(self.0.ctx.ctx, self.to_js_value(), x as u32)
+                    qjs::JS_GetPropertyUint32(self.0.ctx.ctx, self.as_js_value(), x as u32)
                 }
                 x => {
-                    let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, x.to_js_value());
-                    qjs::JS_GetProperty(self.0.ctx.ctx, self.to_js_value(), atom)
+                    let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, x.as_js_value());
+                    qjs::JS_GetProperty(self.0.ctx.ctx, self.as_js_value(), atom)
                 }
             };
             V::from_js(self.0.ctx, Value::from_js_value(self.0.ctx, val)?)
@@ -46,8 +46,8 @@ impl<'js> Object<'js> {
     {
         let key = k.to_js(self.0.ctx)?;
         unsafe {
-            let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, key.to_js_value());
-            let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.to_js_value(), atom);
+            let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, key.as_js_value());
+            let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.as_js_value(), atom);
             if res < 0 {
                 return Err(value::get_exception(self.0.ctx));
             }

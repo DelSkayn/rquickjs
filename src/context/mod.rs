@@ -8,7 +8,7 @@ use rquickjs_sys as qjs;
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
-    mem, ptr,
+    mem,
     sync::Arc,
 };
 
@@ -19,6 +19,7 @@ pub use builder::ContextBuilder;
 /// Can share objects with other contexts of the same runtime
 #[derive(Debug)]
 pub struct Context {
+    //TODO replace with NotNull?
     pub(crate) ctx: *mut qjs::JSContext,
     rt: Arc<runtime::Inner>,
 }
@@ -36,7 +37,7 @@ impl Context {
     pub fn base(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock.lock().unwrap();
         let ctx = unsafe { qjs::JS_NewContextRaw(runtime.inner.rt) };
-        if ctx == ptr::null_mut() {
+        if ctx.is_null() {
             return Err(Error::Allocation);
         }
         let res = Ok(Context {
@@ -54,7 +55,7 @@ impl Context {
     pub fn full(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock.lock().unwrap();
         let ctx = unsafe { qjs::JS_NewContext(runtime.inner.rt) };
-        if ctx == ptr::null_mut() {
+        if ctx.is_null() {
             return Err(Error::Allocation);
         }
         let res = Ok(Context {
@@ -113,10 +114,6 @@ impl Drop for Context {
 
 unsafe impl Send for Context {}
 
-/// Represents a global object from a context
-#[derive(Debug)]
-pub struct Globals<'js>(pub(crate) Object<'js>);
-
 impl<'js> Ctx<'js> {
     fn new(ctx: &'js Context) -> Self {
         Ctx {
@@ -167,19 +164,19 @@ impl<'js> Ctx<'js> {
 
     pub fn coerce_string(self, v: Value<'js>) -> Result<String<'js>> {
         unsafe {
-            let js_val = qjs::JS_ToString(self.ctx, v.to_js_value());
-            let value = Value::from_js_value(self, js_val)?;
-            match value {
-                Value::String(x) => return Ok(x),
-                _ => panic!("JS_ToString did not return a string or exception"),
-            }
+            let js_val = qjs::JS_ToString(self.ctx, v.as_js_value());
+            value::handle_exception(self, js_val)?;
+            // js_val should be a string now
+            // String itself will check for the tag when debug_assertions are enabled
+            // but is should always be string
+            Ok(String::new(self, js_val))
         }
     }
 
     pub fn coerce_i32(self, v: Value<'js>) -> Result<i32> {
         unsafe {
             let mut val: i32 = 0;
-            if qjs::JS_ToInt32(self.ctx, &mut val, v.to_js_value()) < 0 {
+            if qjs::JS_ToInt32(self.ctx, &mut val, v.as_js_value()) < 0 {
                 return Err(value::get_exception(self));
             }
             Ok(val)
@@ -189,7 +186,7 @@ impl<'js> Ctx<'js> {
     pub fn coerce_i64(self, v: Value<'js>) -> Result<i64> {
         unsafe {
             let mut val: i64 = 0;
-            if qjs::JS_ToInt64(self.ctx, &mut val, v.to_js_value()) < 0 {
+            if qjs::JS_ToInt64(self.ctx, &mut val, v.as_js_value()) < 0 {
                 return Err(value::get_exception(self));
             }
             Ok(val)
@@ -199,7 +196,7 @@ impl<'js> Ctx<'js> {
     pub fn coerce_u64(self, v: Value<'js>) -> Result<u64> {
         unsafe {
             let mut val: u64 = 0;
-            if qjs::JS_ToIndex(self.ctx, &mut val, v.to_js_value()) < 0 {
+            if qjs::JS_ToIndex(self.ctx, &mut val, v.as_js_value()) < 0 {
                 return Err(value::get_exception(self));
             }
             Ok(val)
@@ -209,7 +206,7 @@ impl<'js> Ctx<'js> {
     pub fn coerce_f64(self, v: Value<'js>) -> Result<f64> {
         unsafe {
             let mut val: f64 = 0.0;
-            if qjs::JS_ToFloat64(self.ctx, &mut val, v.to_js_value()) < 0 {
+            if qjs::JS_ToFloat64(self.ctx, &mut val, v.as_js_value()) < 0 {
                 return Err(value::get_exception(self));
             }
             Ok(val)
@@ -218,7 +215,7 @@ impl<'js> Ctx<'js> {
 
     pub fn coerce_bool(self, v: Value<'js>) -> Result<bool> {
         unsafe {
-            let val = qjs::JS_ToBool(self.ctx, v.to_js_value());
+            let val = qjs::JS_ToBool(self.ctx, v.as_js_value());
             if val < 0 {
                 return Err(value::get_exception(self));
             }
@@ -230,8 +227,7 @@ impl<'js> Ctx<'js> {
     pub fn globals(self) -> Object<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);
-            let o = Object::new(self, v);
-            o
+            Object::new(self, v)
         }
     }
 }
