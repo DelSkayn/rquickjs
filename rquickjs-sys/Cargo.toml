@@ -1,8 +1,12 @@
 [package]
 name = "rquickjs-sys"
-version = "0.1.0"
+version = "0.0.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2018"
+license = "MIT"
+discription = "quickjs bindings for rquickjs"
+repository = "https://github.com/DelSkayn/rquickjs.git"
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
