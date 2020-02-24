@@ -1,16 +1,19 @@
 use crate::context::Ctx;
-use derivative::Derivative;
 use rquickjs_sys as qjs;
 use std::marker::PhantomData;
 
 /// A owned reference to a javascript object
-#[derive(Derivative)]
-#[derivative(PartialEq, Debug)]
+#[derive(Debug)]
 pub struct JsRef<'js, Ty: JsRefType> {
-    #[derivative(PartialEq = "ignore")]
     pub(crate) ctx: Ctx<'js>,
     pub(crate) ptr: *mut libc::c_void,
     marker: PhantomData<Ty>,
+}
+
+impl<'js, Ty: JsRefType> PartialEq for JsRef<'js, Ty> {
+    fn eq(&self, other: &Self) -> bool {
+        self.ptr == other.ptr
+    }
 }
 
 impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
