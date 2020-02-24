@@ -3,7 +3,8 @@ name = "rquickjs"
 version = "0.0.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2018"
-license-file = "LICENSE"
+license = "MIT"
+readme = "README.md"
 description = "High level bindings to the quickjs javascript engine"
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
