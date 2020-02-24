@@ -1,13 +1,21 @@
 use crate::context::Ctx;
 use rquickjs_sys as qjs;
-use std::marker::PhantomData;
+use std::{fmt, marker::PhantomData};
 
 /// A owned reference to a javascript object
-#[derive(Debug)]
 pub struct JsRef<'js, Ty: JsRefType> {
     pub(crate) ctx: Ctx<'js>,
     pub(crate) ptr: *mut libc::c_void,
     marker: PhantomData<Ty>,
+}
+
+impl<'js, Ty: JsRefType> fmt::Debug for JsRef<'js, Ty> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("JsRef")
+            .field("ctx", &self.ctx)
+            .field("ptr", &self.ptr)
+            .finish()
+    }
 }
 
 impl<'js, Ty: JsRefType> PartialEq for JsRef<'js, Ty> {
