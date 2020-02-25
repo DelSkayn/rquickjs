@@ -1,6 +1,6 @@
 use crate::{
     value::{self, rf::JsObjectRef},
-    Ctx, Error, FromJs, ToJs, Value,
+    Ctx, FromJs, Result, ToJs, Value,
 };
 use rquickjs_sys as qjs;
 
@@ -13,7 +13,7 @@ impl<'js> Object<'js> {
     // liftime of this object must be constrained
     // Further more the JSValue must also be of type object as indicated by JS_TAG_OBJECT
     // All save functions rely on this constrained to be save
-    pub(crate) unsafe fn new(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
+    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
         Object(JsObjectRef::from_js_value(ctx, v))
     }
 
@@ -22,7 +22,17 @@ impl<'js> Object<'js> {
         self.0.as_js_value()
     }
 
-    pub fn get<K: ToJs<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V, Error> {
+    /// Create a new javascript object
+    pub fn new(ctx: Ctx<'js>) -> Result<Self> {
+        unsafe {
+            let val = qjs::JS_NewObject(ctx.ctx);
+            let val = value::handle_exception(ctx, val)?;
+            Ok(Self::from_js_value(ctx, val))
+        }
+    }
+
+    /// Get a new value
+    pub fn get<K: ToJs<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
         let key = k.to_js(self.0.ctx)?;
         unsafe {
             let val = match key {
@@ -40,7 +50,8 @@ impl<'js> Object<'js> {
         }
     }
 
-    pub fn contains_key<K>(&self, k: K) -> Result<bool, Error>
+    /// check wether the object contains a certain key.
+    pub fn contains_key<K>(&self, k: K) -> Result<bool>
     where
         K: ToJs<'js>,
     {

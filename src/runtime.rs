@@ -1,9 +1,8 @@
 use crate::Error;
 use rquickjs_sys as qjs;
 use std::{
-    cell::RefCell,
     ffi::CString,
-    ptr,
+    mem, ptr,
     sync::{Arc, Mutex},
 };
 
@@ -11,15 +10,14 @@ use std::{
 pub(crate) struct Inner {
     //TODO: Maybe make this NonNull?
     pub(crate) rt: *mut qjs::JSRuntime,
-    pub(crate) lock: Mutex<()>,
     // Keep info alive for the entire duration of the lifetime of rt
-    info: RefCell<Option<CString>>,
+    info: Option<CString>,
 }
 
 /// Entry point of the library.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Runtime {
-    pub(crate) inner: Arc<Inner>,
+    pub(crate) inner: Arc<Mutex<Inner>>,
 }
 
 impl Runtime {
@@ -29,33 +27,36 @@ impl Runtime {
             return Err(Error::Allocation);
         }
         Ok(Runtime {
-            inner: Arc::new(Inner {
-                rt,
-                info: RefCell::new(None),
-                lock: Mutex::new(()),
-            }),
+            inner: Arc::new(Mutex::new(Inner { rt, info: None })),
         })
     }
 
     pub fn set_info<S: Into<Vec<u8>>>(&mut self, info: S) -> Result<(), Error> {
+        let mut guard = self.inner.lock().unwrap();
         let string = CString::new(info)?;
-        unsafe { qjs::JS_SetRuntimeInfo(self.inner.rt, string.as_ptr()) }
-        *self.inner.info.borrow_mut() = Some(string);
+        unsafe { qjs::JS_SetRuntimeInfo(guard.rt, string.as_ptr()) }
+        guard.info = Some(string);
         Ok(())
     }
 
     pub fn set_memory_limit(&self, limit: usize) {
+        let guard = self.inner.lock().unwrap();
         let limit = limit as qjs::size_t;
-        unsafe { qjs::JS_SetMemoryLimit(self.inner.rt, limit) }
+        unsafe { qjs::JS_SetMemoryLimit(guard.rt, limit) }
+        mem::drop(guard);
     }
 
     pub fn set_gc_threshold(&self, threshold: usize) {
+        let guard = self.inner.lock().unwrap();
         let threshold = threshold as qjs::size_t;
-        unsafe { qjs::JS_SetGCThreshold(self.inner.rt, threshold) }
+        unsafe { qjs::JS_SetGCThreshold(guard.rt, threshold) }
+        mem::drop(guard);
     }
 
     pub fn run_gc(&self) {
-        unsafe { qjs::JS_RunGC(self.inner.rt) }
+        let guard = self.inner.lock().unwrap();
+        unsafe { qjs::JS_RunGC(guard.rt) }
+        mem::drop(guard);
     }
 }
 
@@ -64,6 +65,11 @@ impl Drop for Inner {
         unsafe { qjs::JS_FreeRuntime(self.rt) }
     }
 }
+
+// Since all functions which use runtime are behind a mutex
+// sending the runtime to other threads should be fine.
+// It might even be sync
+unsafe impl Send for Runtime {}
 
 #[cfg(test)]
 mod test {

@@ -6,7 +6,7 @@ use rquickjs_sys as qjs;
 pub struct Module<'js>(JsModuleRef<'js>);
 
 impl<'js> Module<'js> {
-    pub(crate) unsafe fn new(ctx: Ctx<'js>, js_val: qjs::JSValue) -> Self {
+    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, js_val: qjs::JSValue) -> Self {
         Module(JsModuleRef::from_js_value(ctx, js_val))
     }
 }

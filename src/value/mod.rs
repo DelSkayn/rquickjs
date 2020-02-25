@@ -83,18 +83,18 @@ impl<'js> Value<'js> {
             qjs::JS_TAG_UNDEFINED => Ok(Value::Undefined),
             qjs::JS_TAG_UNINITIALIZED => Ok(Value::Uninitialized),
             qjs::JS_TAG_FLOAT64 => Ok(Value::Float(qjs::JS_VALUE_GET_FLOAT64!(v))),
-            qjs::JS_TAG_STRING => Ok(Value::String(String::new(ctx, v))),
-            qjs::JS_TAG_SYMBOL => Ok(Value::Symbol(Symbol::new(ctx, v))),
+            qjs::JS_TAG_STRING => Ok(Value::String(String::from_js_value(ctx, v))),
+            qjs::JS_TAG_SYMBOL => Ok(Value::Symbol(Symbol::from_js_value(ctx, v))),
             qjs::JS_TAG_OBJECT => {
                 if qjs::JS_IsArray(ctx.ctx, v) == 1 {
-                    Ok(Value::Array(Array::new(ctx, v)))
+                    Ok(Value::Array(Array::from_js_value(ctx, v)))
                 } else {
-                    Ok(Value::Object(Object::new(ctx, v)))
+                    Ok(Value::Object(Object::from_js_value(ctx, v)))
                 }
             }
             qjs::JS_TAG_MODULE => {
                 // Just to make sure things are properly cleaned up;
-                Module::new(ctx, v);
+                Module::from_js_value(ctx, v);
                 panic!("recieved module JSValue for Value, Value should not handle modules.")
             }
             _ => {

@@ -5,7 +5,7 @@ use rquickjs_sys as qjs;
 pub struct Symbol<'js>(JsSymbolRef<'js>);
 
 impl<'js> Symbol<'js> {
-    pub(crate) unsafe fn new(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
+    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
         Symbol(JsSymbolRef::from_js_value(ctx, val))
     }
 

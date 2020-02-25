@@ -15,7 +15,7 @@ impl<'js> String<'js> {
     // liftime of this object must within the lifetime of the context
     // Further more the JSValue must also be of type string as indicated by JS_TAG_STRING
     // All save functions rely on this constrained to be save
-    pub(crate) unsafe fn new(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
+    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
         String(JsStringRef::from_js_value(ctx, v))
     }
 
@@ -44,7 +44,7 @@ impl<'js> String<'js> {
             let js_val = qjs::JS_NewStringLen(ctx.ctx, bytes, len as u64);
             let js_val = value::handle_exception(ctx, js_val)?;
             assert_eq!(js_val.tag, qjs::JS_TAG_STRING as i64);
-            Ok(String::new(ctx, js_val))
+            Ok(String::from_js_value(ctx, js_val))
         }
     }
 }

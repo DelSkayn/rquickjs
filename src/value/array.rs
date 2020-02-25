@@ -13,7 +13,7 @@ impl<'js> Array<'js> {
     // It also should be a javascript array as indicated by `qjs::JS_IsArray` but this might not be
     // a hard requirement.
     // All save functions rely on this constrained to be save
-    pub(crate) unsafe fn new(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
+    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
         Array(JsObjectRef::from_js_value(ctx, v))
     }
 

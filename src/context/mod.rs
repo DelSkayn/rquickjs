@@ -9,7 +9,7 @@ use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
     mem,
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 mod builder;
@@ -21,7 +21,7 @@ pub use builder::ContextBuilder;
 pub struct Context {
     //TODO replace with NotNull?
     pub(crate) ctx: *mut qjs::JSContext,
-    rt: Arc<runtime::Inner>,
+    rt: Arc<Mutex<runtime::Inner>>,
 }
 
 /// A context in use, passed to [`Context::with`](struct.Context.html#method.with).
@@ -35,8 +35,8 @@ impl Context {
     /// Creates a base context with only the required functions registered
     /// If additional functions are required use [`Context::build`](#method.build) or [`Contex::full`](#method.full)
     pub fn base(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock.lock().unwrap();
-        let ctx = unsafe { qjs::JS_NewContextRaw(runtime.inner.rt) };
+        let guard = runtime.inner.lock().unwrap();
+        let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
@@ -44,8 +44,6 @@ impl Context {
             ctx,
             rt: runtime.inner.clone(),
         });
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard);
         res
     }
 
@@ -53,8 +51,8 @@ impl Context {
     /// If precise controll is required of wich functions are availble use
     /// [`Context::build`](#method.context)
     pub fn full(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock.lock().unwrap();
-        let ctx = unsafe { qjs::JS_NewContext(runtime.inner.rt) };
+        let guard = runtime.inner.lock().unwrap();
+        let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
@@ -74,14 +72,14 @@ impl Context {
 
     /// Set the maximum stack size for the local context stack
     pub fn set_max_stack_size(&self, size: usize) {
-        let guard = self.rt.lock.lock().unwrap();
+        let guard = self.rt.lock().unwrap();
         unsafe { qjs::JS_SetMaxStackSize(self.ctx, size as u64) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }
 
     pub fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.rt.lock.lock().unwrap();
+        let guard = self.rt.lock().unwrap();
         unsafe { qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 }) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
@@ -94,7 +92,7 @@ impl Context {
     where
         F: FnOnce(Ctx) -> R,
     {
-        let guard = self.rt.lock.lock().unwrap();
+        let guard = self.rt.lock().unwrap();
         let ctx = Ctx::new(self);
         let res = f(ctx);
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
@@ -105,7 +103,7 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
-        let guard = self.rt.lock.lock().unwrap();
+        let guard = self.rt.lock().unwrap();
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
@@ -158,7 +156,7 @@ impl<'js> Ctx<'js> {
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
         unsafe {
             let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
-            Ok(Module::new(self, js_val))
+            Ok(Module::from_js_value(self, js_val))
         }
     }
 
@@ -169,7 +167,7 @@ impl<'js> Ctx<'js> {
             // js_val should be a string now
             // String itself will check for the tag when debug_assertions are enabled
             // but is should always be string
-            Ok(String::new(self, js_val))
+            Ok(String::from_js_value(self, js_val))
         }
     }
 
@@ -227,7 +225,7 @@ impl<'js> Ctx<'js> {
     pub fn globals(self) -> Object<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);
-            Object::new(self, v)
+            Object::from_js_value(self, v)
         }
     }
 }
@@ -244,22 +242,6 @@ mod test {
             println!("{:?}", ctx.globals());
         });
     }
-
-    /*
-    #[test]
-    fn wrap() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        let rt_2 = Runtime::new().unwrap();
-        let ctx_2 = Context::full(&rt_2).unwrap();
-        ctx.with(|ctx| {
-            let val: Value = ctx.eval::<Value, _>(r#"'test'"#).unwrap();
-            ctx_2.with(|ctx_2| {
-                ctx_2.globals().get::<_, Value>(val).unwrap();
-            })
-        });
-    }
-    */
 
     #[test]
     fn module() {
