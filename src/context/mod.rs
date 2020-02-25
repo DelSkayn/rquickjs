@@ -110,7 +110,12 @@ impl Drop for Context {
     }
 }
 
+// Since the reference to runtime is behind a Arc this object is send
 unsafe impl Send for Context {}
+
+// Since all functions lock the global runtime lock access is synchronized so
+// this object is sync
+unsafe impl Sync for Context {}
 
 impl<'js> Ctx<'js> {
     fn new(ctx: &'js Context) -> Self {

@@ -68,8 +68,12 @@ impl Drop for Inner {
 
 // Since all functions which use runtime are behind a mutex
 // sending the runtime to other threads should be fine.
-// It might even be sync
 unsafe impl Send for Runtime {}
+
+// Since a global lock needs to be locked for safe use
+// using runtime in a sync way should be safe as
+// simultanious accesses is syncronized behind a lock.
+unsafe impl Sync for Runtime {}
 
 #[cfg(test)]
 mod test {
