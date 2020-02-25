@@ -2,7 +2,9 @@ use crate::context::Ctx;
 use rquickjs_sys as qjs;
 use std::{fmt, marker::PhantomData};
 
-/// A owned reference to a javascript object
+/// A owned reference to a javascript object.
+/// Handles the reference count of associated objects and
+/// free's objects when nessacary. TODO spelling
 pub struct JsRef<'js, Ty: JsRefType> {
     pub(crate) ctx: Ctx<'js>,
     pub(crate) ptr: *mut libc::c_void,
@@ -69,6 +71,7 @@ impl<Ty: JsRefType> Drop for JsRef<'_, Ty> {
     }
 }
 
+/// Trait to avoid code duplication over a single constant.
 pub trait JsRefType {
     const TAG: i64;
 }

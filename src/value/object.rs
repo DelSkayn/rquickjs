@@ -3,10 +3,11 @@ use crate::{
     Ctx, FromJs, Result, ToJs, Value,
 };
 use rquickjs_sys as qjs;
+use std::mem;
 
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Object<'js>(JsObjectRef<'js>);
+pub struct Object<'js>(pub(crate) JsObjectRef<'js>);
 
 impl<'js> Object<'js> {
     // Unsafe because pointers must be valid and the
@@ -65,6 +66,34 @@ impl<'js> Object<'js> {
             Ok(res == 1)
         }
     }
+
+    // TODO implement ToKey, which will create a atom for a value,
+    // This can allow code to do checks for the same value faster by
+    // pre computing the atom for the key.
+    /// Set a member of an object to a certain value
+    pub fn set<K: ToJs<'js>, V: ToJs<'js>>(&self, key: K, value: V) -> Result<()> {
+        let key = key.to_js(self.0.ctx)?;
+        let val = value.to_js(self.0.ctx)?;
+        unsafe {
+            let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, key.as_js_value());
+            if qjs::JS_SetProperty(self.0.ctx.ctx, self.as_js_value(), atom, val.as_js_value()) < 0
+            {
+                return Err(value::get_exception(self.0.ctx));
+            };
+            // When we pass in the value to SetProperty, it takes ownership
+            // so we should not decrement the reference count when our version drops
+            mem::forget(val);
+        }
+        Ok(())
+    }
+
+    pub fn is_function(&self) -> bool {
+        unsafe { qjs::JS_IsFunction(self.0.ctx.ctx, self.as_js_value()) != 0 }
+    }
+
+    pub fn is_array(&self) -> bool {
+        unsafe { qjs::JS_IsArray(self.0.ctx.ctx, self.as_js_value()) != 0 }
+    }
 }
 
 #[cfg(test)]
@@ -72,7 +101,7 @@ mod test {
     use crate::*;
     use std::string::String as StdString;
     #[test]
-    fn js_value_object_from_javascript() {
+    fn from_javascript() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
@@ -91,6 +120,8 @@ mod test {
                 assert_eq!(int, 3);
                 let int: StdString = x.get("a").unwrap();
                 assert_eq!(int, "3");
+                x.set("hallo", "foo").unwrap();
+                assert_eq!(x.get("hallo"), Ok("foo".to_string()))
             } else {
                 panic!();
             };

@@ -12,6 +12,8 @@ mod array;
 pub use array::Array;
 mod symbol;
 pub use symbol::Symbol;
+mod function;
+pub use function::Function;
 mod convert;
 pub use convert::*;
 mod rf;
@@ -19,6 +21,7 @@ mod rf;
 /// Any javascript value
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value<'js> {
+    Function(Function<'js>),
     Symbol(Symbol<'js>),
     String(String<'js>),
     Object(Object<'js>),
@@ -88,6 +91,8 @@ impl<'js> Value<'js> {
             qjs::JS_TAG_OBJECT => {
                 if qjs::JS_IsArray(ctx.ctx, v) == 1 {
                     Ok(Value::Array(Array::from_js_value(ctx, v)))
+                } else if qjs::JS_IsFunction(ctx.ctx, v) == 1 {
+                    Ok(Value::Function(Function::from_js_value(ctx, v)))
                 } else {
                     Ok(Value::Object(Object::from_js_value(ctx, v)))
                 }
@@ -138,6 +143,7 @@ impl<'js> Value<'js> {
             Value::String(ref x) => x.as_js_value(),
             Value::Object(ref x) => x.as_js_value(),
             Value::Array(ref x) => x.as_js_value(),
+            Value::Function(ref x) => x.as_js_value(),
         }
     }
 
@@ -153,19 +159,7 @@ impl<'js> Value<'js> {
             Value::String(_) => "string",
             Value::Object(_) => "object",
             Value::Array(_) => "array",
+            Value::Function(_) => "function",
         }
     }
-
-    // Returns wether a value can be used
-    // as a key for a object without first
-    // converting it to a string
-    /*
-    pub fn is_key(&self) -> bool {
-        match *self {
-            Value::Int => true,
-            Value::String => true,
-            _ => false,
-        }
-    }
-    */
 }

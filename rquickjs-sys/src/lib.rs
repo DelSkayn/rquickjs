@@ -203,6 +203,11 @@ pub unsafe fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAto
 }
 
 #[inline]
-pub unsafe fn JS_SetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> i32 {
-    JS_SetPropertyInternal(ctx, this_obj, prop, this_obj, JS_PROP_THROW as i32)
+pub unsafe fn JS_SetProperty(
+    ctx: *mut JSContext,
+    this_obj: JSValue,
+    prop: JSAtom,
+    val: JSValue,
+) -> i32 {
+    JS_SetPropertyInternal(ctx, this_obj, prop, val, JS_PROP_THROW as i32)
 }

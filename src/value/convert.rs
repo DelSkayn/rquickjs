@@ -128,6 +128,20 @@ impl<'js> FromJs<'js> for Object<'js> {
     }
 }
 
+impl<'js> FromJs<'js> for Array<'js> {
+    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        match value {
+            Value::Object(x) => Ok(Array::from_object(x)),
+            Value::Array(x) => Ok(x),
+            x => Err(Error::FromJsConversion {
+                from: x.type_name(),
+                to: "array",
+                message: None,
+            }),
+        }
+    }
+}
+
 impl<'js> FromJs<'js> for () {
     fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
         Ok(())

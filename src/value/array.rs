@@ -1,10 +1,15 @@
-use crate::{value::rf::JsObjectRef, Ctx, Error, FromJs, Value};
+use crate::{
+    value::{self, rf::JsObjectRef},
+    Ctx, FromJs, Object, Result, Value,
+};
 use rquickjs_sys as qjs;
 use std::ffi::CStr;
 
 /// Rust representation of a javascript array.
+/// Javascript array's are objects and can be used as such.
+/// However arrays in quickjs are optimized when they do not have any holes.
 #[derive(Debug, PartialEq, Clone)]
-pub struct Array<'js>(JsObjectRef<'js>);
+pub struct Array<'js>(pub(crate) JsObjectRef<'js>);
 
 impl<'js> Array<'js> {
     // Unsafe because pointers must be valid and the
@@ -22,6 +27,22 @@ impl<'js> Array<'js> {
         self.0.as_js_value()
     }
 
+    pub fn new(ctx: Ctx<'js>) -> Result<Self> {
+        unsafe {
+            let val = qjs::JS_NewArray(ctx.ctx);
+            value::handle_exception(ctx, val)?;
+            Ok(Array(JsObjectRef::from_js_value(ctx, val)))
+        }
+    }
+
+    pub fn to_object(self) -> Object<'js> {
+        Object(self.0)
+    }
+
+    pub fn from_object(object: Object<'js>) -> Self {
+        Array(object.0)
+    }
+
     /// Get the lenght of the javascript array.
     pub fn len(&self) -> usize {
         let v = self.as_js_value();
@@ -33,12 +54,13 @@ impl<'js> Array<'js> {
         }
     }
 
+    /// Returns wether a javascript array is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Get the value at a index in the javascript array.
-    pub fn get<V: FromJs<'js>>(&self, idx: u32) -> Result<V, Error> {
+    pub fn get<V: FromJs<'js>>(&self, idx: u32) -> Result<V> {
         unsafe {
             let v = self.as_js_value();
             let val = qjs::JS_GetPropertyUint32(self.0.ctx.ctx, v, idx);
@@ -52,7 +74,7 @@ impl<'js> Array<'js> {
 mod test {
     use crate::*;
     #[test]
-    fn js_value_array_from_javascript() {
+    fn from_javascript() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
@@ -76,5 +98,23 @@ mod test {
                 panic!();
             };
         });
+    }
+
+    #[test]
+    fn to_object() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let val = ctx
+                .eval::<Array, _>(
+                    r#"
+                let a = [1,2,3];
+                a
+            "#,
+                )
+                .unwrap();
+            let object = val.to_object();
+            assert_eq!(object.get(0), Ok(1));
+        })
     }
 }
