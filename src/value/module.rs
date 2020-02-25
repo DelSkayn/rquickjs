@@ -10,6 +10,7 @@ impl<'js> Module<'js> {
         Module(JsModuleRef::from_js_value(ctx, js_val))
     }
 
+    #[allow(dead_code)]
     pub(crate) fn as_js_value(&self) -> qjs::JSValue {
         self.0.as_js_value()
     }

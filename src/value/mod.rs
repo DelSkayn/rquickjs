@@ -135,10 +135,7 @@ impl<'js> Value<'js> {
                 u: qjs::JSValueUnion { int32: 0 },
                 tag: qjs::JS_TAG_UNINITIALIZED as i64,
             },
-            Value::Float(ref x) => qjs::JSValue {
-                u: qjs::JSValueUnion { float64: *x },
-                tag: qjs::JS_TAG_FLOAT64 as i64,
-            },
+            Value::Float(ref x) => unsafe { qjs::JS_NewFloat64(*x) },
             Value::Symbol(ref x) => x.as_js_value(),
             Value::String(ref x) => x.as_js_value(),
             Value::Object(ref x) => x.as_js_value(),

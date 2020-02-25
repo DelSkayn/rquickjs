@@ -211,3 +211,26 @@ pub unsafe fn JS_SetProperty(
 ) -> i32 {
     JS_SetPropertyInternal(ctx, this_obj, prop, val, JS_PROP_THROW as i32)
 }
+
+#[inline]
+pub unsafe fn JS_NewFloat64(d: f64) -> JSValue {
+    union FloatValue {
+        d: f64,
+        u: i64,
+    };
+
+    let u = FloatValue { d: d };
+    let val = d as i32;
+    let t = FloatValue { d: val as f64 };
+    if u.u == t.u {
+        JSValue {
+            u: JSValueUnion { int32: val },
+            tag: JS_TAG_INT as i64,
+        }
+    } else {
+        JSValue {
+            u: JSValueUnion { float64: d },
+            tag: JS_TAG_FLOAT64 as i64,
+        }
+    }
+}
