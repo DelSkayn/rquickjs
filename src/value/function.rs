@@ -1,4 +1,4 @@
-use crate::{value::rf::JsObjectRef, Ctx, Object};
+use crate::{value::rf::JsObjectRef, Ctx, FromJs, Object, Result, ToJsMulti, Value};
 use rquickjs_sys as qjs;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -15,7 +15,43 @@ impl<'js> Function<'js> {
         self.0.as_js_value()
     }
 
+    pub fn call<A, R>(&self, args: A) -> Result<R>
+    where
+        A: ToJsMulti<'js>,
+        R: FromJs<'js>,
+    {
+        let args = args.to_js_multi(self.0.ctx)?;
+        let len = args.len();
+        unsafe {
+            let mut args: Vec<_> = args.into_iter().map(|x| x.as_js_value()).collect();
+            let val = qjs::JS_Call(
+                self.0.ctx.ctx,
+                self.as_js_value(),
+                self.0.ctx.globals().as_js_value(),
+                len as i32,
+                args.as_mut_ptr(),
+            );
+            R::from_js(self.0.ctx, Value::from_js_value(self.0.ctx, val)?)
+        }
+    }
+
     pub fn to_object(self) -> Object<'js> {
         Object(self.0)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::*;
+    #[test]
+    fn base_call() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let f: Function = ctx.eval("(a) => a + 4").unwrap();
+            let res = f.call(3).unwrap();
+            println!("{:?}", res);
+            assert_eq!(FromJs::from_js(ctx, res), Ok(7));
+        })
     }
 }

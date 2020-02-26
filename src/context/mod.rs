@@ -15,8 +15,7 @@ use std::{
 mod builder;
 pub use builder::ContextBuilder;
 
-/// A single execution context with its own global variables and stack
-/// Can share objects with other contexts of the same runtime
+/// A single execution context with its own global variables and stack Can share objects with other contexts of the same runtime
 #[derive(Debug)]
 pub struct Context {
     //TODO replace with NotNull?
@@ -103,7 +102,10 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
-        let guard = self.rt.lock().unwrap();
+        let guard = match self.rt.lock() {
+            Ok(x) => x,
+            Err(e) => e.into_inner(),
+        };
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
