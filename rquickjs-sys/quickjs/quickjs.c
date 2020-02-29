@@ -26235,6 +26235,7 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
     rt->module_loader_opaque = opaque;
 }
 
+#ifdef CONFIG_MODULE_EXPORTS
 /* Hooks into module loading functions */
 int JS_GetModuleExportEntriesCount(JSModuleDef *m) {
     return m->export_entries_count;
@@ -26251,6 +26252,7 @@ JSAtom JS_GetModuleExportEntryName(JSContext *ctx, JSModuleDef *m, int idx) {
         return JS_ATOM_NULL;
     return JS_DupAtom(ctx, m->export_entries[idx].export_name);
 }
+#endif
 
 /* default module filename normalizer */
 static char *js_default_module_normalize_name(JSContext *ctx,

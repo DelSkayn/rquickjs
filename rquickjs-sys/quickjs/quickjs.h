@@ -972,9 +972,11 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
 int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                            const JSCFunctionListEntry *tab, int len);
 
+#ifdef CONFIG_MODULE_EXPORTS
 int JS_GetModuleExportEntriesCount(JSModuleDef *m);
 JSValue JS_GetModuleExportEntry(JSContext *ctx, JSModuleDef *m, int idx);
 JSAtom JS_GetModuleExportEntryName(JSContext *ctx, JSModuleDef *m, int idx);
+#endif
 
 #undef js_unlikely
 #undef js_force_inline

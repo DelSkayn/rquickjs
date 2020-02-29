@@ -3704,9 +3704,12 @@ extern "C" {
         len: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
+
+#[cfg(feature = "exports")]
 extern "C" {
     pub fn JS_GetModuleExportEntriesCount(m: *mut JSModuleDef) -> ::std::os::raw::c_int;
 }
+#[cfg(feature = "exports")]
 extern "C" {
     pub fn JS_GetModuleExportEntry(
         ctx: *mut JSContext,
@@ -3714,6 +3717,7 @@ extern "C" {
         idx: ::std::os::raw::c_int,
     ) -> JSValue;
 }
+#[cfg(feature = "exports")]
 extern "C" {
     pub fn JS_GetModuleExportEntryName(
         ctx: *mut JSContext,

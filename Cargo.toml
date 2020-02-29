@@ -19,3 +19,7 @@ libc = "0.2.67"
 members = [
     "./rquickjs-sys"
 ]
+
+[features]
+parallel = ["rquickjs-sys/parallel"]
+exports = ["rquickjs-sys/exports"]

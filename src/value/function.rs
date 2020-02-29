@@ -52,6 +52,10 @@ mod test {
             let res = f.call(3).unwrap();
             println!("{:?}", res);
             assert_eq!(FromJs::from_js(ctx, res), Ok(7));
+            let f: Function = ctx.eval("(a,b) => a * b + 4").unwrap();
+            let res = f.call((3, 4)).unwrap();
+            println!("{:?}", res);
+            assert_eq!(FromJs::from_js(ctx, res), Ok(16));
         })
     }
 }

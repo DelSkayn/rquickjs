@@ -1,7 +1,13 @@
 use cc;
+use std::env;
 
 fn main() {
-    cc::Build::new()
+    println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_parallel");
+    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_exports");
+
+    let mut builder = cc::Build::new();
+    builder
         .extra_warnings(false)
         .flag("-Wno-array-bounds")
         .flag("-Wno-format-truncation")
@@ -14,6 +20,13 @@ fn main() {
         .file("quickjs/libunicode.c")
         .file("quickjs/cutils.c")
         .file("quickjs/quickjs-libc.c")
-        .file("quickjs/libbf.c")
-        .compile("libquickjs.a")
+        .file("quickjs/libbf.c");
+
+    if let Ok(_) = env::var("CARGO_FEATURE_exports") {
+        builder.define("CONFIG_MODULE_EXPORTS", None);
+    }
+    if let Ok(_) = env::var("CARGO_FEATURE_parallel") {
+        builder.define("CONFIG_MODULE_PARALLEL", None);
+    }
+    builder.compile("libquickjs.a");
 }
