@@ -79,10 +79,28 @@ impl<'js> Object<'js> {
             if qjs::JS_SetProperty(self.0.ctx.ctx, self.as_js_value(), atom, val.as_js_value()) < 0
             {
                 return Err(value::get_exception(self.0.ctx));
-            };
+            }
             // When we pass in the value to SetProperty, it takes ownership
             // so we should not decrement the reference count when our version drops
             mem::forget(val);
+        }
+        Ok(())
+    }
+
+    /// Remove a member of this objects
+    pub fn remove<K: ToJs<'js>>(&self, key: K) -> Result<()> {
+        let key = key.to_js(self.0.ctx)?;
+        unsafe {
+            let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, key.as_js_value());
+            if qjs::JS_DeleteProperty(
+                self.0.ctx.ctx,
+                self.as_js_value(),
+                atom,
+                qjs::JS_PROP_THROW as i32,
+            ) < 0
+            {
+                return Err(value::get_exception(self.0.ctx));
+            }
         }
         Ok(())
     }
@@ -121,7 +139,9 @@ mod test {
                 let int: StdString = x.get("a").unwrap();
                 assert_eq!(int, "3");
                 x.set("hallo", "foo").unwrap();
-                assert_eq!(x.get("hallo"), Ok("foo".to_string()))
+                assert_eq!(x.get("hallo"), Ok("foo".to_string()));
+                x.remove("hallo").unwrap();
+                assert_eq!(x.get("hallo"), Ok(Value::Undefined))
             } else {
                 panic!();
             };

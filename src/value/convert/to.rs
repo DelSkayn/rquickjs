@@ -45,3 +45,9 @@ impl<'js> ToJs<'js> for i32 {
         Ok(Value::Int(self))
     }
 }
+
+impl<'js> ToJs<'js> for () {
+    fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::Null)
+    }
+}

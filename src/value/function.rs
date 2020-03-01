@@ -15,6 +15,7 @@ impl<'js> Function<'js> {
         self.0.as_js_value()
     }
 
+    /// Call a function with given arguments
     pub fn call<A, R>(&self, args: A) -> Result<R>
     where
         A: ToJsMulti<'js>,
