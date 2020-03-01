@@ -72,14 +72,22 @@ impl Context {
     /// Set the maximum stack size for the local context stack
     pub fn set_max_stack_size(&self, size: usize) {
         let guard = self.rt.lock().unwrap();
-        unsafe { qjs::JS_SetMaxStackSize(self.ctx, size as u64) };
+        unsafe {
+            #[cfg(feature = "parallel")]
+            qjs::JS_ResetCtxStack(self.ctx);
+            qjs::JS_SetMaxStackSize(self.ctx, size as u64)
+        };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }
 
     pub fn enable_big_num_ext(&self, enable: bool) {
         let guard = self.rt.lock().unwrap();
-        unsafe { qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 }) }
+        unsafe {
+            #[cfg(feature = "parallel")]
+            qjs::JS_ResetCtxStack(self.ctx);
+            qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 })
+        }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }
@@ -92,6 +100,10 @@ impl Context {
         F: FnOnce(Ctx) -> R,
     {
         let guard = self.rt.lock().unwrap();
+        #[cfg(feature = "parallel")]
+        unsafe {
+            qjs::JS_ResetCtxStack(self.ctx)
+        };
         let ctx = Ctx::new(self);
         let res = f(ctx);
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
@@ -104,7 +116,14 @@ impl Drop for Context {
     fn drop(&mut self) {
         let guard = match self.rt.lock() {
             Ok(x) => x,
-            Err(e) => e.into_inner(),
+            // When we can not enter the runtime lock we
+            // prefer to leak the value over possibly corrupting memory
+            // with a double free
+            _ => return,
+        };
+        #[cfg(feature = "parallel")]
+        unsafe {
+            qjs::JS_ResetCtxStack(self.ctx)
         };
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
@@ -113,10 +132,13 @@ impl Drop for Context {
 }
 
 // Since the reference to runtime is behind a Arc this object is send
+//
+#[cfg(feature = "parallel")]
 unsafe impl Send for Context {}
 
 // Since all functions lock the global runtime lock access is synchronized so
 // this object is sync
+#[cfg(feature = "parallel")]
 unsafe impl Sync for Context {}
 
 impl<'js> Ctx<'js> {
@@ -267,5 +289,25 @@ mod test {
                 .unwrap();
             println!("Value found {:?}", value);
         });
+    }
+
+    #[test]
+    #[cfg(feature = "parallel")]
+    fn parallel() {
+        use std::thread;
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>("this.foo = 42").unwrap();
+        });
+        thread::spawn(move || {
+            ctx.with(|ctx| {
+                let i = ctx.eval("foo + 8");
+                assert_eq!(i, Ok(80));
+            });
+        })
+        .join()
+        .unwrap();
     }
 }

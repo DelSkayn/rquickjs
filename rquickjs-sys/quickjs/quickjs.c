@@ -1998,6 +1998,13 @@ static inline BOOL js_check_stack_overflow(JSContext *ctx, size_t alloca_size)
 }
 #endif
 
+#ifdef CONFIG_PARALLEL
+void JS_ResetCtxStack(JSContext *ctx)
+{
+     ctx->stack_top = js_get_stack_pointer();
+}
+#endif
+
 JSContext *JS_NewContextRaw(JSRuntime *rt)
 {
     JSContext *ctx;
