@@ -9,18 +9,18 @@ use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
     mem,
-    sync::{Arc, Mutex},
 };
 
 mod builder;
 pub use builder::ContextBuilder;
 
-/// A single execution context with its own global variables and stack Can share objects with other contexts of the same runtime
+/// A single execution context with its own global variables and stack.
+/// Can share objects with other contexts of the same runtime.
 #[derive(Debug)]
 pub struct Context {
     //TODO replace with NotNull?
     pub(crate) ctx: *mut qjs::JSContext,
-    rt: Arc<Mutex<runtime::Inner>>,
+    rt: runtime::InnerRef,
 }
 
 /// A context in use, passed to [`Context::with`](struct.Context.html#method.with).
@@ -31,10 +31,11 @@ pub struct Ctx<'js> {
 }
 
 impl Context {
-    /// Creates a base context with only the required functions registered
-    /// If additional functions are required use [`Context::build`](#method.build) or [`Contex::full`](#method.full)
+    /// Creates a base context with only the required functions registered.
+    /// If additional functions are required use [`Context::build`](#method.build)
+    /// or [`Contex::full`](#method.full).
     pub fn base(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock().unwrap();
+        let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
@@ -46,11 +47,11 @@ impl Context {
         res
     }
 
-    /// Creates a context with all standart available functions registered
+    /// Creates a context with all standart available functions registered.
     /// If precise controll is required of wich functions are availble use
     /// [`Context::build`](#method.context)
     pub fn full(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock().unwrap();
+        let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
@@ -71,7 +72,7 @@ impl Context {
 
     /// Set the maximum stack size for the local context stack
     pub fn set_max_stack_size(&self, size: usize) {
-        let guard = self.rt.lock().unwrap();
+        let guard = self.rt.lock();
         unsafe {
             #[cfg(feature = "parallel")]
             qjs::JS_ResetCtxStack(self.ctx);
@@ -82,7 +83,7 @@ impl Context {
     }
 
     pub fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.rt.lock().unwrap();
+        let guard = self.rt.lock();
         unsafe {
             #[cfg(feature = "parallel")]
             qjs::JS_ResetCtxStack(self.ctx);
@@ -99,7 +100,7 @@ impl Context {
     where
         F: FnOnce(Ctx) -> R,
     {
-        let guard = self.rt.lock().unwrap();
+        let guard = self.rt.lock();
         #[cfg(feature = "parallel")]
         unsafe {
             qjs::JS_ResetCtxStack(self.ctx)
@@ -114,8 +115,9 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
-        let guard = match self.rt.lock() {
-            Ok(x) => x,
+        //TODO
+        let guard = match self.rt.try_lock() {
+            Some(x) => x,
             // When we can not enter the runtime lock we
             // prefer to leak the value over possibly corrupting memory
             // with a double free

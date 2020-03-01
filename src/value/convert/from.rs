@@ -9,24 +9,15 @@ impl<'js> FromJs<'js> for Value<'js> {
 }
 
 impl<'js> FromJs<'js> for StdString {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let type_name = value.type_name();
-        let res = ctx
-            .coerce_string(value)
-            .map_err(|e| {
-                if let Error::Exception(text) = e {
-                    Error::FromJsConversion {
-                        from: type_name,
-                        to: "string",
-                        message: Some(text),
-                    }
-                } else {
-                    e
-                }
-            })?
-            .to_str()?
-            .to_string();
-        Ok(res)
+    fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        match value {
+            Value::String(x) => Ok(x.to_str()?.to_string()),
+            x => Err(Error::FromJsConversion {
+                from: x.type_name(),
+                to: "string",
+                message: None,
+            }),
+        }
     }
 }
 
@@ -127,7 +118,6 @@ impl<'js> FromJs<'js> for Object<'js> {
 impl<'js> FromJs<'js> for Array<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         match value {
-            Value::Object(x) => Ok(Array::from_object(x)),
             Value::Array(x) => Ok(x),
             x => Err(Error::FromJsConversion {
                 from: x.type_name(),
@@ -154,5 +144,26 @@ impl<'js> FromJs<'js> for Function<'js> {
 impl<'js> FromJs<'js> for () {
     fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
         Ok(())
+    }
+}
+
+impl<'js, T: FromJs<'js>> FromJs<'js> for Vec<T> {
+    fn from_js(_: Ctx<'js>, v: Value<'js>) -> Result<Self> {
+        let x = match v {
+            Value::Array(x) => x,
+            x => {
+                return Err(Error::FromJsConversion {
+                    from: x.type_name(),
+                    to: "vector",
+                    message: None,
+                });
+            }
+        };
+        let len = x.len();
+        let mut res = Vec::new();
+        for i in 0..len {
+            res.push(x.get(i as u32)?);
+        }
+        Ok(res)
     }
 }

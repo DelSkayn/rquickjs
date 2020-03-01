@@ -19,10 +19,10 @@
 use quick_error::quick_error;
 use std::{ffi::NulError, str};
 
+mod context;
 mod runtime;
-pub use runtime::Runtime;
-pub mod context;
 pub use context::{Context, ContextBuilder, Ctx};
+pub use runtime::Runtime;
 mod markers;
 mod value;
 use std::result::Result as StdResult;
