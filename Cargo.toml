@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs"
-version = "0.0.2"
+version = "0.0.3"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -11,7 +11,7 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rquickjs-sys = { version = "0.0.1", path = "./rquickjs-sys/" }
+rquickjs-sys = { version = "0.0.2", path = "./rquickjs-sys/" }
 quick-error = "1.2.3"
 libc = "0.2.67"
 
