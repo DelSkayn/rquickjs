@@ -156,3 +156,24 @@ impl<'js> FromJs<'js> for () {
         Ok(())
     }
 }
+
+impl<'js, T: FromJs<'js>> FromJs<'js> for Vec<T> {
+    fn from_js(_: Ctx<'js>, v: Value<'js>) -> Result<Self> {
+        let x = match v {
+            Value::Array(x) => x,
+            x => {
+                return Err(Error::FromJsConversion {
+                    from: x.type_name(),
+                    to: "vector",
+                    message: None,
+                });
+            }
+        };
+        let len = x.len();
+        let mut res = Vec::new();
+        for i in 0..len {
+            res.push(x.get(i as u32)?);
+        }
+        Ok(res)
+    }
+}
