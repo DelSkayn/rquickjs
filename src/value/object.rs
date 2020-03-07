@@ -136,8 +136,8 @@ mod test {
                 assert_eq!(text.as_str(), "a");
                 let int: i32 = x.get("a").unwrap();
                 assert_eq!(int, 3);
-                let int: StdString = x.get("a").unwrap();
-                assert_eq!(int, "3");
+                let int: StdString = x.get(3).unwrap();
+                assert_eq!(int, "a");
                 x.set("hallo", "foo").unwrap();
                 assert_eq!(x.get("hallo"), Ok("foo".to_string()));
                 x.remove("hallo").unwrap();

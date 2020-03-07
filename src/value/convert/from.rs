@@ -11,7 +11,7 @@ impl<'js> FromJs<'js> for Value<'js> {
 impl<'js> FromJs<'js> for StdString {
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         match value {
-            Value::String(x) => Ok(x.to_str()?.to_string()),
+            Value::String(x) => Ok(x.to_string()?),
             x => Err(Error::FromJsConversion {
                 from: x.type_name(),
                 to: "string",

@@ -196,6 +196,10 @@ pub unsafe fn JS_DupValue(v: JSValue) -> JSValue {
 pub unsafe fn JS_ToCString(ctx: *mut JSContext, val: JSValue) -> *const i8 {
     JS_ToCStringLen2(ctx, ptr::null_mut(), val, 0)
 }
+#[inline]
+pub unsafe fn JS_ToCStringLen(ctx: *mut JSContext, plen: *mut size_t, val: JSValue) -> *const i8 {
+    JS_ToCStringLen2(ctx, plen, val, 0)
+}
 
 #[inline]
 pub unsafe fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> JSValue {

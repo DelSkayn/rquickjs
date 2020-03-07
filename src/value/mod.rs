@@ -79,7 +79,7 @@ impl<'js> Value<'js> {
         let v = handle_exception(ctx, v)?;
         //TODO test for overflow in down cast
         //Should probably not happen
-        match v.tag as i32 {
+        match dbg!(v.tag) as i32 {
             qjs::JS_TAG_INT => Ok(Value::Int(qjs::JS_VALUE_GET_INT!(v))),
             qjs::JS_TAG_BOOL => Ok(Value::Bool(qjs::JS_VALUE_GET_BOOL!(v) != 0)),
             qjs::JS_TAG_NULL => Ok(Value::Null),
