@@ -16,6 +16,8 @@ mod function;
 pub use function::Function;
 mod convert;
 pub use convert::*;
+mod atom;
+pub use atom::*;
 mod rf;
 
 /// Any javascript value

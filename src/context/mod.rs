@@ -94,7 +94,12 @@ impl Context {
     }
 
     /// A entry point for manipulating and using javascript objects and scripts.
-    /// The api is structured this way to avoid objects being used with other runtimes.
+    /// The api is structured this way to avoid repeated locking the runtime when ever
+    /// any function is called. This way the runtime is locked once before executing the callback.
+    /// Furthermore, this way it is impossible to use values from different runtimes in this
+    /// context which would otherwise be undefined behaviour.
+    ///
+    ///
     /// This is the only way to get a [`Ctx`](struct.Ctx.html) object.
     pub fn with<F, R>(&self, f: F) -> R
     where
@@ -111,6 +116,11 @@ impl Context {
         mem::drop(guard);
         res
     }
+
+    //#[cfg(not(feature = "parallel"))]
+    //pub fn inner(&self) -> Ctx {
+    //Ctx::new(self)
+    //}
 }
 
 impl Drop for Context {
@@ -191,6 +201,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Coerce a value to a string in the same way javascript would coerce values.
     pub fn coerce_string(self, v: Value<'js>) -> Result<String<'js>> {
         unsafe {
             let js_val = qjs::JS_ToString(self.ctx, v.as_js_value());
@@ -202,6 +213,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Coerce a value to a i32 in the same way javascript would coerce values.
     pub fn coerce_i32(self, v: Value<'js>) -> Result<i32> {
         unsafe {
             let mut val: i32 = 0;
@@ -252,7 +264,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Get the global object of this context
+    /// Returns the global object of this context.
     pub fn globals(self) -> Object<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);

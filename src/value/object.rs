@@ -1,6 +1,6 @@
 use crate::{
     value::{self, rf::JsObjectRef},
-    Ctx, FromJs, Result, ToJs, Value,
+    Ctx, FromJs, Result, ToAtom, ToJs, Value,
 };
 use rquickjs_sys as qjs;
 use std::mem;
@@ -33,20 +33,10 @@ impl<'js> Object<'js> {
     }
 
     /// Get a new value
-    pub fn get<K: ToJs<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
-        let key = k.to_js(self.0.ctx)?;
+    pub fn get<K: ToAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
+        let atom = k.to_atom(self.0.ctx);
         unsafe {
-            let val = match key {
-                Value::Int(x) => {
-                    // TODO is this correct. Integers are signed and the index here is unsigned
-                    // Soo...
-                    qjs::JS_GetPropertyUint32(self.0.ctx.ctx, self.as_js_value(), x as u32)
-                }
-                x => {
-                    let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, x.as_js_value());
-                    qjs::JS_GetProperty(self.0.ctx.ctx, self.as_js_value(), atom)
-                }
-            };
+            let val = qjs::JS_GetProperty(self.0.ctx.ctx, self.as_js_value(), atom.atom);
             V::from_js(self.0.ctx, Value::from_js_value(self.0.ctx, val)?)
         }
     }
@@ -54,12 +44,11 @@ impl<'js> Object<'js> {
     /// check wether the object contains a certain key.
     pub fn contains_key<K>(&self, k: K) -> Result<bool>
     where
-        K: ToJs<'js>,
+        K: ToAtom<'js>,
     {
-        let key = k.to_js(self.0.ctx)?;
+        let atom = k.to_atom(self.0.ctx);
         unsafe {
-            let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, key.as_js_value());
-            let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.as_js_value(), atom);
+            let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.as_js_value(), atom.atom);
             if res < 0 {
                 return Err(value::get_exception(self.0.ctx));
             }
@@ -71,12 +60,16 @@ impl<'js> Object<'js> {
     // This can allow code to do checks for the same value faster by
     // pre computing the atom for the key.
     /// Set a member of an object to a certain value
-    pub fn set<K: ToJs<'js>, V: ToJs<'js>>(&self, key: K, value: V) -> Result<()> {
-        let key = key.to_js(self.0.ctx)?;
+    pub fn set<K: ToAtom<'js>, V: ToJs<'js>>(&self, key: K, value: V) -> Result<()> {
+        let atom = key.to_atom(self.0.ctx);
         let val = value.to_js(self.0.ctx)?;
         unsafe {
-            let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, key.as_js_value());
-            if qjs::JS_SetProperty(self.0.ctx.ctx, self.as_js_value(), atom, val.as_js_value()) < 0
+            if qjs::JS_SetProperty(
+                self.0.ctx.ctx,
+                self.as_js_value(),
+                atom.atom,
+                val.as_js_value(),
+            ) < 0
             {
                 return Err(value::get_exception(self.0.ctx));
             }
@@ -88,14 +81,13 @@ impl<'js> Object<'js> {
     }
 
     /// Remove a member of this objects
-    pub fn remove<K: ToJs<'js>>(&self, key: K) -> Result<()> {
-        let key = key.to_js(self.0.ctx)?;
+    pub fn remove<K: ToAtom<'js>>(&self, key: K) -> Result<()> {
+        let atom = key.to_atom(self.0.ctx);
         unsafe {
-            let atom = qjs::JS_ValueToAtom(self.0.ctx.ctx, key.as_js_value());
             if qjs::JS_DeleteProperty(
                 self.0.ctx.ctx,
                 self.as_js_value(),
-                atom,
+                atom.atom,
                 qjs::JS_PROP_THROW as i32,
             ) < 0
             {
@@ -105,10 +97,12 @@ impl<'js> Object<'js> {
         Ok(())
     }
 
+    /// Check if the object is a function.
     pub fn is_function(&self) -> bool {
         unsafe { qjs::JS_IsFunction(self.0.ctx.ctx, self.as_js_value()) != 0 }
     }
 
+    /// Check if the object is an array.
     pub fn is_array(&self) -> bool {
         unsafe { qjs::JS_IsArray(self.0.ctx.ctx, self.as_js_value()) != 0 }
     }
@@ -146,5 +140,40 @@ mod test {
                 panic!();
             };
         });
+    }
+
+    #[test]
+    fn types() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let val: Object = ctx
+                .eval(
+                    r#"
+                let array_3 = [];
+                array_3[3] = "foo";
+                array_3[99] = 4;
+                ({
+                    array_1: [0,1,2,3,4,5],
+                    array_2: [0,"foo",{},undefined,4,5],
+                    array_3: array_3,
+                    func_1: () => 1,
+                    func_2: function(){ return "foo"},
+                    obj_1: {
+                        a: 1,
+                        b: "foo",
+                    },
+                })
+                "#,
+                )
+                .unwrap();
+            assert!(val.get::<_, Object>("array_1").unwrap().is_array());
+            assert!(val.get::<_, Object>("array_2").unwrap().is_array());
+            assert!(val.get::<_, Object>("array_3").unwrap().is_array());
+            assert!(val.get::<_, Object>("func_1").unwrap().is_function());
+            assert!(val.get::<_, Object>("func_2").unwrap().is_function());
+            assert!(!val.get::<_, Object>("obj_1").unwrap().is_function());
+            assert!(!val.get::<_, Object>("obj_1").unwrap().is_array());
+        })
     }
 }

@@ -1,4 +1,5 @@
-use crate::{context::Ctx, Result, Value};
+use crate::{context::Ctx, Atom, Result, Value};
+mod atom;
 mod from;
 mod multi;
 mod to;
@@ -16,4 +17,9 @@ pub trait ToJs<'js> {
 /// For converting multiple of value to javascript
 pub trait ToJsMulti<'js> {
     fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value>>;
+}
+
+/// Trait for converting values to atoms.
+pub trait ToAtom<'js> {
+    fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js>;
 }

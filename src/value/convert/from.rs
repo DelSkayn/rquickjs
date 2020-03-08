@@ -106,6 +106,8 @@ impl<'js> FromJs<'js> for Object<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         match value {
             Value::Object(x) => Ok(x),
+            Value::Array(x) => Ok(x.to_object()),
+            Value::Function(x) => Ok(x.to_object()),
             x => Err(Error::FromJsConversion {
                 from: x.type_name(),
                 to: "object",
