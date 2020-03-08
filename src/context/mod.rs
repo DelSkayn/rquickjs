@@ -5,14 +5,30 @@ use crate::{
     Error, FromJs, Module, Object, Result, Runtime, Value,
 };
 use rquickjs_sys as qjs;
+#[cfg(feature = "parallel")]
+use std::thread::{self, ThreadId};
 use std::{
-    ffi::{CStr, CString},
+    ffi::{c_void, CStr, CString},
     marker::PhantomData,
     mem,
 };
 
 mod builder;
 pub use builder::ContextBuilder;
+
+struct ContextInfo {
+    #[cfg(feature = "parallel")]
+    last_thread_id: ThreadId,
+}
+
+impl ContextInfo {
+    pub fn new() -> Self {
+        ContextInfo {
+            #[cfg(feature = "parallel")]
+            last_thread_id: thread::current().id(),
+        }
+    }
+}
 
 /// A single execution context with its own global variables and stack.
 /// Can share objects with other contexts of the same runtime.
@@ -44,6 +60,8 @@ impl Context {
             ctx,
             rt: runtime.inner.clone(),
         });
+        let info = Box::new(ContextInfo::new());
+        unsafe { qjs::JS_SetContextOpaque(ctx, Box::into_raw(info) as *mut c_void) };
         res
     }
 
@@ -60,10 +78,26 @@ impl Context {
             ctx,
             rt: runtime.inner.clone(),
         });
+        let info = Box::new(ContextInfo::new());
+        unsafe { qjs::JS_SetContextOpaque(ctx, Box::into_raw(info) as *mut c_void) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
         res
     }
+
+    #[cfg(feature = "parallel")]
+    fn reset_stack(&self) {
+        unsafe {
+            let ptr = qjs::JS_GetContextOpaque(self.ctx) as *mut ContextInfo;
+            if (*ptr).last_thread_id != thread::current().id() {
+                (*ptr).last_thread_id = thread::current().id();
+                qjs::JS_ResetCtxStack(self.ctx);
+            }
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    fn reset_stack(&self) {}
 
     /// Create a context builder for creating a context with a specific set of intrinsics
     pub fn build(rt: &Runtime) -> ContextBuilder {
@@ -73,22 +107,16 @@ impl Context {
     /// Set the maximum stack size for the local context stack
     pub fn set_max_stack_size(&self, size: usize) {
         let guard = self.rt.lock();
-        unsafe {
-            #[cfg(feature = "parallel")]
-            qjs::JS_ResetCtxStack(self.ctx);
-            qjs::JS_SetMaxStackSize(self.ctx, size as u64)
-        };
+        self.reset_stack();
+        unsafe { qjs::JS_SetMaxStackSize(self.ctx, size as u64) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }
 
     pub fn enable_big_num_ext(&self, enable: bool) {
         let guard = self.rt.lock();
-        unsafe {
-            #[cfg(feature = "parallel")]
-            qjs::JS_ResetCtxStack(self.ctx);
-            qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 })
-        }
+        self.reset_stack();
+        unsafe { qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 }) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }
@@ -106,10 +134,7 @@ impl Context {
         F: FnOnce(Ctx) -> R,
     {
         let guard = self.rt.lock();
-        #[cfg(feature = "parallel")]
-        unsafe {
-            qjs::JS_ResetCtxStack(self.ctx)
-        };
+        self.reset_stack();
         let ctx = Ctx::new(self);
         let res = f(ctx);
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
@@ -133,10 +158,7 @@ impl Drop for Context {
             // with a double free
             _ => return,
         };
-        #[cfg(feature = "parallel")]
-        unsafe {
-            qjs::JS_ResetCtxStack(self.ctx)
-        };
+        self.reset_stack();
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)

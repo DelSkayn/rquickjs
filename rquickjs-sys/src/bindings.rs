@@ -1612,15 +1612,19 @@ extern "C" {
     pub fn JS_IsLiveObject(rt: *mut JSRuntime, obj: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    /// Create a new context from a given runtime
     pub fn JS_NewContext(rt: *mut JSRuntime) -> *mut JSContext;
 }
 extern "C" {
+    /// Destroy a context
     pub fn JS_FreeContext(s: *mut JSContext);
 }
 extern "C" {
+    /// Set a opaque pointer for a context.
     pub fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
+    /// Get a opaque pointer for a context.
     pub fn JS_SetContextOpaque(ctx: *mut JSContext, opaque: *mut ::std::os::raw::c_void);
 }
 extern "C" {

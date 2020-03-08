@@ -182,7 +182,6 @@ impl<'a> ContextBuilder<'a> {
         if self.operator_overloading {
             unsafe { qjs::JS_AddIntrinsicOperators(ctx.ctx) };
         }
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
         Ok(ctx)
     }
