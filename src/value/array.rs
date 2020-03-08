@@ -8,6 +8,7 @@ use std::ffi::CStr;
 /// Rust representation of a javascript array.
 /// Javascript array's are objects and can be used as such.
 /// However arrays in quickjs are optimized when they do not have any holes.
+/// This value represents such a optimized array.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Array<'js>(pub(crate) JsObjectRef<'js>);
 
