@@ -23,3 +23,6 @@ members = [
 [features]
 parallel = ["rquickjs-sys/parallel"]
 exports = ["rquickjs-sys/exports"]
+
+[dev-dependencies]
+trybuild = "1.0.23"

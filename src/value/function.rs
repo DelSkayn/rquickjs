@@ -2,6 +2,7 @@ use crate::{value::rf::JsObjectRef, Ctx, FromJs, Object, Result, ToJsMulti, Valu
 use rquickjs_sys as qjs;
 use std::mem;
 
+/// Rust representation of a javascript function.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function<'js>(pub(crate) JsObjectRef<'js>);
 

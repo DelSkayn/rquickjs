@@ -5,6 +5,9 @@ mod multi;
 mod to;
 
 /// For converting javascript values to rust values
+///
+/// This trait automaticly converts any value which can be
+/// represented as an object, like [`Array`](struct.Array.html) to one if it is required.
 pub trait FromJs<'js>: Sized {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self>;
 }
