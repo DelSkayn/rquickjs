@@ -115,32 +115,3 @@ impl<'js> Drop for Atom<'js> {
         }
     }
 }
-
-/*
-/// A raw atom value without its associated context.
-///
-/// Some types of atoms represent a reference counted value
-/// in a hashmap.
-/// RawAtoms can be copied and are smaller in memory but dont free themselfs
-/// so using them inproperly might result in memory leaks.
-/// It is generally advised to use [`Atom`](struct.Atom.html) instead of this struct.
-#[derive(Clone, Copy, Hash)]
-pub(crate) struct RawAtom<'js>(pub(crate) qjs::JSAtom);
-
-impl<'js> RawAtom<'js>{
-    /// Create the raw atom from a javascript value.
-    pub fn from_value(ctx: Ctx<'js>, value: Value<'js) -> RawAtom<'js>{
-        // TODO figure out if this can give errors
-        // It seems like it could but I have not yet figured out
-        // how to detect this.
-        RawAtom(qjs::JS_ValueToAtom(ctx.ctx, value.as_js_value()));
-    }
-
-    /// Increase the reference count of this atom if it has one.
-    pub fn dup(self,ctx: Ctx<'js>)
-
-    /// Decrease the reference count of this atom if it has one.
-    /// and free if
-    pub unsafe fn free(self, ctx: Ctx<'js>)
-}
-*/

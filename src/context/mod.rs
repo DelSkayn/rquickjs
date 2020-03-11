@@ -141,11 +141,6 @@ impl Context {
         mem::drop(guard);
         res
     }
-
-    //#[cfg(not(feature = "parallel"))]
-    //pub fn inner(&self) -> Ctx {
-    //Ctx::new(self)
-    //}
 }
 
 impl Drop for Context {

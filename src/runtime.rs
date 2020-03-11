@@ -11,9 +11,8 @@ use std::{ffi::CString, mem, ptr};
 
 #[derive(Debug)]
 pub(crate) struct Inner {
-    //TODO: Maybe make this NonNull?
     pub(crate) rt: *mut qjs::JSRuntime,
-    // Keep info alive for the entire duration of the lifetime of rt
+    // To keep rt info alive for the entire duration of the lifetime of rt
     info: Option<CString>,
 }
 
@@ -47,13 +46,16 @@ impl InnerRef {
     }
 }
 
-/// Entry point of the library.
+/// Quickjs runtime, entry point of the library.
 #[derive(Debug, Clone)]
 pub struct Runtime {
     pub(crate) inner: InnerRef,
 }
 
 impl Runtime {
+    /// Create a new runtime.
+    ///
+    /// Will generally only fail if not enough memory was available.
     pub fn new() -> Result<Self, Error> {
         let rt = unsafe { qjs::JS_NewRuntime() };
         if rt == ptr::null_mut() {
@@ -74,6 +76,7 @@ impl Runtime {
         }
     }
 
+    /// Set the info of the runtime
     pub fn set_info<S: Into<Vec<u8>>>(&mut self, info: S) -> Result<(), Error> {
         let mut guard = self.inner.lock();
         let string = CString::new(info)?;
@@ -82,6 +85,10 @@ impl Runtime {
         Ok(())
     }
 
+    /// Set a limit on the max amount of memory the runtime
+    /// will use.
+    ///
+    /// Setting the limit to 0 is equivalent to unlimited memory.
     pub fn set_memory_limit(&self, limit: usize) {
         let guard = self.inner.lock();
         let limit = limit as qjs::size_t;
@@ -89,6 +96,7 @@ impl Runtime {
         mem::drop(guard);
     }
 
+    /// Set a memory threshold for garbage collection.
     pub fn set_gc_threshold(&self, threshold: usize) {
         let guard = self.inner.lock();
         let threshold = threshold as qjs::size_t;
@@ -96,6 +104,12 @@ impl Runtime {
         mem::drop(guard);
     }
 
+    /// Manually run the garbage collection.
+    ///
+    /// Most of quickjs values are reference counted and
+    /// will automaticly free themselfs when they have no more
+    /// references. The garbage collector is only for collecting
+    /// cyclic references.
     pub fn run_gc(&self) {
         let guard = self.inner.lock();
         unsafe { qjs::JS_RunGC(guard.rt) }

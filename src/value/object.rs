@@ -56,9 +56,6 @@ impl<'js> Object<'js> {
         }
     }
 
-    // TODO implement ToKey, which will create a atom for a value,
-    // This can allow code to do checks for the same value faster by
-    // pre computing the atom for the key.
     /// Set a member of an object to a certain value
     pub fn set<K: ToAtom<'js>, V: ToJs<'js>>(&self, key: K, value: V) -> Result<()> {
         let atom = key.to_atom(self.0.ctx);
