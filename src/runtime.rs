@@ -1,4 +1,5 @@
-use crate::Error;
+use crate::{Error, RegisteryKey};
+use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
 #[cfg(feature = "parallel")]
 use std::sync::{Arc, Mutex, MutexGuard};
@@ -9,19 +10,19 @@ use std::{
 };
 use std::{ffi::CString, mem, ptr};
 
-#[derive(Debug)]
 pub(crate) struct Inner {
     pub(crate) rt: *mut qjs::JSRuntime,
+    pub(crate) registery: HashSet<RegisteryKey>,
     // To keep rt info alive for the entire duration of the lifetime of rt
     info: Option<CString>,
 }
 
 #[cfg(not(feature = "parallel"))]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct InnerRef(Rc<RefCell<Inner>>);
 
 #[cfg(feature = "parallel")]
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct InnerRef(Arc<Mutex<Inner>>);
 
 impl InnerRef {
@@ -47,7 +48,7 @@ impl InnerRef {
 }
 
 /// Quickjs runtime, entry point of the library.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct Runtime {
     pub(crate) inner: InnerRef,
 }
@@ -64,7 +65,11 @@ impl Runtime {
         #[cfg(not(feature = "parallel"))]
         {
             Ok(Runtime {
-                inner: InnerRef(Rc::new(RefCell::new(Inner { rt, info: None }))),
+                inner: InnerRef(Rc::new(RefCell::new(Inner {
+                    rt,
+                    info: None,
+                    registery: HashSet::default(),
+                }))),
             })
         }
 

@@ -3,7 +3,6 @@ use rquickjs_sys as qjs;
 use std::mem;
 
 /// Used for building a [`Context`](struct.Context.html) with a specific set of intrinsics
-#[derive(Debug)]
 pub struct ContextBuilder<'a> {
     date: bool,
     eval: bool,

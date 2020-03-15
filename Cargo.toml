@@ -14,6 +14,7 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 rquickjs-sys = { version = "0.0.3", path = "./rquickjs-sys/" }
 quick-error = "1.2.3"
 libc = "0.2.67"
+fxhash = "0.2.1"
 
 [workspace]
 members = [

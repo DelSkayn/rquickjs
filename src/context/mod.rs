@@ -2,8 +2,9 @@ use crate::{
     markers::Invariant,
     runtime,
     value::{self, String},
-    Error, FromJs, Module, Object, Result, Runtime, Value,
+    Error, FromJs, Module, Object, RegisteryKey, Result, Runtime, Value,
 };
+use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
 #[cfg(feature = "parallel")]
 use std::thread::{self, ThreadId};
@@ -16,34 +17,16 @@ use std::{
 mod builder;
 pub use builder::ContextBuilder;
 
-struct ContextInfo {
-    #[cfg(feature = "parallel")]
-    last_thread_id: ThreadId,
-}
-
-impl ContextInfo {
-    pub fn new() -> Self {
-        ContextInfo {
-            #[cfg(feature = "parallel")]
-            last_thread_id: thread::current().id(),
-        }
-    }
+pub(crate) unsafe fn get_registery(ctx: *mut qjs::JSContext) -> *mut HashSet<RegisteryKey> {
+    qjs::JS_GetContextOpaque(ctx) as *mut HashSet<RegisteryKey>
 }
 
 /// A single execution context with its own global variables and stack.
 /// Can share objects with other contexts of the same runtime.
-#[derive(Debug)]
 pub struct Context {
     //TODO replace with NotNull?
     pub(crate) ctx: *mut qjs::JSContext,
     rt: runtime::InnerRef,
-}
-
-/// A context in use, passed to [`Context::with`](struct.Context.html#method.with).
-#[derive(Clone, Copy, Debug)]
-pub struct Ctx<'js> {
-    pub(crate) ctx: *mut qjs::JSContext,
-    marker: Invariant<'js>,
 }
 
 impl Context {
@@ -51,7 +34,7 @@ impl Context {
     /// If additional functions are required use [`Context::build`](#method.build)
     /// or [`Contex::full`](#method.full).
     pub fn base(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock();
+        let mut guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
@@ -60,8 +43,8 @@ impl Context {
             ctx,
             rt: runtime.inner.clone(),
         });
-        let info = Box::new(ContextInfo::new());
-        unsafe { qjs::JS_SetContextOpaque(ctx, Box::into_raw(info) as *mut c_void) };
+        let info = &mut guard.registery;
+        unsafe { qjs::JS_SetContextOpaque(ctx, info as *mut _ as *mut c_void) };
         res
     }
 
@@ -69,7 +52,7 @@ impl Context {
     /// If precise controll is required of wich functions are availble use
     /// [`Context::build`](#method.context)
     pub fn full(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock();
+        let mut guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
@@ -78,8 +61,8 @@ impl Context {
             ctx,
             rt: runtime.inner.clone(),
         });
-        let info = Box::new(ContextInfo::new());
-        unsafe { qjs::JS_SetContextOpaque(ctx, Box::into_raw(info) as *mut c_void) };
+        let info = &mut guard.registery;
+        unsafe { qjs::JS_SetContextOpaque(ctx, info as *mut _ as *mut c_void) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
         res
@@ -88,11 +71,7 @@ impl Context {
     #[cfg(feature = "parallel")]
     fn reset_stack(&self) {
         unsafe {
-            let ptr = qjs::JS_GetContextOpaque(self.ctx) as *mut ContextInfo;
-            if (*ptr).last_thread_id != thread::current().id() {
-                (*ptr).last_thread_id = thread::current().id();
-                qjs::JS_ResetCtxStack(self.ctx);
-            }
+            qjs::JS_ResetCtxStack(self.ctx);
         }
     }
 
@@ -169,6 +148,13 @@ unsafe impl Send for Context {}
 // this object is sync
 #[cfg(feature = "parallel")]
 unsafe impl Sync for Context {}
+
+/// A context in use, passed to [`Context::with`](struct.Context.html#method.with).
+#[derive(Clone, Copy, Debug)]
+pub struct Ctx<'js> {
+    pub(crate) ctx: *mut qjs::JSContext,
+    marker: Invariant<'js>,
+}
 
 impl<'js> Ctx<'js> {
     fn new(ctx: &'js Context) -> Self {
@@ -286,6 +272,47 @@ impl<'js> Ctx<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);
             Object::from_js_value(self, v)
+        }
+    }
+
+    /// Store a value in the registery so references to
+    /// it can be kept outside the scope of context use.
+    pub fn register(self, v: Value<'js>) -> RegisteryKey {
+        unsafe {
+            let register = get_registery(self.ctx);
+            let key = RegisteryKey(v.as_js_value());
+            (*register).insert(key);
+            // Registery takes ownership so forget the value
+            mem::forget(v);
+            key
+        }
+    }
+
+    /// Remove a value from the registery.
+    pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
+        unsafe {
+            let register = get_registery(self.ctx);
+            if (*register).remove(&k) {
+                Some(Value::from_js_value(self, k.0).unwrap())
+            } else {
+                None
+            }
+        }
+    }
+
+    /// Get a value from the registery.
+    pub fn get_register(self, k: RegisteryKey) -> Option<Value<'js>> {
+        unsafe {
+            let register = get_registery(self.ctx);
+            if (*register).contains(&k) {
+                let value = Value::from_js_value(self, k.0).unwrap();
+                // Increment the reference count to register since the
+                // value remains also owned by the register
+                mem::forget(value.clone());
+                Some(value)
+            } else {
+                None
+            }
         }
     }
 }

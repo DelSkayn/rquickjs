@@ -38,6 +38,8 @@ use quick_error::quick_error;
 use std::{ffi::NulError, str};
 
 mod context;
+mod registery_key;
+pub use registery_key::RegisteryKey;
 mod runtime;
 pub use context::{Context, ContextBuilder, Ctx};
 pub use runtime::Runtime;
