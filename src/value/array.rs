@@ -5,7 +5,8 @@ use crate::{
 use rquickjs_sys as qjs;
 use std::ffi::CStr;
 
-/// Rust representation of a javascript array.
+/// Rust representation of a javascript object optimized as an array.
+///
 /// Javascript array's are objects and can be used as such.
 /// However arrays in quickjs are optimized when they do not have any holes.
 /// This value represents such a optimized array.

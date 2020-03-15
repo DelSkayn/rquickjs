@@ -4,6 +4,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+/// Key for a registery of a context.
 #[derive(Clone, Copy)]
 pub struct RegisteryKey(pub(crate) qjs::JSValue);
 

@@ -20,7 +20,7 @@ mod atom;
 pub use atom::*;
 mod rf;
 
-/// Any javascript value
+/// Any javascript value.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value<'js> {
     Function(Function<'js>),

@@ -1,6 +1,7 @@
 use crate::{value::rf::JsSymbolRef, Ctx};
 use rquickjs_sys as qjs;
 
+/// Rust representation of a javascript symbol.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Symbol<'js>(JsSymbolRef<'js>);
 

@@ -41,7 +41,7 @@ mod context;
 mod registery_key;
 pub use registery_key::RegisteryKey;
 mod runtime;
-pub use context::{Context, ContextBuilder, Ctx};
+pub use context::{Context, ContextBuilder, Ctx, MultiWith};
 pub use runtime::Runtime;
 mod markers;
 mod value;
@@ -50,7 +50,7 @@ use std::string::String as StdString;
 pub use value::*;
 
 quick_error! {
-    /// Error type of the library
+    /// Error type of the library.
     #[derive(Debug,Clone,PartialEq)]
     pub enum Error{
         /// Could not allocate memory

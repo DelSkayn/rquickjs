@@ -1,7 +1,7 @@
 use crate::{value::rf::JsModuleRef, Ctx};
 use rquickjs_sys as qjs;
 
-/// A module with certain exports and imports
+/// Javascript module with certain exports and imports
 #[derive(Debug, PartialEq)]
 pub struct Module<'js>(JsModuleRef<'js>);
 
