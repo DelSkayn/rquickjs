@@ -25,11 +25,11 @@ impl<'js> FromJs<'js> for i32 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let type_name = value.type_name();
         ctx.coerce_i32(value).map_err(|e| {
-            if let Error::Exception(text) = e {
+            if e.is_exception() {
                 Error::FromJsConversion {
                     from: type_name,
                     to: "i32",
-                    message: Some(text),
+                    message: Some(format!("{}", e)),
                 }
             } else {
                 e
@@ -42,11 +42,11 @@ impl<'js> FromJs<'js> for u64 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let type_name = value.type_name();
         ctx.coerce_u64(value).map_err(|e| {
-            if let Error::Exception(text) = e {
+            if e.is_exception() {
                 Error::FromJsConversion {
                     from: type_name,
                     to: "u32",
-                    message: Some(text),
+                    message: Some(format!("{}", e)),
                 }
             } else {
                 e
@@ -59,11 +59,11 @@ impl<'js> FromJs<'js> for f64 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let type_name = value.type_name();
         ctx.coerce_f64(value).map_err(|e| {
-            if let Error::Exception(text) = e {
+            if e.is_exception() {
                 Error::FromJsConversion {
                     from: type_name,
                     to: "f64",
-                    message: Some(text),
+                    message: Some(format!("{}", e)),
                 }
             } else {
                 e
@@ -76,11 +76,11 @@ impl<'js> FromJs<'js> for bool {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let type_name = value.type_name();
         ctx.coerce_bool(value).map_err(|e| {
-            if let Error::Exception(text) = e {
+            if e.is_exception() {
                 Error::FromJsConversion {
                     from: type_name,
                     to: "bool",
-                    message: Some(text),
+                    message: Some(format!("{}", e)),
                 }
             } else {
                 e

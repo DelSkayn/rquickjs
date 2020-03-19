@@ -1,6 +1,6 @@
 use crate::{context::Ctx, Error};
 use rquickjs_sys as qjs;
-use std::ffi::CStr;
+//use std::ffi::CStr;
 
 mod module;
 pub use module::Module;
@@ -49,29 +49,41 @@ pub(crate) unsafe fn handle_exception<'js>(
 }
 
 pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
+    let atom_stack = Atom::from_str(ctx, "stack");
+    let atom_file_name = Atom::from_str(ctx, "fileName");
+    let atom_line_number = Atom::from_str(ctx, "lineNumber");
+    let atom_message = Atom::from_str(ctx, "message");
+
     let exception_val = qjs::JS_GetException(ctx.ctx);
-    let is_error = qjs::JS_IsError(ctx.ctx, exception_val);
-    let s = qjs::JS_ToCString(ctx.ctx, exception_val);
-    if s.is_null() {
-        return Error::Unknown;
-    }
-    let mut exception_text = CStr::from_ptr(s).to_string_lossy().into_owned();
-    qjs::JS_FreeCString(ctx.ctx, s);
-    if is_error == 1 {
-        let s_stack = CStr::from_bytes_with_nul(b"stack\0").unwrap();
-        let val = qjs::JS_GetPropertyStr(ctx.ctx, exception_val, s_stack.as_ptr());
-        if !qjs::JS_IsUndefined(val) {
-            let stack = qjs::JS_ToCString(ctx.ctx, val);
-            let text = match CStr::from_ptr(stack).to_str() {
-                Err(e) => return e.into(),
-                Ok(x) => x,
-            };
-            exception_text = format!("{}\n{}", exception_text, text);
-            qjs::JS_FreeCString(ctx.ctx, stack);
-        }
-    }
+    // Dont know if is this is always correct
+    // TODO test exceptions
+    let message = Value::from_js_value(
+        ctx,
+        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_message.atom),
+    )
+    .unwrap();
+    let stack = Value::from_js_value(
+        ctx,
+        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_stack.atom),
+    )
+    .unwrap();
+    let file = Value::from_js_value(
+        ctx,
+        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_file_name.atom),
+    )
+    .unwrap();
+    let line = Value::from_js_value(
+        ctx,
+        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_line_number.atom),
+    )
+    .unwrap();
     qjs::JS_FreeValue(ctx.ctx, exception_val);
-    Error::Exception(exception_text)
+    Error::Exception {
+        message: FromJs::from_js(ctx, message).unwrap(),
+        file: FromJs::from_js(ctx, file).unwrap(),
+        line: f64::from_js(ctx, line).unwrap() as u32,
+        stack: FromJs::from_js(ctx, stack).unwrap(),
+    }
 }
 
 impl<'js> Value<'js> {

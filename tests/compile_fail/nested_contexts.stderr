@@ -30,5 +30,5 @@ note: ...so that the types are compatible
    |
 10 |             let f: Function = ctx_2.eval("x => x + 'b'").unwrap();
    |                                     ^^^^
-   = note: expected  `rquickjs::context::Ctx<'_>`
-              found  `rquickjs::context::Ctx<'_>`
+   = note: expected  `rquickjs::context::ctx::Ctx<'_>`
+              found  `rquickjs::context::ctx::Ctx<'_>`
