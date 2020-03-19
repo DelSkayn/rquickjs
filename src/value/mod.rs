@@ -80,7 +80,7 @@ pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
     qjs::JS_FreeValue(ctx.ctx, exception_val);
     Error::Exception {
         message: FromJs::from_js(ctx, message).unwrap(),
-        file: FromJs::from_js(ctx, file).unwrap(),
+        file: FromJs::from_js(ctx, file).unwrap_or_else(|_| "unknown".to_string()),
         line: f64::from_js(ctx, line).unwrap() as u32,
         stack: FromJs::from_js(ctx, stack).unwrap(),
     }
@@ -93,7 +93,7 @@ impl<'js> Value<'js> {
         let v = handle_exception(ctx, v)?;
         //TODO test for overflow in down cast
         //Should probably not happen
-        match dbg!(v.tag) as i32 {
+        match v.tag as i32 {
             qjs::JS_TAG_INT => Ok(Value::Int(qjs::JS_VALUE_GET_INT!(v))),
             qjs::JS_TAG_BOOL => Ok(Value::Bool(qjs::JS_VALUE_GET_BOOL!(v) != 0)),
             qjs::JS_TAG_NULL => Ok(Value::Null),
@@ -158,7 +158,8 @@ impl<'js> Value<'js> {
         }
     }
 
-    pub(crate) fn type_name(&self) -> &'static str {
+    #[doc(hidden)]
+    pub fn type_name(&self) -> &'static str {
         match *self {
             Value::Int(_) => "integer",
             Value::Bool(_) => "bool",

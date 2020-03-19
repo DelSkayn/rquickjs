@@ -174,17 +174,16 @@ mod test {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
-            let value: Module = ctx
+            let _value: Module = ctx
                 .compile(
+                    "test_mod",
                     r#"
                     let t = "3";
                     let b = (a) => a + 3;
                     export { b, t}
                 "#,
-                    "test_mod",
                 )
                 .unwrap();
-            println!("Value found {:?}", value);
         });
     }
 

@@ -22,6 +22,7 @@ members = [
 ]
 
 [features]
+default = ["exports"]
 parallel = ["rquickjs-sys/parallel"]
 exports = ["rquickjs-sys/exports"]
 

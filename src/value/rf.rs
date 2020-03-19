@@ -88,12 +88,6 @@ impl JsRefType for JsObjectType {
     const TAG: i64 = qjs::JS_TAG_OBJECT as i64;
 }
 
-pub struct JsModuleType;
-
-impl JsRefType for JsModuleType {
-    const TAG: i64 = qjs::JS_TAG_MODULE as i64;
-}
-
 pub struct JsSymbolType;
 
 impl JsRefType for JsSymbolType {
@@ -102,5 +96,5 @@ impl JsRefType for JsSymbolType {
 
 pub type JsStringRef<'js> = JsRef<'js, JsStringType>;
 pub type JsObjectRef<'js> = JsRef<'js, JsObjectType>;
-pub type JsModuleRef<'js> = JsRef<'js, JsModuleType>;
+//pub type JsModuleRef<'js> = JsRef<'js, JsModuleType>;
 pub type JsSymbolRef<'js> = JsRef<'js, JsSymbolType>;

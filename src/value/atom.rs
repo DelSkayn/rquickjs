@@ -96,6 +96,10 @@ impl<'js> Atom<'js> {
             Value::from_js_value(self.ctx, v)
         }
     }
+
+    pub(crate) unsafe fn from_atom_val(ctx: Ctx<'js>, val: qjs::JSAtom) -> Self {
+        Atom { atom: val, ctx }
+    }
 }
 
 impl<'js> Clone for Atom<'js> {

@@ -58,7 +58,7 @@ impl<'js> Ctx<'js> {
     }
 
     /// Compile a module for later use.
-    pub fn compile<Sa, Sb>(self, source: Sa, name: Sb) -> Result<Module<'js>>
+    pub fn compile<Sa, Sb>(self, name: Sa, source: Sb) -> Result<Module<'js>>
     where
         Sa: Into<Vec<u8>>,
         Sb: Into<Vec<u8>>,
@@ -68,6 +68,9 @@ impl<'js> Ctx<'js> {
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
         unsafe {
             let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
+            value::handle_exception(self, js_val)?;
+            let ret = qjs::JS_EvalFunction(self.ctx, js_val);
+            value::handle_exception(self, ret)?;
             Ok(Module::from_js_value(self, js_val))
         }
     }
