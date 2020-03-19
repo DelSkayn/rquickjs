@@ -1,5 +1,6 @@
 use crate::{value::rf::JsModuleRef, Ctx};
 use rquickjs_sys as qjs;
+//use std::ffi::CString;
 
 /// Javascript module with certain exports and imports
 #[derive(Debug, PartialEq)]
@@ -14,4 +15,9 @@ impl<'js> Module<'js> {
     pub(crate) fn as_js_value(&self) -> qjs::JSValue {
         self.0.as_js_value()
     }
+
+    /*pub fn new(ctx: Ctx<'js>, name: &str) -> Result<Self>{
+        let name = CString::new(name)?;
+        qjs::JS_NewCModule(ctx.ctx,name.as_ptr(),
+    }*/
 }

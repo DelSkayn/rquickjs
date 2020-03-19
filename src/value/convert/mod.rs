@@ -12,12 +12,18 @@ pub trait FromJs<'js>: Sized {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self>;
 }
 
+/// For converting multiple of value to javascript
+pub trait FromJsMulti<'js>: Sized {
+    fn from_js_multi(ctx: Ctx<'js>, value: Vec<Value<'js>>) -> Result<Self>;
+}
+
 /// For converting rust values to javascript values
 pub trait ToJs<'js> {
     fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>>;
 }
 
 /// For converting multiple of value to javascript
+/// Mostly used for converting the arguments of a function from rust to javascript
 pub trait ToJsMulti<'js> {
     fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value>>;
 }
@@ -26,3 +32,6 @@ pub trait ToJsMulti<'js> {
 pub trait ToAtom<'js> {
     fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js>;
 }
+
+/// A wrapper around `Vec<Value<'js>>` for FromJsMulti to avoid comflict with FromJs.
+pub struct Args<'js>(pub Vec<Value<'js>>);
