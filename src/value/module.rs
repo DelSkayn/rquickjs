@@ -4,6 +4,10 @@ use crate::{Atom, Value};
 use rquickjs_sys as qjs;
 use std::ffi::c_void;
 
+/// An iterator over the items exported out a module
+///
+/// # Features
+/// This struct is only availble if the `exports` feature is enabled.
 #[cfg(feature = "exports")]
 pub struct ExportList<'js> {
     m: Module<'js>,
@@ -66,11 +70,15 @@ impl<'js> Module<'js> {
         }
     }
 
-    /*pub fn new(ctx: Ctx<'js>, name: &str) -> Result<Self>{
-        let name = CString::new(name)?;
-        qjs::JS_NewCModule(ctx.ctx,name.as_ptr(),
-    }*/
+    /// Returns the name of the module as a atom
+    pub fn name(&self) -> Atom<'js> {
+        unsafe { Atom::from_atom_val(self.ctx, qjs::JS_GetModuleName(self.ctx.ctx, self.ptr)) }
+    }
 
+    /// Returns a iterator over the items the module export.
+    ///
+    /// # Features
+    /// This function is only availble if the `exports` feature is enabled.
     #[cfg(feature = "exports")]
     pub fn export_list(&self) -> ExportList<'js> {
         ExportList {
@@ -92,5 +100,44 @@ impl<'js> Module<'js> {
             );
             println!("{}", atom_name.to_string().unwrap());
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::*;
+
+    #[test]
+    fn from_javascript() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let val: Module = ctx
+                .compile(
+                    "Test",
+                    r#"
+            export var a = 2;
+            export function foo(){ return "bar"}
+            export class Baz{
+                quel = 3;
+                constructor(){
+                }
+            }
+                "#,
+                )
+                .unwrap();
+            assert_eq!(val.name().to_string().unwrap(), "Test".to_string());
+            let mut iter = val.export_list();
+            assert_eq!(iter.next().unwrap().0.to_string().unwrap(), "a".to_string());
+            assert_eq!(
+                iter.next().unwrap().0.to_string().unwrap(),
+                "foo".to_string()
+            );
+            assert_eq!(
+                iter.next().unwrap().0.to_string().unwrap(),
+                "Baz".to_string()
+            );
+        });
     }
 }

@@ -9,8 +9,11 @@ use rquickjs_sys as qjs;
 use std::thread::{self, ThreadId};
 use std::{
     ffi::{CStr, CString},
+    fs::File,
+    io::Read,
     marker::PhantomData,
     mem,
+    path::Path,
 };
 
 pub(crate) unsafe fn get_registery(ctx: *mut qjs::JSContext) -> *mut HashSet<RegisteryKey> {
@@ -52,6 +55,26 @@ impl<'js> Ctx<'js> {
         let flag = qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT;
         unsafe {
             let val = self._eval(source, file_name, flag as i32)?;
+            let val = Value::from_js_value(self, val)?;
+            V::from_js(self, val)
+        }
+    }
+
+    /// Evaluate a script directly from a file.
+    pub fn eval_file<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
+        let mut file = File::open(path.as_ref())?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        let file_name = CString::new(
+            path.as_ref()
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned(),
+        )?;
+        let flag = qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT;
+        unsafe {
+            let val = self._eval(buffer, file_name.as_c_str(), flag as i32)?;
             let val = Value::from_js_value(self, val)?;
             V::from_js(self, val)
         }

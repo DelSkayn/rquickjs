@@ -35,7 +35,7 @@
 #![allow(clippy::needless_lifetimes)]
 
 use quick_error::quick_error;
-use std::{ffi::NulError, str};
+use std::{ffi::NulError, io, str};
 
 mod context;
 mod registery_key;
@@ -51,7 +51,7 @@ pub use value::*;
 
 quick_error! {
     /// Error type of the library.
-    #[derive(Debug,Clone,PartialEq)]
+    #[derive(Debug)]
     pub enum Error{
         /// Could not allocate memory
         /// This is generally only triggered when out of memory.
@@ -88,8 +88,15 @@ quick_error! {
         ToJsConversion{from: &'static str, to: &'static str, message: Option<StdString>} {
             display("error converting from type '{}', to '{}': {}",from,to,message.as_ref().unwrap_or(&StdString::new()))
         }
+        /// Missing arguments for conversion with `FromJsMulti`
         MissingArguments(got: usize, needed: usize){
             display("missing arguments in multi from js conversion, got {} but needed: {} arguments", got, needed)
+        }
+        /// An io error
+        IO(e: io::Error){
+            display("IO Error: {}",e)
+            from()
+            cause(e)
         }
     }
 }

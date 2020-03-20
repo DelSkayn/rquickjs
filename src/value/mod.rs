@@ -3,7 +3,7 @@ use rquickjs_sys as qjs;
 //use std::ffi::CStr;
 
 mod module;
-pub use module::Module;
+pub use module::{ExportList, Module};
 mod string;
 pub use string::String;
 mod object;
