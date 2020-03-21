@@ -1,4 +1,4 @@
-use crate::{value::rf::JsObjectRef, Ctx, FromJs, Object, Result, ToJsMulti, Value};
+use crate::{value::rf::JsObjectRef, FromJs, Object, Result, ToJsMulti, Value};
 use rquickjs_sys as qjs;
 use std::mem;
 
@@ -7,16 +7,6 @@ use std::mem;
 pub struct Function<'js>(pub(crate) JsObjectRef<'js>);
 
 impl<'js> Function<'js> {
-    // Unsafe because of requirement that the JSValue is valid.
-    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
-        Function(JsObjectRef::from_js_value(ctx, val))
-    }
-
-    // Safe because using JSValue is unsafe
-    pub(crate) fn as_js_value(&self) -> qjs::JSValue {
-        self.0.as_js_value()
-    }
-
     /// Call a function with given arguments with this as the global object.
     pub fn call<A, R>(&self, args: A) -> Result<R>
     where
@@ -30,8 +20,8 @@ impl<'js> Function<'js> {
             let mut args: Vec<_> = args.iter().map(|x| x.as_js_value()).collect();
             let val = qjs::JS_Call(
                 self.0.ctx.ctx,
-                self.as_js_value(),
-                self.0.ctx.globals().as_js_value(),
+                self.0.as_js_value(),
+                self.0.ctx.globals().0.as_js_value(),
                 len as i32,
                 args.as_mut_ptr(),
             );
@@ -59,11 +49,11 @@ mod test {
             let f: Function = ctx.eval("(a) => a + 4").unwrap();
             let res = f.call(3).unwrap();
             println!("{:?}", res);
-            assert_eq!(FromJs::from_js(ctx, res), Ok(7));
+            assert_eq!(i32::from_js(ctx, res).unwrap(), 7);
             let f: Function = ctx.eval("(a,b) => a * b + 4").unwrap();
             let res = f.call((3, 4)).unwrap();
             println!("{:?}", res);
-            assert_eq!(FromJs::from_js(ctx, res), Ok(16));
+            assert_eq!(i32::from_js(ctx, res).unwrap(), 16);
         })
     }
 }

@@ -18,7 +18,10 @@ mod convert;
 pub use convert::*;
 mod atom;
 pub use atom::*;
-mod rf;
+pub(crate) mod rf;
+use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
+mod multi;
+pub use multi::{MultiValue, ValueIter};
 
 /// Any javascript value.
 #[derive(Debug, Clone, PartialEq)]
@@ -100,15 +103,61 @@ impl<'js> Value<'js> {
             qjs::JS_TAG_UNDEFINED => Ok(Value::Undefined),
             qjs::JS_TAG_UNINITIALIZED => Ok(Value::Uninitialized),
             qjs::JS_TAG_FLOAT64 => Ok(Value::Float(qjs::JS_VALUE_GET_FLOAT64!(v))),
-            qjs::JS_TAG_STRING => Ok(Value::String(String::from_js_value(ctx, v))),
-            qjs::JS_TAG_SYMBOL => Ok(Value::Symbol(Symbol::from_js_value(ctx, v))),
+            qjs::JS_TAG_STRING => Ok(Value::String(String(JsStringRef::from_js_value(ctx, v)))),
+            qjs::JS_TAG_SYMBOL => Ok(Value::Symbol(Symbol(JsSymbolRef::from_js_value(ctx, v)))),
             qjs::JS_TAG_OBJECT => {
+                let val = JsObjectRef::from_js_value(ctx, v);
                 if qjs::JS_IsArray(ctx.ctx, v) == 1 {
-                    Ok(Value::Array(Array::from_js_value(ctx, v)))
+                    Ok(Value::Array(Array(val)))
                 } else if qjs::JS_IsFunction(ctx.ctx, v) == 1 {
-                    Ok(Value::Function(Function::from_js_value(ctx, v)))
+                    Ok(Value::Function(Function(val)))
                 } else {
-                    Ok(Value::Object(Object::from_js_value(ctx, v)))
+                    Ok(Value::Object(Object(val)))
+                }
+            }
+            qjs::JS_TAG_MODULE => {
+                // Just to make sure things are properly cleaned up;
+                Module::from_js_value(ctx, v);
+                panic!("recieved module JSValue for Value, Value should not handle modules.")
+            }
+            _ => {
+                // Can we possibly leak here?
+                // We should have catched all the possible
+                // types which are reference counted so it should be fine.
+                panic!("got unmatched js value type tag")
+            }
+        }
+    }
+
+    #[allow(dead_code)]
+    pub(crate) unsafe fn from_js_value_const(
+        ctx: Ctx<'js>,
+        v: qjs::JSValue,
+    ) -> Result<Self, Error> {
+        let v = handle_exception(ctx, v)?;
+        //TODO test for overflow in down cast
+        //Should probably not happen
+        match v.tag as i32 {
+            qjs::JS_TAG_INT => Ok(Value::Int(qjs::JS_VALUE_GET_INT!(v))),
+            qjs::JS_TAG_BOOL => Ok(Value::Bool(qjs::JS_VALUE_GET_BOOL!(v) != 0)),
+            qjs::JS_TAG_NULL => Ok(Value::Null),
+            qjs::JS_TAG_UNDEFINED => Ok(Value::Undefined),
+            qjs::JS_TAG_UNINITIALIZED => Ok(Value::Uninitialized),
+            qjs::JS_TAG_FLOAT64 => Ok(Value::Float(qjs::JS_VALUE_GET_FLOAT64!(v))),
+            qjs::JS_TAG_STRING => Ok(Value::String(String(JsStringRef::from_js_value_const(
+                ctx, v,
+            )))),
+            qjs::JS_TAG_SYMBOL => Ok(Value::Symbol(Symbol(JsSymbolRef::from_js_value_const(
+                ctx, v,
+            )))),
+            qjs::JS_TAG_OBJECT => {
+                let val = JsObjectRef::from_js_value_const(ctx, v);
+                if qjs::JS_IsArray(ctx.ctx, v) == 1 {
+                    Ok(Value::Array(Array(val)))
+                } else if qjs::JS_IsFunction(ctx.ctx, v) == 1 {
+                    Ok(Value::Function(Function(val)))
+                } else {
+                    Ok(Value::Object(Object(val)))
                 }
             }
             qjs::JS_TAG_MODULE => {
@@ -150,11 +199,44 @@ impl<'js> Value<'js> {
                 tag: qjs::JS_TAG_UNINITIALIZED as i64,
             },
             Value::Float(ref x) => unsafe { qjs::JS_NewFloat64(*x) },
-            Value::Symbol(ref x) => x.as_js_value(),
-            Value::String(ref x) => x.as_js_value(),
-            Value::Object(ref x) => x.as_js_value(),
-            Value::Array(ref x) => x.as_js_value(),
-            Value::Function(ref x) => x.as_js_value(),
+            Value::Symbol(ref x) => x.0.as_js_value(),
+            Value::String(ref x) => x.0.as_js_value(),
+            Value::Object(ref x) => x.0.as_js_value(),
+            Value::Array(ref x) => x.0.as_js_value(),
+            Value::Function(ref x) => x.0.as_js_value(),
+        }
+    }
+
+    pub(crate) fn to_js_value(self) -> qjs::JSValue {
+        match self {
+            Value::Int(ref x) => qjs::JSValue {
+                u: qjs::JSValueUnion { int32: *x },
+                tag: qjs::JS_TAG_INT as i64,
+            },
+            Value::Bool(ref x) => qjs::JSValue {
+                u: qjs::JSValueUnion {
+                    int32: if *x { 1 } else { 0 },
+                },
+                tag: qjs::JS_TAG_BOOL as i64,
+            },
+            Value::Null => qjs::JSValue {
+                u: qjs::JSValueUnion { int32: 0 },
+                tag: qjs::JS_TAG_NULL as i64,
+            },
+            Value::Undefined => qjs::JSValue {
+                u: qjs::JSValueUnion { int32: 0 },
+                tag: qjs::JS_TAG_UNDEFINED as i64,
+            },
+            Value::Uninitialized => qjs::JSValue {
+                u: qjs::JSValueUnion { int32: 0 },
+                tag: qjs::JS_TAG_UNINITIALIZED as i64,
+            },
+            Value::Float(x) => unsafe { qjs::JS_NewFloat64(x) },
+            Value::Symbol(x) => x.0.to_js_value(),
+            Value::String(x) => x.0.to_js_value(),
+            Value::Object(x) => x.0.to_js_value(),
+            Value::Array(x) => x.0.to_js_value(),
+            Value::Function(x) => x.0.to_js_value(),
         }
     }
 

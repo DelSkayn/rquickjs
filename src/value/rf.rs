@@ -1,6 +1,6 @@
 use crate::context::Ctx;
 use rquickjs_sys as qjs;
-use std::{fmt, marker::PhantomData};
+use std::{fmt, marker::PhantomData, mem};
 
 /// A owned reference to a javascript object.
 /// Handles the reference count of associated objects and
@@ -27,6 +27,7 @@ impl<'js, Ty: JsRefType> PartialEq for JsRef<'js, Ty> {
 }
 
 impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
+    /// creates a ref from a js value we have ownership of.
     pub unsafe fn from_js_value(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
         debug_assert_eq!(val.tag, Ty::TAG);
         JsRef {
@@ -36,11 +37,38 @@ impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
         }
     }
 
+    /// creates a ref from a const js value.
+    ///
+    /// const js value represent a borrow of a js value which
+    /// means that the ref_count is not increment for the current js value.
+    /// so if we want to convert it to a JsRef we will first need to increment the ref count.
+    pub unsafe fn from_js_value_const(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
+        let ptr = val.u.ptr;
+        let p = ptr as *mut qjs::JSRefCountHeader;
+        (*p).ref_count += 1;
+        debug_assert_eq!(val.tag, Ty::TAG);
+        JsRef {
+            ctx,
+            ptr: val.u.ptr,
+            marker: PhantomData,
+        }
+    }
+
+    /// return the underlying JSValue
     pub fn as_js_value(&self) -> qjs::JSValue {
         qjs::JSValue {
             u: qjs::JSValueUnion { ptr: self.ptr },
             tag: Ty::TAG,
         }
+    }
+
+    /// return the underlying JSValue
+    /// and consume the object, not decreasing the refcount
+    /// on drop.
+    pub fn to_js_value(self) -> qjs::JSValue {
+        let val = self.as_js_value();
+        mem::forget(self);
+        val
     }
 }
 
@@ -96,5 +124,4 @@ impl JsRefType for JsSymbolType {
 
 pub type JsStringRef<'js> = JsRef<'js, JsStringType>;
 pub type JsObjectRef<'js> = JsRef<'js, JsObjectType>;
-//pub type JsModuleRef<'js> = JsRef<'js, JsModuleType>;
 pub type JsSymbolRef<'js> = JsRef<'js, JsSymbolType>;

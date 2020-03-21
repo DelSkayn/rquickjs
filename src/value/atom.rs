@@ -1,5 +1,5 @@
 use crate::{
-    value::{self, String, Value},
+    value::{self, rf::JsStringRef, String, Value},
     Ctx, Error, Result,
 };
 use rquickjs_sys as qjs;
@@ -85,7 +85,7 @@ impl<'js> Atom<'js> {
         unsafe {
             let v = qjs::JS_AtomToString(self.ctx.ctx, self.atom);
             value::handle_exception(self.ctx, v)?;
-            Ok(String::from_js_value(self.ctx, v))
+            Ok(String(JsStringRef::from_js_value(self.ctx, v)))
         }
     }
 

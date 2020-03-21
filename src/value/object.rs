@@ -3,32 +3,18 @@ use crate::{
     Ctx, FromJs, Result, ToAtom, ToJs, Value,
 };
 use rquickjs_sys as qjs;
-use std::mem;
 
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Object<'js>(pub(crate) JsObjectRef<'js>);
 
 impl<'js> Object<'js> {
-    // Unsafe because pointers must be valid and the
-    // liftime of this object must be constrained
-    // Further more the JSValue must also be of type object as indicated by JS_TAG_OBJECT
-    // All save functions rely on this constrained to be save
-    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
-        Object(JsObjectRef::from_js_value(ctx, v))
-    }
-
-    // Save because using the JSValue is unsafe
-    pub(crate) fn as_js_value(&self) -> qjs::JSValue {
-        self.0.as_js_value()
-    }
-
     /// Create a new javascript object
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
         unsafe {
             let val = qjs::JS_NewObject(ctx.ctx);
             let val = value::handle_exception(ctx, val)?;
-            Ok(Self::from_js_value(ctx, val))
+            Ok(Object(JsObjectRef::from_js_value(ctx, val)))
         }
     }
 
@@ -36,7 +22,7 @@ impl<'js> Object<'js> {
     pub fn get<K: ToAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
         let atom = k.to_atom(self.0.ctx);
         unsafe {
-            let val = qjs::JS_GetProperty(self.0.ctx.ctx, self.as_js_value(), atom.atom);
+            let val = qjs::JS_GetProperty(self.0.ctx.ctx, self.0.as_js_value(), atom.atom);
             V::from_js(self.0.ctx, Value::from_js_value(self.0.ctx, val)?)
         }
     }
@@ -48,7 +34,7 @@ impl<'js> Object<'js> {
     {
         let atom = k.to_atom(self.0.ctx);
         unsafe {
-            let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.as_js_value(), atom.atom);
+            let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.0.as_js_value(), atom.atom);
             if res < 0 {
                 return Err(value::get_exception(self.0.ctx));
             }
@@ -63,16 +49,13 @@ impl<'js> Object<'js> {
         unsafe {
             if qjs::JS_SetProperty(
                 self.0.ctx.ctx,
-                self.as_js_value(),
+                self.0.as_js_value(),
                 atom.atom,
-                val.as_js_value(),
+                val.to_js_value(),
             ) < 0
             {
                 return Err(value::get_exception(self.0.ctx));
             }
-            // When we pass in the value to SetProperty, it takes ownership
-            // so we should not decrement the reference count when our version drops
-            mem::forget(val);
         }
         Ok(())
     }
@@ -83,7 +66,7 @@ impl<'js> Object<'js> {
         unsafe {
             if qjs::JS_DeleteProperty(
                 self.0.ctx.ctx,
-                self.as_js_value(),
+                self.0.as_js_value(),
                 atom.atom,
                 qjs::JS_PROP_THROW as i32,
             ) < 0
@@ -96,12 +79,12 @@ impl<'js> Object<'js> {
 
     /// Check if the object is a function.
     pub fn is_function(&self) -> bool {
-        unsafe { qjs::JS_IsFunction(self.0.ctx.ctx, self.as_js_value()) != 0 }
+        unsafe { qjs::JS_IsFunction(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
     }
 
     /// Check if the object is an array.
     pub fn is_array(&self) -> bool {
-        unsafe { qjs::JS_IsArray(self.0.ctx.ctx, self.as_js_value()) != 0 }
+        unsafe { qjs::JS_IsArray(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
     }
 }
 
@@ -130,9 +113,9 @@ mod test {
                 let int: StdString = x.get(3).unwrap();
                 assert_eq!(int, "a");
                 x.set("hallo", "foo").unwrap();
-                assert_eq!(x.get("hallo"), Ok("foo".to_string()));
+                assert_eq!(x.get::<_, StdString>("hallo").unwrap(), "foo".to_string());
                 x.remove("hallo").unwrap();
-                assert_eq!(x.get("hallo"), Ok(Value::Undefined))
+                assert_eq!(x.get::<_, Value>("hallo").unwrap(), Value::Undefined)
             } else {
                 panic!();
             };

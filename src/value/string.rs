@@ -8,22 +8,9 @@ use std::{ffi::CStr, mem, string::String as StdString};
 
 /// Rust representation of a javascript string.
 #[derive(Debug, Clone, PartialEq)]
-pub struct String<'js>(JsStringRef<'js>);
+pub struct String<'js>(pub(crate) JsStringRef<'js>);
 
 impl<'js> String<'js> {
-    // Unsafe because pointers must be valid and the
-    // liftime of this object must within the lifetime of the context
-    // Further more the JSValue must also be of type string as indicated by JS_TAG_STRING
-    // All save functions rely on this constrained to be save
-    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, v: qjs::JSValue) -> Self {
-        String(JsStringRef::from_js_value(ctx, v))
-    }
-
-    // Save because using the JSValue is unsafe
-    pub(crate) fn as_js_value(&self) -> qjs::JSValue {
-        self.0.as_js_value()
-    }
-
     /// Convert the javascript string to a rust string.
     pub fn to_string(&self) -> Result<StdString> {
         pub struct DropStr<'js>(Ctx<'js>, *const i8);
@@ -37,7 +24,7 @@ impl<'js> String<'js> {
         }
 
         unsafe {
-            let c_str = qjs::JS_ToCString(self.0.ctx.ctx, self.as_js_value());
+            let c_str = qjs::JS_ToCString(self.0.ctx.ctx, self.0.as_js_value());
             // Ensure the c_string is dropped no matter what happens
             let drop = DropStr(self.0.ctx, c_str);
             if c_str.is_null() {
@@ -58,7 +45,7 @@ impl<'js> String<'js> {
             let bytes = s.as_ptr() as *const i8;
             let js_val = qjs::JS_NewStringLen(ctx.ctx, bytes, len as u64);
             let js_val = value::handle_exception(ctx, js_val)?;
-            Ok(String::from_js_value(ctx, js_val))
+            Ok(String(JsStringRef::from_js_value(ctx, js_val)))
         }
     }
 }
@@ -73,7 +60,7 @@ mod test {
         ctx.with(|ctx| {
             let val = ctx.eval::<Value, _>(" 'foo bar baz' ");
             if let Ok(Value::String(x)) = val {
-                assert_eq!(x.to_string(), Ok("foo bar baz".to_string()))
+                assert_eq!(x.to_string().unwrap(), "foo bar baz".to_string())
             } else {
                 panic!("val not a string");
             };

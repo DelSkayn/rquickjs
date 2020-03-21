@@ -1,6 +1,10 @@
 use crate::{
     markers::Invariant,
-    value::{self, String},
+    value::{
+        self,
+        rf::{JsObjectRef, JsStringRef},
+        String,
+    },
     Context, FromJs, Module, Object, RegisteryKey, Result, Value,
 };
 use fxhash::FxHashSet as HashSet;
@@ -12,7 +16,6 @@ use std::{
     fs::File,
     io::Read,
     marker::PhantomData,
-    mem,
     path::Path,
 };
 
@@ -106,7 +109,7 @@ impl<'js> Ctx<'js> {
             // js_val should be a string now
             // String itself will check for the tag when debug_assertions are enabled
             // but is should always be string
-            Ok(String::from_js_value(self, js_val))
+            Ok(String(JsStringRef::from_js_value(self, js_val)))
         }
     }
 
@@ -165,7 +168,7 @@ impl<'js> Ctx<'js> {
     pub fn globals(self) -> Object<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);
-            Object::from_js_value(self, v)
+            Object(JsObjectRef::from_js_value(self, v))
         }
     }
 
@@ -175,10 +178,8 @@ impl<'js> Ctx<'js> {
     pub fn register(self, v: Value<'js>) -> RegisteryKey {
         unsafe {
             let register = get_registery(self.ctx);
-            let key = RegisteryKey(v.as_js_value());
+            let key = RegisteryKey(v.to_js_value());
             (*register).insert(key);
-            // Registery takes ownership so forget the value
-            mem::forget(v);
             key
         }
     }
@@ -200,10 +201,7 @@ impl<'js> Ctx<'js> {
         unsafe {
             let register = get_registery(self.ctx);
             if (*register).contains(&k) {
-                let value = Value::from_js_value(self, k.0).unwrap();
-                // Increment the reference count to register since the
-                // value remains also owned by the register
-                mem::forget(value.clone());
+                let value = Value::from_js_value_const(self, k.0).unwrap();
                 Some(value)
             } else {
                 None

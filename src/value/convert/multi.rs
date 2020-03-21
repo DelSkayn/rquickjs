@@ -1,5 +1,5 @@
-use super::{Args, FromJs, FromJsMulti, ToJs, ToJsMulti};
-use crate::{Ctx, Error, Result, Value};
+use super::{FromJs, FromJsMulti, MultiValue, ToJs, ToJsMulti};
+use crate::{Ctx, Result, Value};
 
 impl<'js> ToJsMulti<'js> for Vec<Value<'js>> {
     fn to_js_multi(self, _: Ctx<'js>) -> Result<Vec<Value<'js>>> {
@@ -13,19 +13,15 @@ impl<'js, T: ToJs<'js>> ToJsMulti<'js> for T {
     }
 }
 
-impl<'js> FromJsMulti<'js> for Args<'js> {
-    fn from_js_multi(_: Ctx<'js>, value: Vec<Value<'js>>) -> Result<Self> {
-        Ok(Args(value))
+impl<'js> FromJsMulti<'js> for MultiValue<'js> {
+    fn from_js_multi(_: Ctx<'js>, value: MultiValue<'js>) -> Result<Self> {
+        Ok(value)
     }
 }
 
 impl<'js, T: FromJs<'js>> FromJsMulti<'js> for T {
-    fn from_js_multi(ctx: Ctx<'js>, value: Vec<Value<'js>>) -> Result<Self> {
-        let len = value.len();
-        let v = value
-            .into_iter()
-            .next()
-            .ok_or(Error::MissingArguments(len, 1))?;
+    fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
+        let v = value.iter().next().unwrap_or(Value::Undefined);
         T::from_js(ctx, v)
     }
 }
@@ -52,13 +48,12 @@ macro_rules! impl_from_js_multi{
             where $($t: FromJs<'js>,)*
         {
             #[allow(non_snake_case)]
-            fn from_js_multi(ctx: Ctx<'js>, value: Vec<Value<'js>>) -> Result<Self> {
-                let len = value.len();
-                let mut iter = value.into_iter();
+            fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
+                let mut iter = value.iter();
                 Ok((
                     $({
                         let v = iter.next()
-                            .ok_or(Error::MissingArguments(len,1))?;
+                            .unwrap_or(Value::Undefined);
                         $t::from_js(ctx,v)?
                     },)*
                 ))

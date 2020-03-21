@@ -164,7 +164,8 @@ mod test {
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
             let val = ctx.eval::<Value, _>(r#"1+1"#);
-            assert_eq!(val, Ok(Value::Int(2)));
+
+            assert_eq!(val.unwrap(), Value::Int(2));
             println!("{:?}", ctx.globals());
         });
     }
