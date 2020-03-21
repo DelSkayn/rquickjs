@@ -1,5 +1,5 @@
 use super::ToJs;
-use crate::{Array, Ctx, Object, Result, String, Value};
+use crate::{Array, Ctx, Function, Object, Result, String, Value};
 use std::string::String as StdString;
 
 impl<'js> ToJs<'js> for Value<'js> {
@@ -17,6 +17,12 @@ impl<'js> ToJs<'js> for String<'js> {
 impl<'js> ToJs<'js> for Object<'js> {
     fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
         Ok(Value::Object(self))
+    }
+}
+
+impl<'js> ToJs<'js> for Function<'js> {
+    fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::Function(self))
     }
 }
 
@@ -48,6 +54,6 @@ impl<'js> ToJs<'js> for i32 {
 
 impl<'js> ToJs<'js> for () {
     fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
-        Ok(Value::Null)
+        Ok(Value::Undefined)
     }
 }

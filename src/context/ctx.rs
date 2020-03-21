@@ -31,6 +31,13 @@ pub struct Ctx<'js> {
 }
 
 impl<'js> Ctx<'js> {
+    pub(crate) fn from_ptr(ctx: *mut qjs::JSContext) -> Self {
+        Ctx {
+            ctx,
+            marker: PhantomData,
+        }
+    }
+
     pub(crate) fn new(ctx: &'js Context) -> Self {
         Ctx {
             ctx: ctx.ctx,

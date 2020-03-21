@@ -17,12 +17,19 @@ impl<'js> FromJsMulti<'js> for MultiValue<'js> {
     fn from_js_multi(_: Ctx<'js>, value: MultiValue<'js>) -> Result<Self> {
         Ok(value)
     }
+
+    fn len() -> i64 {
+        -1
+    }
 }
 
-impl<'js, T: FromJs<'js>> FromJsMulti<'js> for T {
-    fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
-        let v = value.iter().next().unwrap_or(Value::Undefined);
-        T::from_js(ctx, v)
+impl<'js> FromJsMulti<'js> for () {
+    fn from_js_multi(_: Ctx<'js>, _: MultiValue<'js>) -> Result<Self> {
+        Ok(())
+    }
+
+    fn len() -> i64 {
+        0
     }
 }
 
@@ -43,7 +50,7 @@ macro_rules! impl_to_js_multi{
 }
 
 macro_rules! impl_from_js_multi{
-    ($num:expr, $($t:ident),+) => {
+    ($num:expr, $($t:ident),*) => {
         impl<'js, $($t,)*> FromJsMulti<'js> for ($($t,)*)
             where $($t: FromJs<'js>,)*
         {
@@ -57,6 +64,10 @@ macro_rules! impl_from_js_multi{
                         $t::from_js(ctx,v)?
                     },)*
                 ))
+            }
+
+            fn len() -> i64{
+                $num
             }
         }
     }

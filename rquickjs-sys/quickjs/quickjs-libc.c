@@ -125,8 +125,7 @@ static JSValue js_printf_internal(JSContext *ctx,
         fmt = (const uint8_t *)fmt_str;
         fmt_end = fmt + fmt_len;
         while (fmt < fmt_end) {
-            for (p = fmt; fmt < fmt_end && *fmt != '%'; fmt++)
-                continue;
+            for (p = fmt; fmt < fmt_end && *fmt != '%'; fmt++) continue;
             dbuf_put(&dbuf, p, fmt - p);
             if (fmt >= fmt_end)
                 break;

@@ -7,7 +7,7 @@ use std::{
 
 /// An iterator over a list of js values
 pub struct ValueIter<'js> {
-    value: MultiValue<'js>,
+    value: mem::ManuallyDrop<MultiValue<'js>>,
     current: usize,
 }
 
@@ -93,7 +93,7 @@ impl<'js> MultiValue<'js> {
     }
 
     #[allow(dead_code)]
-    pub(crate) unsafe fn from_value_count_copy(
+    pub(crate) unsafe fn from_value_count_const(
         ctx: Ctx<'js>,
         len: usize,
         ptr: *mut qjs::JSValue,
@@ -124,12 +124,12 @@ impl<'js> MultiValue<'js> {
     /// Returns a interator over the js values.
     pub fn iter(&mut self) -> ValueIter<'js> {
         let res = ValueIter {
-            value: MultiValue {
+            value: mem::ManuallyDrop::new(MultiValue {
                 ctx: self.ctx,
                 len: self.len,
                 ptr: self.ptr,
                 ownership: self.ownership,
-            },
+            }),
             current: 0,
         };
         self.ownership = false;

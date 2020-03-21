@@ -12,7 +12,7 @@ mod array;
 pub use array::Array;
 mod symbol;
 pub use symbol::Symbol;
-mod function;
+pub mod function;
 pub use function::Function;
 mod convert;
 pub use convert::*;
