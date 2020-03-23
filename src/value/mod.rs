@@ -1,5 +1,6 @@
 use crate::{context::Ctx, Error};
 use rquickjs_sys as qjs;
+use std::panic::{self, UnwindSafe};
 //use std::ffi::CStr;
 
 mod module;
@@ -22,6 +23,33 @@ pub(crate) mod rf;
 use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
 mod multi;
 pub use multi::{MultiValue, ValueIter};
+
+/// A bit of a hack to enable propegating panics.
+///
+/// positive values are not seen as pointers by qjs.
+/// this way we can create an exception who is not free
+/// and for which we can check in handle exception
+const JS_TAG_PANIC: i32 = qjs::JS_TAG_FLOAT64 + 1;
+
+pub(crate) fn handle_panic<F: FnOnce() -> qjs::JSValue + UnwindSafe>(
+    ctx: *mut qjs::JSContext,
+    f: F,
+) -> qjs::JSValue {
+    unsafe {
+        match panic::catch_unwind(f) {
+            Ok(x) => x,
+            Err(e) => qjs::JS_Throw(
+                ctx,
+                qjs::JSValue {
+                    u: qjs::JSValueUnion {
+                        ptr: Box::into_raw(e) as *mut _,
+                    },
+                    tag: JS_TAG_PANIC as i64,
+                },
+            ),
+        }
+    }
+}
 
 /// Any javascript value.
 #[derive(Debug, Clone, PartialEq)]
@@ -58,6 +86,10 @@ pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
     let atom_message = Atom::from_str(ctx, "message");
 
     let exception_val = qjs::JS_GetException(ctx.ctx);
+    if exception_val.tag == JS_TAG_PANIC as i64 {
+        let ptr = exception_val.u.ptr as *mut _;
+        panic::resume_unwind(Box::from_raw(ptr));
+    }
     // Dont know if is this is always correct
     // TODO test exceptions
     let message = Value::from_js_value(
