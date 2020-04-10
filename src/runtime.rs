@@ -13,7 +13,7 @@ use std::{ffi::CString, mem, ptr};
 /// Opaque book keeping data for rust.
 pub struct Opaque {
     pub registery: HashSet<RegisteryKey>,
-    pub func_cb_class_id: u32,
+    pub func_class: u32,
 }
 
 impl Opaque {
@@ -24,14 +24,13 @@ impl Opaque {
         }
         Opaque {
             registery: HashSet::default(),
-            func_cb_class_id: class_id,
+            func_class: class_id,
         }
     }
 }
 
 pub(crate) struct Inner {
     pub(crate) rt: *mut qjs::JSRuntime,
-    pub(crate) opaque: Opaque,
     // To keep rt info alive for the entire duration of the lifetime of rt
     info: Option<CString>,
 }
@@ -81,23 +80,13 @@ impl Runtime {
         if rt == ptr::null_mut() {
             return Err(Error::Allocation);
         }
-        #[cfg(not(feature = "parallel"))]
-        {
-            Ok(Runtime {
-                inner: InnerRef(Rc::new(RefCell::new(Inner {
-                    rt,
-                    info: None,
-                    opaque: Opaque::new(),
-                }))),
-            })
+        let opaque = Opaque::new();
+        unsafe {
+            qjs::JS_SetRuntimeOpaque(rt, Box::into_raw(Box::new(opaque)) as *mut _);
         }
-
-        #[cfg(feature = "parallel")]
-        {
-            Ok(Runtime {
-                inner: InnerRef(Arc::new(Mutex::new(Inner { rt, info: None }))),
-            })
-        }
+        Ok(Runtime {
+            inner: InnerRef(Rc::new(RefCell::new(Inner { rt, info: None }))),
+        })
     }
 
     /// Set the info of the runtime
@@ -143,7 +132,11 @@ impl Runtime {
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        unsafe { qjs::JS_FreeRuntime(self.rt) }
+        unsafe {
+            let ptr = qjs::JS_GetRuntimeOpaque(self.rt);
+            let _opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            qjs::JS_FreeRuntime(self.rt)
+        }
     }
 }
 

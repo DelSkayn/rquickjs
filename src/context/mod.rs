@@ -1,8 +1,8 @@
 use crate::{runtime, Error, Result, Runtime};
 use rquickjs_sys as qjs;
+use std::mem;
 #[cfg(feature = "parallel")]
 use std::thread::{self, ThreadId};
-use std::{ffi::c_void, mem};
 
 mod builder;
 pub use builder::ContextBuilder;
@@ -35,17 +35,17 @@ impl Context {
     /// If additional functions are required use [`Context::build`](#method.build)
     /// or [`Contex::full`](#method.full).
     pub fn base(runtime: &Runtime) -> Result<Self> {
-        let mut guard = runtime.inner.lock();
+        let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
+        unsafe { qjs::JS_SetContextOpaque(ctx, qjs::JS_GetRuntimeOpaque(guard.rt)) };
         let res = Ok(Context {
             ctx,
             rt: runtime.inner.clone(),
         });
-        let info = &mut guard.opaque;
-        unsafe { qjs::JS_SetContextOpaque(ctx, info as *mut _ as *mut c_void) };
+        mem::drop(guard);
         res
     }
 
@@ -53,17 +53,16 @@ impl Context {
     /// If precise controll is required of wich functions are availble use
     /// [`Context::build`](#method.context)
     pub fn full(runtime: &Runtime) -> Result<Self> {
-        let mut guard = runtime.inner.lock();
+        let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
+        unsafe { qjs::JS_SetContextOpaque(ctx, qjs::JS_GetRuntimeOpaque(guard.rt)) };
         let res = Ok(Context {
             ctx,
             rt: runtime.inner.clone(),
         });
-        let info = &mut guard.opaque;
-        unsafe { qjs::JS_SetContextOpaque(ctx, info as *mut _ as *mut c_void) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
         res

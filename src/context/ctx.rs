@@ -19,10 +19,6 @@ use std::{
     path::Path,
 };
 
-pub(crate) unsafe fn get_registery(ctx: *mut qjs::JSContext) -> *mut Opaque {
-    qjs::JS_GetContextOpaque(ctx) as *mut Opaque
-}
-
 /// Context in use, passed to [`Context::with`](struct.Context.html#method.with).
 #[derive(Clone, Copy, Debug)]
 pub struct Ctx<'js> {
@@ -184,9 +180,9 @@ impl<'js> Ctx<'js> {
     /// A registered value can be retrieved from any context belonging to the same runtime.
     pub fn register(self, v: Value<'js>) -> RegisteryKey {
         unsafe {
-            let register = get_registery(self.ctx);
+            let register = self.get_opaque();
             let key = RegisteryKey(v.to_js_value());
-            (*register).registery.insert(key);
+            register.registery.insert(key);
             key
         }
     }
@@ -194,7 +190,7 @@ impl<'js> Ctx<'js> {
     /// Remove a value from the registery.
     pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
-            let register = get_registery(self.ctx);
+            let register = self.get_opaque();
             if (*register).registery.remove(&k) {
                 Some(Value::from_js_value(self, k.0).unwrap())
             } else {
@@ -206,13 +202,18 @@ impl<'js> Ctx<'js> {
     /// Get a value from the registery.
     pub fn get_register(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
-            let register = get_registery(self.ctx);
-            if (*register).registery.contains(&k) {
+            let register = self.get_opaque();
+            if register.registery.contains(&k) {
                 let value = Value::from_js_value_const(self, k.0).unwrap();
                 Some(value)
             } else {
                 None
             }
         }
+    }
+
+    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
+        let ptr = qjs::JS_GetContextOpaque(self.ctx);
+        &mut *(ptr as *mut _)
     }
 }

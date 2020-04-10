@@ -1,48 +1,15 @@
 use crate::{
-    value::{handle_panic, rf::JsObjectRef},
-    Ctx, FromJs, FromJsMulti, MultiValue, Object, Result, ToJs, ToJsMulti, Value,
+    value::rf::JsObjectRef, Ctx, FromJs, FromJsMulti, Object, Result, ToJs, ToJsMulti, Value,
 };
 use rquickjs_sys as qjs;
-use std::{ffi::CString, mem, os::raw::c_int};
+use std::{
+    ffi::{CStr, CString},
+    mem,
+    os::raw::c_int,
+    ptr,
+};
 
-unsafe extern "C" fn call_fn_static<'js, F>(
-    ctx: *mut qjs::JSContext,
-    this: qjs::JSValue,
-    argc: c_int,
-    argv: *mut qjs::JSValue,
-) -> qjs::JSValue
-where
-    F: StaticFn<'js>,
-{
-    handle_panic(ctx, || {
-        //TODO catch unwind
-        let val: Result<Value> = (|| {
-            let ctx = Ctx::from_ptr(ctx);
-            let this = F::This::from_js(ctx, Value::from_js_value_const(ctx, this)?)?;
-            let multi = MultiValue::from_value_count_const(ctx, argc as usize, argv);
-            let args = F::Args::from_js_multi(ctx, multi)?;
-            let value = F::call(ctx, this, args)?.to_js(ctx)?;
-            Ok(value)
-        })();
-        match val {
-            Ok(x) => x.to_js_value(),
-            Err(e) => {
-                let error = format!("{}", e);
-                let error_str = CString::new(error).unwrap();
-                qjs::JS_ThrowInternalError(ctx, error_str.as_ptr())
-            }
-        }
-    })
-}
-
-unsafe fn call_fn_callback<'js, A, T, R, F>(ctx: Ctx<'js>, func: *mut F)
-where
-    A: FromJsMulti<'js>,
-    T: FromJs<'js>,
-    R: ToJs<'js>,
-    F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
-{
-}
+mod ffi;
 
 pub trait StaticFn<'js> {
     type This: FromJs<'js>;
@@ -133,7 +100,7 @@ impl<'js> Function<'js> {
         F: StaticFn<'js>,
     {
         let name = CString::new(name)?;
-        let func = call_fn_static::<F>
+        let func = ffi::call_fn_static::<F>
             as unsafe extern "C" fn(
                 *mut qjs::JSContext,
                 qjs::JSValue,
@@ -178,14 +145,30 @@ impl<'js> Function<'js> {
         unsafe { Self::new_unsafe(ctx, CString::new(name)?, func) }
     }
 
-    unsafe fn new_unsafe<A, T, R, F>(_ctx: Ctx<'js>, _name: CString, _func: F) -> Result<Self>
+    unsafe fn new_unsafe<A, T, R, F>(ctx: Ctx<'js>, _name: CString, func: F) -> Result<Self>
     where
         A: FromJsMulti<'js>,
         T: FromJs<'js>,
         R: ToJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
     {
-        todo!();
+        let class_id = ctx.get_opaque().func_class;
+        let rt = qjs::JS_GetRuntime(ctx.ctx);
+        if qjs::JS_IsRegisteredClass(rt, class_id) == 0 {
+            let class_name = CStr::from_bytes_with_nul(b"RustFunc\0").unwrap();
+            let class_def = qjs::JSClassDef {
+                class_name: class_name.as_ptr(),
+                finalizer: Some(ffi::cb_finalizer),
+                gc_mark: None,
+                call: Some(ffi::cb_call),
+                exotic: ptr::null_mut(),
+            };
+            assert!(qjs::JS_NewClass(rt, class_id, &class_def) == 0);
+        }
+        let opaque = ffi::wrap_cb(func);
+        let obj = qjs::JS_NewObjectClass(ctx.ctx, class_id as i32);
+        qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(opaque)) as *mut _);
+        Ok(Function(JsObjectRef::from_js_value(ctx, obj)))
     }
 
     /// Call a function with given arguments with the `this` as the global context object.
