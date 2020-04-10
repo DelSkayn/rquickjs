@@ -5,7 +5,7 @@ use crate::{
 use rquickjs_sys as qjs;
 use std::{ffi::CString, mem, os::raw::c_int};
 
-unsafe extern "C" fn call_fn<'js, F>(
+unsafe extern "C" fn call_fn_static<'js, F>(
     ctx: *mut qjs::JSContext,
     this: qjs::JSValue,
     argc: c_int,
@@ -33,6 +33,15 @@ where
             }
         }
     })
+}
+
+unsafe fn call_fn_callback<'js, A, T, R, F>(ctx: Ctx<'js>, func: *mut F)
+where
+    A: FromJsMulti<'js>,
+    T: FromJs<'js>,
+    R: ToJs<'js>,
+    F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
+{
 }
 
 pub trait StaticFn<'js> {
@@ -124,7 +133,7 @@ impl<'js> Function<'js> {
         F: StaticFn<'js>,
     {
         let name = CString::new(name)?;
-        let func = call_fn::<F>
+        let func = call_fn_static::<F>
             as unsafe extern "C" fn(
                 *mut qjs::JSContext,
                 qjs::JSValue,
@@ -143,6 +152,40 @@ impl<'js> Function<'js> {
             );
             Ok(Function(JsObjectRef::from_js_value(ctx, val)))
         }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: Into<Vec<u8>>,
+        A: FromJsMulti<'js>,
+        T: FromJs<'js>,
+        R: ToJs<'js>,
+        F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
+    {
+        unsafe { Self::new_unsafe(ctx, CString::new(name)?, func) }
+    }
+
+    #[cfg(feature = "parallel")]
+    pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: Into<Vec<u8>>,
+        A: FromJsMulti<'js>,
+        T: FromJs<'js>,
+        R: ToJs<'js>,
+        F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
+    {
+        unsafe { Self::new_unsafe(ctx, CString::new(name)?, func) }
+    }
+
+    unsafe fn new_unsafe<A, T, R, F>(_ctx: Ctx<'js>, _name: CString, _func: F) -> Result<Self>
+    where
+        A: FromJsMulti<'js>,
+        T: FromJs<'js>,
+        R: ToJs<'js>,
+        F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
+    {
+        todo!();
     }
 
     /// Call a function with given arguments with the `this` as the global context object.

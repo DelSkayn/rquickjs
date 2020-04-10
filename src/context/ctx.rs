@@ -1,5 +1,6 @@
 use crate::{
     markers::Invariant,
+    runtime::Opaque,
     value::{
         self,
         rf::{JsObjectRef, JsStringRef},
@@ -7,7 +8,6 @@ use crate::{
     },
     Context, FromJs, Module, Object, RegisteryKey, Result, Value,
 };
-use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
 #[cfg(feature = "parallel")]
 use std::thread::{self, ThreadId};
@@ -19,8 +19,8 @@ use std::{
     path::Path,
 };
 
-pub(crate) unsafe fn get_registery(ctx: *mut qjs::JSContext) -> *mut HashSet<RegisteryKey> {
-    qjs::JS_GetContextOpaque(ctx) as *mut HashSet<RegisteryKey>
+pub(crate) unsafe fn get_registery(ctx: *mut qjs::JSContext) -> *mut Opaque {
+    qjs::JS_GetContextOpaque(ctx) as *mut Opaque
 }
 
 /// Context in use, passed to [`Context::with`](struct.Context.html#method.with).
@@ -186,7 +186,7 @@ impl<'js> Ctx<'js> {
         unsafe {
             let register = get_registery(self.ctx);
             let key = RegisteryKey(v.to_js_value());
-            (*register).insert(key);
+            (*register).registery.insert(key);
             key
         }
     }
@@ -195,7 +195,7 @@ impl<'js> Ctx<'js> {
     pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
             let register = get_registery(self.ctx);
-            if (*register).remove(&k) {
+            if (*register).registery.remove(&k) {
                 Some(Value::from_js_value(self, k.0).unwrap())
             } else {
                 None
@@ -207,7 +207,7 @@ impl<'js> Ctx<'js> {
     pub fn get_register(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
             let register = get_registery(self.ctx);
-            if (*register).contains(&k) {
+            if (*register).registery.contains(&k) {
                 let value = Value::from_js_value_const(self, k.0).unwrap();
                 Some(value)
             } else {

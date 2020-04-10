@@ -10,9 +10,28 @@ use std::{
 };
 use std::{ffi::CString, mem, ptr};
 
+/// Opaque book keeping data for rust.
+pub struct Opaque {
+    pub registery: HashSet<RegisteryKey>,
+    pub func_cb_class_id: u32,
+}
+
+impl Opaque {
+    fn new() -> Self {
+        let mut class_id: u32 = 0;
+        unsafe {
+            qjs::JS_NewClassID(&mut class_id);
+        }
+        Opaque {
+            registery: HashSet::default(),
+            func_cb_class_id: class_id,
+        }
+    }
+}
+
 pub(crate) struct Inner {
     pub(crate) rt: *mut qjs::JSRuntime,
-    pub(crate) registery: HashSet<RegisteryKey>,
+    pub(crate) opaque: Opaque,
     // To keep rt info alive for the entire duration of the lifetime of rt
     info: Option<CString>,
 }
@@ -68,7 +87,7 @@ impl Runtime {
                 inner: InnerRef(Rc::new(RefCell::new(Inner {
                     rt,
                     info: None,
-                    registery: HashSet::default(),
+                    opaque: Opaque::new(),
                 }))),
             })
         }

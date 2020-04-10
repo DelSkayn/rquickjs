@@ -1569,62 +1569,53 @@ pub struct JSGCObjectHeader {
     _unused: [u8; 0],
 }
 extern "C" {
-    /// Creates a new runtime
     pub fn JS_NewRuntime() -> *mut JSRuntime;
 }
 extern "C" {
-    /// Set the info of a runtime.
     pub fn JS_SetRuntimeInfo(rt: *mut JSRuntime, info: *const ::std::os::raw::c_char);
 }
 extern "C" {
-    /// Set a memory limit
     pub fn JS_SetMemoryLimit(rt: *mut JSRuntime, limit: size_t);
 }
 extern "C" {
-    /// Set the memory threshold for GC to run
     pub fn JS_SetGCThreshold(rt: *mut JSRuntime, gc_threshold: size_t);
 }
 extern "C" {
-    /// Create a runtime with a given memory allocator
     pub fn JS_NewRuntime2(
         mf: *const JSMallocFunctions,
         opaque: *mut ::std::os::raw::c_void,
     ) -> *mut JSRuntime;
 }
 extern "C" {
-    /// Free a runtime
     pub fn JS_FreeRuntime(rt: *mut JSRuntime);
+}
+extern "C" {
+    pub fn JS_GetRuntimeOpaque(rt: *mut JSRuntime) -> *mut ::std::os::raw::c_void;
+}
+extern "C" {
+    pub fn JS_SetRuntimeOpaque(rt: *mut JSRuntime, opaque: *mut ::std::os::raw::c_void);
 }
 pub type JS_MarkFunc =
     ::std::option::Option<unsafe extern "C" fn(rt: *mut JSRuntime, gp: *mut JSGCObjectHeader)>;
 extern "C" {
-    /// Mark objects for GC
     pub fn JS_MarkValue(rt: *mut JSRuntime, val: JSValue, mark_func: JS_MarkFunc);
 }
 extern "C" {
-    /// Run the GC.
     pub fn JS_RunGC(rt: *mut JSRuntime);
 }
 extern "C" {
-    /// Return false if not an object or if the object has already been
-    /// freed (zombie objects are visible in finalizers when freeing
-    /// cycles).
     pub fn JS_IsLiveObject(rt: *mut JSRuntime, obj: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    /// Create a new context from a given runtime
     pub fn JS_NewContext(rt: *mut JSRuntime) -> *mut JSContext;
 }
 extern "C" {
-    /// Destroy a context
     pub fn JS_FreeContext(s: *mut JSContext);
 }
 extern "C" {
-    /// Set a opaque pointer for a context.
     pub fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
-    /// Get a opaque pointer for a context.
     pub fn JS_SetContextOpaque(ctx: *mut JSContext, opaque: *mut ::std::os::raw::c_void);
 }
 extern "C" {
@@ -1639,12 +1630,10 @@ extern "C" {
 extern "C" {
     pub fn JS_GetClassProto(ctx: *mut JSContext, class_id: JSClassID) -> JSValue;
 }
-
 #[cfg(feature = "parallel")]
 extern "C" {
     pub fn JS_ResetCtxStack(ctx: *mut JSContext);
 }
-
 extern "C" {
     pub fn JS_NewContextRaw(rt: *mut JSRuntime) -> *mut JSContext;
 }
@@ -2483,9 +2472,6 @@ extern "C" {
     pub fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: JSClassID) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn JS_NewInt64(ctx: *mut JSContext, v: i64) -> JSValue;
-}
-extern "C" {
     pub fn JS_NewBigInt64(ctx: *mut JSContext, v: i64) -> JSValue;
 }
 extern "C" {
@@ -2568,6 +2554,13 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_ToBigInt64(
+        ctx: *mut JSContext,
+        pres: *mut i64,
+        val: JSValue,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_ToInt64Ext(
         ctx: *mut JSContext,
         pres: *mut i64,
         val: JSValue,
@@ -3725,7 +3718,6 @@ extern "C" {
         len: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
 }
-
 #[cfg(feature = "exports")]
 extern "C" {
     pub fn JS_GetModuleExportEntriesCount(m: *mut JSModuleDef) -> ::std::os::raw::c_int;

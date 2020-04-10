@@ -44,7 +44,7 @@ impl Context {
             ctx,
             rt: runtime.inner.clone(),
         });
-        let info = &mut guard.registery;
+        let info = &mut guard.opaque;
         unsafe { qjs::JS_SetContextOpaque(ctx, info as *mut _ as *mut c_void) };
         res
     }
@@ -62,7 +62,7 @@ impl Context {
             ctx,
             rt: runtime.inner.clone(),
         });
-        let info = &mut guard.registery;
+        let info = &mut guard.opaque;
         unsafe { qjs::JS_SetContextOpaque(ctx, info as *mut _ as *mut c_void) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
