@@ -11,11 +11,17 @@ use std::{
 
 mod ffi;
 
+/// A trait which allows rquickjs to create a callback with only minimal overhead.
 pub trait StaticFn<'js> {
+    /// type of the this object that the function expects
+    /// Generally the global object.
     type This: FromJs<'js>;
+    /// type of the arguments that the function expects
     type Args: FromJsMulti<'js>;
+    /// type of the return value
     type Result: ToJs<'js>;
 
+    /// Call the static function.
     fn call(ctx: Ctx<'js>, this: Self::This, args: Self::Args) -> Result<Self::Result>;
 }
 

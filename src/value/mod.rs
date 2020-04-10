@@ -24,13 +24,6 @@ use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
 mod multi;
 pub use multi::{MultiValue, ValueIter};
 
-/// A bit of a hack to enable propegating panics.
-///
-/// positive values are not seen as pointers by qjs.
-/// this way we can create an exception who is not free
-/// and for which we can check in handle exception
-const JS_TAG_PANIC: i32 = qjs::JS_TAG_FLOAT64 + 1;
-
 pub(crate) fn handle_panic<F: FnOnce() -> qjs::JSValue + UnwindSafe>(
     ctx: *mut qjs::JSContext,
     f: F,
@@ -38,15 +31,16 @@ pub(crate) fn handle_panic<F: FnOnce() -> qjs::JSValue + UnwindSafe>(
     unsafe {
         match panic::catch_unwind(f) {
             Ok(x) => x,
-            Err(e) => qjs::JS_Throw(
-                ctx,
-                qjs::JSValue {
-                    u: qjs::JSValueUnion {
-                        ptr: Box::into_raw(e) as *mut _,
+            Err(e) => {
+                Ctx::from_ptr(ctx).get_opaque().panic = Some(e);
+                qjs::JS_Throw(
+                    ctx,
+                    qjs::JSValue {
+                        u: qjs::JSValueUnion { int32: 0 },
+                        tag: qjs::JS_TAG_EXCEPTION as i64,
                     },
-                    tag: JS_TAG_PANIC as i64,
-                },
-            ),
+                )
+            }
         }
     }
 }
@@ -80,16 +74,15 @@ pub(crate) unsafe fn handle_exception<'js>(
 }
 
 pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
+    let exception_val = qjs::JS_GetException(ctx.ctx);
+    if let Some(x) = ctx.get_opaque().panic.take() {
+        panic::resume_unwind(x);
+    }
+
     let atom_stack = Atom::from_str(ctx, "stack");
     let atom_file_name = Atom::from_str(ctx, "fileName");
     let atom_line_number = Atom::from_str(ctx, "lineNumber");
     let atom_message = Atom::from_str(ctx, "message");
-
-    let exception_val = qjs::JS_GetException(ctx.ctx);
-    if exception_val.tag == JS_TAG_PANIC as i64 {
-        let ptr = exception_val.u.ptr as *mut _;
-        panic::resume_unwind(Box::from_raw(ptr));
-    }
     // Dont know if is this is always correct
     // TODO test exceptions
     let message = Value::from_js_value(

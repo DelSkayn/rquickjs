@@ -3,17 +3,21 @@ use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
 #[cfg(feature = "parallel")]
 use std::sync::{Arc, Mutex, MutexGuard};
+use std::{any::Any, ffi::CString, mem, ptr};
 #[cfg(not(feature = "parallel"))]
 use std::{
     cell::{RefCell, RefMut},
     rc::Rc,
 };
-use std::{ffi::CString, mem, ptr};
 
 /// Opaque book keeping data for rust.
 pub struct Opaque {
+    /// The registery, used to keep track of which registery values belong to this runtime.
     pub registery: HashSet<RegisteryKey>,
+    /// The function callback, used for its finalizer to be able to free closures.
     pub func_class: u32,
+    /// Used to carry a panic if a callback triggered one.
+    pub panic: Option<Box<dyn Any + Send + 'static>>,
 }
 
 impl Opaque {
@@ -25,6 +29,7 @@ impl Opaque {
         Opaque {
             registery: HashSet::default(),
             func_class: class_id,
+            panic: None,
         }
     }
 }
