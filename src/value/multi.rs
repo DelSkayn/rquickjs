@@ -19,12 +19,12 @@ impl<'js> Iterator for ValueIter<'js> {
             return None;
         }
         unsafe {
-            let ptr = self.value.ptr.offset(self.current as isize);
+            let ptr = self.value.ptr.add(self.current);
             self.current += 1;
             if self.value.ownership {
-                return Some(Value::from_js_value(self.value.ctx, *ptr).unwrap());
+                Some(Value::from_js_value(self.value.ctx, *ptr).unwrap())
             } else {
-                return Some(Value::from_js_value_const(self.value.ctx, *ptr).unwrap());
+                Some(Value::from_js_value_const(self.value.ctx, *ptr).unwrap())
             }
         }
     }
@@ -48,7 +48,7 @@ impl<'js> Drop for ValueIter<'js> {
             if self.value.ownership {
                 self.current += 1;
                 for v in self.current..self.value.len {
-                    let ptr = self.value.ptr.offset(v as isize);
+                    let ptr = self.value.ptr.add(v);
                     Value::from_js_value(self.value.ctx, *ptr).ok();
                 }
             }
@@ -117,7 +117,7 @@ impl<'js> MultiValue<'js> {
     }
 
     /// Returns a vector containing all the js values.
-    pub fn to_vec(mut self) -> Vec<Value<'js>> {
+    pub fn into_vec(mut self) -> Vec<Value<'js>> {
         self.iter().collect()
     }
 

@@ -215,7 +215,7 @@ impl<'js> Function<'js> {
         res
     }
 
-    pub fn to_object(self) -> Object<'js> {
+    pub fn into_object(self) -> Object<'js> {
         Object(self.0)
     }
 }
@@ -225,7 +225,7 @@ mod test {
     use super::*;
     use crate::*;
     #[test]
-    fn base_call() {
+    fn js_call() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
@@ -256,6 +256,26 @@ mod test {
             let eval: Function = ctx.eval("(a) => { a()}").unwrap();
             eval.call::<_, ()>(f.clone()).unwrap();
             f.call::<_, ()>(()).unwrap()
+        })
+    }
+
+    #[test]
+    fn callback() {
+        use std::{cell::RefCell, rc::Rc};
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let called = Rc::new(RefCell::new(false));
+            let called_clone = called.clone();
+            let f = Function::new(ctx, "test", move |_, _: (), _: ()| {
+                (*called_clone.borrow_mut()) = true;
+                Ok(())
+            })
+            .unwrap();
+            let eval: Function = ctx.eval("(a) => { a()}").unwrap();
+            eval.call::<_, ()>(f.clone()).unwrap();
+            f.call::<_, ()>(()).unwrap();
+            assert!(*called.borrow())
         })
     }
 }

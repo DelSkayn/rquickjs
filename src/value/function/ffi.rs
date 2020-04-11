@@ -51,7 +51,7 @@ where
             let args = try_ffi!(ctx.ctx, F::Args::from_js_multi(ctx, multi));
             let value = try_ffi!(ctx.ctx, F::call(ctx, this, args));
             let value = try_ffi!(ctx.ctx, value.to_js(ctx));
-            value.to_js_value()
+            value.into_js_value()
         }),
     )
 }
@@ -90,7 +90,7 @@ where
                     let args = try_ffi!(ctx.ctx, A::from_js_multi(ctx, multi));
                     let value = try_ffi!(ctx.ctx, func(ctx, this, args));
                     let value = try_ffi!(ctx.ctx, value.to_js(ctx));
-                    value.to_js_value()
+                    value.into_js_value()
                 }),
             )
         }),

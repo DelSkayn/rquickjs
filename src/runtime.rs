@@ -3,7 +3,7 @@ use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
 #[cfg(feature = "parallel")]
 use std::sync::{Arc, Mutex, MutexGuard};
-use std::{any::Any, ffi::CString, mem, ptr};
+use std::{any::Any, ffi::CString, mem};
 #[cfg(not(feature = "parallel"))]
 use std::{
     cell::{RefCell, RefMut},
@@ -82,7 +82,7 @@ impl Runtime {
     /// Will generally only fail if not enough memory was available.
     pub fn new() -> Result<Self, Error> {
         let rt = unsafe { qjs::JS_NewRuntime() };
-        if rt == ptr::null_mut() {
+        if rt.is_null() {
             return Err(Error::Allocation);
         }
         let opaque = Opaque::new();

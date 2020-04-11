@@ -2,8 +2,9 @@
 #![allow(non_camel_case_types)]
 #![allow(non_snake_case)]
 #![allow(clippy::unreadable_literal)]
+#![allow(clippy::missing_safety_doc)]
 
-use std::{mem, ptr};
+use std::ptr;
 
 mod bindings;
 pub use bindings::*;
@@ -164,7 +165,7 @@ pub fn JS_IsObject(v: JSValue) -> bool {
 #[inline]
 pub unsafe fn JS_FreeValue(ctx: *mut JSContext, v: JSValue) {
     if JS_VALUE_HAS_REF_COUNT!(v.tag) {
-        let p: *mut JSRefCountHeader = mem::transmute(JS_VALUE_GET_PTR!(v));
+        let p: *mut JSRefCountHeader = JS_VALUE_GET_PTR!(v) as *mut _;
         (*p).ref_count -= 1;
         if (*p).ref_count <= 0 {
             __JS_FreeValue(ctx, v)
@@ -175,7 +176,7 @@ pub unsafe fn JS_FreeValue(ctx: *mut JSContext, v: JSValue) {
 #[inline]
 pub unsafe fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue) {
     if JS_VALUE_HAS_REF_COUNT!(v.tag) {
-        let p: *mut JSRefCountHeader = mem::transmute(JS_VALUE_GET_PTR!(v));
+        let p: *mut JSRefCountHeader = JS_VALUE_GET_PTR!(v) as *mut _;
         (*p).ref_count -= 1;
         if (*p).ref_count <= 0 {
             __JS_FreeValueRT(rt, v)
@@ -186,7 +187,7 @@ pub unsafe fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue) {
 #[inline]
 pub unsafe fn JS_DupValue(v: JSValue) -> JSValue {
     if JS_VALUE_HAS_REF_COUNT!(v.tag) {
-        let p: *mut JSRefCountHeader = mem::transmute(JS_VALUE_GET_PTR!(v));
+        let p: *mut JSRefCountHeader = JS_VALUE_GET_PTR!(v) as *mut _;
         (*p).ref_count += 1;
     }
     v
@@ -223,7 +224,7 @@ pub unsafe fn JS_NewFloat64(d: f64) -> JSValue {
         u: i64,
     };
 
-    let u = FloatValue { d: d };
+    let u = FloatValue { d };
     let val = d as i32;
     let t = FloatValue { d: val as f64 };
     if u.u == t.u {

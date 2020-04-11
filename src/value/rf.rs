@@ -65,7 +65,7 @@ impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
     /// return the underlying JSValue
     /// and consume the object, not decreasing the refcount
     /// on drop.
-    pub fn to_js_value(self) -> qjs::JSValue {
+    pub fn into_js_value(self) -> qjs::JSValue {
         let val = self.as_js_value();
         mem::forget(self);
         val

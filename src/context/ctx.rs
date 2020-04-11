@@ -13,8 +13,7 @@ use rquickjs_sys as qjs;
 use std::thread::{self, ThreadId};
 use std::{
     ffi::{CStr, CString},
-    fs::File,
-    io::Read,
+    fs,
     marker::PhantomData,
     path::Path,
 };
@@ -68,9 +67,7 @@ impl<'js> Ctx<'js> {
 
     /// Evaluate a script directly from a file.
     pub fn eval_file<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
-        let mut file = File::open(path.as_ref())?;
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer)?;
+        let buffer = fs::read(path.as_ref())?;
         let file_name = CString::new(
             path.as_ref()
                 .file_name()
@@ -181,7 +178,7 @@ impl<'js> Ctx<'js> {
     pub fn register(self, v: Value<'js>) -> RegisteryKey {
         unsafe {
             let register = self.get_opaque();
-            let key = RegisteryKey(v.to_js_value());
+            let key = RegisteryKey(v.into_js_value());
             register.registery.insert(key);
             key
         }

@@ -232,7 +232,7 @@ impl<'js> Value<'js> {
         }
     }
 
-    pub(crate) fn to_js_value(self) -> qjs::JSValue {
+    pub(crate) fn into_js_value(self) -> qjs::JSValue {
         match self {
             Value::Int(ref x) => qjs::JSValue {
                 u: qjs::JSValueUnion { int32: *x },
@@ -257,11 +257,11 @@ impl<'js> Value<'js> {
                 tag: qjs::JS_TAG_UNINITIALIZED as i64,
             },
             Value::Float(x) => unsafe { qjs::JS_NewFloat64(x) },
-            Value::Symbol(x) => x.0.to_js_value(),
-            Value::String(x) => x.0.to_js_value(),
-            Value::Object(x) => x.0.to_js_value(),
-            Value::Array(x) => x.0.to_js_value(),
-            Value::Function(x) => x.0.to_js_value(),
+            Value::Symbol(x) => x.0.into_js_value(),
+            Value::String(x) => x.0.into_js_value(),
+            Value::Object(x) => x.0.into_js_value(),
+            Value::Array(x) => x.0.into_js_value(),
+            Value::Function(x) => x.0.into_js_value(),
         }
     }
 

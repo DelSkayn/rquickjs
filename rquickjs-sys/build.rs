@@ -1,4 +1,3 @@
-use cc;
 use std::{env, fs, path::Path, process::Command};
 
 fn main() {
@@ -68,10 +67,10 @@ fn main() {
         builder.file(out_dir.join(e));
     }
 
-    if let Ok(_) = env::var("CARGO_FEATURE_EXPORTS") {
+    if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
         builder.define("CONFIG_MODULE_EXPORTS", None);
     }
-    if let Ok(_) = env::var("CARGO_FEATURE_PARALLEL") {
+    if env::var("CARGO_FEATURE_PARALLEL").is_ok() {
         builder.define("CONFIG_PARALLEL", None);
     }
     builder.compile("libquickjs.a");

@@ -22,7 +22,7 @@ impl<'js> Array<'js> {
         }
     }
 
-    pub fn to_object(self) -> Object<'js> {
+    pub fn into_object(self) -> Object<'js> {
         Object(self.0)
     }
 
@@ -88,7 +88,7 @@ mod test {
     }
 
     #[test]
-    fn to_object() {
+    fn into_object() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
@@ -100,7 +100,7 @@ mod test {
             "#,
                 )
                 .unwrap();
-            let object = val.to_object();
+            let object = val.into_object();
             assert_eq!(object.get::<_, i32>(0).unwrap(), 1);
         })
     }

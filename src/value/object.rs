@@ -51,7 +51,7 @@ impl<'js> Object<'js> {
                 self.0.ctx.ctx,
                 self.0.as_js_value(),
                 atom.atom,
-                val.to_js_value(),
+                val.into_js_value(),
             ) < 0
             {
                 return Err(value::get_exception(self.0.ctx));
