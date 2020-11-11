@@ -10,6 +10,8 @@ use std::{
     rc::Rc,
 };
 
+use crate::{context::Ctx, value};
+
 /// Opaque book keeping data for rust.
 pub struct Opaque {
     /// The registery, used to keep track of which registery values belong to this runtime.
@@ -132,6 +134,37 @@ impl Runtime {
         let guard = self.inner.lock();
         unsafe { qjs::JS_RunGC(guard.rt) }
         mem::drop(guard);
+    }
+
+    /// Test for pending jobs
+    ///
+    /// Returns true when at least one job is pending.
+    pub fn is_job_pending(&self) -> bool {
+        let guard = self.inner.lock();
+        let res = unsafe { qjs::JS_IsJobPending(guard.rt) };
+        mem::drop(guard);
+        res != 0
+    }
+
+    /// Execute first pending job
+    ///
+    /// Returns context for executed job or none when queue is empty or error when exception thrown under execution.
+    pub fn execute_pending_job(&self) -> Result<Option<Ctx<'_>>, Error> {
+        let guard = self.inner.lock();
+        let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
+        let result = unsafe { qjs::JS_ExecutePendingJob(guard.rt, ctx_ptr.as_mut_ptr()) };
+        mem::drop(guard);
+        if result == 0 {
+            // no jobs executed
+            return Ok(None);
+        }
+        let ctx = Ctx::from_ptr(unsafe { ctx_ptr.assume_init() });
+        if result == 1 {
+            // single job executed
+            return Ok(Some(ctx));
+        }
+        // exception thrown
+        Err(unsafe { value::get_exception(ctx) })
     }
 }
 
