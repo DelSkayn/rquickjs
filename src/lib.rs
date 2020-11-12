@@ -37,6 +37,7 @@ mod context;
 mod registery_key;
 pub use registery_key::RegisteryKey;
 mod runtime;
+mod safe_ref;
 pub use context::{Context, ContextBuilder, Ctx, MultiWith};
 pub use runtime::Runtime;
 mod markers;

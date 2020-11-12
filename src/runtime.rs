@@ -1,16 +1,9 @@
 use crate::{Error, RegisteryKey};
 use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
-#[cfg(feature = "parallel")]
-use std::sync::{Arc, Mutex, MutexGuard};
 use std::{any::Any, ffi::CString, mem};
-#[cfg(not(feature = "parallel"))]
-use std::{
-    cell::{RefCell, RefMut},
-    rc::Rc,
-};
 
-use crate::{context::Ctx, value};
+use crate::{context::Ctx, safe_ref::Ref, value};
 
 /// Opaque book keeping data for rust.
 pub struct Opaque {
@@ -42,41 +35,7 @@ pub(crate) struct Inner {
     info: Option<CString>,
 }
 
-#[derive(Clone)]
-pub(crate) struct InnerRef(
-    #[cfg(not(feature = "parallel"))] Rc<RefCell<Inner>>,
-    #[cfg(feature = "parallel")] Arc<Mutex<Inner>>,
-);
-
-#[cfg(not(feature = "parallel"))]
-impl InnerRef {
-    fn new(inner: Inner) -> Self {
-        Self(Rc::new(RefCell::new(inner)))
-    }
-
-    pub fn lock(&self) -> RefMut<Inner> {
-        self.0.borrow_mut()
-    }
-
-    pub fn try_lock(&self) -> Option<RefMut<Inner>> {
-        Some(self.0.borrow_mut())
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl InnerRef {
-    fn new(inner: Inner) -> Self {
-        Self(Arc::new(Mutex::new(inner)))
-    }
-
-    pub fn lock(&self) -> MutexGuard<Inner> {
-        self.0.lock().unwrap()
-    }
-
-    pub fn try_lock(&self) -> Option<MutexGuard<Inner>> {
-        self.0.lock().ok()
-    }
-}
+pub(crate) type InnerRef = Ref<Inner>;
 
 /// Quickjs runtime, entry point of the library.
 #[derive(Clone)]
