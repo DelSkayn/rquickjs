@@ -1,4 +1,5 @@
 use crate::{Ctx, Error, FromJs, Function, Object, Result, Runtime, StdResult, ToJs, Value};
+use rquickjs_sys as qjs;
 use std::{
     fmt::Display,
     future::Future,
@@ -121,20 +122,47 @@ where
         spawn(async move {
             let rt_lock = runtime.inner.lock();
             let ctx = Ctx::from_ptr(ctx);
-            let then = Function::from_js(ctx, ctx.deregister(then).unwrap()).unwrap();
-            let catch = Function::from_js(ctx, ctx.deregister(catch).unwrap()).unwrap();
-            let _: Result<()> = match future.await {
+            let then = ctx.deregister(then).unwrap();
+            let catch = ctx.deregister(catch).unwrap();
+            match future.await {
                 Ok(value) => match value.to_js(ctx) {
-                    Ok(value) => then.call(value),
-                    Err(error) => catch.call(error.to_string()),
+                    Ok(value) => schedule_resolution(ctx, then, value),
+                    Err(error) => schedule_resolution(ctx, catch, error.to_string()),
                 },
-                Err(error) => catch.call(error.to_string()),
+                Err(error) => schedule_resolution(ctx, catch, error.to_string()),
             };
             mem::drop(rt_lock);
         });
 
         Ok(Value::Object(promise))
     }
+}
+
+fn schedule_resolution<'js, V: ToJs<'js>>(ctx: Ctx<'js>, func: Value<'js>, val: V) {
+    if let Ok(val) = val.to_js(ctx) {
+        let args = [func.as_js_value(), val.as_js_value()];
+        unsafe {
+            qjs::JS_EnqueueJob(
+                ctx.ctx,
+                Some(resolution_job),
+                args.len() as i32,
+                args.as_ptr() as *mut _,
+            );
+        }
+        mem::drop(args);
+    }
+}
+
+unsafe extern "C" fn resolution_job(
+    ctx: *mut qjs::JSContext,
+    argc: std::os::raw::c_int,
+    argv: *mut qjs::JSValue,
+) -> qjs::JSValue {
+    let this = qjs::JS_GetGlobalObject(ctx);
+    let func = *argv;
+    let argv = argv.offset(1);
+    let argc = argc - 1;
+    qjs::JS_Call(ctx, func, this, argc, argv)
 }
 
 #[cfg(any(feature = "tokio", feature = "async-std"))]
