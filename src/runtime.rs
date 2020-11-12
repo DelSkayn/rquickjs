@@ -42,32 +42,38 @@ pub(crate) struct Inner {
     info: Option<CString>,
 }
 
+#[derive(Clone)]
+pub(crate) struct InnerRef(
+    #[cfg(not(feature = "parallel"))] Rc<RefCell<Inner>>,
+    #[cfg(feature = "parallel")] Arc<Mutex<Inner>>,
+);
+
 #[cfg(not(feature = "parallel"))]
-#[derive(Clone)]
-pub(crate) struct InnerRef(Rc<RefCell<Inner>>);
-
-#[cfg(feature = "parallel")]
-#[derive(Clone)]
-pub(crate) struct InnerRef(Arc<Mutex<Inner>>);
-
 impl InnerRef {
-    #[cfg(not(feature = "parallel"))]
+    fn new(inner: Inner) -> Self {
+        Self(Rc::new(RefCell::new(inner)))
+    }
+
     pub fn lock(&self) -> RefMut<Inner> {
         self.0.borrow_mut()
     }
 
-    #[cfg(not(feature = "parallel"))]
     pub fn try_lock(&self) -> Option<RefMut<Inner>> {
         Some(self.0.borrow_mut())
     }
+}
 
-    #[cfg(feature = "parallel")]
+#[cfg(feature = "parallel")]
+impl InnerRef {
+    fn new(inner: Inner) -> Self {
+        Self(Arc::new(Mutex::new(inner)))
+    }
+
     pub fn lock(&self) -> MutexGuard<Inner> {
         self.0.lock().unwrap()
     }
 
-    #[cfg(feature = "parallel")]
-    pub fn try_lock(&self) -> Option<RefMut<Inner>> {
+    pub fn try_lock(&self) -> Option<MutexGuard<Inner>> {
         self.0.lock().ok()
     }
 }
@@ -92,7 +98,7 @@ impl Runtime {
             qjs::JS_SetRuntimeOpaque(rt, Box::into_raw(Box::new(opaque)) as *mut _);
         }
         Ok(Runtime {
-            inner: InnerRef(Rc::new(RefCell::new(Inner { rt, info: None }))),
+            inner: InnerRef::new(Inner { rt, info: None }),
         })
     }
 
