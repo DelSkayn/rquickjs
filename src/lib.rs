@@ -108,6 +108,26 @@ impl Error {
     }
 }
 
+impl<'js> FromJs<'js> for Error {
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let obj = Object::from_js(ctx, value)?;
+        if obj.is_error() {
+            Ok(Error::Exception {
+                message: obj.get("message")?,
+                file: obj.get("fileName").unwrap_or_else(|_| "unknown".into()),
+                line: obj.get::<_, f64>("lineNumber")? as u32,
+                stack: obj.get("stack")?,
+            })
+        } else {
+            Err(Error::FromJsConversion {
+                from: "object",
+                to: "error",
+                message: None,
+            })
+        }
+    }
+}
+
 /// Result type used throught the library.
 pub type Result<T> = StdResult<T, Error>;
 
