@@ -1,6 +1,8 @@
-use crate::{Ctx, Error, FromJs, Function, Object, Result, Value};
+use crate::{Ctx, Error, FromJs, Function, Object, Result, Runtime, StdResult, ToJs, Value};
 use std::{
+    fmt::Display,
     future::Future,
+    mem,
     pin::Pin,
     sync::{Arc, Mutex},
     task::{Context, Poll, Waker},
@@ -80,5 +82,70 @@ impl<T> Future for Promise<T> {
         }
         state.waker = cx.waker().clone().into();
         Poll::Pending
+    }
+}
+
+/// Wrapper for futures to convert to JS promises
+pub struct PromiseJs<T> {
+    runtime: Runtime,
+    future: T,
+}
+
+impl<T> PromiseJs<T> {
+    pub(crate) fn new(runtime: Runtime, future: T) -> Self {
+        Self { runtime, future }
+    }
+}
+
+#[cfg(any(feature = "async-std", feature = "tokio"))]
+impl<'js, 'a, T, V, E> ToJs<'js> for PromiseJs<T>
+where
+    T: Future<Output = StdResult<V, E>> + 'static,
+    V: ToJs<'js> + 'static,
+    E: Display + 'static,
+{
+    fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        #[cfg(feature = "async-std")]
+        use async_std_rs::task::spawn_local as spawn;
+        #[cfg(feature = "tokio")]
+        use tokio_rs::task::spawn_local as spawn;
+
+        let (promise, then, catch) = ctx.promise()?;
+
+        let then = ctx.register(Value::Function(then));
+        let catch = ctx.register(Value::Function(catch));
+
+        let ctx = ctx.ctx;
+        let Self { runtime, future } = self;
+
+        spawn(async move {
+            let rt_lock = runtime.inner.lock();
+            let ctx = Ctx::from_ptr(ctx);
+            let then = Function::from_js(ctx, ctx.deregister(then).unwrap()).unwrap();
+            let catch = Function::from_js(ctx, ctx.deregister(catch).unwrap()).unwrap();
+            let _: Result<()> = match future.await {
+                Ok(value) => match value.to_js(ctx) {
+                    Ok(value) => then.call(value),
+                    Err(error) => catch.call(error.to_string()),
+                },
+                Err(error) => catch.call(error.to_string()),
+            };
+            mem::drop(rt_lock);
+        });
+
+        Ok(Value::Object(promise))
+    }
+}
+
+#[cfg(any(feature = "tokio", feature = "async-std"))]
+impl Runtime {
+    /// Create promise from future
+    pub fn promise<'js, T, V, E>(&self, future: T) -> PromiseJs<T>
+    where
+        T: Future<Output = StdResult<V, E>> + 'static,
+        V: ToJs<'js>,
+        E: Display,
+    {
+        PromiseJs::new(self.clone(), future)
     }
 }
