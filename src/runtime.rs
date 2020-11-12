@@ -3,6 +3,15 @@ use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
 use std::{any::Any, ffi::CString, mem};
 
+#[cfg(all(feature = "parallel", feature = "async-std"))]
+use async_std_rs::task::{spawn, yield_now, JoinHandle};
+#[cfg(all(not(feature = "parallel"), feature = "async-std"))]
+use async_std_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
+#[cfg(all(feature = "parallel", feature = "tokio"))]
+use tokio_rs::task::{spawn, yield_now, JoinHandle};
+#[cfg(all(not(feature = "parallel"), feature = "tokio"))]
+use tokio_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
+
 use crate::{context::Ctx, safe_ref::Ref, value};
 
 /// Opaque book keeping data for rust.
@@ -106,9 +115,9 @@ impl Runtime {
     /// Returns true when at least one job is pending.
     pub fn is_job_pending(&self) -> bool {
         let guard = self.inner.lock();
-        let res = unsafe { qjs::JS_IsJobPending(guard.rt) };
+        let res = 0 != unsafe { qjs::JS_IsJobPending(guard.rt) };
         mem::drop(guard);
-        res != 0
+        res
     }
 
     /// Execute first pending job
@@ -118,7 +127,6 @@ impl Runtime {
         let guard = self.inner.lock();
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
         let result = unsafe { qjs::JS_ExecutePendingJob(guard.rt, ctx_ptr.as_mut_ptr()) };
-        mem::drop(guard);
         if result == 0 {
             // no jobs executed
             return Ok(None);
@@ -129,7 +137,33 @@ impl Runtime {
             return Ok(Some(ctx));
         }
         // exception thrown
-        Err(unsafe { value::get_exception(ctx) })
+        let res = Err(unsafe { value::get_exception(ctx) });
+        mem::drop(guard);
+        res
+    }
+
+    #[cfg(any(feature = "tokio", feature = "async-std"))]
+    /// Execute pending jobs using async runtime
+    ///
+    /// When `until_empty` is `true` execution will be stopped if no pending jobs still in queue.
+    /// When `until_empty` is `false` execution will never been stopped. All newly added pending tasks will be executed as well.
+    ///
+    /// Either __tokio__ or __async-std__ runtime is supported depending from used cargo feature.
+    pub fn spawn_pending_jobs(&self, until_empty: bool) -> JoinHandle<()> {
+        let rt = self.clone();
+
+        spawn(async move {
+            loop {
+                while rt.is_job_pending() {
+                    let _ = rt.execute_pending_job();
+                    yield_now().await;
+                }
+                if until_empty {
+                    break;
+                }
+                yield_now().await;
+            }
+        })
     }
 }
 

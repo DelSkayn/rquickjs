@@ -25,37 +25,50 @@ impl<T> Default for State<T> {
     }
 }
 
-impl<'js, T: FromJs<'js> + 'static> FromJs<'js> for Promise<T> {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let obj = Object::from_js(ctx, value)?;
-        let then: Function = obj.get("then")?;
-        let state = Arc::new(Mutex::new(State::default()));
-        let on_ok = Function::new(ctx, "onSuccess", {
-            let state = state.clone();
-            move |ctx, _this: Value, (value,): (Value,)| {
-                let mut state = state.lock().unwrap();
-                state.result = T::from_js(ctx, value).into();
-                if let Some(waker) = state.waker.take() {
-                    waker.wake();
-                }
-                Ok(())
+macro_rules! fromjs_for_promise {
+    ($($extra_guards: tt)*) => {
+        impl<'js, T> FromJs<'js> for Promise<T>
+        where
+            T: FromJs<'js> + 'static,
+            $(T: $extra_guards,)*
+        {
+            fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                let obj = Object::from_js(ctx, value)?;
+                let then: Function = obj.get("then")?;
+                let state = Arc::new(Mutex::new(State::default()));
+                let on_ok = Function::new(ctx, "onSuccess", {
+                    let state = state.clone();
+                    move |ctx, _this: Value, (value,): (Value,)| {
+                        let mut state = state.lock().unwrap();
+                        state.result = T::from_js(ctx, value).into();
+                        if let Some(waker) = state.waker.take() {
+                            waker.wake();
+                        }
+                        Ok(())
+                    }
+                })?;
+                let on_err = Function::new(ctx, "onError", {
+                    let state = state.clone();
+                    move |_ctx, _this: Value, (error,): (Error,)| {
+                        let mut state = state.lock().unwrap();
+                        state.result = Err(error).into();
+                        if let Some(waker) = state.waker.take() {
+                            waker.wake();
+                        }
+                        Ok(())
+                    }
+                })?;
+                then.call_on(obj, (on_ok, on_err))?;
+                Ok(Self { state })
             }
-        })?;
-        let on_err = Function::new(ctx, "onError", {
-            let state = state.clone();
-            move |_ctx, _this: Value, (error,): (Error,)| {
-                let mut state = state.lock().unwrap();
-                state.result = Err(error).into();
-                if let Some(waker) = state.waker.take() {
-                    waker.wake();
-                }
-                Ok(())
-            }
-        })?;
-        then.call_on(obj, (on_ok, on_err))?;
-        Ok(Self { state })
-    }
+        }
+    };
 }
+
+#[cfg(not(feature = "parallel"))]
+fromjs_for_promise!();
+#[cfg(feature = "parallel")]
+fromjs_for_promise!(Send);
 
 impl<T> Future for Promise<T> {
     type Output = Result<T>;
