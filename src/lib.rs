@@ -46,6 +46,12 @@ use std::result::Result as StdResult;
 use std::string::String as StdString;
 pub use value::*;
 
+#[cfg(feature = "futures")]
+mod promise;
+
+#[cfg(feature = "futures")]
+pub use promise::Promise;
+
 quick_error! {
     /// Error type of the library.
     #[derive(Debug)]

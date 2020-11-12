@@ -25,6 +25,7 @@ members = [
 default = ["exports"]
 parallel = ["rquickjs-sys/parallel"]
 exports = ["rquickjs-sys/exports"]
+futures = []
 
 [dev-dependencies]
 trybuild = "1.0.23"
