@@ -12,7 +12,21 @@ use tokio_rs::task::{spawn, yield_now, JoinHandle};
 #[cfg(all(not(feature = "parallel"), feature = "tokio"))]
 use tokio_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
 
-use crate::{context::Ctx, safe_ref::Ref, value};
+use crate::{
+    context::Ctx,
+    safe_ref::{Ref, WeakRef},
+    value,
+};
+
+#[derive(Clone)]
+#[repr(transparent)]
+pub struct WeakRuntime(WeakRef<Inner>);
+
+impl WeakRuntime {
+    pub fn try_ref(&self) -> Option<Runtime> {
+        self.0.try_ref().map(|inner| Runtime { inner })
+    }
+}
 
 /// Opaque book keeping data for rust.
 pub struct Opaque {
@@ -67,6 +81,10 @@ impl Runtime {
         Ok(Runtime {
             inner: Ref::new(Inner { rt, info: None }),
         })
+
+    /// Get weak ref to runtime
+    pub fn weak(&self) -> WeakRuntime {
+        WeakRuntime(self.inner.weak())
     }
 
     /// Set the info of the runtime
