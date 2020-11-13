@@ -50,7 +50,7 @@ pub use value::*;
 mod promise;
 
 #[cfg(feature = "futures")]
-pub use promise::Promise;
+pub use promise::{Promise, PromiseJs};
 
 quick_error! {
     /// Error type of the library.

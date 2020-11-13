@@ -1,4 +1,4 @@
-use crate::{Ctx, Error, FromJs, Function, Object, Result, Runtime, StdResult, ToJs, Value};
+use crate::{Ctx, Error, FromJs, Function, Object, Result, StdResult, ToJs, Value};
 use rquickjs_sys as qjs;
 use std::{
     fmt::Display,
@@ -87,14 +87,12 @@ impl<T> Future for Promise<T> {
 }
 
 /// Wrapper for futures to convert to JS promises
-pub struct PromiseJs<T> {
-    runtime: Runtime,
-    future: T,
-}
+#[repr(transparent)]
+pub struct PromiseJs<T>(pub T);
 
-impl<T> PromiseJs<T> {
-    fn new(runtime: Runtime, future: T) -> Self {
-        Self { runtime, future }
+impl<T> From<T> for PromiseJs<T> {
+    fn from(future: T) -> Self {
+        Self(future)
     }
 }
 
@@ -116,8 +114,12 @@ where
         let then = ctx.register(Value::Function(then));
         let catch = ctx.register(Value::Function(catch));
 
+        let runtime = unsafe { &ctx.get_opaque().runtime }
+            .try_ref()
+            .ok_or_else(|| Error::Unknown)?;
+
         let ctx = ctx.ctx;
-        let Self { runtime, future } = self;
+        let future = self.0;
 
         spawn(async move {
             let rt_lock = runtime.inner.lock();
@@ -163,17 +165,4 @@ unsafe extern "C" fn resolution_job(
     let argv = argv.offset(1);
     let argc = argc - 1;
     qjs::JS_Call(ctx, func, this, argc, argv)
-}
-
-#[cfg(any(feature = "tokio", feature = "async-std"))]
-impl Runtime {
-    /// Create promise from future
-    pub fn promise<'js, T, V, E>(&self, future: T) -> PromiseJs<T>
-    where
-        T: Future<Output = StdResult<V, E>> + 'static,
-        V: ToJs<'js>,
-        E: Display,
-    {
-        PromiseJs::new(self.clone(), future)
-    }
 }
