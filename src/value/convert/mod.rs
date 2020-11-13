@@ -19,6 +19,11 @@ pub trait FromJsMulti<'js>: Sized {
     const LEN: i32;
 }
 
+/// Trait for converting values from atoms.
+pub trait FromAtom<'js>: Sized {
+    fn from_atom(atom: Atom<'js>) -> Result<Self>;
+}
+
 /// For converting rust values to javascript values
 pub trait ToJs<'js> {
     fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>>;
