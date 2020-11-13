@@ -37,6 +37,7 @@ mod context;
 mod registery_key;
 pub use registery_key::RegisteryKey;
 mod runtime;
+mod safe_ref;
 pub use context::{Context, ContextBuilder, Ctx, MultiWith};
 pub use runtime::Runtime;
 mod markers;
@@ -44,6 +45,12 @@ mod value;
 use std::result::Result as StdResult;
 use std::string::String as StdString;
 pub use value::*;
+
+#[cfg(feature = "futures")]
+mod promise;
+
+#[cfg(feature = "futures")]
+pub use promise::{Promise, PromiseJs};
 
 quick_error! {
     /// Error type of the library.
@@ -104,6 +111,26 @@ impl Error {
                 stack: _,
             } => true,
             _ => false,
+        }
+    }
+}
+
+impl<'js> FromJs<'js> for Error {
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let obj = Object::from_js(ctx, value)?;
+        if obj.is_error() {
+            Ok(Error::Exception {
+                message: obj.get("message")?,
+                file: obj.get("fileName").unwrap_or_else(|_| "unknown".into()),
+                line: obj.get::<_, f64>("lineNumber")? as u32,
+                stack: obj.get("stack")?,
+            })
+        } else {
+            Err(Error::FromJsConversion {
+                from: "object",
+                to: "error",
+                message: None,
+            })
         }
     }
 }

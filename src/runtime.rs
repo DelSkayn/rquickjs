@@ -1,14 +1,32 @@
 use crate::{Error, RegisteryKey};
 use fxhash::FxHashSet as HashSet;
 use rquickjs_sys as qjs;
-#[cfg(feature = "parallel")]
-use std::sync::{Arc, Mutex, MutexGuard};
 use std::{any::Any, ffi::CString, mem};
-#[cfg(not(feature = "parallel"))]
-use std::{
-    cell::{RefCell, RefMut},
-    rc::Rc,
+
+#[cfg(all(feature = "parallel", feature = "async-std"))]
+use async_std_rs::task::{spawn, yield_now, JoinHandle};
+#[cfg(all(not(feature = "parallel"), feature = "async-std"))]
+use async_std_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
+#[cfg(all(feature = "parallel", feature = "tokio"))]
+use tokio_rs::task::{spawn, yield_now, JoinHandle};
+#[cfg(all(not(feature = "parallel"), feature = "tokio"))]
+use tokio_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
+
+use crate::{
+    context::Ctx,
+    safe_ref::{Ref, WeakRef},
+    value,
 };
+
+#[derive(Clone)]
+#[repr(transparent)]
+pub struct WeakRuntime(WeakRef<Inner>);
+
+impl WeakRuntime {
+    pub fn try_ref(&self) -> Option<Runtime> {
+        self.0.try_ref().map(|inner| Runtime { inner })
+    }
+}
 
 /// Opaque book keeping data for rust.
 pub struct Opaque {
@@ -18,10 +36,13 @@ pub struct Opaque {
     pub func_class: u32,
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
+
+    /// Uset to ref Runtime from Ctx
+    pub runtime: WeakRuntime,
 }
 
 impl Opaque {
-    fn new() -> Self {
+    fn new(runtime: &Runtime) -> Self {
         let mut class_id: u32 = 0;
         unsafe {
             qjs::JS_NewClassID(&mut class_id);
@@ -30,6 +51,7 @@ impl Opaque {
             registery: HashSet::default(),
             func_class: class_id,
             panic: None,
+            runtime: runtime.weak(),
         }
     }
 }
@@ -40,40 +62,11 @@ pub(crate) struct Inner {
     info: Option<CString>,
 }
 
-#[cfg(not(feature = "parallel"))]
-#[derive(Clone)]
-pub(crate) struct InnerRef(Rc<RefCell<Inner>>);
-
-#[cfg(feature = "parallel")]
-#[derive(Clone)]
-pub(crate) struct InnerRef(Arc<Mutex<Inner>>);
-
-impl InnerRef {
-    #[cfg(not(feature = "parallel"))]
-    pub fn lock(&self) -> RefMut<Inner> {
-        self.0.borrow_mut()
-    }
-
-    #[cfg(not(feature = "parallel"))]
-    pub fn try_lock(&self) -> Option<RefMut<Inner>> {
-        Some(self.0.borrow_mut())
-    }
-
-    #[cfg(feature = "parallel")]
-    pub fn lock(&self) -> MutexGuard<Inner> {
-        self.0.lock().unwrap()
-    }
-
-    #[cfg(feature = "parallel")]
-    pub fn try_lock(&self) -> Option<RefMut<Inner>> {
-        self.0.lock().ok()
-    }
-}
-
 /// Quickjs runtime, entry point of the library.
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct Runtime {
-    pub(crate) inner: InnerRef,
+    pub(crate) inner: Ref<Inner>,
 }
 
 impl Runtime {
@@ -85,13 +78,19 @@ impl Runtime {
         if rt.is_null() {
             return Err(Error::Allocation);
         }
-        let opaque = Opaque::new();
+        let runtime = Runtime {
+            inner: Ref::new(Inner { rt, info: None }),
+        };
+        let opaque = Opaque::new(&runtime);
         unsafe {
             qjs::JS_SetRuntimeOpaque(rt, Box::into_raw(Box::new(opaque)) as *mut _);
         }
-        Ok(Runtime {
-            inner: InnerRef(Rc::new(RefCell::new(Inner { rt, info: None }))),
-        })
+        Ok(runtime)
+    }
+
+    /// Get weak ref to runtime
+    pub fn weak(&self) -> WeakRuntime {
+        WeakRuntime(self.inner.weak())
     }
 
     /// Set the info of the runtime
@@ -132,6 +131,62 @@ impl Runtime {
         let guard = self.inner.lock();
         unsafe { qjs::JS_RunGC(guard.rt) }
         mem::drop(guard);
+    }
+
+    /// Test for pending jobs
+    ///
+    /// Returns true when at least one job is pending.
+    pub fn is_job_pending(&self) -> bool {
+        let guard = self.inner.lock();
+        let res = 0 != unsafe { qjs::JS_IsJobPending(guard.rt) };
+        mem::drop(guard);
+        res
+    }
+
+    /// Execute first pending job
+    ///
+    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
+    /// The second returned value is true when pending jobs still in queue.
+    pub fn execute_pending_job(&self) -> (Result<bool, Error>, bool) {
+        let guard = self.inner.lock();
+        let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
+        let result = unsafe { qjs::JS_ExecutePendingJob(guard.rt, ctx_ptr.as_mut_ptr()) };
+        if result == 0 {
+            // no jobs executed
+            return (Ok(false), false);
+        }
+        let ctx_ptr = unsafe { ctx_ptr.assume_init() };
+        let has_pending = 0 != unsafe { qjs::JS_IsJobPending(guard.rt) };
+        if result == 1 {
+            // single job executed
+            return (Ok(false), has_pending);
+        }
+        // exception thrown
+        let ctx = Ctx::from_ptr(ctx_ptr);
+        let res = Err(unsafe { value::get_exception(ctx) });
+        mem::drop(guard);
+        (res, has_pending)
+    }
+
+    #[cfg(any(feature = "tokio", feature = "async-std"))]
+    /// Execute pending jobs using async runtime
+    ///
+    /// When `until_empty` is `true` execution will be stopped if no pending jobs still in queue.
+    /// When `until_empty` is `false` execution will never been stopped. All newly added pending tasks will be executed as well.
+    ///
+    /// Either __tokio__ or __async-std__ runtime is supported depending from used cargo feature.
+    pub fn spawn_pending_jobs(&self, until_empty: bool) -> JoinHandle<()> {
+        let rt = self.clone();
+
+        spawn(async move {
+            loop {
+                let (_, has_pending) = rt.execute_pending_job();
+                if !has_pending && until_empty {
+                    break;
+                }
+                yield_now().await;
+            }
+        })
     }
 }
 

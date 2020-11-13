@@ -6,7 +6,7 @@ use crate::{
         rf::{JsObjectRef, JsStringRef},
         String,
     },
-    Context, FromJs, Module, Object, RegisteryKey, Result, Value,
+    Context, FromJs, Function, Module, Object, RegisteryKey, Result, Value,
 };
 use rquickjs_sys as qjs;
 #[cfg(feature = "parallel")]
@@ -15,6 +15,7 @@ use std::{
     ffi::{CStr, CString},
     fs,
     marker::PhantomData,
+    mem,
     path::Path,
 };
 
@@ -172,6 +173,27 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Creates promise and resolving functions.
+    pub fn promise(self) -> Result<(Object<'js>, Function<'js>, Function<'js>)> {
+        let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
+
+        Ok(unsafe {
+            let promise = Object(JsObjectRef::from_js_value(
+                self,
+                value::handle_exception(
+                    self,
+                    qjs::JS_NewPromiseCapability(self.ctx, funcs.as_mut_ptr() as *mut qjs::JSValue),
+                )?,
+            ));
+            let (then, catch) = funcs.assume_init();
+            (
+                promise,
+                Function(JsObjectRef::from_js_value(self, then)),
+                Function(JsObjectRef::from_js_value(self, catch)),
+            )
+        })
+    }
+
     /// Store a value in the registery so references to it can be kept outside the scope of context use.
     ///
     /// A registered value can be retrieved from any context belonging to the same runtime.
@@ -210,7 +232,7 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
-        let ptr = qjs::JS_GetContextOpaque(self.ctx);
+        let ptr = qjs::JS_GetRuntimeOpaque(qjs::JS_GetRuntime(self.ctx));
         &mut *(ptr as *mut _)
     }
 }

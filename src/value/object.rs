@@ -86,6 +86,11 @@ impl<'js> Object<'js> {
     pub fn is_array(&self) -> bool {
         unsafe { qjs::JS_IsArray(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
     }
+
+    /// Check if the object is as error.
+    pub fn is_error(&self) -> bool {
+        unsafe { qjs::JS_IsError(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
+    }
 }
 
 #[cfg(test)]

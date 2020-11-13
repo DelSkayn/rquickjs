@@ -16,6 +16,20 @@ quick-error = "1.2.3"
 libc = "0.2.67"
 fxhash = "0.2.1"
 
+[dependencies.tokio-rs]
+package = "tokio"
+version = "^0.3"
+optional = true
+default-features = false
+features = ["rt"]
+
+[dependencies.async-std-rs]
+package = "async-std"
+version = "^1.7"
+optional = true
+default-features = false
+features = ["default", "unstable"]
+
 [workspace]
 members = [
     "./rquickjs-sys"
@@ -25,6 +39,9 @@ members = [
 default = ["exports"]
 parallel = ["rquickjs-sys/parallel"]
 exports = ["rquickjs-sys/exports"]
+futures = []
+tokio = ["futures", "tokio-rs"]
+async-std = ["futures", "async-std-rs"]
 
 [dev-dependencies]
 trybuild = "1.0.23"
