@@ -232,7 +232,7 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
-        let ptr = qjs::JS_GetContextOpaque(self.ctx);
+        let ptr = qjs::JS_GetRuntimeOpaque(qjs::JS_GetRuntime(self.ctx));
         &mut *(ptr as *mut _)
     }
 }

@@ -40,7 +40,6 @@ impl Context {
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
-        unsafe { qjs::JS_SetContextOpaque(ctx, qjs::JS_GetRuntimeOpaque(guard.rt)) };
         let res = Ok(Context {
             ctx,
             rt: runtime.clone(),
@@ -58,7 +57,6 @@ impl Context {
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
-        unsafe { qjs::JS_SetContextOpaque(ctx, qjs::JS_GetRuntimeOpaque(guard.rt)) };
         let res = Ok(Context {
             ctx,
             rt: runtime.clone(),
