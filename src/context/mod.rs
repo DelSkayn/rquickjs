@@ -170,6 +170,18 @@ mod test {
     }
 
     #[test]
+    fn minimal() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::build(&rt).none().eval(true).build().unwrap();
+        ctx.with(|ctx| {
+            let val = ctx.eval::<Value, _>(r#"1+1"#);
+
+            assert_eq!(val.unwrap(), Value::Int(2));
+            println!("{:?}", ctx.globals());
+        });
+    }
+
+    #[test]
     fn module() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();

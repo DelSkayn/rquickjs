@@ -139,6 +139,7 @@ impl<'a> ContextBuilder<'a> {
     pub fn build(self) -> Result<Context, Error> {
         let ctx = Context::base(self.rf)?;
         let guard = self.rf.inner.lock();
+        unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.ctx) };
         if self.date {
             unsafe { qjs::JS_AddIntrinsicDate(ctx.ctx) };
         }
