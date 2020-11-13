@@ -2,12 +2,7 @@ use crate::{
     value::rf::JsObjectRef, Ctx, FromJs, FromJsMulti, Object, Result, ToJs, ToJsMulti, Value,
 };
 use rquickjs_sys as qjs;
-use std::{
-    ffi::{CStr, CString},
-    mem,
-    os::raw::c_int,
-    ptr,
-};
+use std::{ffi::CString, mem, os::raw::c_int, ptr};
 
 mod ffi;
 
@@ -161,9 +156,8 @@ impl<'js> Function<'js> {
         let class_id = ctx.get_opaque().func_class;
         let rt = qjs::JS_GetRuntime(ctx.ctx);
         if qjs::JS_IsRegisteredClass(rt, class_id) == 0 {
-            let class_name = CStr::from_bytes_with_nul(b"RustFunc\0").unwrap();
             let class_def = qjs::JSClassDef {
-                class_name: class_name.as_ptr(),
+                class_name: b"RustFunc\0".as_ptr() as *const _,
                 finalizer: Some(ffi::cb_finalizer),
                 gc_mark: None,
                 call: Some(ffi::cb_call),

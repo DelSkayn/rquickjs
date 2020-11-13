@@ -3,7 +3,6 @@ use crate::{
     Ctx, FromJs, Object, Result, Value,
 };
 use rquickjs_sys as qjs;
-use std::ffi::CStr;
 
 /// Rust representation of a javascript object optimized as an array.
 ///
@@ -34,8 +33,7 @@ impl<'js> Array<'js> {
     pub fn len(&self) -> usize {
         let v = self.0.as_js_value();
         unsafe {
-            let prop = CStr::from_bytes_with_nul(b"length\0").unwrap();
-            let val = qjs::JS_GetPropertyStr(self.0.ctx.ctx, v, prop.as_ptr());
+            let val = qjs::JS_GetPropertyStr(self.0.ctx.ctx, v, b"length\0".as_ptr() as *const _);
             assert!(qjs::JS_IsInt(val));
             qjs::JS_VALUE_GET_INT!(val) as usize
         }
