@@ -122,24 +122,27 @@ impl Runtime {
 
     /// Execute first pending job
     ///
-    /// Returns context for executed job or none when queue is empty or error when exception thrown under execution.
-    pub fn execute_pending_job(&self) -> Result<Option<Ctx<'_>>, Error> {
+    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
+    /// The second returned value is true when pending jobs still in queue.
+    pub fn execute_pending_job(&self) -> (Result<bool, Error>, bool) {
         let guard = self.inner.lock();
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
         let result = unsafe { qjs::JS_ExecutePendingJob(guard.rt, ctx_ptr.as_mut_ptr()) };
         if result == 0 {
             // no jobs executed
-            return Ok(None);
+            return (Ok(false), false);
         }
-        let ctx = Ctx::from_ptr(unsafe { ctx_ptr.assume_init() });
+        let ctx_ptr = unsafe { ctx_ptr.assume_init() };
+        let has_pending = 0 != unsafe { qjs::JS_IsJobPending(guard.rt) };
         if result == 1 {
             // single job executed
-            return Ok(Some(ctx));
+            return (Ok(false), has_pending);
         }
         // exception thrown
+        let ctx = Ctx::from_ptr(ctx_ptr);
         let res = Err(unsafe { value::get_exception(ctx) });
         mem::drop(guard);
-        res
+        (res, has_pending)
     }
 
     #[cfg(any(feature = "tokio", feature = "async-std"))]
@@ -154,11 +157,8 @@ impl Runtime {
 
         spawn(async move {
             loop {
-                while rt.is_job_pending() {
-                    let _ = rt.execute_pending_job();
-                    yield_now().await;
-                }
-                if until_empty {
+                let (_, has_pending) = rt.execute_pending_job();
+                if !has_pending && until_empty {
                     break;
                 }
                 yield_now().await;
