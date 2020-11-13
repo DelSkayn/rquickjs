@@ -21,7 +21,7 @@ macro_rules! impl_multi_with{
                 $(if self.0.get_runtime_ptr() != $t.get_runtime_ptr(){
                     panic!("Tried to use contexts of different runtimes with eachother");
                 })*
-                let guard = self.0.rt.lock();
+                let guard = self.0.rt.inner.lock();
                 self.0.reset_stack();
                 let res = f(($(Ctx::new($t),)*));
                 mem::drop(guard);

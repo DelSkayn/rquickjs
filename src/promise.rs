@@ -93,7 +93,7 @@ pub struct PromiseJs<T> {
 }
 
 impl<T> PromiseJs<T> {
-    pub(crate) fn new(runtime: Runtime, future: T) -> Self {
+    fn new(runtime: Runtime, future: T) -> Self {
         Self { runtime, future }
     }
 }

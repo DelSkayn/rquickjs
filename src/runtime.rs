@@ -44,12 +44,11 @@ pub(crate) struct Inner {
     info: Option<CString>,
 }
 
-pub(crate) type InnerRef = Ref<Inner>;
-
 /// Quickjs runtime, entry point of the library.
 #[derive(Clone)]
+#[repr(transparent)]
 pub struct Runtime {
-    pub(crate) inner: InnerRef,
+    pub(crate) inner: Ref<Inner>,
 }
 
 impl Runtime {
@@ -66,7 +65,7 @@ impl Runtime {
             qjs::JS_SetRuntimeOpaque(rt, Box::into_raw(Box::new(opaque)) as *mut _);
         }
         Ok(Runtime {
-            inner: InnerRef::new(Inner { rt, info: None }),
+            inner: Ref::new(Inner { rt, info: None }),
         })
     }
 

@@ -1,4 +1,4 @@
-use crate::{runtime, Error, Result, Runtime};
+use crate::{Error, Result, Runtime};
 use rquickjs_sys as qjs;
 use std::mem;
 #[cfg(feature = "parallel")]
@@ -27,7 +27,7 @@ pub trait MultiWith<'js> {
 pub struct Context {
     //TODO replace with NotNull?
     pub(crate) ctx: *mut qjs::JSContext,
-    rt: runtime::InnerRef,
+    rt: Runtime,
 }
 
 impl Context {
@@ -43,7 +43,7 @@ impl Context {
         unsafe { qjs::JS_SetContextOpaque(ctx, qjs::JS_GetRuntimeOpaque(guard.rt)) };
         let res = Ok(Context {
             ctx,
-            rt: runtime.inner.clone(),
+            rt: runtime.clone(),
         });
         mem::drop(guard);
         res
@@ -61,7 +61,7 @@ impl Context {
         unsafe { qjs::JS_SetContextOpaque(ctx, qjs::JS_GetRuntimeOpaque(guard.rt)) };
         let res = Ok(Context {
             ctx,
-            rt: runtime.inner.clone(),
+            rt: runtime.clone(),
         });
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
@@ -85,7 +85,7 @@ impl Context {
 
     /// Set the maximum stack size for the local context stack
     pub fn set_max_stack_size(&self, size: usize) {
-        let guard = self.rt.lock();
+        let guard = self.rt.inner.lock();
         self.reset_stack();
         unsafe { qjs::JS_SetMaxStackSize(self.ctx, size as u64) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
@@ -93,11 +93,15 @@ impl Context {
     }
 
     pub fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.rt.lock();
+        let guard = self.rt.inner.lock();
         self.reset_stack();
         unsafe { qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 }) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
+    }
+
+    pub fn runtime(&self) -> &Runtime {
+        &self.rt
     }
 
     pub(crate) fn get_runtime_ptr(&self) -> *mut qjs::JSRuntime {
@@ -116,7 +120,7 @@ impl Context {
     where
         F: FnOnce(Ctx) -> R,
     {
-        let guard = self.rt.lock();
+        let guard = self.rt.inner.lock();
         self.reset_stack();
         let ctx = Ctx::new(self);
         let res = f(ctx);
@@ -129,7 +133,7 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         //TODO
-        let guard = match self.rt.try_lock() {
+        let guard = match self.rt.inner.try_lock() {
             Some(x) => x,
             // When we can not enter the runtime lock we
             // prefer to leak the value over possibly corrupting memory
