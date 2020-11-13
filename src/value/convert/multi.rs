@@ -18,9 +18,7 @@ impl<'js> FromJsMulti<'js> for MultiValue<'js> {
         Ok(value)
     }
 
-    fn len() -> i64 {
-        -1
-    }
+    const LEN: i32 = -1;
 }
 
 impl<'js> FromJsMulti<'js> for () {
@@ -28,9 +26,7 @@ impl<'js> FromJsMulti<'js> for () {
         Ok(())
     }
 
-    fn len() -> i64 {
-        0
-    }
+    const LEN: i32 = 0;
 }
 
 macro_rules! impl_to_js_multi{
@@ -66,9 +62,7 @@ macro_rules! impl_from_js_multi{
                 ))
             }
 
-            fn len() -> i64{
-                $num
-            }
+            const LEN: i32 = $num;
         }
     }
 }

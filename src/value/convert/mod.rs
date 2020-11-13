@@ -16,7 +16,7 @@ pub trait FromJs<'js>: Sized {
 pub trait FromJsMulti<'js>: Sized {
     fn from_js_multi(ctx: Ctx<'js>, value: MultiValue<'js>) -> Result<Self>;
 
-    fn len() -> i64;
+    const LEN: i32;
 }
 
 /// For converting rust values to javascript values

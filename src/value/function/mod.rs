@@ -114,7 +114,7 @@ impl<'js> Function<'js> {
                 ctx.ctx,
                 func,
                 name.as_ptr(),
-                F::Args::len() as c_int,
+                F::Args::LEN as c_int,
                 qjs::JSCFunctionEnum_JS_CFUNC_generic,
                 0,
             );
