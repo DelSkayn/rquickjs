@@ -36,10 +36,13 @@ pub struct Opaque {
     pub func_class: u32,
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
+
+    /// Uset to ref Runtime from Ctx
+    pub runtime: WeakRuntime,
 }
 
 impl Opaque {
-    fn new() -> Self {
+    fn new(runtime: &Runtime) -> Self {
         let mut class_id: u32 = 0;
         unsafe {
             qjs::JS_NewClassID(&mut class_id);
@@ -48,6 +51,7 @@ impl Opaque {
             registery: HashSet::default(),
             func_class: class_id,
             panic: None,
+            runtime: runtime.weak(),
         }
     }
 }
@@ -74,13 +78,15 @@ impl Runtime {
         if rt.is_null() {
             return Err(Error::Allocation);
         }
-        let opaque = Opaque::new();
+        let runtime = Runtime {
+            inner: Ref::new(Inner { rt, info: None }),
+        };
+        let opaque = Opaque::new(&runtime);
         unsafe {
             qjs::JS_SetRuntimeOpaque(rt, Box::into_raw(Box::new(opaque)) as *mut _);
         }
-        Ok(Runtime {
-            inner: Ref::new(Inner { rt, info: None }),
-        })
+        Ok(runtime)
+    }
 
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
