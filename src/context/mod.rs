@@ -40,6 +40,7 @@ impl Context {
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
+        unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx) };
         let res = Ok(Context {
             ctx,
             rt: runtime.clone(),
