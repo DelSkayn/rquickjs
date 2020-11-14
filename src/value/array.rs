@@ -1,6 +1,6 @@
 use crate::{
     value::{self, rf::JsObjectRef},
-    Ctx, FromJs, Object, Result, ToJs, Value,
+    Ctx, FromIteratorJs, FromJs, Object, Result, ToJs, Value,
 };
 use rquickjs_sys as qjs;
 use std::{
@@ -122,6 +122,27 @@ impl<'js> IntoIterator for Array<'js> {
     }
 }
 
+impl<'js, A> FromIteratorJs<'js, A> for Array<'js>
+where
+    A: ToJs<'js>,
+{
+    type Item = Value<'js>;
+
+    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    where
+        T: IntoIterator<Item = A>,
+    {
+        let array = Array::new(ctx)?;
+        let mut index = 0;
+        for item in iter {
+            let item = item.to_js(ctx)?;
+            array.set(index, item)?;
+            index += 1;
+        }
+        Ok(array)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::*;
@@ -208,6 +229,23 @@ mod test {
             assert_eq!(elems[1], "b");
             assert_eq!(elems[2], "");
             assert_eq!(elems[3], "cdef");
+        })
+    }
+
+    #[test]
+    fn collect_js() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let array = [1i32, 2, 3]
+                .iter()
+                .cloned()
+                .collect_js::<Array>(ctx)
+                .unwrap();
+            assert_eq!(array.len(), 3);
+            assert_eq!(i32::from_js(ctx, array.get(0).unwrap()).unwrap(), 1);
+            assert_eq!(i32::from_js(ctx, array.get(1).unwrap()).unwrap(), 2);
+            assert_eq!(i32::from_js(ctx, array.get(2).unwrap()).unwrap(), 3);
         })
     }
 }

@@ -1,4 +1,4 @@
-use crate::{context::Ctx, Error};
+use crate::{context::Ctx, Error, Result};
 use rquickjs_sys as qjs;
 use std::panic::{self, UnwindSafe};
 //use std::ffi::CStr;
@@ -23,6 +23,34 @@ pub(crate) mod rf;
 use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
 mod multi;
 pub use multi::{MultiValue, ValueIter};
+
+/// The `FromIterator` trait to use with `Ctx`
+pub trait FromIteratorJs<'js, A>: Sized {
+    type Item;
+
+    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    where
+        T: IntoIterator<Item = A>;
+}
+
+/// The `Iterator` trait extension to support `Ctx`
+pub trait IteratorJs<'js, A> {
+    fn collect_js<B>(self, ctx: Ctx<'js>) -> Result<B>
+    where
+        B: FromIteratorJs<'js, A>;
+}
+
+impl<'js, T, A> IteratorJs<'js, A> for T
+where
+    T: Iterator<Item = A>,
+{
+    fn collect_js<B>(self, ctx: Ctx<'js>) -> Result<B>
+    where
+        B: FromIteratorJs<'js, A>,
+    {
+        B::from_iter_js(ctx, self.into_iter())
+    }
+}
 
 pub(crate) fn handle_panic<F: FnOnce() -> qjs::JSValue + UnwindSafe>(
     ctx: *mut qjs::JSContext,
@@ -66,7 +94,7 @@ pub enum Value<'js> {
 pub(crate) unsafe fn handle_exception<'js>(
     ctx: Ctx<'js>,
     js_val: qjs::JSValue,
-) -> Result<qjs::JSValue, Error> {
+) -> Result<qjs::JSValue> {
     if js_val.tag != qjs::JS_TAG_EXCEPTION as i64 {
         return Ok(js_val);
     }
@@ -117,7 +145,7 @@ pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
 impl<'js> Value<'js> {
     // unsafe becuase the value must belong the context and the lifetime must be constrained
     // by its lifetime
-    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, v: qjs::JSValue) -> Result<Self, Error> {
+    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, v: qjs::JSValue) -> Result<Self> {
         let v = handle_exception(ctx, v)?;
         //TODO test for overflow in down cast
         //Should probably not happen
@@ -155,10 +183,7 @@ impl<'js> Value<'js> {
     }
 
     #[allow(dead_code)]
-    pub(crate) unsafe fn from_js_value_const(
-        ctx: Ctx<'js>,
-        v: qjs::JSValue,
-    ) -> Result<Self, Error> {
+    pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, v: qjs::JSValue) -> Result<Self> {
         let v = handle_exception(ctx, v)?;
         //TODO test for overflow in down cast
         //Should probably not happen

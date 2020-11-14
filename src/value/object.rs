@@ -1,6 +1,6 @@
 use crate::{
     value::{self, rf::JsObjectRef},
-    Atom, Ctx, FromAtom, FromJs, Result, ToAtom, ToJs, Value,
+    Atom, Ctx, FromAtom, FromIteratorJs, FromJs, Result, ToAtom, ToJs, Value,
 };
 use rquickjs_sys as qjs;
 use std::{
@@ -229,6 +229,27 @@ impl<'js> IntoIterator for Object<'js> {
     }
 }
 
+impl<'js, K, V> FromIteratorJs<'js, (K, V)> for Object<'js>
+where
+    K: ToAtom<'js>,
+    V: ToJs<'js>,
+{
+    type Item = (Atom<'js>, Value<'js>);
+
+    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    where
+        T: IntoIterator<Item = (K, V)>,
+    {
+        let object = Object::new(ctx)?;
+        for (key, value) in iter {
+            let key = key.to_atom(ctx);
+            let value = value.to_js(ctx)?;
+            object.set(key, value)?;
+        }
+        Ok(object)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::*;
@@ -386,6 +407,31 @@ mod test {
             assert_eq!(Array::from_js(ctx, pairs[2].1.clone()).unwrap().len(), 0);
             assert_eq!(pairs[3].0.clone().to_string().unwrap(), "");
             assert_eq!(pairs[3].1, Value::Undefined);
+        })
+    }
+
+    #[test]
+    fn collect_js() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let object = [("a", "bc"), ("$_", ""), ("", "xyz")]
+                .iter()
+                .cloned()
+                .collect_js::<Object>(ctx)
+                .unwrap();
+            assert_eq!(
+                StdString::from_js(ctx, object.get("a").unwrap()).unwrap(),
+                "bc"
+            );
+            assert_eq!(
+                StdString::from_js(ctx, object.get("$_").unwrap()).unwrap(),
+                ""
+            );
+            assert_eq!(
+                StdString::from_js(ctx, object.get("").unwrap()).unwrap(),
+                "xyz"
+            );
         })
     }
 }
