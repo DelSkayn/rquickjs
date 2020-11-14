@@ -29,64 +29,75 @@ impl<'js> FromJsMulti<'js> for () {
     const LEN: i32 = 0;
 }
 
-macro_rules! impl_to_js_multi{
-    ($($t:ident),+) => {
-        impl<'js, $($t,)*> ToJsMulti<'js> for ($($t,)*)
+macro_rules! impl_from_to_js_multi {
+    ($($($t:ident)*;)*) => {
+        $(
+            impl<'js, $($t,)*> ToJsMulti<'js> for ($($t,)*)
             where $($t: ToJs<'js>,)*
-        {
-            #[allow(non_snake_case)]
-            fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value<'js>>>{
-                let ($($t,)*) = self;
-                Ok(vec![
-                    $($t.to_js(ctx)?,)*
-                ])
+            {
+                #[allow(non_snake_case)]
+                fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value<'js>>>{
+                    let ($($t,)*) = self;
+                    Ok(vec![
+                        $($t.to_js(ctx)?,)*
+                    ])
+                }
             }
-        }
-    }
-}
 
-macro_rules! impl_from_js_multi{
-    ($num:expr, $($t:ident),*) => {
-        impl<'js, $($t,)*> FromJsMulti<'js> for ($($t,)*)
+            impl<'js, $($t,)*> FromJsMulti<'js> for ($($t,)*)
             where $($t: FromJs<'js>,)*
-        {
-            #[allow(non_snake_case)]
-            fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
-                let mut iter = value.iter();
-                Ok((
-                    $({
-                        let v = iter.next()
-                            .unwrap_or(Value::Undefined);
-                        $t::from_js(ctx,v)?
-                    },)*
-                ))
-            }
+            {
+                #[allow(non_snake_case)]
+                fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
+                    let mut iter = value.iter();
+                    Ok((
+                        $({
+                            let v = iter.next()
+                                .unwrap_or(Value::Undefined);
+                            $t::from_js(ctx,v)?
+                        },)*
+                    ))
+                }
 
-            const LEN: i32 = $num;
-        }
-    }
+                const LEN: i32 = impl_from_to_js_multi!(@count $($t),*);
+            }
+        )*
+    };
+
+    (@count $($t:ident),*) => {
+        0 $(+ impl_from_to_js_multi!(@1 $t))*
+    };
+
+    (@1 $($t:tt)*) => { 1 };
 }
 
-impl_to_js_multi!(A);
-impl_to_js_multi!(A, B);
-impl_to_js_multi!(A, B, C);
-impl_to_js_multi!(A, B, C, D);
-impl_to_js_multi!(A, B, C, D, E);
-impl_to_js_multi!(A, B, C, D, E, F);
-impl_to_js_multi!(A, B, C, D, E, F, G);
-impl_to_js_multi!(A, B, C, D, E, F, G, H);
-impl_to_js_multi!(A, B, C, D, E, F, G, H, I);
-impl_to_js_multi!(A, B, C, D, E, F, G, H, I, J);
-impl_to_js_multi!(A, B, C, D, E, F, G, H, I, J, K);
+impl_from_to_js_multi! {
+    A;
+    A B;
+    A B C;
+    A B C D;
+    A B C D E;
+    A B C D E F;
+    A B C D E F G;
+    A B C D E F G H;
+    A B C D E F G H I;
+    A B C D E F G H I J;
+    A B C D E F G H I J K;
+    A B C D E F G H I J K L;
+    A B C D E F G H I J K L M;
+    A B C D E F G H I J K L M N;
+    A B C D E F G H I J K L M N O;
+    A B C D E F G H I J K L M N O P;
+}
 
-impl_from_js_multi!(1, A);
-impl_from_js_multi!(2, A, B);
-impl_from_js_multi!(3, A, B, C);
-impl_from_js_multi!(4, A, B, C, D);
-impl_from_js_multi!(5, A, B, C, D, E);
-impl_from_js_multi!(6, A, B, C, D, E, F);
-impl_from_js_multi!(7, A, B, C, D, E, F, G);
-impl_from_js_multi!(8, A, B, C, D, E, F, G, H);
-impl_from_js_multi!(9, A, B, C, D, E, F, G, H, I);
-impl_from_js_multi!(10, A, B, C, D, E, F, G, H, I, J);
-impl_from_js_multi!(11, A, B, C, D, E, F, G, H, I, J, K);
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn from_js_multi_len() {
+        assert_eq!(<((),)>::LEN, 1);
+        assert_eq!(<((), ())>::LEN, 2);
+        assert_eq!(<((), (), ())>::LEN, 3);
+    }
+}
