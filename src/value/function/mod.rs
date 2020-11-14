@@ -291,21 +291,21 @@ mod test {
 
     #[test]
     fn const_callback() {
-        use std::{cell::RefCell, rc::Rc};
+        use std::sync::{Arc, Mutex};
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
-            let called = Rc::new(RefCell::new(false));
+            let called = Arc::new(Mutex::new(false));
             let called_clone = called.clone();
             let f = Function::new(ctx, "test", move |_, _: (), _: ()| {
-                (*called_clone.borrow_mut()) = true;
+                (*called_clone.lock().unwrap()) = true;
                 Ok(())
             })
             .unwrap();
             let eval: Function = ctx.eval("(a) => { a()}").unwrap();
             eval.call::<_, ()>(f.clone()).unwrap();
             f.call::<_, ()>(()).unwrap();
-            assert!(*called.borrow())
+            assert!(*called.lock().unwrap())
         })
     }
 

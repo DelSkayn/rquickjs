@@ -1,8 +1,6 @@
 use crate::{Error, Result, Runtime};
 use rquickjs_sys as qjs;
 use std::mem;
-#[cfg(feature = "parallel")]
-use std::thread::{self, ThreadId};
 
 mod builder;
 pub use builder::ContextBuilder;
@@ -214,8 +212,8 @@ mod test {
         });
         thread::spawn(move || {
             ctx.with(|ctx| {
-                let i = ctx.eval("foo + 8");
-                assert_eq!(i, Ok(80));
+                let i: i32 = ctx.eval("foo + 8").unwrap();
+                assert_eq!(i, 50);
             });
         })
         .join()

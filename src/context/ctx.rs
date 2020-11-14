@@ -9,8 +9,6 @@ use crate::{
     Context, FromJs, Function, Module, Object, RegisteryKey, Result, Value,
 };
 use rquickjs_sys as qjs;
-#[cfg(feature = "parallel")]
-use std::thread::{self, ThreadId};
 use std::{
     ffi::{CStr, CString},
     fs,
