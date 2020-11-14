@@ -4,11 +4,11 @@ use crate::{
     ToJs, Value,
 };
 use rquickjs_sys as qjs;
-use std::{ffi::CString, mem, panic::AssertUnwindSafe};
+use std::{cell::RefCell, ffi::CString, mem, panic::AssertUnwindSafe};
 
 pub struct FuncOpaque {
     func: Box<
-        dyn FnMut(
+        dyn Fn(
             *mut qjs::JSContext,
             qjs::JSValue,
             std::os::raw::c_int,
@@ -69,16 +69,50 @@ pub unsafe extern "C" fn cb_call(
     (&mut (*fn_opaque).func)(ctx, this_val, argc, argv)
 }
 
-pub fn wrap_cb<'js, A, T, R, F>(mut func: F) -> FuncOpaque
+pub fn wrap_cb_mut<'js, A, T, R, F>(func: F) -> FuncOpaque
 where
     A: FromJsMulti<'js>,
     T: FromJs<'js>,
     R: ToJs<'js>,
     F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
 {
+    let func = RefCell::new(func);
+
     FuncOpaque {
         func: Box::new(move |ctx, this, argc, argv| {
-            let func = &mut func;
+            let func = &func;
+            handle_panic(
+                ctx,
+                AssertUnwindSafe(move || unsafe {
+                    //TODO catch unwind
+                    let ctx = Ctx::from_ptr(ctx);
+                    let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
+                    let this = try_ffi!(ctx.ctx, T::from_js(ctx, this));
+                    let multi = MultiValue::from_value_count_const(ctx, argc as usize, argv);
+                    let args = try_ffi!(ctx.ctx, A::from_js_multi(ctx, multi));
+                    let value = {
+                        let mut func = func.try_borrow_mut()
+                        .expect("Mutable function callback is already in use! Could it have been called recursively?");
+                        try_ffi!(ctx.ctx, func(ctx, this, args))
+                    };
+                    let value = try_ffi!(ctx.ctx, value.to_js(ctx));
+                    value.into_js_value()
+                }),
+            )
+        }),
+    }
+}
+
+pub fn wrap_cb<'js, A, T, R, F>(func: F) -> FuncOpaque
+where
+    A: FromJsMulti<'js>,
+    T: FromJs<'js>,
+    R: ToJs<'js>,
+    F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
+{
+    FuncOpaque {
+        func: Box::new(move |ctx, this, argc, argv| {
+            let func = &func;
             handle_panic(
                 ctx,
                 AssertUnwindSafe(move || unsafe {

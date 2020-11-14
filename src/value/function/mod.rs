@@ -10,6 +10,7 @@ use std::{
 };
 
 mod ffi;
+use ffi::FuncOpaque;
 
 /// A trait which allows rquickjs to create a callback with only minimal overhead.
 pub trait StaticFn<'js> {
@@ -128,7 +129,7 @@ impl<'js> Function<'js> {
     }
 
     #[cfg(not(feature = "parallel"))]
-    pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: Into<Vec<u8>>,
         A: FromJsMulti<'js>,
@@ -136,7 +137,40 @@ impl<'js> Function<'js> {
         R: ToJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
     {
-        unsafe { Self::new_unsafe(ctx, CString::new(name)?, func) }
+        unsafe {
+            let opaque = ffi::wrap_cb_mut(func);
+            Self::new_unsafe(ctx, CString::new(name)?, opaque)
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: Into<Vec<u8>>,
+        A: FromJsMulti<'js>,
+        T: FromJs<'js>,
+        R: ToJs<'js>,
+        F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
+    {
+        unsafe {
+            let opaque = ffi::wrap_cb(func);
+            Self::new_unsafe(ctx, CString::new(name)?, opaque)
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: Into<Vec<u8>>,
+        A: FromJsMulti<'js>,
+        T: FromJs<'js>,
+        R: ToJs<'js>,
+        F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
+    {
+        unsafe {
+            let opaque = ffi::wrap_cb_mut(func);
+            Self::new_unsafe(ctx, CString::new(name)?, opaque)
+        }
     }
 
     #[cfg(feature = "parallel")]
@@ -146,18 +180,15 @@ impl<'js> Function<'js> {
         A: FromJsMulti<'js>,
         T: FromJs<'js>,
         R: ToJs<'js>,
-        F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
+        F: Fn(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
     {
-        unsafe { Self::new_unsafe(ctx, CString::new(name)?, func) }
+        unsafe {
+            let opaque = ffi::wrap_cb(func);
+            Self::new_unsafe(ctx, CString::new(name)?, opaque)
+        }
     }
 
-    unsafe fn new_unsafe<A, T, R, F>(ctx: Ctx<'js>, _name: CString, func: F) -> Result<Self>
-    where
-        A: FromJsMulti<'js>,
-        T: FromJs<'js>,
-        R: ToJs<'js>,
-        F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
-    {
+    unsafe fn new_unsafe(ctx: Ctx<'js>, _name: CString, opaque: FuncOpaque) -> Result<Self> {
         let class_id = ctx.get_opaque().func_class;
         let rt = qjs::JS_GetRuntime(ctx.ctx);
         if qjs::JS_IsRegisteredClass(rt, class_id) == 0 {
@@ -171,7 +202,6 @@ impl<'js> Function<'js> {
             };
             assert!(qjs::JS_NewClass(rt, class_id, &class_def) == 0);
         }
-        let opaque = ffi::wrap_cb(func);
         let obj = qjs::JS_NewObjectClass(ctx.ctx, class_id as i32);
         qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(opaque)) as *mut _);
         Ok(Function(JsObjectRef::from_js_value(ctx, obj)))
@@ -260,7 +290,7 @@ mod test {
     }
 
     #[test]
-    fn callback() {
+    fn const_callback() {
         use std::{cell::RefCell, rc::Rc};
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
@@ -276,6 +306,49 @@ mod test {
             eval.call::<_, ()>(f.clone()).unwrap();
             f.call::<_, ()>(()).unwrap();
             assert!(*called.borrow())
+        })
+    }
+
+    #[test]
+    fn mut_callback() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let mut v = 0;
+            let f = Function::new_mut(ctx, "test", move |_, _: (), _: ()| {
+                v += 1;
+                dbg!(v);
+                return Ok(v);
+            })
+            .unwrap();
+            let eval: Function = ctx.eval("(a) => { return a()}").unwrap();
+            assert_eq!(eval.call::<_, i32>(f.clone()).unwrap(), 1);
+            assert_eq!(eval.call::<_, i32>(f.clone()).unwrap(), 2);
+            assert_eq!(eval.call::<_, i32>(f.clone()).unwrap(), 3);
+        })
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Mutable function callback is already in use! Could it have been called recursively?"
+    )]
+    fn recursive_mutable_callback() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let mut v = 0;
+            let f = Function::new_mut(ctx, "test", move |ctx, _: (), _: ()| {
+                v += 1;
+                ctx.globals()
+                    .get::<_, Function>("foo")
+                    .unwrap()
+                    .call::<_, ()>(())
+                    .unwrap();
+                return Ok(v);
+            })
+            .unwrap();
+            ctx.globals().set("foo", f.clone()).unwrap();
+            f.call::<_, ()>(()).unwrap();
         })
     }
 }
