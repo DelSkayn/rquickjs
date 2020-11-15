@@ -1,22 +1,20 @@
-use super::{
-    FromJs, FromJsMulti, IntoJs, IntoJsMulti, MultiValue, MultiValueJs, RestValues, Value,
-};
+use super::{FromJs, FromJsArgs, IntoJs, IntoJsArgs, MultiValue, MultiValueJs, RestValues, Value};
 use crate::{Ctx, Result};
 use std::iter::{empty, once};
 
-impl<'js> IntoJsMulti<'js> for MultiValueJs<'js> {
-    fn to_js_multi(self, _: Ctx<'js>) -> Result<MultiValueJs<'js>> {
+impl<'js> IntoJsArgs<'js> for MultiValueJs<'js> {
+    fn into_js_multi(self, _: Ctx<'js>) -> Result<MultiValueJs<'js>> {
         Ok(self)
     }
 }
 
-impl<'js, T: IntoJs<'js>> IntoJsMulti<'js> for T {
-    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
-        Ok(vec![self.to_js(ctx)?].into())
+impl<'js, T: IntoJs<'js>> IntoJsArgs<'js> for T {
+    fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
+        Ok(vec![self.into_js(ctx)?].into())
     }
 }
 
-impl<'js> FromJsMulti<'js> for MultiValue<'js> {
+impl<'js> FromJsArgs<'js> for MultiValue<'js> {
     fn from_js_multi(_: Ctx<'js>, value: MultiValue<'js>) -> Result<Self> {
         Ok(value)
     }
@@ -24,7 +22,7 @@ impl<'js> FromJsMulti<'js> for MultiValue<'js> {
     const LEN: i32 = -1;
 }
 
-impl<'js> FromJsMulti<'js> for () {
+impl<'js> FromJsArgs<'js> for () {
     fn from_js_multi(_: Ctx<'js>, _: MultiValue<'js>) -> Result<Self> {
         Ok(())
     }
@@ -32,18 +30,18 @@ impl<'js> FromJsMulti<'js> for () {
     const LEN: i32 = 0;
 }
 
-impl<'js, X> IntoJsMulti<'js> for RestValues<X>
+impl<'js, X> IntoJsArgs<'js> for RestValues<X>
 where
     X: IntoJs<'js>,
 {
-    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
+    fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
         let rest: Vec<_> = self.into();
-        let iter = rest.into_iter().map(|value| value.to_js(ctx));
+        let iter = rest.into_iter().map(|value| value.into_js(ctx));
         Ok(iter.collect::<Result<Vec<_>>>()?.into())
     }
 }
 
-impl<'js, X> FromJsMulti<'js> for RestValues<X>
+impl<'js, X> FromJsArgs<'js> for RestValues<X>
 where
     X: FromJs<'js>,
 {
@@ -61,36 +59,36 @@ where
 macro_rules! impl_from_to_js_multi {
     ($($($t:ident)*;)*) => {
         $(
-            impl<'js, $($t,)*> IntoJsMulti<'js> for ($($t,)*)
+            impl<'js, $($t,)*> IntoJsArgs<'js> for ($($t,)*)
             where
                 $($t: IntoJs<'js>,)*
             {
                 #[allow(non_snake_case)]
-                fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
+                fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
                     let ($($t,)*) = self;
                     Ok(vec![
-                        $($t.to_js(ctx)?,)*
+                        $($t.into_js(ctx)?,)*
                     ].into())
                 }
             }
 
-            impl<'js, $($t,)* X> IntoJsMulti<'js> for ($($t,)* RestValues<X>)
+            impl<'js, $($t,)* X> IntoJsArgs<'js> for ($($t,)* RestValues<X>)
             where
                 $($t: IntoJs<'js>,)*
                 X: IntoJs<'js>,
             {
                 #[allow(non_snake_case)]
-                fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
+                fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
                     let ($($t,)* X) = self;
                     let iter = empty();
-                    $(let iter = iter.chain(once($t.to_js(ctx))));*;
+                    $(let iter = iter.chain(once($t.into_js(ctx))));*;
                     let rest: Vec<_> = X.into();
-                    let iter = iter.chain(rest.into_iter().map(|value| value.to_js(ctx)));
+                    let iter = iter.chain(rest.into_iter().map(|value| value.into_js(ctx)));
                     Ok(iter.collect::<Result<Vec<_>>>()?.into())
                 }
             }
 
-            impl<'js, $($t,)*> FromJsMulti<'js> for ($($t,)*)
+            impl<'js, $($t,)*> FromJsArgs<'js> for ($($t,)*)
             where
                 $($t: FromJs<'js>,)*
             {
@@ -109,7 +107,7 @@ macro_rules! impl_from_to_js_multi {
                 const LEN: i32 = impl_from_to_js_multi!(@count $($t),*);
             }
 
-            impl<'js, $($t,)* X> FromJsMulti<'js> for ($($t,)* RestValues<X>)
+            impl<'js, $($t,)* X> FromJsArgs<'js> for ($($t,)* RestValues<X>)
             where
                 $($t: FromJs<'js>,)*
                 X: FromJs<'js>,

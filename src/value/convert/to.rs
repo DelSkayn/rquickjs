@@ -7,27 +7,27 @@ use std::{
 };
 
 impl<'js> IntoJs<'js> for Value<'js> {
-    fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
         Ok(self)
     }
 }
 
 impl<'js> IntoJs<'js> for StdString {
-    fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let s = String::from_str(ctx, self.as_str())?;
         Ok(Value::String(s))
     }
 }
 
 impl<'js, 'a> IntoJs<'js> for &'a str {
-    fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let s = String::from_str(ctx, self)?;
         Ok(Value::String(s))
     }
 }
 
 impl<'js> IntoJs<'js> for () {
-    fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
         Ok(Value::Undefined)
     }
 }
@@ -36,9 +36,9 @@ impl<'js, T> IntoJs<'js> for Option<T>
 where
     T: IntoJs<'js>,
 {
-    fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Ok(match self {
-            Some(value) => value.to_js(ctx)?,
+            Some(value) => value.into_js(ctx)?,
             _ => Value::Undefined,
         })
     }
@@ -49,10 +49,10 @@ where
     T: IntoJs<'js>,
     E: IntoJs<'js>,
 {
-    fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Ok(match self {
-            Ok(value) => value.to_js(ctx)?,
-            Err(error) => error.to_js(ctx)?,
+            Ok(value) => value.into_js(ctx)?,
+            Err(error) => error.into_js(ctx)?,
         })
     }
 }
@@ -62,7 +62,7 @@ macro_rules! tojs_impls {
     ($($type:ident,)*) => {
         $(
             impl<'js> IntoJs<'js> for $type<'js> {
-                fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
                     Ok(Value::$type(self))
                 }
             }
@@ -76,7 +76,7 @@ macro_rules! tojs_impls {
             where
                 T: IntoJs<'js>,
             {
-                fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js::<Array>(ctx)
                         .map(Value::Array)
@@ -93,7 +93,7 @@ macro_rules! tojs_impls {
                 K: IntoAtom<'js>,
                 V: IntoJs<'js>,
             {
-                fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js::<Object>(ctx)
                         .map(Value::Object)
@@ -106,7 +106,7 @@ macro_rules! tojs_impls {
     ($($type:ty: $jstype:ident,)*) => {
         $(
             impl<'js> IntoJs<'js> for $type {
-                fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
                     Ok(Value::$jstype(self as _))
                 }
             }
@@ -117,7 +117,7 @@ macro_rules! tojs_impls {
     ($($type:ty => $totype:ty: $jstype:ident,)*) => {
         $(
             impl<'js> IntoJs<'js> for $type {
-                fn to_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
                     use std::convert::TryFrom;
                     let val = <$totype>::try_from(self).map_err(|_| {
                         $crate::Error::ToJs{

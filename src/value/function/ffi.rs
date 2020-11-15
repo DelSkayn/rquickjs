@@ -1,6 +1,6 @@
 use super::StaticFn;
 use crate::{
-    context::Ctx, runtime::Opaque, value::handle_panic, FromJs, FromJsMulti, IntoJs, MultiValue,
+    context::Ctx, runtime::Opaque, value::handle_panic, FromJs, FromJsArgs, IntoJs, MultiValue,
     Result, Value,
 };
 use rquickjs_sys as qjs;
@@ -50,7 +50,7 @@ where
             let multi = MultiValue::from_value_count_const(ctx, argc as usize, argv);
             let args = try_ffi!(ctx.ctx, F::Args::from_js_multi(ctx, multi));
             let value = try_ffi!(ctx.ctx, F::call(ctx, this, args));
-            let value = try_ffi!(ctx.ctx, value.to_js(ctx));
+            let value = try_ffi!(ctx.ctx, value.into_js(ctx));
             value.into_js_value()
         }),
     )
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn cb_call(
 
 pub fn wrap_cb_mut<'js, A, T, R, F>(func: F) -> FuncOpaque
 where
-    A: FromJsMulti<'js>,
+    A: FromJsArgs<'js>,
     T: FromJs<'js>,
     R: IntoJs<'js>,
     F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
@@ -95,7 +95,7 @@ where
                         .expect("Mutable function callback is already in use! Could it have been called recursively?");
                         try_ffi!(ctx.ctx, func(ctx, this, args))
                     };
-                    let value = try_ffi!(ctx.ctx, value.to_js(ctx));
+                    let value = try_ffi!(ctx.ctx, value.into_js(ctx));
                     value.into_js_value()
                 }),
             )
@@ -105,7 +105,7 @@ where
 
 pub fn wrap_cb<'js, A, T, R, F>(func: F) -> FuncOpaque
 where
-    A: FromJsMulti<'js>,
+    A: FromJsArgs<'js>,
     T: FromJs<'js>,
     R: IntoJs<'js>,
     F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
@@ -123,7 +123,7 @@ where
                     let multi = MultiValue::from_value_count_const(ctx, argc as usize, argv);
                     let args = try_ffi!(ctx.ctx, A::from_js_multi(ctx, multi));
                     let value = try_ffi!(ctx.ctx, func(ctx, this, args));
-                    let value = try_ffi!(ctx.ctx, value.to_js(ctx));
+                    let value = try_ffi!(ctx.ctx, value.into_js(ctx));
                     value.into_js_value()
                 }),
             )

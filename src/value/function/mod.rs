@@ -1,5 +1,5 @@
 use crate::{
-    value::rf::JsObjectRef, Ctx, FromJs, FromJsMulti, IntoJs, IntoJsMulti, Object, Result, Value,
+    value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoJs, IntoJsArgs, Object, Result, Value,
 };
 use rquickjs_sys as qjs;
 use std::{ffi::CString, mem, os::raw::c_int, ptr};
@@ -13,7 +13,7 @@ pub trait StaticFn<'js> {
     /// Generally the global object.
     type This: FromJs<'js>;
     /// type of the arguments that the function expects
-    type Args: FromJsMulti<'js>;
+    type Args: FromJsArgs<'js>;
     /// type of the return value
     type Result: IntoJs<'js>;
 
@@ -127,7 +127,7 @@ impl<'js> Function<'js> {
     pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: Into<Vec<u8>>,
-        A: FromJsMulti<'js>,
+        A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
@@ -142,7 +142,7 @@ impl<'js> Function<'js> {
     pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: Into<Vec<u8>>,
-        A: FromJsMulti<'js>,
+        A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
         F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
@@ -204,7 +204,7 @@ impl<'js> Function<'js> {
     /// Call a function with given arguments with the `this` as the global context object.
     pub fn call<A, R>(&self, args: A) -> Result<R>
     where
-        A: IntoJsMulti<'js>,
+        A: IntoJsArgs<'js>,
         R: FromJs<'js>,
     {
         self.call_on(self.0.ctx.globals(), args)
@@ -213,12 +213,12 @@ impl<'js> Function<'js> {
     /// Call a function with given arguments on a given `this`
     pub fn call_on<A, T, R>(&self, this: T, args: A) -> Result<R>
     where
-        A: IntoJsMulti<'js>,
+        A: IntoJsArgs<'js>,
         R: FromJs<'js>,
         T: IntoJs<'js>,
     {
-        let args = args.to_js_multi(self.0.ctx)?;
-        let this = this.to_js(self.0.ctx)?;
+        let args = args.into_js_multi(self.0.ctx)?;
+        let this = this.into_js(self.0.ctx)?;
         let len = args.len();
         let res = unsafe {
             // Dont drop args value

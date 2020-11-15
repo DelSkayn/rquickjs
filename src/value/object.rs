@@ -25,7 +25,7 @@ impl<'js> Object<'js> {
 
     /// Get a new value
     pub fn get<K: IntoAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
-        let atom = k.to_atom(self.0.ctx);
+        let atom = k.into_atom(self.0.ctx);
         unsafe {
             let val = qjs::JS_GetProperty(self.0.ctx.ctx, self.0.as_js_value(), atom.atom);
             V::from_js(self.0.ctx, Value::from_js_value(self.0.ctx, val)?)
@@ -37,7 +37,7 @@ impl<'js> Object<'js> {
     where
         K: IntoAtom<'js>,
     {
-        let atom = k.to_atom(self.0.ctx);
+        let atom = k.into_atom(self.0.ctx);
         unsafe {
             let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.0.as_js_value(), atom.atom);
             if res < 0 {
@@ -49,8 +49,8 @@ impl<'js> Object<'js> {
 
     /// Set a member of an object to a certain value
     pub fn set<K: IntoAtom<'js>, V: IntoJs<'js>>(&self, key: K, value: V) -> Result<()> {
-        let atom = key.to_atom(self.0.ctx);
-        let val = value.to_js(self.0.ctx)?;
+        let atom = key.into_atom(self.0.ctx);
+        let val = value.into_js(self.0.ctx)?;
         unsafe {
             if qjs::JS_SetProperty(
                 self.0.ctx.ctx,
@@ -67,7 +67,7 @@ impl<'js> Object<'js> {
 
     /// Remove a member of an object
     pub fn remove<K: IntoAtom<'js>>(&self, key: K) -> Result<()> {
-        let atom = key.to_atom(self.0.ctx);
+        let atom = key.into_atom(self.0.ctx);
         unsafe {
             if qjs::JS_DeleteProperty(
                 self.0.ctx.ctx,
@@ -242,8 +242,8 @@ where
     {
         let object = Object::new(ctx)?;
         for (key, value) in iter {
-            let key = key.to_atom(ctx);
-            let value = value.to_js(ctx)?;
+            let key = key.into_atom(ctx);
+            let value = value.into_js(ctx)?;
             object.set(key, value)?;
         }
         Ok(object)

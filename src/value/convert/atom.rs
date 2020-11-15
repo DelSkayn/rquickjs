@@ -27,31 +27,31 @@ impl<'js> FromAtom<'js> for StdString {
 }
 
 impl<'js> IntoAtom<'js> for Atom<'js> {
-    fn to_atom(self, _: Ctx<'js>) -> Atom<'js> {
+    fn into_atom(self, _: Ctx<'js>) -> Atom<'js> {
         self
     }
 }
 
 impl<'js> IntoAtom<'js> for Value<'js> {
-    fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_value(ctx, &self)
     }
 }
 
 impl<'js> IntoAtom<'js> for &str {
-    fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_str(ctx, self)
     }
 }
 
 impl<'js> IntoAtom<'js> for StdString {
-    fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_str(ctx, &self)
     }
 }
 
 impl<'js> IntoAtom<'js> for u32 {
-    fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_u32(ctx, self)
     }
 }
@@ -59,7 +59,7 @@ impl<'js> IntoAtom<'js> for u32 {
 macro_rules! impl_for_to_js(
     ($ty:ty, $Var:ident) => {
         impl<'js> IntoAtom<'js> for $ty {
-            fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+            fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
                 Atom::from_value(ctx, &Value::$Var(self))
             }
         }

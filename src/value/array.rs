@@ -61,7 +61,7 @@ impl<'js> Array<'js> {
     /// Set the value at an index in the javascript array.
     pub fn set<V: IntoJs<'js>>(&self, idx: u32, val: V) -> Result<()> {
         let obj = self.0.as_js_value();
-        let val = val.to_js(self.0.ctx)?.into_js_value();
+        let val = val.into_js(self.0.ctx)?.into_js_value();
         unsafe {
             if -1 == qjs::JS_SetPropertyUint32(self.0.ctx.ctx, obj, idx, val) {
                 return Err(value::get_exception(self.0.ctx));
@@ -135,7 +135,7 @@ where
         let array = Array::new(ctx)?;
         let mut index = 0;
         for item in iter {
-            let item = item.to_js(ctx)?;
+            let item = item.into_js(ctx)?;
             array.set(index, item)?;
             index += 1;
         }
