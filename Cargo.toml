@@ -18,6 +18,11 @@ optional = true
 version = "0.0.4"
 path = "./rquickjs-sys"
 
+[dependencies.rquickjs-macro]
+version = "0.0.1"
+path = "./rquickjs-macro"
+optional = true
+
 [dependencies.tokio-rs]
 package = "tokio"
 version = "^0.3"
@@ -43,6 +48,7 @@ optional = true
 [workspace]
 members = [
     "rquickjs-sys",
+    "rquickjs-macro",
     "examples/native-module",
     "examples/module-loader",
 ]
@@ -84,6 +90,9 @@ classes = []
 
 # Enable user-defined properties support
 properties = []
+
+# Enable helper macros
+macro = ["rquickjs-macro"]
 
 # Enable interop between Rust futures and JS Promises
 futures = []

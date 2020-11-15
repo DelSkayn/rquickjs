@@ -1,0 +1,25 @@
+[package]
+name = "rquickjs-macro"
+version = "0.0.1"
+authors = ["K. <kayo@illumium.org>"]
+edition = "2018"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "^1"
+proc-macro-crate = "^0.1"
+proc-macro-error = "^1"
+quote = "^1"
+syn = { version = "^1", features = ["full"] }
+
+[dev-dependencies.rquickjs]
+path = "../"
+features = ["async-std", "macro"]
+
+[dev-dependencies.async-std]
+version = "^1"
+features = ["attributes"]
+
+[features]
