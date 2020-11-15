@@ -1,4 +1,4 @@
-use crate::{context::Ctx, Atom, MultiValue, MultiValueJs, Result, Value};
+use crate::{context::Ctx, Atom, MultiValue, MultiValueJs, RestValues, Result, Value};
 mod atom;
 mod from;
 mod multi;

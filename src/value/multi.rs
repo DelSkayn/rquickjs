@@ -181,3 +181,39 @@ impl<'js> DerefMut for MultiValueJs<'js> {
         &mut self.0
     }
 }
+
+/// Rest values
+#[derive(Clone, Default)]
+pub struct RestValues<T>(Vec<T>);
+
+impl<T> RestValues<T> {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl<T> From<Vec<T>> for RestValues<T> {
+    fn from(vec: Vec<T>) -> Self {
+        Self(vec)
+    }
+}
+
+impl<T> Into<Vec<T>> for RestValues<T> {
+    fn into(self) -> Vec<T> {
+        self.0
+    }
+}
+
+impl<T> Deref for RestValues<T> {
+    type Target = Vec<T>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<T> DerefMut for RestValues<T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
