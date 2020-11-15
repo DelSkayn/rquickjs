@@ -17,7 +17,7 @@ impl<'js> FromJs<'js> for StdString {
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         match value {
             Value::String(x) => Ok(x.to_string()?),
-            x => Err(Error::FromJsConversion {
+            x => Err(Error::FromJs {
                 from: x.type_name(),
                 to: "string",
                 message: None,
@@ -38,7 +38,7 @@ macro_rules! fromjs_impls {
                     let array = match value {
                         Value::Array(array) => array,
                         other => {
-                            return Err(Error::FromJsConversion {
+                            return Err(Error::FromJs{
                                 from: other.type_name(),
                                 to: "array",
                                 message: None,
@@ -65,7 +65,7 @@ macro_rules! fromjs_impls {
                         Value::Array(array) => array.into_object(),
                         Value::Function(func) => func.into_object(),
                         other => {
-                            return Err(Error::FromJsConversion {
+                            return Err(Error::FromJs{
                                 from: other.type_name(),
                                 to: "object",
                                 message: None,
@@ -86,7 +86,7 @@ macro_rules! fromjs_impls {
                     let type_name = value.type_name();
                     ctx.$coerce(value).map_err(|error| {
                         if error.is_exception() {
-                            Error::FromJsConversion {
+                            Error::FromJs{
                                 from: type_name,
                                 to: stringify!($type),
                                 message: Some(error.to_string()),
@@ -107,7 +107,7 @@ macro_rules! fromjs_impls {
                 fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     <$origtype>::from_js(ctx, value).and_then(|value| {
                         <$type>::try_from(value).map_err(|_error| {
-                            Error::FromJsConversion {
+                            Error::FromJs{
                                 from: stringify!($origtype),
                                 to: stringify!($type),
                                 message: None,
@@ -129,7 +129,7 @@ macro_rules! fromjs_impls {
                         $($(
                         Value::$stype(value) => Ok(value.into_object()),
                         )*)*
-                        other => Err(Error::FromJsConversion {
+                        other => Err(Error::FromJs{
                             from: other.type_name(),
                             to: $typename,
                             message: None,
