@@ -157,9 +157,9 @@ impl<'js> Function<'js> {
     pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: Into<Vec<u8>>,
-        A: FromJsMulti<'js>,
+        A: FromJsArgs<'js>,
         T: FromJs<'js>,
-        R: ToJs<'js>,
+        R: IntoJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
     {
         unsafe {
@@ -172,9 +172,9 @@ impl<'js> Function<'js> {
     pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: Into<Vec<u8>>,
-        A: FromJsMulti<'js>,
+        A: FromJsArgs<'js>,
         T: FromJs<'js>,
-        R: ToJs<'js>,
+        R: IntoJs<'js>,
         F: Fn(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
     {
         unsafe {
