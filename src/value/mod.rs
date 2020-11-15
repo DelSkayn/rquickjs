@@ -48,7 +48,7 @@ where
     where
         B: FromIteratorJs<'js, A>,
     {
-        B::from_iter_js(ctx, self.into_iter())
+        B::from_iter_js(ctx, self)
     }
 }
 

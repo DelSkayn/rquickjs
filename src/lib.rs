@@ -103,15 +103,7 @@ quick_error! {
 impl Error {
     /// Returns wheter the error is a quickjs generated exception.
     pub fn is_exception(&self) -> bool {
-        match *self {
-            Error::Exception {
-                message: _,
-                file: _,
-                line: _,
-                stack: _,
-            } => true,
-            _ => false,
-        }
+        matches!(*self, Error::Exception{..})
     }
 }
 

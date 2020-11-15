@@ -133,11 +133,9 @@ where
         T: IntoIterator<Item = A>,
     {
         let array = Array::new(ctx)?;
-        let mut index = 0;
-        for item in iter {
+        for (idx, item) in iter.into_iter().enumerate() {
             let item = item.into_js(ctx)?;
-            array.set(index, item)?;
-            index += 1;
+            array.set(idx as u32, item)?;
         }
         Ok(array)
     }
