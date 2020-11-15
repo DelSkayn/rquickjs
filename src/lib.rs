@@ -1,5 +1,11 @@
 //! # High-level bindings to quickjs
-//! The `quickrjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.  This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.  # The `Runtime` and `Context` objects The main entry point of this library is the [`Runtime`] struct.
+//!
+//! The `quickrjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
+//! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.  
+//!
+//! # The `Runtime` and `Context` objects
+//!
+//! The main entry point of this library is the [`Runtime`] struct.
 //! It represents the interperter state and is used to create [`Context`]
 //! objects. As the quickjs library does not support threading the runtime is locked behind a
 //! mutex. Multiple threads cannot run as script or create objects from the same runtime at the
@@ -10,7 +16,7 @@
 //! # Converting Values
 //!
 //! This library has multiple traits for converting to and from javascript.
-//! The [`IntoJs`], [`IntoJsMulti`] traits are used for taking rust values
+//! The [`IntoJs`], [`IntoJsArgs`] traits are used for taking rust values
 //! and turning them into javascript values.
 //! [`IntoJsArgs`] is specificly used for place where a specific number of values
 //! need to be converted to javascript like for example the arguments of functions.
