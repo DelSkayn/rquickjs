@@ -1,6 +1,11 @@
 use super::FromJs;
-use crate::{Array, Ctx, Error, Function, Object, Result, String, Value};
-use std::string::String as StdString;
+use crate::{value, Array, Ctx, Error, FromAtom, Function, Object, Result, String, Value};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
+    convert::TryFrom,
+    hash::Hash,
+    string::String as StdString,
+};
 
 impl<'js> FromJs<'js> for Value<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
@@ -21,126 +26,162 @@ impl<'js> FromJs<'js> for StdString {
     }
 }
 
-impl<'js> FromJs<'js> for i32 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let type_name = value.type_name();
-        ctx.coerce_i32(value).map_err(|e| {
-            if e.is_exception() {
-                Error::FromJsConversion {
-                    from: type_name,
-                    to: "i32",
-                    message: Some(format!("{}", e)),
+macro_rules! fromjs_impls {
+    // for list-like Rust types
+    (list: $($type:ident $(($($guard:tt)*))* ,)*) => {
+        $(
+            impl<'js, T> FromJs<'js> for $type<T>
+            where
+                T: FromJs<'js> $(+ $($guard)*)*,
+            {
+                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    let array = match value {
+                        Value::Array(array) => array,
+                        other => {
+                            return Err(Error::FromJsConversion {
+                                from: other.type_name(),
+                                to: "array",
+                                message: None,
+                            });
+                        }
+                    };
+                    array.iter().collect::<Result<$type<_>>>()
                 }
-            } else {
-                e
             }
-        })
-    }
-}
+        )*
+    };
 
-impl<'js> FromJs<'js> for u64 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let type_name = value.type_name();
-        ctx.coerce_u64(value).map_err(|e| {
-            if e.is_exception() {
-                Error::FromJsConversion {
-                    from: type_name,
-                    to: "u32",
-                    message: Some(format!("{}", e)),
+    // for map-like Rust types
+    (map: $($type:ident $(($($guard:tt)*))* ,)*) => {
+        $(
+            impl<'js, K, V> FromJs<'js> for $type<K, V>
+            where
+                K: FromAtom<'js> $(+ $($guard)*)*,
+                V: FromJs<'js>,
+            {
+                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    let object = match value {
+                        Value::Object(object) => object,
+                        Value::Array(array) => array.into_object(),
+                        Value::Function(func) => func.into_object(),
+                        other => {
+                            return Err(Error::FromJsConversion {
+                                from: other.type_name(),
+                                to: "object",
+                                message: None,
+                            });
+                        }
+                    };
+                    object.own_props(true)?.collect::<Result<$type<_, _>>>()
                 }
-            } else {
-                e
             }
-        })
-    }
-}
+        )*
+    };
 
-impl<'js> FromJs<'js> for f64 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let type_name = value.type_name();
-        ctx.coerce_f64(value).map_err(|e| {
-            if e.is_exception() {
-                Error::FromJsConversion {
-                    from: type_name,
-                    to: "f64",
-                    message: Some(format!("{}", e)),
+    // for primitive types which needs coercion
+    ($($type:ty => $coerce:ident,)*) => {
+        $(
+            impl<'js> FromJs<'js> for $type {
+                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    let type_name = value.type_name();
+                    ctx.$coerce(value).map_err(|error| {
+                        if error.is_exception() {
+                            Error::FromJsConversion {
+                                from: type_name,
+                                to: stringify!($type),
+                                message: Some(error.to_string()),
+                            }
+                        } else {
+                            error
+                        }
+                    })
                 }
-            } else {
-                e
             }
-        })
-    }
-}
+        )*
+    };
 
-impl<'js> FromJs<'js> for bool {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let type_name = value.type_name();
-        ctx.coerce_bool(value).map_err(|e| {
-            if e.is_exception() {
-                Error::FromJsConversion {
-                    from: type_name,
-                    to: "bool",
-                    message: Some(format!("{}", e)),
+    // for primitive types which needs coercion and optional try_from
+    ($($type:ty: $origtype:ty,)*) => {
+        $(
+            impl<'js> FromJs<'js> for $type {
+                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    <$origtype>::from_js(ctx, value).and_then(|value| {
+                        <$type>::try_from(value).map_err(|_error| {
+                            Error::FromJsConversion {
+                                from: stringify!($origtype),
+                                to: stringify!($type),
+                                message: None,
+                            }
+                        })
+                    })
                 }
-            } else {
-                e
             }
-        })
-    }
+        )*
+    };
+
+    // for JS Value types
+    ($($type:ident $(($($stype:ident),*))*: $typename:literal,)*) => {
+        $(
+            impl<'js> FromJs<'js> for $type<'js> {
+                fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    match value {
+                        Value::$type(value) => Ok(value),
+                        $($(
+                        Value::$stype(value) => Ok(value.into_object()),
+                        )*)*
+                        other => Err(Error::FromJsConversion {
+                            from: other.type_name(),
+                            to: $typename,
+                            message: None,
+                        }),
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl<'js> FromJs<'js> for String<'js> {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        match value {
-            Value::String(x) => Ok(x),
-            x => Err(Error::FromJsConversion {
-                from: x.type_name(),
-                to: "string",
-                message: None,
-            }),
-        }
-    }
+fromjs_impls! {
+    i8: i32,
+    u8: i32,
+
+    i16: i32,
+    u16: i32,
+
+    u32: u64,
 }
 
-impl<'js> FromJs<'js> for Object<'js> {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        match value {
-            Value::Object(x) => Ok(x),
-            Value::Array(x) => Ok(x.into_object()),
-            Value::Function(x) => Ok(x.into_object()),
-            x => Err(Error::FromJsConversion {
-                from: x.type_name(),
-                to: "object",
-                message: None,
-            }),
-        }
-    }
+fromjs_impls! {
+    bool => coerce_bool,
+
+    i32 => coerce_i32,
+
+    i64 => coerce_i64,
+    u64 => coerce_u64,
+
+    f64 => coerce_f64,
 }
 
-impl<'js> FromJs<'js> for Array<'js> {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        match value {
-            Value::Array(x) => Ok(x),
-            x => Err(Error::FromJsConversion {
-                from: x.type_name(),
-                to: "array",
-                message: None,
-            }),
-        }
-    }
+fromjs_impls! {
+    String: "string",
+    Function: "function",
+    Array: "array",
+    Object(Array, Function): "object",
 }
 
-impl<'js> FromJs<'js> for Function<'js> {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        match value {
-            Value::Function(x) => Ok(x),
-            x => Err(Error::FromJsConversion {
-                from: x.type_name(),
-                to: "function",
-                message: None,
-            }),
-        }
-    }
+fromjs_impls! {
+    list:
+    Vec,
+    VecDeque,
+    LinkedList,
+    HashSet (Eq + Hash),
+    BTreeSet (Eq + Ord),
+}
+
+fromjs_impls! {
+    map:
+    HashMap (Eq + Hash),
+    BTreeMap (Eq + Ord),
 }
 
 impl<'js> FromJs<'js> for () {
@@ -149,23 +190,23 @@ impl<'js> FromJs<'js> for () {
     }
 }
 
-impl<'js, T: FromJs<'js>> FromJs<'js> for Vec<T> {
-    fn from_js(_: Ctx<'js>, v: Value<'js>) -> Result<Self> {
-        let x = match v {
-            Value::Array(x) => x,
-            x => {
-                return Err(Error::FromJsConversion {
-                    from: x.type_name(),
-                    to: "vector",
-                    message: None,
-                });
-            }
-        };
-        let len = x.len();
-        let mut res = Vec::new();
-        for i in 0..len {
-            res.push(x.get(i as u32)?);
+impl<'js, T> FromJs<'js> for Option<T>
+where
+    T: FromJs<'js>,
+{
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        match value {
+            Value::Undefined | Value::Uninitialized | Value::Null => Ok(None),
+            other => T::from_js(ctx, other).map(Some),
         }
-        Ok(res)
+    }
+}
+
+impl<'js, T> FromJs<'js> for Result<T>
+where
+    T: FromJs<'js>,
+{
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        unsafe { value::handle_exception(ctx, value.as_js_value()) }.map(|_| T::from_js(ctx, value))
     }
 }

@@ -1,4 +1,4 @@
-use crate::{context::Ctx, Atom, MultiValue, Result, Value};
+use crate::{context::Ctx, Atom, MultiValue, MultiValueJs, RestValues, Result, Value};
 mod atom;
 mod from;
 mod multi;
@@ -16,7 +16,12 @@ pub trait FromJs<'js>: Sized {
 pub trait FromJsMulti<'js>: Sized {
     fn from_js_multi(ctx: Ctx<'js>, value: MultiValue<'js>) -> Result<Self>;
 
-    fn len() -> i64;
+    const LEN: i32;
+}
+
+/// Trait for converting values from atoms.
+pub trait FromAtom<'js>: Sized {
+    fn from_atom(atom: Atom<'js>) -> Result<Self>;
 }
 
 /// For converting rust values to javascript values
@@ -27,7 +32,7 @@ pub trait ToJs<'js> {
 /// For converting multiple of value to javascript
 /// Mostly used for converting the arguments of a function from rust to javascript
 pub trait ToJsMulti<'js> {
-    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value>>;
+    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>;
 }
 
 /// Trait for converting values to atoms.
