@@ -3,11 +3,11 @@
 @@ -2010,6 +2010,14 @@
  }
  #endif
- 
+
 +#ifdef CONFIG_PARALLEL
 +void JS_ResetCtxStack(JSContext *ctx)
 +{
-+     ctx->stack_top = js_get_stack_pointer();
++     ctx->rt->stack_top = js_get_stack_pointer();
 +}
 +#endif
 +
@@ -18,7 +18,7 @@
 @@ -26246,6 +26254,26 @@
      rt->module_loader_opaque = opaque;
  }
- 
+
 +#ifdef CONFIG_MODULE_EXPORTS
 +/* Hooks into module loading functions */
 +int JS_GetModuleExportEntriesCount(JSModuleDef *m) {
