@@ -1,14 +1,16 @@
-use super::{FromJs, FromJsMulti, MultiValue, MultiValueJs, RestValues, ToJs, ToJsMulti, Value};
+use super::{
+    FromJs, FromJsMulti, IntoJs, IntoJsMulti, MultiValue, MultiValueJs, RestValues, Value,
+};
 use crate::{Ctx, Result};
 use std::iter::{empty, once};
 
-impl<'js> ToJsMulti<'js> for MultiValueJs<'js> {
+impl<'js> IntoJsMulti<'js> for MultiValueJs<'js> {
     fn to_js_multi(self, _: Ctx<'js>) -> Result<MultiValueJs<'js>> {
         Ok(self)
     }
 }
 
-impl<'js, T: ToJs<'js>> ToJsMulti<'js> for T {
+impl<'js, T: IntoJs<'js>> IntoJsMulti<'js> for T {
     fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
         Ok(vec![self.to_js(ctx)?].into())
     }
@@ -30,9 +32,9 @@ impl<'js> FromJsMulti<'js> for () {
     const LEN: i32 = 0;
 }
 
-impl<'js, X> ToJsMulti<'js> for RestValues<X>
+impl<'js, X> IntoJsMulti<'js> for RestValues<X>
 where
-    X: ToJs<'js>,
+    X: IntoJs<'js>,
 {
     fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
         let rest: Vec<_> = self.into();
@@ -59,9 +61,9 @@ where
 macro_rules! impl_from_to_js_multi {
     ($($($t:ident)*;)*) => {
         $(
-            impl<'js, $($t,)*> ToJsMulti<'js> for ($($t,)*)
+            impl<'js, $($t,)*> IntoJsMulti<'js> for ($($t,)*)
             where
-                $($t: ToJs<'js>,)*
+                $($t: IntoJs<'js>,)*
             {
                 #[allow(non_snake_case)]
                 fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
@@ -72,10 +74,10 @@ macro_rules! impl_from_to_js_multi {
                 }
             }
 
-            impl<'js, $($t,)* X> ToJsMulti<'js> for ($($t,)* RestValues<X>)
+            impl<'js, $($t,)* X> IntoJsMulti<'js> for ($($t,)* RestValues<X>)
             where
-                $($t: ToJs<'js>,)*
-                X: ToJs<'js>,
+                $($t: IntoJs<'js>,)*
+                X: IntoJs<'js>,
             {
                 #[allow(non_snake_case)]
                 fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{

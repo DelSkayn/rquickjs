@@ -1,7 +1,7 @@
 use super::StaticFn;
 use crate::{
-    context::Ctx, runtime::Opaque, value::handle_panic, FromJs, FromJsMulti, MultiValue, Result,
-    ToJs, Value,
+    context::Ctx, runtime::Opaque, value::handle_panic, FromJs, FromJsMulti, IntoJs, MultiValue,
+    Result, Value,
 };
 use rquickjs_sys as qjs;
 use std::{cell::RefCell, ffi::CString, mem, panic::AssertUnwindSafe};
@@ -73,7 +73,7 @@ pub fn wrap_cb_mut<'js, A, T, R, F>(func: F) -> FuncOpaque
 where
     A: FromJsMulti<'js>,
     T: FromJs<'js>,
-    R: ToJs<'js>,
+    R: IntoJs<'js>,
     F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
 {
     let func = RefCell::new(func);
@@ -107,7 +107,7 @@ pub fn wrap_cb<'js, A, T, R, F>(func: F) -> FuncOpaque
 where
     A: FromJsMulti<'js>,
     T: FromJs<'js>,
-    R: ToJs<'js>,
+    R: IntoJs<'js>,
     F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
 {
     FuncOpaque {

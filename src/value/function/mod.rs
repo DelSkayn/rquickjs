@@ -1,5 +1,5 @@
 use crate::{
-    value::rf::JsObjectRef, Ctx, FromJs, FromJsMulti, Object, Result, ToJs, ToJsMulti, Value,
+    value::rf::JsObjectRef, Ctx, FromJs, FromJsMulti, IntoJs, IntoJsMulti, Object, Result, Value,
 };
 use rquickjs_sys as qjs;
 use std::{ffi::CString, mem, os::raw::c_int, ptr};
@@ -15,7 +15,7 @@ pub trait StaticFn<'js> {
     /// type of the arguments that the function expects
     type Args: FromJsMulti<'js>;
     /// type of the return value
-    type Result: ToJs<'js>;
+    type Result: IntoJs<'js>;
 
     /// Call the static function.
     fn call(ctx: Ctx<'js>, this: Self::This, args: Self::Args) -> Result<Self::Result>;
@@ -129,7 +129,7 @@ impl<'js> Function<'js> {
         N: Into<Vec<u8>>,
         A: FromJsMulti<'js>,
         T: FromJs<'js>,
-        R: ToJs<'js>,
+        R: IntoJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
     {
         unsafe {
@@ -144,7 +144,7 @@ impl<'js> Function<'js> {
         N: Into<Vec<u8>>,
         A: FromJsMulti<'js>,
         T: FromJs<'js>,
-        R: ToJs<'js>,
+        R: IntoJs<'js>,
         F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
     {
         unsafe {
@@ -204,7 +204,7 @@ impl<'js> Function<'js> {
     /// Call a function with given arguments with the `this` as the global context object.
     pub fn call<A, R>(&self, args: A) -> Result<R>
     where
-        A: ToJsMulti<'js>,
+        A: IntoJsMulti<'js>,
         R: FromJs<'js>,
     {
         self.call_on(self.0.ctx.globals(), args)
@@ -213,9 +213,9 @@ impl<'js> Function<'js> {
     /// Call a function with given arguments on a given `this`
     pub fn call_on<A, T, R>(&self, this: T, args: A) -> Result<R>
     where
-        A: ToJsMulti<'js>,
+        A: IntoJsMulti<'js>,
         R: FromJs<'js>,
-        T: ToJs<'js>,
+        T: IntoJs<'js>,
     {
         let args = args.to_js_multi(self.0.ctx)?;
         let this = this.to_js(self.0.ctx)?;

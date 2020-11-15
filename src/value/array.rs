@@ -1,6 +1,6 @@
 use crate::{
     value::{self, rf::JsObjectRef},
-    Ctx, FromIteratorJs, FromJs, Object, Result, ToJs, Value,
+    Ctx, FromIteratorJs, FromJs, IntoJs, Object, Result, Value,
 };
 use rquickjs_sys as qjs;
 use std::{
@@ -59,7 +59,7 @@ impl<'js> Array<'js> {
     }
 
     /// Set the value at an index in the javascript array.
-    pub fn set<V: ToJs<'js>>(&self, idx: u32, val: V) -> Result<()> {
+    pub fn set<V: IntoJs<'js>>(&self, idx: u32, val: V) -> Result<()> {
         let obj = self.0.as_js_value();
         let val = val.to_js(self.0.ctx)?.into_js_value();
         unsafe {
@@ -124,7 +124,7 @@ impl<'js> IntoIterator for Array<'js> {
 
 impl<'js, A> FromIteratorJs<'js, A> for Array<'js>
 where
-    A: ToJs<'js>,
+    A: IntoJs<'js>,
 {
     type Item = Value<'js>;
 

@@ -1,6 +1,6 @@
 use crate::{
     value::{self, rf::JsObjectRef},
-    Atom, Ctx, FromAtom, FromIteratorJs, FromJs, Result, ToAtom, ToJs, Value,
+    Atom, Ctx, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, Result, Value,
 };
 use rquickjs_sys as qjs;
 use std::{
@@ -24,7 +24,7 @@ impl<'js> Object<'js> {
     }
 
     /// Get a new value
-    pub fn get<K: ToAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
+    pub fn get<K: IntoAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
         let atom = k.to_atom(self.0.ctx);
         unsafe {
             let val = qjs::JS_GetProperty(self.0.ctx.ctx, self.0.as_js_value(), atom.atom);
@@ -35,7 +35,7 @@ impl<'js> Object<'js> {
     /// check wether the object contains a certain key.
     pub fn contains_key<K>(&self, k: K) -> Result<bool>
     where
-        K: ToAtom<'js>,
+        K: IntoAtom<'js>,
     {
         let atom = k.to_atom(self.0.ctx);
         unsafe {
@@ -48,7 +48,7 @@ impl<'js> Object<'js> {
     }
 
     /// Set a member of an object to a certain value
-    pub fn set<K: ToAtom<'js>, V: ToJs<'js>>(&self, key: K, value: V) -> Result<()> {
+    pub fn set<K: IntoAtom<'js>, V: IntoJs<'js>>(&self, key: K, value: V) -> Result<()> {
         let atom = key.to_atom(self.0.ctx);
         let val = value.to_js(self.0.ctx)?;
         unsafe {
@@ -66,7 +66,7 @@ impl<'js> Object<'js> {
     }
 
     /// Remove a member of an object
-    pub fn remove<K: ToAtom<'js>>(&self, key: K) -> Result<()> {
+    pub fn remove<K: IntoAtom<'js>>(&self, key: K) -> Result<()> {
         let atom = key.to_atom(self.0.ctx);
         unsafe {
             if qjs::JS_DeleteProperty(
@@ -231,8 +231,8 @@ impl<'js> IntoIterator for Object<'js> {
 
 impl<'js, K, V> FromIteratorJs<'js, (K, V)> for Object<'js>
 where
-    K: ToAtom<'js>,
-    V: ToJs<'js>,
+    K: IntoAtom<'js>,
+    V: IntoJs<'js>,
 {
     type Item = (Atom<'js>, Value<'js>);
 

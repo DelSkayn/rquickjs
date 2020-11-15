@@ -1,4 +1,4 @@
-use super::{FromAtom, ToAtom};
+use super::{FromAtom, IntoAtom};
 use crate::{value::*, Ctx, Result};
 use std::string::String as StdString;
 
@@ -26,31 +26,31 @@ impl<'js> FromAtom<'js> for StdString {
     }
 }
 
-impl<'js> ToAtom<'js> for Atom<'js> {
+impl<'js> IntoAtom<'js> for Atom<'js> {
     fn to_atom(self, _: Ctx<'js>) -> Atom<'js> {
         self
     }
 }
 
-impl<'js> ToAtom<'js> for Value<'js> {
+impl<'js> IntoAtom<'js> for Value<'js> {
     fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_value(ctx, &self)
     }
 }
 
-impl<'js> ToAtom<'js> for &str {
+impl<'js> IntoAtom<'js> for &str {
     fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_str(ctx, self)
     }
 }
 
-impl<'js> ToAtom<'js> for StdString {
+impl<'js> IntoAtom<'js> for StdString {
     fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_str(ctx, &self)
     }
 }
 
-impl<'js> ToAtom<'js> for u32 {
+impl<'js> IntoAtom<'js> for u32 {
     fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
         Atom::from_u32(ctx, self)
     }
@@ -58,7 +58,7 @@ impl<'js> ToAtom<'js> for u32 {
 
 macro_rules! impl_for_to_js(
     ($ty:ty, $Var:ident) => {
-        impl<'js> ToAtom<'js> for $ty {
+        impl<'js> IntoAtom<'js> for $ty {
             fn to_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
                 Atom::from_value(ctx, &Value::$Var(self))
             }
