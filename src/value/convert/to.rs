@@ -142,6 +142,7 @@ tojs_impls! {
 
 tojs_impls! {
     list:
+    Vec,
     VecDeque,
     LinkedList,
     HashSet,

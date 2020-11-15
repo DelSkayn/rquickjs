@@ -3,6 +3,7 @@ use rquickjs_sys as qjs;
 use std::{
     iter::{ExactSizeIterator, FusedIterator},
     mem,
+    ops::{Deref, DerefMut},
 };
 
 /// An iterator over a list of js values
@@ -56,7 +57,7 @@ impl<'js> Drop for ValueIter<'js> {
     }
 }
 
-/// An list of Js values.
+/// An list of values given from JS
 ///
 /// Handed to callbacks as arguments.
 pub struct MultiValue<'js> {
@@ -140,5 +141,43 @@ impl<'js> MultiValue<'js> {
 impl<'js> Drop for MultiValue<'js> {
     fn drop(&mut self) {
         mem::drop(self.iter())
+    }
+}
+
+/// An list of values to pass to JS
+///
+/// Passed to functions as arguments when calling.
+#[derive(Clone, Default)]
+pub struct MultiValueJs<'js>(Vec<Value<'js>>);
+
+impl<'js> MultiValueJs<'js> {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+}
+
+impl<'js> From<Vec<Value<'js>>> for MultiValueJs<'js> {
+    fn from(vec: Vec<Value<'js>>) -> Self {
+        Self(vec)
+    }
+}
+
+impl<'js> Into<Vec<Value<'js>>> for MultiValueJs<'js> {
+    fn into(self) -> Vec<Value<'js>> {
+        self.0
+    }
+}
+
+impl<'js> Deref for MultiValueJs<'js> {
+    type Target = Vec<Value<'js>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'js> DerefMut for MultiValueJs<'js> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

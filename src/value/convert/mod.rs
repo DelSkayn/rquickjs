@@ -1,4 +1,4 @@
-use crate::{context::Ctx, Atom, MultiValue, Result, Value};
+use crate::{context::Ctx, Atom, MultiValue, MultiValueJs, Result, Value};
 mod atom;
 mod from;
 mod multi;
@@ -32,7 +32,7 @@ pub trait ToJs<'js> {
 /// For converting multiple of value to javascript
 /// Mostly used for converting the arguments of a function from rust to javascript
 pub trait ToJsMulti<'js> {
-    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value>>;
+    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>;
 }
 
 /// Trait for converting values to atoms.

@@ -1,15 +1,15 @@
-use super::{FromJs, FromJsMulti, MultiValue, ToJs, ToJsMulti};
+use super::{FromJs, FromJsMulti, MultiValue, MultiValueJs, ToJs, ToJsMulti};
 use crate::{Ctx, Result, Value};
 
-impl<'js> ToJsMulti<'js> for Vec<Value<'js>> {
-    fn to_js_multi(self, _: Ctx<'js>) -> Result<Vec<Value<'js>>> {
+impl<'js> ToJsMulti<'js> for MultiValueJs<'js> {
+    fn to_js_multi(self, _: Ctx<'js>) -> Result<MultiValueJs<'js>> {
         Ok(self)
     }
 }
 
 impl<'js, T: ToJs<'js>> ToJsMulti<'js> for T {
-    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value<'js>>> {
-        Ok(vec![self.to_js(ctx)?])
+    fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
+        Ok(vec![self.to_js(ctx)?].into())
     }
 }
 
@@ -36,11 +36,11 @@ macro_rules! impl_from_to_js_multi {
             where $($t: ToJs<'js>,)*
             {
                 #[allow(non_snake_case)]
-                fn to_js_multi(self, ctx: Ctx<'js>) -> Result<Vec<Value<'js>>>{
+                fn to_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
                     let ($($t,)*) = self;
                     Ok(vec![
                         $($t.to_js(ctx)?,)*
-                    ])
+                    ].into())
                 }
             }
 

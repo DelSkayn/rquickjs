@@ -22,7 +22,7 @@ pub use atom::*;
 pub(crate) mod rf;
 use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
 mod multi;
-pub use multi::{MultiValue, ValueIter};
+pub use multi::{MultiValue, MultiValueJs, ValueIter};
 
 /// The `FromIterator` trait to use with `Ctx`
 pub trait FromIteratorJs<'js, A>: Sized {
