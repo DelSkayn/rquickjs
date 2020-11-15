@@ -10,23 +10,23 @@
 //! # Converting Values
 //!
 //! This library has multiple traits for converting to and from javascript.
-//! The [`ToJs`], [`ToJsMulti`] traits are used for taking rust values
+//! The [`IntoJs`], [`IntoJsMulti`] traits are used for taking rust values
 //! and turning them into javascript values.
-//! [`ToJsMulti`] is specificly used for place where a specific number of values
+//! [`IntoJsArgs`] is specificly used for place where a specific number of values
 //! need to be converted to javascript like for example the arguments of functions.
 //! [`FromJs`] is for converting javascript value to rust.
 //! Note that this trait does some automatic coercion.
 //! For values which represent the name of variables or indecies the
-//! trait [`ToAtom`] is available to convert values to the represention
+//! trait [`IntoAtom`] is available to convert values to the represention
 //! quickjs requires.
 //!
 //!
 //! [`Runtime`]: struct.Runtime.html
 //! [`Context`]: struct.Context.html
-//! [`ToJs`]: trait.ToJs.html
-//! [`ToJsMulti`]: trait.ToJsMulti.html
+//! [`IntoJs`]: trait.IntoJs.html
+//! [`IntoJsMulti`]: trait.IntoJsMulti.html
 //! [`FromJs`]: trait.FromJs.html
-//! [`ToAtom`]: trait.ToAtom.html
+//! [`IntoAtom`]: trait.IntoAtom.html
 
 #![allow(clippy::needless_lifetimes)]
 

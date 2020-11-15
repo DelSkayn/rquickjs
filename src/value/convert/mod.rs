@@ -1,8 +1,8 @@
 use crate::{context::Ctx, Atom, MultiValue, MultiValueJs, RestValues, Result, Value};
 mod atom;
 mod from;
+mod into;
 mod multi;
-mod to;
 
 /// For converting javascript values to rust values
 ///
