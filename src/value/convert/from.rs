@@ -184,6 +184,12 @@ fromjs_impls! {
     BTreeMap (Eq + Ord),
 }
 
+impl<'js> FromJs<'js> for f32 {
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        f64::from_js(ctx, value).map(|value| value as _)
+    }
+}
+
 impl<'js> FromJs<'js> for () {
     fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
         Ok(())
