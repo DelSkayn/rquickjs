@@ -28,13 +28,13 @@ pub const __STDC_IEC_559_COMPLEX__: u32 = 1;
 pub const __STDC_ISO_10646__: u32 = 201706;
 pub const __GNU_LIBRARY__: u32 = 6;
 pub const __GLIBC__: u32 = 2;
-pub const __GLIBC_MINOR__: u32 = 31;
+pub const __GLIBC_MINOR__: u32 = 32;
 pub const _SYS_CDEFS_H: u32 = 1;
 pub const __glibc_c99_flexarr_available: u32 = 1;
 pub const __WORDSIZE: u32 = 64;
 pub const __WORDSIZE_TIME64_COMPAT32: u32 = 1;
 pub const __SYSCALL_WORDSIZE: u32 = 64;
-pub const __LONG_DOUBLE_USES_FLOAT128: u32 = 0;
+pub const __LDOUBLE_REDIRECTS_TO_FLOAT128_ABI: u32 = 0;
 pub const __HAVE_GENERIC_SELECTION: u32 = 1;
 pub const __GLIBC_USE_LIB_EXT2: u32 = 0;
 pub const __GLIBC_USE_IEC_60559_BFP_EXT: u32 = 0;
@@ -50,6 +50,7 @@ pub const __OFF_T_MATCHES_OFF64_T: u32 = 1;
 pub const __INO_T_MATCHES_INO64_T: u32 = 1;
 pub const __RLIM_T_MATCHES_RLIM64_T: u32 = 1;
 pub const __STATFS_MATCHES_STATFS64: u32 = 1;
+pub const __KERNEL_OLD_TIMEVAL_MATCHES_TIMEVAL64: u32 = 1;
 pub const __FD_SETSIZE: u32 = 1024;
 pub const _BITS_TIME64_H: u32 = 1;
 pub const _____fpos_t_defined: u32 = 1;
@@ -69,13 +70,29 @@ pub const EOF: i32 = -1;
 pub const SEEK_SET: u32 = 0;
 pub const SEEK_CUR: u32 = 1;
 pub const SEEK_END: u32 = 2;
-pub const P_tmpdir: &[u8; 5usize] = b"/tmp\0";
+pub const P_tmpdir: &'static [u8; 5usize] = b"/tmp\0";
 pub const _BITS_STDIO_LIM_H: u32 = 1;
 pub const L_tmpnam: u32 = 20;
 pub const TMP_MAX: u32 = 238328;
 pub const FILENAME_MAX: u32 = 4096;
 pub const L_ctermid: u32 = 9;
 pub const FOPEN_MAX: u32 = 16;
+pub const __HAVE_FLOAT128: u32 = 0;
+pub const __HAVE_DISTINCT_FLOAT128: u32 = 0;
+pub const __HAVE_FLOAT64X: u32 = 1;
+pub const __HAVE_FLOAT64X_LONG_DOUBLE: u32 = 1;
+pub const __HAVE_FLOAT16: u32 = 0;
+pub const __HAVE_FLOAT32: u32 = 1;
+pub const __HAVE_FLOAT64: u32 = 1;
+pub const __HAVE_FLOAT32X: u32 = 1;
+pub const __HAVE_FLOAT128X: u32 = 0;
+pub const __HAVE_DISTINCT_FLOAT16: u32 = 0;
+pub const __HAVE_DISTINCT_FLOAT32: u32 = 0;
+pub const __HAVE_DISTINCT_FLOAT64: u32 = 0;
+pub const __HAVE_DISTINCT_FLOAT32X: u32 = 0;
+pub const __HAVE_DISTINCT_FLOAT64X: u32 = 0;
+pub const __HAVE_DISTINCT_FLOAT128X: u32 = 0;
+pub const __HAVE_FLOATN_NOT_TYPEDEF: u32 = 0;
 pub const _STDINT_H: u32 = 1;
 pub const _BITS_WCHAR_H: u32 = 1;
 pub const _BITS_STDINT_INTN_H: u32 = 1;
@@ -148,16 +165,22 @@ pub const JS_EVAL_FLAG_STRICT: u32 = 8;
 pub const JS_EVAL_FLAG_STRIP: u32 = 16;
 pub const JS_EVAL_FLAG_COMPILE_ONLY: u32 = 32;
 pub const JS_EVAL_FLAG_BACKTRACE_BARRIER: u32 = 64;
+pub const JS_ATOM_NULL: u32 = 0;
 pub const JS_CALL_FLAG_CONSTRUCTOR: u32 = 1;
 pub const JS_GPN_STRING_MASK: u32 = 1;
 pub const JS_GPN_SYMBOL_MASK: u32 = 2;
 pub const JS_GPN_PRIVATE_MASK: u32 = 4;
 pub const JS_GPN_ENUM_ONLY: u32 = 16;
 pub const JS_GPN_SET_ENUM: u32 = 32;
+pub const JS_PARSE_JSON_EXT: u32 = 1;
 pub const JS_WRITE_OBJ_BYTECODE: u32 = 1;
 pub const JS_WRITE_OBJ_BSWAP: u32 = 2;
+pub const JS_WRITE_OBJ_SAB: u32 = 4;
+pub const JS_WRITE_OBJ_REFERENCE: u32 = 8;
 pub const JS_READ_OBJ_BYTECODE: u32 = 1;
 pub const JS_READ_OBJ_ROM_DATA: u32 = 2;
+pub const JS_READ_OBJ_SAB: u32 = 4;
+pub const JS_READ_OBJ_REFERENCE: u32 = 8;
 pub const JS_DEF_CFUNC: u32 = 0;
 pub const JS_DEF_CGETSET: u32 = 1;
 pub const JS_DEF_CGETSET_MAGIC: u32 = 2;
@@ -240,6 +263,7 @@ pub type __id_t = ::std::os::raw::c_uint;
 pub type __time_t = ::std::os::raw::c_long;
 pub type __useconds_t = ::std::os::raw::c_uint;
 pub type __suseconds_t = ::std::os::raw::c_long;
+pub type __suseconds64_t = ::std::os::raw::c_long;
 pub type __daddr_t = ::std::os::raw::c_int;
 pub type __key_t = ::std::os::raw::c_int;
 pub type __clockid_t = ::std::os::raw::c_int;
@@ -959,6 +983,10 @@ extern "C" {
         ...
     ) -> ::std::os::raw::c_int;
 }
+pub type _Float32 = f32;
+pub type _Float64 = f64;
+pub type _Float32x = f64;
+pub type _Float64x = u128;
 extern "C" {
     #[link_name = "\u{1}__isoc99_fscanf"]
     pub fn fscanf1(
@@ -1185,12 +1213,6 @@ extern "C" {
 }
 extern "C" {
     pub fn perror(__s: *const ::std::os::raw::c_char);
-}
-extern "C" {
-    pub static mut sys_nerr: ::std::os::raw::c_int;
-}
-extern "C" {
-    pub static mut sys_errlist: [*const ::std::os::raw::c_char; 0usize];
 }
 extern "C" {
     pub fn fileno(__stream: *mut FILE) -> ::std::os::raw::c_int;
@@ -1581,6 +1603,9 @@ extern "C" {
     pub fn JS_SetGCThreshold(rt: *mut JSRuntime, gc_threshold: size_t);
 }
 extern "C" {
+    pub fn JS_SetMaxStackSize(rt: *mut JSRuntime, stack_size: size_t);
+}
+extern "C" {
     pub fn JS_NewRuntime2(
         mf: *const JSMallocFunctions,
         opaque: *mut ::std::os::raw::c_void,
@@ -1613,6 +1638,9 @@ extern "C" {
     pub fn JS_FreeContext(s: *mut JSContext);
 }
 extern "C" {
+    pub fn JS_DupContext(ctx: *mut JSContext) -> *mut JSContext;
+}
+extern "C" {
     pub fn JS_GetContextOpaque(ctx: *mut JSContext) -> *mut ::std::os::raw::c_void;
 }
 extern "C" {
@@ -1620,9 +1648,6 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_GetRuntime(ctx: *mut JSContext) -> *mut JSRuntime;
-}
-extern "C" {
-    pub fn JS_SetMaxStackSize(ctx: *mut JSContext, stack_size: size_t);
 }
 extern "C" {
     pub fn JS_SetClassProto(ctx: *mut JSContext, class_id: JSClassID, obj: JSValue);
@@ -2782,7 +2807,14 @@ extern "C" {
     ) -> JSValue;
 }
 extern "C" {
-    pub fn JS_EvalFunction(ctx: *mut JSContext, fun_obj: JSValue) -> JSValue;
+    pub fn JS_EvalThis(
+        ctx: *mut JSContext,
+        this_obj: JSValue,
+        input: *const ::std::os::raw::c_char,
+        input_len: size_t,
+        filename: *const ::std::os::raw::c_char,
+        eval_flags: ::std::os::raw::c_int,
+    ) -> JSValue;
 }
 extern "C" {
     pub fn JS_GetGlobalObject(ctx: *mut JSContext) -> JSValue;
@@ -2864,6 +2896,15 @@ extern "C" {
     ) -> JSValue;
 }
 extern "C" {
+    pub fn JS_ParseJSON2(
+        ctx: *mut JSContext,
+        buf: *const ::std::os::raw::c_char,
+        buf_len: size_t,
+        filename: *const ::std::os::raw::c_char,
+        flags: ::std::os::raw::c_int,
+    ) -> JSValue;
+}
+extern "C" {
     pub fn JS_JSONStringify(
         ctx: *mut JSContext,
         obj: JSValue,
@@ -2906,6 +2947,90 @@ extern "C" {
         pbytes_per_element: *mut size_t,
     ) -> JSValue;
 }
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct JSSharedArrayBufferFunctions {
+    pub sab_alloc: ::std::option::Option<
+        unsafe extern "C" fn(
+            opaque: *mut ::std::os::raw::c_void,
+            size: size_t,
+        ) -> *mut ::std::os::raw::c_void,
+    >,
+    pub sab_free: ::std::option::Option<
+        unsafe extern "C" fn(opaque: *mut ::std::os::raw::c_void, ptr: *mut ::std::os::raw::c_void),
+    >,
+    pub sab_dup: ::std::option::Option<
+        unsafe extern "C" fn(opaque: *mut ::std::os::raw::c_void, ptr: *mut ::std::os::raw::c_void),
+    >,
+    pub sab_opaque: *mut ::std::os::raw::c_void,
+}
+#[test]
+fn bindgen_test_layout_JSSharedArrayBufferFunctions() {
+    assert_eq!(
+        ::std::mem::size_of::<JSSharedArrayBufferFunctions>(),
+        32usize,
+        concat!("Size of: ", stringify!(JSSharedArrayBufferFunctions))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<JSSharedArrayBufferFunctions>(),
+        8usize,
+        concat!("Alignment of ", stringify!(JSSharedArrayBufferFunctions))
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<JSSharedArrayBufferFunctions>())).sab_alloc as *const _ as usize
+        },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSSharedArrayBufferFunctions),
+            "::",
+            stringify!(sab_alloc)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<JSSharedArrayBufferFunctions>())).sab_free as *const _ as usize
+        },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSSharedArrayBufferFunctions),
+            "::",
+            stringify!(sab_free)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<JSSharedArrayBufferFunctions>())).sab_dup as *const _ as usize
+        },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSSharedArrayBufferFunctions),
+            "::",
+            stringify!(sab_dup)
+        )
+    );
+    assert_eq!(
+        unsafe {
+            &(*(::std::ptr::null::<JSSharedArrayBufferFunctions>())).sab_opaque as *const _ as usize
+        },
+        24usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSSharedArrayBufferFunctions),
+            "::",
+            stringify!(sab_opaque)
+        )
+    );
+}
+extern "C" {
+    pub fn JS_SetSharedArrayBufferFunctions(
+        rt: *mut JSRuntime,
+        sf: *const JSSharedArrayBufferFunctions,
+    );
+}
 extern "C" {
     pub fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
 }
@@ -2940,6 +3065,9 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_SetCanBlock(rt: *mut JSRuntime, can_block: ::std::os::raw::c_int);
+}
+extern "C" {
+    pub fn JS_SetIsHTMLDDA(ctx: *mut JSContext, obj: JSValue);
 }
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -3008,6 +3136,16 @@ extern "C" {
     ) -> *mut u8;
 }
 extern "C" {
+    pub fn JS_WriteObject2(
+        ctx: *mut JSContext,
+        psize: *mut size_t,
+        obj: JSValue,
+        flags: ::std::os::raw::c_int,
+        psab_tab: *mut *mut *mut u8,
+        psab_tab_len: *mut size_t,
+    ) -> *mut u8;
+}
+extern "C" {
     pub fn JS_ReadObject(
         ctx: *mut JSContext,
         buf: *const u8,
@@ -3016,7 +3154,23 @@ extern "C" {
     ) -> JSValue;
 }
 extern "C" {
+    pub fn JS_EvalFunction(ctx: *mut JSContext, fun_obj: JSValue) -> JSValue;
+}
+extern "C" {
     pub fn JS_ResolveModule(ctx: *mut JSContext, obj: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_GetScriptOrModuleName(
+        ctx: *mut JSContext,
+        n_stack_levels: ::std::os::raw::c_int,
+    ) -> JSAtom;
+}
+extern "C" {
+    pub fn JS_RunModule(
+        ctx: *mut JSContext,
+        basename: *const ::std::os::raw::c_char,
+        filename: *const ::std::os::raw::c_char,
+    ) -> *mut JSModuleDef;
 }
 pub const JSCFunctionEnum_JS_CFUNC_generic: JSCFunctionEnum = 0;
 pub const JSCFunctionEnum_JS_CFUNC_generic_magic: JSCFunctionEnum = 1;

@@ -43,10 +43,10 @@ impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
     /// means that the ref_count is not increment for the current js value.
     /// so if we want to convert it to a JsRef we will first need to increment the ref count.
     pub unsafe fn from_js_value_const(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
+        debug_assert_eq!(val.tag, Ty::TAG);
         let ptr = val.u.ptr;
         let p = ptr as *mut qjs::JSRefCountHeader;
         (*p).ref_count += 1;
-        debug_assert_eq!(val.tag, Ty::TAG);
         JsRef {
             ctx,
             ptr: val.u.ptr,

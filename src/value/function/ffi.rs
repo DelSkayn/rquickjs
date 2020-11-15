@@ -84,7 +84,6 @@ where
             handle_panic(
                 ctx,
                 AssertUnwindSafe(move || unsafe {
-                    //TODO catch unwind
                     let ctx = Ctx::from_ptr(ctx);
                     let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
                     let this = try_ffi!(ctx.ctx, T::from_js(ctx, this));
@@ -116,7 +115,6 @@ where
             handle_panic(
                 ctx,
                 AssertUnwindSafe(move || unsafe {
-                    //TODO catch unwind
                     let ctx = Ctx::from_ptr(ctx);
                     let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
                     let this = try_ffi!(ctx.ctx, T::from_js(ctx, this));

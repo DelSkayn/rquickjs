@@ -206,7 +206,14 @@ impl<'js, T> FromJs<'js> for Result<T>
 where
     T: FromJs<'js>,
 {
+    //TODO this function seems a bit hacky.
+    //Expections are generally handled when returned from a function
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        unsafe { value::handle_exception(ctx, value.as_js_value()) }.map(|_| T::from_js(ctx, value))
+        unsafe {
+            match value::handle_exception(ctx, value.into_js_value()) {
+                Ok(x) => T::from_js(ctx, Value::from_js_value(ctx, x)?).map(Ok),
+                Err(e) => Ok(Err(e)),
+            }
+        }
     }
 }

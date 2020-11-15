@@ -84,7 +84,7 @@ impl Context {
     pub fn set_max_stack_size(&self, size: usize) {
         let guard = self.rt.inner.lock();
         self.reset_stack();
-        unsafe { qjs::JS_SetMaxStackSize(self.ctx, size as u64) };
+        unsafe { qjs::JS_SetMaxStackSize(guard.rt, size as u64) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }

@@ -91,6 +91,9 @@ pub enum Value<'js> {
 
 /// Handle possible exceptions in JSValue's and turn them into errors
 /// Will return the JSValue if it is not an exception
+///
+/// # Safety
+/// Assumes to have ownership of the JSValue
 pub(crate) unsafe fn handle_exception<'js>(
     ctx: Ctx<'js>,
     js_val: qjs::JSValue,

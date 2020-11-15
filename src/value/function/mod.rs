@@ -122,22 +122,6 @@ impl<'js> Function<'js> {
             Ok(Function(JsObjectRef::from_js_value(ctx, val)))
         }
     }
-
-    #[cfg(not(feature = "parallel"))]
-    pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
-    where
-        N: Into<Vec<u8>>,
-        A: FromJsArgs<'js>,
-        T: FromJs<'js>,
-        R: IntoJs<'js>,
-        F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
-    {
-        unsafe {
-            let opaque = ffi::wrap_cb_mut(func);
-            Self::new_unsafe(ctx, CString::new(name)?, opaque)
-        }
-    }
-
     #[cfg(not(feature = "parallel"))]
     pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
@@ -154,21 +138,6 @@ impl<'js> Function<'js> {
     }
 
     #[cfg(feature = "parallel")]
-    pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
-    where
-        N: Into<Vec<u8>>,
-        A: FromJsArgs<'js>,
-        T: FromJs<'js>,
-        R: IntoJs<'js>,
-        F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
-    {
-        unsafe {
-            let opaque = ffi::wrap_cb_mut(func);
-            Self::new_unsafe(ctx, CString::new(name)?, opaque)
-        }
-    }
-
-    #[cfg(feature = "parallel")]
     pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: Into<Vec<u8>>,
@@ -179,6 +148,36 @@ impl<'js> Function<'js> {
     {
         unsafe {
             let opaque = ffi::wrap_cb(func);
+            Self::new_unsafe(ctx, CString::new(name)?, opaque)
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: Into<Vec<u8>>,
+        A: FromJsArgs<'js>,
+        T: FromJs<'js>,
+        R: IntoJs<'js>,
+        F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
+    {
+        unsafe {
+            let opaque = ffi::wrap_cb_mut(func);
+            Self::new_unsafe(ctx, CString::new(name)?, opaque)
+        }
+    }
+
+    #[cfg(feature = "parallel")]
+    pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: Into<Vec<u8>>,
+        A: FromJsArgs<'js>,
+        T: FromJs<'js>,
+        R: IntoJs<'js>,
+        F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
+    {
+        unsafe {
+            let opaque = ffi::wrap_cb_mut(func);
             Self::new_unsafe(ctx, CString::new(name)?, opaque)
         }
     }
@@ -311,7 +310,6 @@ mod test {
             let mut v = 0;
             let f = Function::new_mut(ctx, "test", move |_, _: (), _: ()| {
                 v += 1;
-                dbg!(v);
                 return Ok(v);
             })
             .unwrap();

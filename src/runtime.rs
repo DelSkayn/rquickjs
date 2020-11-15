@@ -37,7 +37,7 @@ pub struct Opaque {
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
 
-    /// Uset to ref Runtime from Ctx
+    /// Used to ref Runtime from Ctx
     pub runtime: WeakRuntime,
 }
 
