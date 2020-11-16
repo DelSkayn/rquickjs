@@ -29,10 +29,10 @@ impl<'js, Ty: JsRefType> PartialEq for JsRef<'js, Ty> {
 impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
     /// creates a ref from a js value we have ownership of.
     pub unsafe fn from_js_value(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
-        debug_assert_eq!(val.tag, Ty::TAG);
+        debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(val), Ty::TAG);
         JsRef {
             ctx,
-            ptr: val.u.ptr,
+            ptr: qjs::JS_VALUE_GET_PTR(val),
             marker: PhantomData,
         }
     }
@@ -43,23 +43,20 @@ impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
     /// means that the ref_count is not increment for the current js value.
     /// so if we want to convert it to a JsRef we will first need to increment the ref count.
     pub unsafe fn from_js_value_const(ctx: Ctx<'js>, val: qjs::JSValue) -> Self {
-        debug_assert_eq!(val.tag, Ty::TAG);
-        let ptr = val.u.ptr;
-        let p = ptr as *mut qjs::JSRefCountHeader;
-        (*p).ref_count += 1;
+        debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(val), Ty::TAG);
+        let ptr = qjs::JS_VALUE_GET_PTR(val);
+        let p = &mut *(ptr as *mut qjs::JSRefCountHeader);
+        p.ref_count += 1;
         JsRef {
             ctx,
-            ptr: val.u.ptr,
+            ptr,
             marker: PhantomData,
         }
     }
 
     /// return the underlying JSValue
     pub fn as_js_value(&self) -> qjs::JSValue {
-        qjs::JSValue {
-            u: qjs::JSValueUnion { ptr: self.ptr },
-            tag: Ty::TAG,
-        }
+        qjs::JS_MKPTR(Ty::TAG, self.ptr)
     }
 
     /// return the underlying JSValue
@@ -101,25 +98,25 @@ impl<Ty: JsRefType> Drop for JsRef<'_, Ty> {
 
 /// Trait to avoid code duplication over a single constant.
 pub trait JsRefType {
-    const TAG: i64;
+    const TAG: i32;
 }
 
 pub struct JsStringType;
 
 impl JsRefType for JsStringType {
-    const TAG: i64 = qjs::JS_TAG_STRING as i64;
+    const TAG: i32 = qjs::JS_TAG_STRING;
 }
 
 pub struct JsObjectType;
 
 impl JsRefType for JsObjectType {
-    const TAG: i64 = qjs::JS_TAG_OBJECT as i64;
+    const TAG: i32 = qjs::JS_TAG_OBJECT;
 }
 
 pub struct JsSymbolType;
 
 impl JsRefType for JsSymbolType {
-    const TAG: i64 = qjs::JS_TAG_SYMBOL as i64;
+    const TAG: i32 = qjs::JS_TAG_SYMBOL;
 }
 
 pub type JsStringRef<'js> = JsRef<'js, JsStringType>;

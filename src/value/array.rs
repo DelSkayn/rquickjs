@@ -39,7 +39,7 @@ impl<'js> Array<'js> {
         unsafe {
             let val = qjs::JS_GetPropertyStr(self.0.ctx.ctx, v, b"length\0".as_ptr() as *const _);
             assert!(qjs::JS_IsInt(val));
-            qjs::JS_VALUE_GET_INT!(val) as usize
+            qjs::JS_VALUE_GET_INT(val) as usize
         }
     }
 

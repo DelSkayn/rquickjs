@@ -37,6 +37,7 @@ members = [
 
 [features]
 default = ["exports"]
+bindgen = ["rquickjs-sys/bindgen"]
 parallel = ["rquickjs-sys/parallel"]
 exports = ["rquickjs-sys/exports"]
 futures = []

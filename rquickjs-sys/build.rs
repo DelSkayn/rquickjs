@@ -1,39 +1,23 @@
-use std::{env, fs, path::Path, process::Command};
+use std::{
+    env, fs,
+    io::Write,
+    path::Path,
+    process::{Command, Stdio},
+};
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PARALLEL");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_EXPORTS");
+    println!("cargo:rerun-if-env-changed=CARGO_BINDGEN");
+    println!("cargo:rerun-if-env-changed=CARGO_UPDATE_BINDINGS");
 
-    let out_dir_env = env::var_os("OUT_DIR").unwrap();
-    let out_dir = Path::new(&out_dir_env);
+    let src_dir = Path::new("quickjs");
+    let patches_dir = Path::new("patches");
 
-    let opt_level = env::var_os("OPT_LEVEL")
-        .unwrap()
-        .to_str()
-        .unwrap()
-        .parse()
-        .unwrap();
+    let out_dir = env::var("OUT_DIR").expect("No OUT_DIR env var is set by cargo");
+    let out_dir = Path::new(&out_dir);
 
-    if env::var("CARGO_FEATURE_EXPORTS").is_ok() || env::var("CARGO_FEATURE_PARALLEL").is_ok() {
-        Command::new("patch")
-            .arg("quickjs/quickjs.c")
-            .arg("patches/quickjs.c.diff")
-            .arg("-o")
-            .arg(out_dir.join("quickjs.c"))
-            .output()
-            .unwrap();
-    } else {
-        fs::copy("quickjs/quickjs.c", out_dir.join("quickjs.c")).unwrap();
-    }
-
-    let source_files = [
-        "libregexp.c",
-        "libunicode.c",
-        "cutils.c",
-        "quickjs-libc.c",
-        "libbf.c",
-    ];
     let header_files = [
         "libbf.h",
         "libregexp-opcode.h",
@@ -47,31 +31,157 @@ fn main() {
         "quickjs.h",
         "cutils.h",
     ];
-    for e in source_files.iter().chain(header_files.iter()) {
-        fs::copy(Path::new("quickjs").join(e), out_dir.join(e)).unwrap();
+
+    let source_files = [
+        "libregexp.c",
+        "libunicode.c",
+        "cutils.c",
+        "quickjs-libc.c",
+        "quickjs.c",
+        "libbf.c",
+    ];
+
+    let patch_files = ["rquickjs.patch"];
+
+    let mut defines = vec![
+        ("_GNU_SOURCE", None),
+        ("CONFIG_VERSION", Some("\"2020-01-19\"")),
+        ("CONFIG_BIGNUM", None),
+    ];
+
+    if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
+        defines.push(("CONFIG_MODULE_EXPORTS", None));
     }
+
+    if env::var("CARGO_FEATURE_PARALLEL").is_ok() {
+        defines.push(("CONFIG_PARALLEL", None));
+    }
+
+    for file in source_files.iter().chain(header_files.iter()) {
+        fs::copy(src_dir.join(file), out_dir.join(file)).expect("Unable to copy source");
+    }
+
+    // applying patches
+    for file in &patch_files {
+        patch(out_dir, patches_dir.join(file));
+    }
+
+    // generating bindings
+    bindgen(out_dir, out_dir.join("quickjs.h"), &defines);
 
     let mut builder = cc::Build::new();
     builder
         .extra_warnings(false)
         .flag("-Wno-array-bounds")
-        .flag("-Wno-format-truncation")
-        .flag("-g")
-        .define("_GNU_SOURCE", None)
-        .define("CONFIG_VERSION", "\"2020-01-19\"")
-        .define("CONFIG_BIGNUM", None)
-        .opt_level(opt_level)
-        .file(out_dir.join("quickjs.c"));
+        .flag("-Wno-format-truncation");
 
-    for e in source_files.iter() {
-        builder.file(out_dir.join(e));
+    for (name, value) in &defines {
+        builder.define(name, *value);
     }
 
-    if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
-        builder.define("CONFIG_MODULE_EXPORTS", None);
+    for src in &source_files {
+        builder.file(out_dir.join(src));
     }
-    if env::var("CARGO_FEATURE_PARALLEL").is_ok() {
-        builder.define("CONFIG_PARALLEL", None);
-    }
+
     builder.compile("libquickjs.a");
+}
+
+fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
+    let mut child = Command::new("patch")
+        .arg("-p1")
+        .stdin(Stdio::piped())
+        .current_dir(out_dir)
+        .spawn()
+        .unwrap();
+
+    {
+        let patch = fs::read(patch).expect("Unable to read patch");
+
+        let stdin = child.stdin.as_mut().unwrap();
+        stdin.write_all(&patch).expect("Unable to apply patch");
+    }
+
+    child.wait_with_output().expect("Unable to apply patch");
+}
+
+#[cfg(not(feature = "bindgen"))]
+fn bindgen<'a, D, H, X, K, V>(out_dir: D, _header_file: H, _defines: X)
+where
+    D: AsRef<Path>,
+    H: AsRef<Path>,
+    X: IntoIterator<Item = &'a (K, Option<V>)>,
+    K: AsRef<str> + 'a,
+    V: AsRef<str> + 'a,
+{
+    let target = env::var("TARGET").unwrap();
+
+    let bindings_file = out_dir.as_ref().join("bindings.rs");
+
+    fs::write(
+        &bindings_file,
+        format!(
+            r#"macro_rules! bindings_env {{
+                ("TARGET") => {{ "{}" }};
+            }}"#,
+            target
+        ),
+    )
+    .unwrap();
+}
+
+#[cfg(feature = "bindgen")]
+fn bindgen<'a, D, H, X, K, V>(out_dir: D, header_file: H, defines: X)
+where
+    D: AsRef<Path>,
+    H: AsRef<Path>,
+    X: IntoIterator<Item = &'a (K, Option<V>)>,
+    K: AsRef<str> + 'a,
+    V: AsRef<str> + 'a,
+{
+    let target = env::var("TARGET").unwrap();
+    let out_dir = out_dir.as_ref();
+    let header_file = header_file.as_ref();
+
+    let mut cflags = vec![format!("--target={}", target)];
+
+    //format!("-I{}", out_dir.parent().display()),
+
+    for (name, value) in defines {
+        cflags.push(if let Some(value) = value {
+            format!("-D{}={}", name.as_ref(), value.as_ref())
+        } else {
+            format!("-D{}", name.as_ref())
+        });
+    }
+
+    let bindings = bindgen_rs::Builder::default()
+        .detect_include_paths(true)
+        .clang_arg("-xc")
+        .clang_args(cflags)
+        .header(header_file.display().to_string())
+        .whitelist_type("JS.*")
+        .whitelist_function("js.*")
+        .whitelist_function("JS.*")
+        .whitelist_function("__JS.*")
+        .whitelist_var("JS.*")
+        .opaque_type("FILE")
+        .blacklist_type("FILE")
+        .blacklist_function("JS_DumpMemoryUsage")
+        .generate()
+        .expect("Unable to generate bindings");
+
+    let bindings_file = out_dir.join("bindings.rs");
+
+    bindings
+        .write_to_file(&bindings_file)
+        .expect("Couldn't write bindings");
+
+    // Special case to support bundled bindings
+    if env::var("CARGO_FEATURE_UPDATE_BINDINGS").is_ok() {
+        let dest_dir = Path::new("src").join("bindings");
+        fs::create_dir_all(&dest_dir).unwrap();
+
+        let dest_file = format!("{}.rs", target);
+        fs::copy(&bindings_file, dest_dir.join(&dest_file)).unwrap();
+    }
 }
