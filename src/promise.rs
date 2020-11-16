@@ -1,4 +1,4 @@
-use crate::{Ctx, Error, FromJs, Function, Object, Result, StdResult, ToJs, Value};
+use crate::{Ctx, Error, FromJs, Function, IntoJs, Object, Result, StdResult, Value};
 use rquickjs_sys as qjs;
 use std::{
     fmt::Display,
@@ -97,13 +97,13 @@ impl<T> From<T> for PromiseJs<T> {
 }
 
 #[cfg(any(feature = "async-std", feature = "tokio"))]
-impl<'js, 'a, T, V, E> ToJs<'js> for PromiseJs<T>
+impl<'js, 'a, T, V, E> IntoJs<'js> for PromiseJs<T>
 where
     T: Future<Output = StdResult<V, E>> + 'static,
-    V: ToJs<'js> + 'static,
+    V: IntoJs<'js> + 'static,
     E: Display + 'static,
 {
-    fn to_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         #[cfg(feature = "async-std")]
         use async_std_rs::task::spawn_local as spawn;
         #[cfg(feature = "tokio")]
@@ -116,23 +116,28 @@ where
 
         let runtime = unsafe { &ctx.get_opaque().runtime }
             .try_ref()
-            .ok_or_else(|| Error::Unknown)?;
+            .ok_or(Error::Unknown)?;
 
         let ctx = ctx.ctx;
         let future = self.0;
 
         spawn(async move {
+            let result = future.await;
+
             let rt_lock = runtime.inner.lock();
+
             let ctx = Ctx::from_ptr(ctx);
             let then = ctx.deregister(then).unwrap();
             let catch = ctx.deregister(catch).unwrap();
-            match future.await {
-                Ok(value) => match value.to_js(ctx) {
+
+            match result {
+                Ok(value) => match value.into_js(ctx) {
                     Ok(value) => schedule_resolution(ctx, then, value),
                     Err(error) => schedule_resolution(ctx, catch, error.to_string()),
                 },
                 Err(error) => schedule_resolution(ctx, catch, error.to_string()),
             };
+
             mem::drop(rt_lock);
         });
 
@@ -140,8 +145,8 @@ where
     }
 }
 
-fn schedule_resolution<'js, V: ToJs<'js>>(ctx: Ctx<'js>, func: Value<'js>, val: V) {
-    if let Ok(val) = val.to_js(ctx) {
+fn schedule_resolution<'js, V: IntoJs<'js>>(ctx: Ctx<'js>, func: Value<'js>, val: V) {
+    if let Ok(val) = val.into_js(ctx) {
         let args = [func.as_js_value(), val.as_js_value()];
         unsafe {
             qjs::JS_EnqueueJob(
@@ -151,7 +156,6 @@ fn schedule_resolution<'js, V: ToJs<'js>>(ctx: Ctx<'js>, func: Value<'js>, val: 
                 args.as_ptr() as *mut _,
             );
         }
-        mem::drop(args);
     }
 }
 

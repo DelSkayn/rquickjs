@@ -1,7 +1,7 @@
 //! # High-level bindings to quickjs
 //!
 //! The `rquickjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
-//! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.  
+//! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
 //!
 //! # The `Runtime` and `Context` objects
 //!
@@ -94,7 +94,7 @@ quick_error! {
             display("error converting from js from type '{}', to '{}': {}",from,to,message.as_ref().unwrap_or(&StdString::new()))
         }
         /// Error converting to javascript from a rust type.
-        ToJs{from: &'static str, to: &'static str, message: Option<StdString>} {
+        IntoJs{from: &'static str, to: &'static str, message: Option<StdString>} {
             display("error converting from type '{}', to '{}': {}",from,to,message.as_ref().unwrap_or(&StdString::new()))
         }
         /// An io error

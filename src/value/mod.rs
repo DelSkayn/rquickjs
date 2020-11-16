@@ -1,10 +1,12 @@
 use crate::{context::Ctx, Error, Result};
 use rquickjs_sys as qjs;
 use std::panic::{self, UnwindSafe};
-//use std::ffi::CStr;
 
+#[cfg(feature = "exports")]
 mod module;
+#[cfg(feature = "exports")]
 pub use module::{ExportList, Module};
+
 mod string;
 pub use string::String;
 mod object;
@@ -171,6 +173,7 @@ impl<'js> Value<'js> {
                     Ok(Value::Object(Object(val)))
                 }
             }
+            #[cfg(feature = "exports")]
             qjs::JS_TAG_MODULE => {
                 // Just to make sure things are properly cleaned up;
                 Module::from_js_value(ctx, v);
@@ -213,6 +216,7 @@ impl<'js> Value<'js> {
                     Ok(Value::Object(Object(val)))
                 }
             }
+            #[cfg(feature = "exports")]
             qjs::JS_TAG_MODULE => {
                 // Just to make sure things are properly cleaned up;
                 Module::from_js_value(ctx, v);

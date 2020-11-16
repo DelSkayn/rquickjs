@@ -43,7 +43,7 @@ impl<'js> String<'js> {
         unsafe {
             let len = s.len();
             let bytes = s.as_ptr() as *const i8;
-            let js_val = qjs::JS_NewStringLen(ctx.ctx, bytes, len as u64);
+            let js_val = qjs::JS_NewStringLen(ctx.ctx, bytes, len as _);
             let js_val = value::handle_exception(ctx, js_val)?;
             Ok(String(JsStringRef::from_js_value(ctx, js_val)))
         }
