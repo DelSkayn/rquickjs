@@ -120,6 +120,11 @@ jobs:
             features: tokio
           - os: ubuntu-latest
             rust: stable
+            target: i686-unknown-linux-gnu
+            features: default,parallel
+            bindings: true
+          - os: ubuntu-latest
+            rust: stable
             target: x86_64-unknown-linux-gnu
             features: default
           - os: ubuntu-latest
@@ -130,6 +135,11 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: tokio
+          - os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: default,parallel
+            bindings: true
           - os: ubuntu-latest
             rust: beta
             target: x86_64-unknown-linux-gnu
@@ -142,14 +152,29 @@ jobs:
             rust: stable
             target: x86_64-apple-darwin
             features: default,async-std
+          - os: macos-latest
+            rust: stable
+            target: x86_64-apple-darwin
+            features: default,parallel
+            bindings: true
           - os: windows-latest
-            rust: stable-i686-gnu
+            rust: stable-x86_64-gnu
             target: i686-pc-windows-gnu
             features: default,async-std
           - os: windows-latest
             rust: stable-x86_64-gnu
+            target: i686-pc-windows-gnu
+            features: default,parallel
+            bindings: true
+          - os: windows-latest
+            rust: stable-x86_64-gnu
             target: x86_64-pc-windows-gnu
             features: default,async-std
+          - os: windows-latest
+            rust: stable-x86_64-gnu
+            target: x86_64-pc-windows-gnu
+            features: default,parallel
+            bindings: true
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
@@ -158,12 +183,26 @@ jobs:
       - name: Setup cross linux toolchain ${{ matrix.target }}
         if: contains(matrix.os, 'ubuntu') && contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'x86_64')
         run: |
-          if [ "${{ matrix.target }}" = "i686-unknown-linux-gnu" ]; then
-            GCC_TARGET=multilib
-          else
-            GCC_TARGET=$(printf ${{ matrix.target }} | sed 's/-unknown-/-/' | sed 's/arm[^-]*/arm/g')
-          fi
-          sudo apt-get install -y gcc-${GCC_TARGET}
+          case "${{ matrix.target }}" in
+            i686-*) SYSTEM_ARCH=i386 ;;
+          esac
+          GCC_TARGET=$(printf "${{ matrix.target }}" | sed 's/-unknown-/-/' | sed 's/arm[^-]*/arm/g')
+          ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+          sudo dpkg --add-architecture ${SYSTEM_ARCH}
+          sudo apt-get update -y
+          sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET}
+          echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
+      - name: Setup clang on windows
+        if: contains(matrix.os, 'windows')
+        uses: KyleMayes/install-llvm-action@v1
+        with:
+          version: 10.0
+          directory: ${{ runner.temp }}/llvm
+      - name: Configure clang on windows
+        if: contains(matrix.os, 'windows')
+        run: |
+          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm/lib" >> $GITHUB_ENV
+          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm/bin/llvm-config" >> $GITHUB_ENV
       - name: Setup Rust ${{ matrix.rust }} [${{ matrix.target }}]
         uses: actions-rs/toolchain@v1
         with:
@@ -182,6 +221,17 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Build sys ${{ matrix.rust }}
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --manifest-path rquickjs-sys/Cargo.toml --target ${{ matrix.target }} --features exports,parallel,bindgen,update-bindings
+      - name: Upload bindings
+        if: matrix.bindings
+        uses: actions/upload-artifact@v2
+        with:
+          name: bindings
+          path: rquickjs-sys/src/bindings/${{ matrix.target }}.rs
       - name: Build ${{ matrix.rust }}
         uses: actions-rs/cargo@v1
         with:
@@ -192,6 +242,29 @@ jobs:
         with:
           command: test
           args: --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }} --lib
+
+  update-bindings:
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    needs:
+      - test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Download bindings
+        uses: actions/download-artifact@v2
+        with:
+          name: bindings
+          path: rquickjs-sys/src/bindings
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v3
+        with:
+          base: ${{ github.head_ref }}
+          commit-message: Updated bindings
+          branch: update-bindings
+          delete-branch: true
+          title: Update bindings
+          body: |
+            Bindings should be updated to be consistent with latest changes
 
   publish:
     if: github.repository == 'DelSkayn/rquickjs' && startsWith(github.ref, 'refs/tags/')
