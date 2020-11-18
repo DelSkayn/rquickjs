@@ -131,11 +131,15 @@ impl Drop for Context {
     fn drop(&mut self) {
         //TODO
         let guard = match self.rt.inner.try_lock() {
-            Some(x) => x,
-            // When we can not enter the runtime lock we
-            // prefer to leak the value over possibly corrupting memory
-            // with a double free
-            _ => return,
+            Ok(x) => x,
+            Err(x) => {
+                // Lock was poisened, this should only happen on a panic.
+                // We should still free the context.
+                // TODO see if there is a way to recover from a panic which could cause the
+                // following assertion to trigger
+                assert!(std::thread::panicking());
+                x
+            }
         };
         self.reset_stack();
         unsafe { qjs::JS_FreeContext(self.ctx) }

@@ -33,8 +33,8 @@ impl<T> Ref<T> {
         self.0.borrow_mut()
     }
 
-    pub fn try_lock(&self) -> Option<RefGuard<T>> {
-        Some(self.0.borrow_mut())
+    pub fn try_lock(&self) -> Result<RefGuard<T>, RefGuard<T>> {
+        Ok(self.0.borrow_mut())
     }
 
     pub fn weak(&self) -> WeakRef<T> {
@@ -52,8 +52,11 @@ impl<T> Ref<T> {
         self.0.lock().unwrap()
     }
 
-    pub fn try_lock(&self) -> Option<RefGuard<T>> {
-        self.0.lock().ok()
+    pub fn try_lock(&self) -> Result<RefGuard<T>, RefGuard<T>> {
+        match self.0.lock() {
+            Ok(x) => Ok(x),
+            Err(x) => Err(x.into_inner()),
+        }
     }
 
     pub fn weak(&self) -> WeakRef<T> {
