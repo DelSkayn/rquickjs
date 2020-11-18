@@ -106,82 +106,81 @@ jobs:
       fail-fast: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/') }}
       matrix:
         include:
-          - os: ubuntu-latest
-            rust: stable
-            target: i686-unknown-linux-gnu
-            features: default
-          - os: ubuntu-latest
-            rust: stable
-            target: i686-unknown-linux-gnu
-            features: async-std
-          - os: ubuntu-latest
-            rust: stable
-            target: i686-unknown-linux-gnu
-            features: tokio
-          - os: ubuntu-latest
+          # Generate bindings
+          - task: bindings
+            os: ubuntu-latest
             rust: stable
             target: i686-unknown-linux-gnu
             features: default,parallel
-            bindings: true
-          - os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: default
-          - os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: async-std
-          - os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: tokio
-          - os: ubuntu-latest
+          - task: bindings
+            os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: default,parallel
-            bindings: true
-          - os: ubuntu-latest
+          - task: bindings
+            os: macos-latest
+            rust: stable
+            target: x86_64-apple-darwin
+            features: default,parallel,async-std
+          - task: bindings
+            os: windows-latest
+            rust: stable-x86_64-gnu
+            target: i686-pc-windows-gnu
+            features: default,parallel,async-std
+          - task: bindings
+            os: windows-latest
+            rust: stable-x86_64-gnu
+            target: x86_64-pc-windows-gnu
+            features: default,parallel,async-std
+          # Test features
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: default
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: parallel
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: futures
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: async-std
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: tokio
+          # Test channels
+          - task: channels
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: default,parallel,async-std
+          - task: channels
+            os: ubuntu-latest
             rust: beta
             target: x86_64-unknown-linux-gnu
-            features: default,async-std
-          - os: ubuntu-latest
+            features: default,parallel,async-std
+          - task: channels
+            os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
-            features: default,async-std
-          - os: macos-latest
-            rust: stable
-            target: x86_64-apple-darwin
-            features: default,async-std
-          - os: macos-latest
-            rust: stable
-            target: x86_64-apple-darwin
-            features: default,parallel
-            bindings: true
-          - os: windows-latest
-            rust: stable-x86_64-gnu
-            target: i686-pc-windows-gnu
-            features: default,async-std
-          - os: windows-latest
-            rust: stable-x86_64-gnu
-            target: i686-pc-windows-gnu
-            features: default,parallel
-            bindings: true
-          - os: windows-latest
-            rust: stable-x86_64-gnu
-            target: x86_64-pc-windows-gnu
-            features: default,async-std
-          - os: windows-latest
-            rust: stable-x86_64-gnu
-            target: x86_64-pc-windows-gnu
-            features: default,parallel
-            bindings: true
+            features: default,parallel,async-std
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
         with:
           submodules: true
-      - name: Setup cross linux toolchain ${{ matrix.target }}
-        if: contains(matrix.os, 'ubuntu') && contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'x86_64')
+      - name: Setup cross linux toolchain
+        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'x86_64-')
         run: |
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
@@ -198,12 +197,12 @@ jobs:
         with:
           version: 10.0
           directory: ${{ runner.temp }}/llvm
-      - name: Configure clang on windows
         if: contains(matrix.os, 'windows')
+      - name: Prepare env for windows
         run: |
           echo "LIBCLANG_PATH=${{ runner.temp }}/llvm/lib" >> $GITHUB_ENV
           echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm/bin/llvm-config" >> $GITHUB_ENV
-      - name: Setup Rust ${{ matrix.rust }} [${{ matrix.target }}]
+      - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
@@ -221,23 +220,23 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build sys ${{ matrix.rust }}
+      - name: Build sys
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --manifest-path rquickjs-sys/Cargo.toml --target ${{ matrix.target }} --features exports,parallel,bindgen,update-bindings
       - name: Upload bindings
-        if: matrix.bindings
+        if: matrix.task == 'bindings'
         uses: actions/upload-artifact@v2
         with:
           name: bindings
           path: rquickjs-sys/src/bindings/${{ matrix.target }}.rs
-      - name: Build ${{ matrix.rust }}
+      - name: Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
-      - name: Test ${{ matrix.rust }}
+      - name: Test
         uses: actions-rs/cargo@v1
         with:
           command: test
