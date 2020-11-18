@@ -1,6 +1,6 @@
 use super::StaticFn;
 use crate::{
-    context::Ctx, runtime::Opaque, value::handle_panic, FromJs, FromJsArgs, IntoJs, MultiValue,
+    context::Ctx, runtime::Opaque, value::handle_panic, ArgsValue, FromJs, FromJsArgs, IntoJs,
     Result, Value,
 };
 use rquickjs_sys as qjs;
@@ -47,8 +47,8 @@ where
             let ctx = Ctx::from_ptr(ctx);
             let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
             let this = try_ffi!(ctx.ctx, F::This::from_js(ctx, this));
-            let multi = MultiValue::from_value_count_const(ctx, argc as usize, argv);
-            let args = try_ffi!(ctx.ctx, F::Args::from_js_multi(ctx, multi));
+            let multi = ArgsValue::from_value_count_const(ctx, argc as usize, argv);
+            let args = try_ffi!(ctx.ctx, F::Args::from_js_args(ctx, multi));
             let value = try_ffi!(ctx.ctx, F::call(ctx, this, args));
             let value = try_ffi!(ctx.ctx, value.into_js(ctx));
             value.into_js_value()
@@ -87,8 +87,8 @@ where
                     let ctx = Ctx::from_ptr(ctx);
                     let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
                     let this = try_ffi!(ctx.ctx, T::from_js(ctx, this));
-                    let multi = MultiValue::from_value_count_const(ctx, argc as usize, argv);
-                    let args = try_ffi!(ctx.ctx, A::from_js_multi(ctx, multi));
+                    let multi = ArgsValue::from_value_count_const(ctx, argc as usize, argv);
+                    let args = try_ffi!(ctx.ctx, A::from_js_args(ctx, multi));
                     let value = {
                         let mut func = func.try_borrow_mut()
                         .expect("Mutable function callback is already in use! Could it have been called recursively?");
@@ -118,8 +118,8 @@ where
                     let ctx = Ctx::from_ptr(ctx);
                     let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
                     let this = try_ffi!(ctx.ctx, T::from_js(ctx, this));
-                    let multi = MultiValue::from_value_count_const(ctx, argc as usize, argv);
-                    let args = try_ffi!(ctx.ctx, A::from_js_multi(ctx, multi));
+                    let multi = ArgsValue::from_value_count_const(ctx, argc as usize, argv);
+                    let args = try_ffi!(ctx.ctx, A::from_js_args(ctx, multi));
                     let value = try_ffi!(ctx.ctx, func(ctx, this, args));
                     let value = try_ffi!(ctx.ctx, value.into_js(ctx));
                     value.into_js_value()

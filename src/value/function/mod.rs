@@ -216,7 +216,7 @@ impl<'js> Function<'js> {
         R: FromJs<'js>,
         T: IntoJs<'js>,
     {
-        let args = args.into_js_multi(self.0.ctx)?;
+        let args = args.into_js_args(self.0.ctx)?;
         let this = this.into_js(self.0.ctx)?;
         let len = args.len();
         let res = unsafe {

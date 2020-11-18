@@ -8,7 +8,7 @@ use std::{
 
 /// An iterator over a list of js values
 pub struct ValueIter<'js> {
-    value: mem::ManuallyDrop<MultiValue<'js>>,
+    value: mem::ManuallyDrop<ArgsValue<'js>>,
     current: usize,
 }
 
@@ -60,16 +60,16 @@ impl<'js> Drop for ValueIter<'js> {
 /// An list of values given from JS
 ///
 /// Handed to callbacks as arguments.
-pub struct MultiValue<'js> {
+pub struct ArgsValue<'js> {
     ctx: Ctx<'js>,
     len: usize,
     ptr: *mut qjs::JSValue,
     ownership: bool,
 }
 
-impl<'js> Clone for MultiValue<'js> {
+impl<'js> Clone for ArgsValue<'js> {
     fn clone(&self) -> Self {
-        MultiValue {
+        ArgsValue {
             ctx: self.ctx,
             len: self.len,
             ptr: self.ptr,
@@ -78,14 +78,14 @@ impl<'js> Clone for MultiValue<'js> {
     }
 }
 
-impl<'js> MultiValue<'js> {
+impl<'js> ArgsValue<'js> {
     #[allow(dead_code)]
     pub(crate) unsafe fn from_value_count(
         ctx: Ctx<'js>,
         len: usize,
         ptr: *mut qjs::JSValue,
     ) -> Self {
-        MultiValue {
+        ArgsValue {
             ctx,
             len,
             ptr,
@@ -99,7 +99,7 @@ impl<'js> MultiValue<'js> {
         len: usize,
         ptr: *mut qjs::JSValue,
     ) -> Self {
-        MultiValue {
+        ArgsValue {
             ctx,
             len,
             ptr,
@@ -125,7 +125,7 @@ impl<'js> MultiValue<'js> {
     /// Returns a interator over the js values.
     pub fn iter(&mut self) -> ValueIter<'js> {
         let res = ValueIter {
-            value: mem::ManuallyDrop::new(MultiValue {
+            value: mem::ManuallyDrop::new(ArgsValue {
                 ctx: self.ctx,
                 len: self.len,
                 ptr: self.ptr,
@@ -138,7 +138,7 @@ impl<'js> MultiValue<'js> {
     }
 }
 
-impl<'js> Drop for MultiValue<'js> {
+impl<'js> Drop for ArgsValue<'js> {
     fn drop(&mut self) {
         mem::drop(self.iter())
     }
@@ -148,27 +148,27 @@ impl<'js> Drop for MultiValue<'js> {
 ///
 /// Passed to functions as arguments when calling.
 #[derive(Clone, Default)]
-pub struct MultiValueJs<'js>(Vec<Value<'js>>);
+pub struct ArgsValueJs<'js>(Vec<Value<'js>>);
 
-impl<'js> MultiValueJs<'js> {
+impl<'js> ArgsValueJs<'js> {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 }
 
-impl<'js> From<Vec<Value<'js>>> for MultiValueJs<'js> {
+impl<'js> From<Vec<Value<'js>>> for ArgsValueJs<'js> {
     fn from(vec: Vec<Value<'js>>) -> Self {
         Self(vec)
     }
 }
 
-impl<'js> Into<Vec<Value<'js>>> for MultiValueJs<'js> {
+impl<'js> Into<Vec<Value<'js>>> for ArgsValueJs<'js> {
     fn into(self) -> Vec<Value<'js>> {
         self.0
     }
 }
 
-impl<'js> Deref for MultiValueJs<'js> {
+impl<'js> Deref for ArgsValueJs<'js> {
     type Target = Vec<Value<'js>>;
 
     fn deref(&self) -> &Self::Target {
@@ -176,7 +176,7 @@ impl<'js> Deref for MultiValueJs<'js> {
     }
 }
 
-impl<'js> DerefMut for MultiValueJs<'js> {
+impl<'js> DerefMut for ArgsValueJs<'js> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }

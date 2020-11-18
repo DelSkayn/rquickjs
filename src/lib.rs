@@ -1,6 +1,6 @@
 //! # High-level bindings to quickjs
 //!
-//! The `quickrjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
+//! The `rquickjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.  
 //!
 //! # The `Runtime` and `Context` objects

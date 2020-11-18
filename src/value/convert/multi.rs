@@ -1,21 +1,21 @@
-use super::{FromJs, FromJsArgs, IntoJs, IntoJsArgs, MultiValue, MultiValueJs, RestValues, Value};
+use super::{ArgsValue, ArgsValueJs, FromJs, FromJsArgs, IntoJs, IntoJsArgs, RestValues, Value};
 use crate::{Ctx, Result};
 use std::iter::{empty, once};
 
-impl<'js> IntoJsArgs<'js> for MultiValueJs<'js> {
-    fn into_js_multi(self, _: Ctx<'js>) -> Result<MultiValueJs<'js>> {
+impl<'js> IntoJsArgs<'js> for ArgsValueJs<'js> {
+    fn into_js_args(self, _: Ctx<'js>) -> Result<ArgsValueJs<'js>> {
         Ok(self)
     }
 }
 
 impl<'js, T: IntoJs<'js>> IntoJsArgs<'js> for T {
-    fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
+    fn into_js_args(self, ctx: Ctx<'js>) -> Result<ArgsValueJs<'js>> {
         Ok(vec![self.into_js(ctx)?].into())
     }
 }
 
-impl<'js> FromJsArgs<'js> for MultiValue<'js> {
-    fn from_js_multi(_: Ctx<'js>, value: MultiValue<'js>) -> Result<Self> {
+impl<'js> FromJsArgs<'js> for ArgsValue<'js> {
+    fn from_js_args(_: Ctx<'js>, value: ArgsValue<'js>) -> Result<Self> {
         Ok(value)
     }
 
@@ -23,7 +23,7 @@ impl<'js> FromJsArgs<'js> for MultiValue<'js> {
 }
 
 impl<'js> FromJsArgs<'js> for () {
-    fn from_js_multi(_: Ctx<'js>, _: MultiValue<'js>) -> Result<Self> {
+    fn from_js_args(_: Ctx<'js>, _: ArgsValue<'js>) -> Result<Self> {
         Ok(())
     }
 
@@ -34,7 +34,7 @@ impl<'js, X> IntoJsArgs<'js> for RestValues<X>
 where
     X: IntoJs<'js>,
 {
-    fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>> {
+    fn into_js_args(self, ctx: Ctx<'js>) -> Result<ArgsValueJs<'js>> {
         let rest: Vec<_> = self.into();
         let iter = rest.into_iter().map(|value| value.into_js(ctx));
         Ok(iter.collect::<Result<Vec<_>>>()?.into())
@@ -45,7 +45,7 @@ impl<'js, X> FromJsArgs<'js> for RestValues<X>
 where
     X: FromJs<'js>,
 {
-    fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
+    fn from_js_args(ctx: Ctx<'js>, mut value: ArgsValue<'js>) -> Result<Self> {
         Ok(value
             .iter()
             .map(|value| X::from_js(ctx, value))
@@ -56,7 +56,7 @@ where
     const LEN: i32 = 0;
 }
 
-macro_rules! impl_from_to_js_multi {
+macro_rules! impl_from_to_js_args {
     ($($($t:ident)*;)*) => {
         $(
             impl<'js, $($t,)*> IntoJsArgs<'js> for ($($t,)*)
@@ -64,7 +64,7 @@ macro_rules! impl_from_to_js_multi {
                 $($t: IntoJs<'js>,)*
             {
                 #[allow(non_snake_case)]
-                fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
+                fn into_js_args(self, ctx: Ctx<'js>) -> Result<ArgsValueJs<'js>>{
                     let ($($t,)*) = self;
                     Ok(vec![
                         $($t.into_js(ctx)?,)*
@@ -78,7 +78,7 @@ macro_rules! impl_from_to_js_multi {
                 X: IntoJs<'js>,
             {
                 #[allow(non_snake_case)]
-                fn into_js_multi(self, ctx: Ctx<'js>) -> Result<MultiValueJs<'js>>{
+                fn into_js_args(self, ctx: Ctx<'js>) -> Result<ArgsValueJs<'js>>{
                     let ($($t,)* X) = self;
                     let iter = empty();
                     $(let iter = iter.chain(once($t.into_js(ctx))));*;
@@ -93,7 +93,7 @@ macro_rules! impl_from_to_js_multi {
                 $($t: FromJs<'js>,)*
             {
                 #[allow(non_snake_case)]
-                fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
+                fn from_js_args(ctx: Ctx<'js>, mut value: ArgsValue<'js>) -> Result<Self> {
                     let mut iter = value.iter();
                     Ok((
                         $({
@@ -104,7 +104,7 @@ macro_rules! impl_from_to_js_multi {
                     ))
                 }
 
-                const LEN: i32 = impl_from_to_js_multi!(@count $($t),*);
+                const LEN: i32 = impl_from_to_js_args!(@count $($t),*);
             }
 
             impl<'js, $($t,)* X> FromJsArgs<'js> for ($($t,)* RestValues<X>)
@@ -113,7 +113,7 @@ macro_rules! impl_from_to_js_multi {
                 X: FromJs<'js>,
             {
                 #[allow(non_snake_case)]
-                fn from_js_multi(ctx: Ctx<'js>, mut value: MultiValue<'js>) -> Result<Self> {
+                fn from_js_args(ctx: Ctx<'js>, mut value: ArgsValue<'js>) -> Result<Self> {
                     let mut iter = value.iter();
                     Ok((
                         $({
@@ -125,19 +125,19 @@ macro_rules! impl_from_to_js_multi {
                     ))
                 }
 
-                const LEN: i32 = impl_from_to_js_multi!(@count $($t),*);
+                const LEN: i32 = impl_from_to_js_args!(@count $($t),*);
             }
         )*
     };
 
     (@count $($t:ident),*) => {
-        0 $(+ impl_from_to_js_multi!(@1 $t))*
+        0 $(+ impl_from_to_js_args!(@1 $t))*
     };
 
     (@1 $($t:tt)*) => { 1 };
 }
 
-impl_from_to_js_multi! {
+impl_from_to_js_args! {
     A;
     A B;
     A B C;
@@ -161,7 +161,7 @@ mod test {
     use crate::*;
 
     #[test]
-    fn from_js_multi_len() {
+    fn from_js_args_len() {
         assert_eq!(<((),)>::LEN, 1);
         assert_eq!(<((), ())>::LEN, 2);
         assert_eq!(<((), (), ())>::LEN, 3);
