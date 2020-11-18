@@ -222,9 +222,11 @@ jobs:
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Build sys
         uses: actions-rs/cargo@v1
+        env:
+          RUST_LOG: bindgen=debug
         with:
           command: build
-          args: --manifest-path rquickjs-sys/Cargo.toml --target ${{ matrix.target }} --features exports,parallel,bindgen,update-bindings
+          args: --manifest-path rquickjs-sys/Cargo.toml --target ${{ matrix.target }} --features exports,parallel,bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
         uses: actions/upload-artifact@v2

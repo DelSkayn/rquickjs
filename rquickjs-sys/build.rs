@@ -6,6 +6,9 @@ use std::{
 };
 
 fn main() {
+    #[cfg(feature = "logging")]
+    pretty_env_logger::init();
+
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PARALLEL");
     println!("cargo:rerun-if-env-changed=CARGO_FEATURE_EXPORTS");
@@ -157,6 +160,7 @@ where
     let bindings = bindgen_rs::Builder::default()
         .detect_include_paths(true)
         .clang_arg("-xc")
+        .clang_arg("-v")
         .clang_args(cflags)
         .header(header_file.display().to_string())
         .whitelist_type("JS.*")
