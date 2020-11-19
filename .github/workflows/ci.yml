@@ -200,16 +200,21 @@ jobs:
           sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET}
           echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
       - name: Setup clang on windows
-        if: contains(matrix.os, 'windows')
+        if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         uses: KyleMayes/install-llvm-action@v1
         with:
-          version: 10.0
+          version: 11.0
           directory: ${{ runner.temp }}/llvm
-        if: contains(matrix.os, 'windows')
       - name: Prepare env for windows
+        if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         run: |
-          echo "LIBCLANG_PATH=${{ runner.temp }}/llvm/lib" >> $GITHUB_ENV
-          echo "LLVM_CONFIG_PATH=${{ runner.temp }}/llvm/bin/llvm-config" >> $GITHUB_ENV
+          # Add symlinks to C headers for Clang
+          if ( "${{ matrix.target }}" -like "x86_64-*" ) {
+            New-Item -Path "${{ runner.temp }}\llvm\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
+          } else {
+            New-Item -Path "${{ runner.temp }}\llvm\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw32\i686-w64-mingw32"
+            echo "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
