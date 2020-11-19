@@ -18,6 +18,9 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          profile: minimal
+          components: rustfmt
+          default: true
           override: true
       - name: Cargo cache
         uses: actions/cache@v2
@@ -42,6 +45,9 @@ jobs:
         uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
+          profile: minimal
+          components: rust-docs
+          default: true
           override: true
       - name: Cargo cache
         uses: actions/cache@v2
@@ -78,7 +84,9 @@ jobs:
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
+          profile: minimal
           components: clippy
+          default: true
           override: true
       - name: Cargo cache
         uses: actions/cache@v2
@@ -124,12 +132,12 @@ jobs:
             features: default,parallel,async-std
           - task: bindings
             os: windows-latest
-            rust: stable-x86_64-gnu
+            rust: stable
             target: i686-pc-windows-gnu
             features: default,parallel,async-std
           - task: bindings
             os: windows-latest
-            rust: stable-x86_64-gnu
+            rust: stable
             target: x86_64-pc-windows-gnu
             features: default,parallel,async-std
           # Test features
@@ -207,6 +215,9 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
+          profile: minimal
+          components: rustfmt
+          default: true
           override: true
       - name: Cargo cache
         uses: actions/cache@v2
