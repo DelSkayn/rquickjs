@@ -80,7 +80,7 @@ quick_error! {
             from()
             cause(e)
         }
-        /// An error from quickjs which i do not know the specifics about yet.
+        /// An error from quickjs from which the specifics are unknown.
         /// Should eventually be removed as development progresses.
         Unknown{
             display("quickjs library created a unknown error")
@@ -107,7 +107,7 @@ quick_error! {
 }
 
 impl Error {
-    /// Returns wheter the error is a quickjs generated exception.
+    /// Returns whether the error is a quickjs generated exception.
     pub fn is_exception(&self) -> bool {
         matches!(*self, Error::Exception{..})
     }

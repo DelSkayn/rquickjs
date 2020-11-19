@@ -2,10 +2,10 @@ use crate::{context::Ctx, Error, Result};
 use rquickjs_sys as qjs;
 use std::panic::{self, UnwindSafe};
 
-#[cfg(feature = "exports")]
 mod module;
 #[cfg(feature = "exports")]
-pub use module::{ExportList, Module};
+pub use module::ExportList;
+pub use module::Module;
 
 mod string;
 pub use string::String;

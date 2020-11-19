@@ -9,7 +9,6 @@ use crate::{
     Context, FromJs, Function, Object, RegisteryKey, Result, Value,
 };
 
-#[cfg(feature = "exports")]
 use crate::Module;
 
 use rquickjs_sys as qjs;
@@ -86,7 +85,6 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    #[cfg(feature = "exports")]
     /// Compile a module for later use.
     pub fn compile<Sa, Sb>(self, name: Sa, source: Sb) -> Result<Module<'js>>
     where

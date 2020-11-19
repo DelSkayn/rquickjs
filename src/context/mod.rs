@@ -48,7 +48,7 @@ impl Context {
     }
 
     /// Creates a context with all standart available functions registered.
-    /// If precise controll is required of wich functions are availble use
+    /// If precise controll is required of wich functions are available use
     /// [`Context::build`](#method.context)
     pub fn full(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
@@ -97,6 +97,7 @@ impl Context {
         mem::drop(guard)
     }
 
+    /// Returns the associated runtime
     pub fn runtime(&self) -> &Runtime {
         &self.rt
     }

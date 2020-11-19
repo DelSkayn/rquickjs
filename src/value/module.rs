@@ -1,6 +1,6 @@
-use crate::Ctx;
 #[cfg(feature = "exports")]
-use crate::{Atom, Value};
+use crate::Value;
+use crate::{Atom, Ctx};
 use rquickjs_sys as qjs;
 
 /// An iterator over the items exported out a module
@@ -107,7 +107,7 @@ mod test {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
-            let val: Module = ctx
+            let _val: Module = ctx
                 .compile(
                     "Test",
                     r#"
@@ -121,17 +121,21 @@ mod test {
                 "#,
                 )
                 .unwrap();
-            assert_eq!(val.name().to_string().unwrap(), "Test".to_string());
-            let mut iter = val.export_list();
-            assert_eq!(iter.next().unwrap().0.to_string().unwrap(), "a".to_string());
-            assert_eq!(
-                iter.next().unwrap().0.to_string().unwrap(),
-                "foo".to_string()
-            );
-            assert_eq!(
-                iter.next().unwrap().0.to_string().unwrap(),
-                "Baz".to_string()
-            );
+
+            #[cfg(feature = "exports")]
+            {
+                assert_eq!(_val.name().to_string().unwrap(), "Test".to_string());
+                let mut iter = _val.export_list();
+                assert_eq!(iter.next().unwrap().0.to_string().unwrap(), "a".to_string());
+                assert_eq!(
+                    iter.next().unwrap().0.to_string().unwrap(),
+                    "foo".to_string()
+                );
+                assert_eq!(
+                    iter.next().unwrap().0.to_string().unwrap(),
+                    "Baz".to_string()
+                );
+            }
         });
     }
 }
