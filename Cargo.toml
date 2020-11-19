@@ -37,11 +37,13 @@ members = [
 
 [features]
 default = ["exports"]
+bindgen = ["rquickjs-sys/bindgen"]
 parallel = ["rquickjs-sys/parallel"]
 exports = ["rquickjs-sys/exports"]
 futures = []
 tokio = ["futures", "tokio-rs"]
 async-std = ["futures", "async-std-rs"]
+compile-tests = []
 
 [dev-dependencies]
 trybuild = "1.0.23"

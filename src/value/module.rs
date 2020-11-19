@@ -2,7 +2,6 @@ use crate::Ctx;
 #[cfg(feature = "exports")]
 use crate::{Atom, Value};
 use rquickjs_sys as qjs;
-use std::ffi::c_void;
 
 /// An iterator over the items exported out a module
 ///
@@ -52,8 +51,8 @@ impl<'js> PartialEq<Module<'js>> for Module<'js> {
 
 impl<'js> Module<'js> {
     pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, js_val: qjs::JSValue) -> Self {
-        debug_assert_eq!(js_val.tag, qjs::JS_TAG_MODULE as i64);
-        let ptr = js_val.u.ptr;
+        debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(js_val), qjs::JS_TAG_MODULE);
+        let ptr = qjs::JS_VALUE_GET_PTR(js_val);
         Module {
             ptr: ptr as *mut qjs::JSModuleDef,
             ctx,
@@ -62,12 +61,7 @@ impl<'js> Module<'js> {
 
     #[allow(dead_code)]
     pub(crate) fn as_js_value(&self) -> qjs::JSValue {
-        qjs::JSValue {
-            u: qjs::JSValueUnion {
-                ptr: self.ptr as *mut c_void,
-            },
-            tag: qjs::JS_TAG_MODULE as i64,
-        }
+        qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.ptr as *mut _)
     }
 
     /// Returns the name of the module as a atom

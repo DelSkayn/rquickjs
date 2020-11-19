@@ -6,8 +6,12 @@ use crate::{
         rf::{JsObjectRef, JsStringRef},
         String,
     },
-    Context, FromJs, Function, Module, Object, RegisteryKey, Result, Value,
+    Context, FromJs, Function, Object, RegisteryKey, Result, Value,
 };
+
+#[cfg(feature = "exports")]
+use crate::Module;
+
 use rquickjs_sys as qjs;
 use std::{
     ffi::{CStr, CString},
@@ -48,14 +52,14 @@ impl<'js> Ctx<'js> {
         let src = source.into();
         let len = src.len();
         let src = CString::new(src)?;
-        let val = qjs::JS_Eval(self.ctx, src.as_ptr(), len as u64, file_name.as_ptr(), flag);
+        let val = qjs::JS_Eval(self.ctx, src.as_ptr(), len as _, file_name.as_ptr(), flag);
         value::handle_exception(self, val)?;
         Ok(val)
     }
 
     /// Evaluate a script in global context
     pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
-        let file_name = CStr::from_bytes_with_nul(b"eval_script\0").unwrap();
+        let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
         let flag = qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT;
         unsafe {
             let val = self._eval(source, file_name, flag as i32)?;
@@ -82,6 +86,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    #[cfg(feature = "exports")]
     /// Compile a module for later use.
     pub fn compile<Sa, Sb>(self, name: Sa, source: Sb) -> Result<Module<'js>>
     where

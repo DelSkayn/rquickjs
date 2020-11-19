@@ -120,7 +120,7 @@ macro_rules! tojs_impls {
                 fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
                     use std::convert::TryFrom;
                     let val = <$totype>::try_from(self).map_err(|_| {
-                        $crate::Error::ToJs{
+                        $crate::Error::IntoJs{
                             from: stringify!($type),
                             to: stringify!($totype),
                             message: None,

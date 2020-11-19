@@ -48,7 +48,7 @@ impl<'js> Atom<'js> {
         // how to detect this.
         unsafe {
             let ptr = name.as_ptr() as *const i8;
-            let atom = qjs::JS_NewAtomLen(ctx.ctx, ptr, name.len() as u64);
+            let atom = qjs::JS_NewAtomLen(ctx.ctx, ptr, name.len() as _);
             Atom { atom, ctx }
         }
     }

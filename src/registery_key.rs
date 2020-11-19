@@ -16,14 +16,17 @@ impl Hash for RegisteryKey {
     where
         H: Hasher,
     {
-        unsafe { self.0.u.ptr.hash(state) };
-        self.0.tag.hash(state);
+        unsafe { qjs::JS_VALUE_GET_PTR(self.0) }.hash(state);
+        unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.0) }.hash(state);
     }
 }
 
 impl PartialEq<RegisteryKey> for RegisteryKey {
     fn eq(&self, other: &Self) -> bool {
-        self.0.tag == other.0.tag && unsafe { self.0.u.ptr == other.0.u.ptr }
+        (unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.0) }
+            == unsafe { qjs::JS_VALUE_GET_NORM_TAG(other.0) })
+            && (unsafe { qjs::JS_VALUE_GET_PTR(self.0) }
+                == unsafe { qjs::JS_VALUE_GET_PTR(other.0) })
     }
 }
 
