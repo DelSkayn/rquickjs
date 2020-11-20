@@ -1,7 +1,6 @@
 #[cfg(feature = "exports")]
 use crate::Value;
-use crate::{Atom, Ctx};
-use rquickjs_sys as qjs;
+use crate::{qjs, Atom, Ctx};
 
 /// An iterator over the items exported out a module
 ///

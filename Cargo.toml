@@ -11,10 +11,13 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-rquickjs-sys = { version = "0.0.4", path = "./rquickjs-sys/" }
 quick-error = "1.2.3"
 libc = "0.2.67"
 fxhash = "0.2.1"
+
+[dependencies.rquickjs-sys]
+version = "0.0.4"
+path = "./rquickjs-sys"
 
 [dependencies.tokio-rs]
 package = "tokio"

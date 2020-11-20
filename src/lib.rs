@@ -52,6 +52,8 @@ use std::result::Result as StdResult;
 use std::string::String as StdString;
 pub use value::*;
 
+pub(crate) use rquickjs_sys as qjs;
+
 #[cfg(feature = "futures")]
 mod promise;
 

@@ -1,5 +1,4 @@
-use crate::{Context, Error, Runtime};
-use rquickjs_sys as qjs;
+use crate::{qjs, Context, Error, Runtime};
 use std::mem;
 
 /// Used for building a [`Context`](struct.Context.html) with a specific set of intrinsics

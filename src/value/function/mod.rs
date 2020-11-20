@@ -1,7 +1,6 @@
 use crate::{
-    value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoJs, IntoJsArgs, Object, Result, Value,
+    qjs, value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoJs, IntoJsArgs, Object, Result, Value,
 };
-use rquickjs_sys as qjs;
 use std::{ffi::CString, mem, os::raw::c_int, ptr};
 
 mod ffi;

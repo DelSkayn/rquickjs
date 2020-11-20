@@ -1,4 +1,4 @@
-use rquickjs_sys as qjs;
+use crate::qjs;
 use std::{
     cmp::PartialEq,
     hash::{Hash, Hasher},

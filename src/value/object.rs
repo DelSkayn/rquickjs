@@ -1,8 +1,8 @@
 use crate::{
+    qjs,
     value::{self, rf::JsObjectRef},
     Atom, Ctx, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, Result, Value,
 };
-use rquickjs_sys as qjs;
 use std::{
     iter::{IntoIterator, Iterator},
     marker::PhantomData,

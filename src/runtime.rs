@@ -1,6 +1,5 @@
-use crate::{Error, RegisteryKey};
+use crate::{qjs, Error, RegisteryKey};
 use fxhash::FxHashSet as HashSet;
-use rquickjs_sys as qjs;
 use std::{any::Any, ffi::CString, mem};
 
 #[cfg(all(feature = "parallel", feature = "async-std"))]

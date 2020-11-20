@@ -1,5 +1,4 @@
-use crate::context::Ctx;
-use rquickjs_sys as qjs;
+use crate::{context::Ctx, qjs};
 use std::{fmt, marker::PhantomData, mem};
 
 /// A owned reference to a javascript object.

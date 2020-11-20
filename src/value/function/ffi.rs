@@ -1,9 +1,8 @@
 use super::StaticFn;
 use crate::{
-    context::Ctx, runtime::Opaque, value::handle_panic, ArgsValue, FromJs, FromJsArgs, IntoJs,
+    context::Ctx, qjs, runtime::Opaque, value::handle_panic, ArgsValue, FromJs, FromJsArgs, IntoJs,
     Result, Value,
 };
-use rquickjs_sys as qjs;
 use std::{cell::RefCell, ffi::CString, mem, panic::AssertUnwindSafe};
 
 pub struct FuncOpaque {
