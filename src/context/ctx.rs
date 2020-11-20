@@ -1,5 +1,6 @@
 use crate::{
     markers::Invariant,
+    qjs,
     runtime::Opaque,
     value::{
         self,
@@ -11,7 +12,6 @@ use crate::{
 
 use crate::Module;
 
-use rquickjs_sys as qjs;
 use std::{
     ffi::{CStr, CString},
     fs,

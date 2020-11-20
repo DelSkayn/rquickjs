@@ -1,5 +1,4 @@
-use crate::{context::Ctx, Error, Result};
-use rquickjs_sys as qjs;
+use crate::{context::Ctx, qjs, Error, Result};
 use std::panic::{self, UnwindSafe};
 
 mod module;

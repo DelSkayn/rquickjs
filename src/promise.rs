@@ -1,5 +1,4 @@
-use crate::{Ctx, Error, FromJs, Function, IntoJs, Object, Result, StdResult, Value};
-use rquickjs_sys as qjs;
+use crate::{qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result, StdResult, Value};
 use std::{
     fmt::Display,
     future::Future,

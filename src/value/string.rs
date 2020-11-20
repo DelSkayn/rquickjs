@@ -1,9 +1,9 @@
 use crate::{
     context::Ctx,
+    qjs,
     value::{self, rf::JsStringRef},
     Error, Result,
 };
-use rquickjs_sys as qjs;
 use std::{ffi::CStr, mem, string::String as StdString};
 
 /// Rust representation of a javascript string.

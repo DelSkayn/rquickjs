@@ -1,5 +1,4 @@
-use crate::{Error, Result, Runtime};
-use rquickjs_sys as qjs;
+use crate::{qjs, Error, Result, Runtime};
 use std::mem;
 
 mod builder;

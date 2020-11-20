@@ -1,8 +1,8 @@
 use crate::{
+    qjs,
     value::{self, rf::JsStringRef, String, Value},
     Ctx, Error, Result,
 };
-use rquickjs_sys as qjs;
 use std::{ffi::CStr, mem, string::String as StdString};
 
 /// An atom is value representing the name of a variable of an objects and can be created
