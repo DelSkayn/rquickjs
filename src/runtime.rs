@@ -14,7 +14,7 @@ use tokio_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
 use crate::{
     context::Ctx,
     safe_ref::{Ref, WeakRef},
-    value,
+    value, Function,
 };
 
 #[derive(Clone)]
@@ -42,13 +42,9 @@ pub struct Opaque {
 
 impl Opaque {
     fn new(runtime: &Runtime) -> Self {
-        let mut class_id: u32 = 0;
-        unsafe {
-            qjs::JS_NewClassID(&mut class_id);
-        }
         Opaque {
             registery: HashSet::default(),
-            func_class: class_id,
+            func_class: Function::new_class(runtime),
             panic: None,
             runtime: runtime.weak(),
         }
