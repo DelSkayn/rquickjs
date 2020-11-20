@@ -1,10 +1,11 @@
 use crate::{
-    qjs, value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoJs, IntoJsArgs, Object, Result, Value,
+    qjs, value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoAtom, IntoJs, IntoJsArgs, Object,
+    Result, Runtime, String, Value,
 };
-use std::{ffi::CString, mem, os::raw::c_int, ptr};
+use std::{ffi::CString, mem, os::raw::c_int};
 
 mod ffi;
-use ffi::FuncOpaque;
+use ffi::{FuncOpaque, FuncStatic};
 
 /// A trait which allows rquickjs to create a callback with only minimal overhead.
 pub trait StaticFn<'js> {
@@ -97,22 +98,14 @@ impl<'js> Function<'js> {
     /// ```
     pub fn new_static<F, N>(ctx: Ctx<'js>, name: N) -> Result<Self>
     where
-        N: Into<Vec<u8>>,
+        N: AsRef<str>,
         F: StaticFn<'js>,
     {
-        let name = CString::new(name)?;
-        let func = ffi::call_fn_static::<F>
-            as unsafe extern "C" fn(
-                *mut qjs::JSContext,
-                qjs::JSValue,
-                c_int,
-                *mut qjs::JSValue,
-            ) -> qjs::JSValue;
-        let func: qjs::JSCFunction = Some(func);
+        let name = CString::new(name.as_ref())?;
         unsafe {
             let val = qjs::JS_NewCFunction2(
                 ctx.ctx,
-                func,
+                Some(FuncStatic::<F>::call),
                 name.as_ptr(),
                 F::Args::LEN as c_int,
                 qjs::JSCFunctionEnum_JS_CFUNC_generic,
@@ -121,82 +114,65 @@ impl<'js> Function<'js> {
             Ok(Function(JsObjectRef::from_js_value(ctx, val)))
         }
     }
+
     #[cfg(not(feature = "parallel"))]
     pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
-        N: Into<Vec<u8>>,
+        N: AsRef<str>,
         A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
         F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
     {
-        unsafe {
-            let opaque = ffi::wrap_cb(func);
-            Self::new_unsafe(ctx, CString::new(name)?, opaque)
-        }
+        let opaque = FuncOpaque::wrap(func);
+        Self::new_raw(ctx, name, opaque)
     }
 
     #[cfg(feature = "parallel")]
     pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
-        N: Into<Vec<u8>>,
+        N: AsRef<str>,
         A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
         F: Fn(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
     {
-        unsafe {
-            let opaque = ffi::wrap_cb(func);
-            Self::new_unsafe(ctx, CString::new(name)?, opaque)
-        }
+        let opaque = FuncOpaque::wrap(func);
+        Self::new_raw(ctx, name, opaque)
     }
 
     #[cfg(not(feature = "parallel"))]
     pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
-        N: Into<Vec<u8>>,
+        N: AsRef<str>,
         A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
     {
-        unsafe {
-            let opaque = ffi::wrap_cb_mut(func);
-            Self::new_unsafe(ctx, CString::new(name)?, opaque)
-        }
+        let opaque = FuncOpaque::wrap_mut(func);
+        Self::new_raw(ctx, name, opaque)
     }
 
     #[cfg(feature = "parallel")]
     pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
-        N: Into<Vec<u8>>,
+        N: AsRef<str>,
         A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
     {
-        unsafe {
-            let opaque = ffi::wrap_cb_mut(func);
-            Self::new_unsafe(ctx, CString::new(name)?, opaque)
-        }
+        let opaque = FuncOpaque::wrap_mut(func);
+        Self::new_raw(ctx, name, opaque)
     }
 
-    unsafe fn new_unsafe(ctx: Ctx<'js>, _name: CString, opaque: FuncOpaque) -> Result<Self> {
-        let class_id = ctx.get_opaque().func_class;
-        let rt = qjs::JS_GetRuntime(ctx.ctx);
-        if qjs::JS_IsRegisteredClass(rt, class_id) == 0 {
-            let class_def = qjs::JSClassDef {
-                class_name: b"RustFunc\0".as_ptr() as *const _,
-                finalizer: Some(ffi::cb_finalizer),
-                gc_mark: None,
-                call: Some(ffi::cb_call),
-                exotic: ptr::null_mut(),
-            };
-            assert!(qjs::JS_NewClass(rt, class_id, &class_def) == 0);
-        }
-        let obj = qjs::JS_NewObjectClass(ctx.ctx, class_id as i32);
-        qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(opaque)) as *mut _);
-        Ok(Function(JsObjectRef::from_js_value(ctx, obj)))
+    fn new_raw<N: AsRef<str>>(ctx: Ctx<'js>, name: N, opaque: FuncOpaque) -> Result<Self> {
+        let obj = unsafe { opaque.to_js_value(ctx) };
+        let name_field = "name".into_atom(ctx);
+        let name_value = String::from_str(ctx, name.as_ref())?;
+        unsafe { qjs::JS_SetProperty(ctx.ctx, obj, name_field.atom, name_value.0.into_js_value()) };
+        Ok(Function(unsafe { JsObjectRef::from_js_value(ctx, obj) }))
     }
 
     /// Call a function with given arguments with the `this` as the global context object.
@@ -239,6 +215,11 @@ impl<'js> Function<'js> {
 
     pub fn into_object(self) -> Object<'js> {
         Object(self.0)
+    }
+
+    pub(crate) fn new_class(rt: &Runtime) -> qjs::JSClassID {
+        let rt_ref = rt.inner.lock();
+        unsafe { FuncOpaque::new_fn_class(rt_ref.rt) }
     }
 }
 
