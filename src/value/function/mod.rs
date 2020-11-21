@@ -7,6 +7,9 @@ use std::{cell::RefCell, ffi::CString, mem, os::raw::c_int};
 mod ffi;
 use ffi::{FuncOpaque, FuncStatic};
 
+mod as_js;
+pub use as_js::{AsFunction, AsFunctionMut, This};
+
 /// A trait which allows rquickjs to create a callback with only minimal overhead.
 pub trait StaticFn<'js> {
     /// type of the this object that the function expects
@@ -154,6 +157,33 @@ impl<'js> Function<'js> {
             let res = func(ctx, this, args)?;
 
             res.into_js(ctx)
+        });
+
+        Self::new_raw(ctx, name, opaque)
+    }
+
+    pub fn new2<F, A, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: AsRef<str>,
+        F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+    {
+        let opaque = FuncOpaque::new(move |ctx, this, args| func.call(ctx, this, args));
+
+        Self::new_raw(ctx, name, opaque)
+    }
+
+    pub fn new_mut2<F, A, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    where
+        N: AsRef<str>,
+        F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
+    {
+        let func = RefCell::new(func);
+
+        let opaque = FuncOpaque::new(move |ctx, this, args| {
+            let mut func = func.try_borrow_mut()
+                .expect("Mutable function callback is already in use! Could it have been called recursively?");
+
+            func.call(ctx, this, args)
         });
 
         Self::new_raw(ctx, name, opaque)
@@ -336,6 +366,62 @@ mod test {
             .unwrap();
             ctx.globals().set("foo", f.clone()).unwrap();
             f.call::<_, ()>(()).unwrap();
+        })
+    }
+
+    #[test]
+    fn const_callback2() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let globals = ctx.globals();
+            globals
+                .set("one", Function::new2(ctx, "id", || 1f64).unwrap())
+                .unwrap();
+            globals
+                .set("neg", Function::new2(ctx, "neg", |a: f64| -a).unwrap())
+                .unwrap();
+            globals
+                .set(
+                    "add",
+                    Function::new2(ctx, "add", |a: f64, b: f64| a + b).unwrap(),
+                )
+                .unwrap();
+
+            let r: f64 = ctx.eval("neg(add(one(), 2))").unwrap();
+            assert_eq!(r, -3.0);
+        })
+    }
+
+    #[test]
+    fn mut_callback2() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let globals = ctx.globals();
+            let mut id_alloc = 0;
+            globals
+                .set(
+                    "new_id",
+                    Function::new_mut2(ctx, "id", move || {
+                        id_alloc += 1;
+                        if id_alloc < 4 {
+                            Ok(id_alloc)
+                        } else {
+                            Err(Error::Unknown)
+                        }
+                    })
+                    .unwrap(),
+                )
+                .unwrap();
+
+            let id: u32 = ctx.eval("new_id()").unwrap();
+            assert_eq!(id, 1);
+            let id: u32 = ctx.eval("new_id()").unwrap();
+            assert_eq!(id, 2);
+            let id: u32 = ctx.eval("new_id()").unwrap();
+            assert_eq!(id, 3);
+            let _err = ctx.eval::<u32, _>("new_id()").unwrap_err();
         })
     }
 }
