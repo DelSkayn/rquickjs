@@ -15,7 +15,7 @@ pub use array::Array;
 mod symbol;
 pub use symbol::Symbol;
 pub mod function;
-pub use function::Function;
+pub use function::{AsFunction, AsFunctionMut, Function, IntoFunction};
 mod convert;
 pub use convert::*;
 mod atom;
