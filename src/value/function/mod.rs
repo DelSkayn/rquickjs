@@ -256,9 +256,16 @@ mod test {
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
             let f = Function::new_static::<Test, _>(ctx, "test").unwrap();
-            let eval: Function = ctx.eval("(a) => { a()}").unwrap();
+            let eval: Function = ctx.eval("a => { a() }").unwrap();
             eval.call::<_, ()>(f.clone()).unwrap();
-            f.call::<_, ()>(()).unwrap()
+            f.call::<_, ()>(()).unwrap();
+
+            let name: StdString = f.clone().into_object().get("name").unwrap();
+            assert_eq!(name, "test");
+
+            let get_name: Function = ctx.eval("a => a.name").unwrap();
+            let name: StdString = get_name.call(f.clone()).unwrap();
+            assert_eq!(name, "test");
         })
     }
 
@@ -275,10 +282,18 @@ mod test {
                 Ok(())
             })
             .unwrap();
-            let eval: Function = ctx.eval("(a) => { a()}").unwrap();
+
+            let eval: Function = ctx.eval("a => { a() }").unwrap();
             eval.call::<_, ()>(f.clone()).unwrap();
             f.call::<_, ()>(()).unwrap();
-            assert!(*called.lock().unwrap())
+            assert!(*called.lock().unwrap());
+
+            let name: StdString = f.clone().into_object().get("name").unwrap();
+            assert_eq!(name, "test");
+
+            let get_name: Function = ctx.eval("a => a.name").unwrap();
+            let name: StdString = get_name.call(f.clone()).unwrap();
+            assert_eq!(name, "test");
         })
     }
 
@@ -293,10 +308,18 @@ mod test {
                 return Ok(v);
             })
             .unwrap();
-            let eval: Function = ctx.eval("(a) => { return a()}").unwrap();
+
+            let eval: Function = ctx.eval("a => a()").unwrap();
             assert_eq!(eval.call::<_, i32>(f.clone()).unwrap(), 1);
             assert_eq!(eval.call::<_, i32>(f.clone()).unwrap(), 2);
             assert_eq!(eval.call::<_, i32>(f.clone()).unwrap(), 3);
+
+            let name: StdString = f.clone().into_object().get("name").unwrap();
+            assert_eq!(name, "test");
+
+            let get_name: Function = ctx.eval("a => a.name").unwrap();
+            let name: StdString = get_name.call(f.clone()).unwrap();
+            assert_eq!(name, "test");
         })
     }
 
