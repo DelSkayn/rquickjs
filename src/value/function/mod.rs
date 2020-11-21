@@ -424,4 +424,43 @@ mod test {
             let _err = ctx.eval::<u32, _>("new_id()").unwrap_err();
         })
     }
+
+    #[test]
+    fn callback2_with_ctx_and_this() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let globals = ctx.globals();
+            let mut id_alloc = 0;
+            globals
+                .set(
+                    "new_id",
+                    Function::new_mut2(
+                        ctx,
+                        "id",
+                        move |ctx: Ctx<'_>, _this: This<()>| -> Result<_> {
+                            let initial: Option<u32> = ctx.globals().get("initial_id")?;
+                            if let Some(initial) = initial {
+                                id_alloc += 1;
+                                Ok(id_alloc + initial)
+                            } else {
+                                Err(Error::Unknown)
+                            }
+                        },
+                    )
+                    .unwrap(),
+                )
+                .unwrap();
+
+            //let _err = ctx.eval::<u32, _>("new_id()").unwrap_err();
+            globals.set("initial_id", 10).unwrap();
+
+            let id: u32 = ctx.eval("new_id()").unwrap();
+            assert_eq!(id, 11);
+            let id: u32 = ctx.eval("new_id()").unwrap();
+            assert_eq!(id, 12);
+            let id: u32 = ctx.eval("new_id()").unwrap();
+            assert_eq!(id, 13);
+        })
+    }
 }
