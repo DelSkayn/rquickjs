@@ -183,27 +183,39 @@ impl<'js> DerefMut for ArgsValueJs<'js> {
 
 /// Rest values
 #[derive(Clone, Default)]
-pub struct RestValues<T>(Vec<T>);
+pub struct RestArgs<T>(pub Vec<T>);
 
-impl<T> RestValues<T> {
+impl<T> RestArgs<T> {
     pub fn new() -> Self {
         Self(Vec::new())
     }
 }
 
-impl<T> From<Vec<T>> for RestValues<T> {
+impl<T> From<Vec<T>> for RestArgs<T> {
     fn from(vec: Vec<T>) -> Self {
         Self(vec)
     }
 }
 
-impl<T> Into<Vec<T>> for RestValues<T> {
+impl<T> Into<Vec<T>> for RestArgs<T> {
     fn into(self) -> Vec<T> {
         self.0
     }
 }
 
-impl<T> Deref for RestValues<T> {
+impl<T> AsRef<Vec<T>> for RestArgs<T> {
+    fn as_ref(&self) -> &Vec<T> {
+        &self.0
+    }
+}
+
+impl<T> AsMut<Vec<T>> for RestArgs<T> {
+    fn as_mut(&mut self) -> &mut Vec<T> {
+        &mut self.0
+    }
+}
+
+impl<T> Deref for RestArgs<T> {
     type Target = Vec<T>;
 
     fn deref(&self) -> &Self::Target {
@@ -211,7 +223,7 @@ impl<T> Deref for RestValues<T> {
     }
 }
 
-impl<T> DerefMut for RestValues<T> {
+impl<T> DerefMut for RestArgs<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
