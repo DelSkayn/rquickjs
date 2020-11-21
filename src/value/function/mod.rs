@@ -2,7 +2,7 @@ use crate::{
     qjs, value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoAtom, IntoJs, IntoJsArgs, Object,
     Result, Runtime, SendWhenParallel, String, Value,
 };
-use std::{ffi::CString, mem, os::raw::c_int};
+use std::{cell::RefCell, ffi::CString, mem, os::raw::c_int};
 
 mod ffi;
 use ffi::{FuncOpaque, FuncStatic};
@@ -123,7 +123,14 @@ impl<'js> Function<'js> {
         R: IntoJs<'js>,
         F: Fn(Ctx<'js>, T, A) -> Result<R> + SendWhenParallel + 'static,
     {
-        let opaque = FuncOpaque::wrap(func);
+        let opaque = FuncOpaque::new(move |ctx, this, args| {
+            let this = T::from_js(ctx, this)?;
+            let args = A::from_js_args(ctx, args)?;
+
+            let res = func(ctx, this, args)?;
+            res.into_js(ctx)
+        });
+
         Self::new_raw(ctx, name, opaque)
     }
 
@@ -135,7 +142,20 @@ impl<'js> Function<'js> {
         R: IntoJs<'js>,
         F: FnMut(Ctx<'js>, T, A) -> Result<R> + SendWhenParallel + 'static,
     {
-        let opaque = FuncOpaque::wrap_mut(func);
+        let func = RefCell::new(func);
+
+        let opaque = FuncOpaque::new(move |ctx, this, args| {
+            let this = T::from_js(ctx, this)?;
+            let args = A::from_js_args(ctx, args)?;
+
+            let mut func = func.try_borrow_mut()
+                .expect("Mutable function callback is already in use! Could it have been called recursively?");
+
+            let res = func(ctx, this, args)?;
+
+            res.into_js(ctx)
+        });
+
         Self::new_raw(ctx, name, opaque)
     }
 
