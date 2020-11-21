@@ -3,48 +3,17 @@ use crate::{
     context::Ctx, qjs, runtime::Opaque, value::handle_panic, ArgsValue, FromJs, FromJsArgs, IntoJs,
     Result, Value,
 };
-use std::{cell::RefCell, ffi::CString, marker::PhantomData, panic, panic::AssertUnwindSafe, ptr};
+use std::{ffi::CString, marker::PhantomData, panic, panic::AssertUnwindSafe, ptr};
 
 #[repr(transparent)]
 pub struct FuncOpaque<'js>(Box<dyn Fn(Ctx<'js>, Value<'js>, ArgsValue<'js>) -> Result<Value<'js>>>);
 
 impl<'js> FuncOpaque<'js> {
-    pub fn wrap<A, T, R, F>(func: F) -> Self
+    pub fn new<F>(func: F) -> Self
     where
-        A: FromJsArgs<'js>,
-        T: FromJs<'js>,
-        R: IntoJs<'js>,
-        F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
+        F: Fn(Ctx<'js>, Value<'js>, ArgsValue<'js>) -> Result<Value<'js>> + 'static,
     {
-        Self(Box::new(move |ctx, this, args| {
-            let this = T::from_js(ctx, this)?;
-            let args = A::from_js_args(ctx, args)?;
-
-            let res = func(ctx, this, args)?;
-            res.into_js(ctx)
-        }))
-    }
-
-    pub fn wrap_mut<A, T, R, F>(func: F) -> Self
-    where
-        A: FromJsArgs<'js>,
-        T: FromJs<'js>,
-        R: IntoJs<'js>,
-        F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
-    {
-        let func = RefCell::new(func);
-
-        Self(Box::new(move |ctx, this, args| {
-            let this = T::from_js(ctx, this)?;
-            let args = A::from_js_args(ctx, args)?;
-
-            let mut func = func.try_borrow_mut()
-                    .expect("Mutable function callback is already in use! Could it have been called recursively?");
-
-            let res = func(ctx, this, args)?;
-
-            res.into_js(ctx)
-        }))
+        Self(Box::new(func))
     }
 
     unsafe fn call(
