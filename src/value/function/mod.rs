@@ -1,6 +1,6 @@
 use crate::{
     qjs, value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoAtom, IntoJs, IntoJsArgs, Object,
-    Result, Runtime, String, Value,
+    Result, Runtime, SendWhenParallel, String, Value,
 };
 use std::{ffi::CString, mem, os::raw::c_int};
 
@@ -115,53 +115,25 @@ impl<'js> Function<'js> {
         }
     }
 
-    #[cfg(not(feature = "parallel"))]
     pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: AsRef<str>,
         A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
-        F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
+        F: Fn(Ctx<'js>, T, A) -> Result<R> + SendWhenParallel + 'static,
     {
         let opaque = FuncOpaque::wrap(func);
         Self::new_raw(ctx, name, opaque)
     }
 
-    #[cfg(feature = "parallel")]
-    pub fn new<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
-    where
-        N: AsRef<str>,
-        A: FromJsArgs<'js>,
-        T: FromJs<'js>,
-        R: IntoJs<'js>,
-        F: Fn(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
-    {
-        let opaque = FuncOpaque::wrap(func);
-        Self::new_raw(ctx, name, opaque)
-    }
-
-    #[cfg(not(feature = "parallel"))]
     pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
     where
         N: AsRef<str>,
         A: FromJsArgs<'js>,
         T: FromJs<'js>,
         R: IntoJs<'js>,
-        F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
-    {
-        let opaque = FuncOpaque::wrap_mut(func);
-        Self::new_raw(ctx, name, opaque)
-    }
-
-    #[cfg(feature = "parallel")]
-    pub fn new_mut<F, A, T, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
-    where
-        N: AsRef<str>,
-        A: FromJsArgs<'js>,
-        T: FromJs<'js>,
-        R: IntoJs<'js>,
-        F: FnMut(Ctx<'js>, T, A) -> Result<R> + Send + 'static,
+        F: FnMut(Ctx<'js>, T, A) -> Result<R> + SendWhenParallel + 'static,
     {
         let opaque = FuncOpaque::wrap_mut(func);
         Self::new_raw(ctx, name, opaque)
