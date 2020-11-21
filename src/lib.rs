@@ -48,6 +48,7 @@ pub use context::{Context, ContextBuilder, Ctx, MultiWith};
 pub use runtime::Runtime;
 mod markers;
 mod value;
+pub use markers::SendWhenParallel;
 use std::result::Result as StdResult;
 use std::string::String as StdString;
 pub use value::*;
