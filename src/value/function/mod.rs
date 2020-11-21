@@ -65,6 +65,63 @@ macro_rules! static_fn {
     };
 }
 
+/// The trait to convert Rust function to JS one
+pub trait IntoFunction<'js, P> {
+    /// Convert Rust function to JS
+    fn into_function<N: AsRef<str>>(self, ctx: Ctx<'js>, name: N) -> Result<Function<'js>>;
+}
+
+impl<'js, F> IntoFunction<'js, ()> for F
+where
+    F: StaticFn<'js>,
+{
+    fn into_function<N: AsRef<str>>(self, ctx: Ctx<'js>, name: N) -> Result<Function<'js>> {
+        Function::new_static::<F, _>(ctx, name)
+    }
+}
+
+impl<'js, F, A, T, R> IntoFunction<'js, ((), A, T, R)> for F
+where
+    A: FromJsArgs<'js>,
+    T: FromJs<'js>,
+    R: IntoJs<'js>,
+    F: Fn(Ctx<'js>, T, A) -> Result<R> + SendWhenParallel + 'static,
+{
+    fn into_function<N: AsRef<str>>(self, ctx: Ctx<'js>, name: N) -> Result<Function<'js>> {
+        Function::new(ctx, name, self)
+    }
+}
+
+impl<'js, F, A, T, R> IntoFunction<'js, ((), A, T, R, ())> for F
+where
+    A: FromJsArgs<'js>,
+    T: FromJs<'js>,
+    R: IntoJs<'js>,
+    F: FnMut(Ctx<'js>, T, A) -> Result<R> + SendWhenParallel + 'static,
+{
+    fn into_function<N: AsRef<str>>(self, ctx: Ctx<'js>, name: N) -> Result<Function<'js>> {
+        Function::new_mut(ctx, name, self)
+    }
+}
+
+impl<'js, F, A, R> IntoFunction<'js, (A, R)> for F
+where
+    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_function<N: AsRef<str>>(self, ctx: Ctx<'js>, name: N) -> Result<Function<'js>> {
+        Function::new2(ctx, name, self)
+    }
+}
+
+impl<'js, F, A, R> IntoFunction<'js, (A, R, ())> for F
+where
+    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_function<N: AsRef<str>>(self, ctx: Ctx<'js>, name: N) -> Result<Function<'js>> {
+        Function::new_mut2(ctx, name, self)
+    }
+}
+
 /// Rust representation of a javascript function.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function<'js>(pub(crate) JsObjectRef<'js>);
@@ -277,7 +334,8 @@ mod test {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
-            let f = Function::new_static::<Test, _>(ctx, "test").unwrap();
+            //let f = Function::new_static::<Test, _>(ctx, "test").unwrap();
+            let f = Test.into_function(ctx, "test").unwrap();
             let eval: Function = ctx.eval("a => { a() }").unwrap();
             eval.call::<_, ()>(f.clone()).unwrap();
             f.call::<_, ()>(()).unwrap();
@@ -435,19 +493,16 @@ mod test {
             globals
                 .set(
                     "new_id",
-                    Function::new_mut2(
-                        ctx,
-                        "id",
-                        move |ctx: Ctx<'_>, _this: This<()>| -> Result<_> {
-                            let initial: Option<u32> = ctx.globals().get("initial_id")?;
-                            if let Some(initial) = initial {
-                                id_alloc += 1;
-                                Ok(id_alloc + initial)
-                            } else {
-                                Err(Error::Unknown)
-                            }
-                        },
-                    )
+                    move |ctx: Ctx<'_>, _this: This<()>| -> Result<_> {
+                        let initial: Option<u32> = ctx.globals().get("initial_id")?;
+                        if let Some(initial) = initial {
+                            id_alloc += 1;
+                            Ok(id_alloc + initial)
+                        } else {
+                            Err(Error::Unknown)
+                        }
+                    }
+                    .into_function(ctx, "id")
                     .unwrap(),
                 )
                 .unwrap();
