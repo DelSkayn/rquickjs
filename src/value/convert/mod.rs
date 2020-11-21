@@ -1,4 +1,4 @@
-use crate::{context::Ctx, ArgsValue, ArgsValueJs, Atom, RestValues, Result, Value};
+use crate::{context::Ctx, ArgsValue, ArgsValueJs, Atom, RestArgs, Result, Value};
 mod atom;
 mod from;
 mod into;

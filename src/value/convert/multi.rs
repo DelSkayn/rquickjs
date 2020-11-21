@@ -1,4 +1,4 @@
-use super::{ArgsValue, ArgsValueJs, FromJs, FromJsArgs, IntoJs, IntoJsArgs, RestValues, Value};
+use super::{ArgsValue, ArgsValueJs, FromJs, FromJsArgs, IntoJs, IntoJsArgs, RestArgs, Value};
 use crate::{Ctx, Result};
 use std::iter::{empty, once};
 
@@ -30,7 +30,7 @@ impl<'js> FromJsArgs<'js> for () {
     const LEN: i32 = 0;
 }
 
-impl<'js, X> IntoJsArgs<'js> for RestValues<X>
+impl<'js, X> IntoJsArgs<'js> for RestArgs<X>
 where
     X: IntoJs<'js>,
 {
@@ -41,7 +41,7 @@ where
     }
 }
 
-impl<'js, X> FromJsArgs<'js> for RestValues<X>
+impl<'js, X> FromJsArgs<'js> for RestArgs<X>
 where
     X: FromJs<'js>,
 {
@@ -49,8 +49,8 @@ where
         Ok(value
             .iter()
             .map(|value| X::from_js(ctx, value))
-            .collect::<Result<Vec<_>>>()?
-            .into())
+            .collect::<Result<_>>()
+            .map(Self)?)
     }
 
     const LEN: i32 = 0;
@@ -72,7 +72,7 @@ macro_rules! impl_from_to_js_args {
                 }
             }
 
-            impl<'js, $($t,)* X> IntoJsArgs<'js> for ($($t,)* RestValues<X>)
+            impl<'js, $($t,)* X> IntoJsArgs<'js> for ($($t,)* RestArgs<X>)
             where
                 $($t: IntoJs<'js>,)*
                 X: IntoJs<'js>,
@@ -104,10 +104,10 @@ macro_rules! impl_from_to_js_args {
                     ))
                 }
 
-                const LEN: i32 = impl_from_to_js_args!(@count $($t),*);
+                const LEN: i32 = 0 $(+ impl_from_to_js_args!(@one $t))*;
             }
 
-            impl<'js, $($t,)* X> FromJsArgs<'js> for ($($t,)* RestValues<X>)
+            impl<'js, $($t,)* X> FromJsArgs<'js> for ($($t,)* RestArgs<X>)
             where
                 $($t: FromJs<'js>,)*
                 X: FromJs<'js>,
@@ -125,16 +125,16 @@ macro_rules! impl_from_to_js_args {
                     ))
                 }
 
-                const LEN: i32 = impl_from_to_js_args!(@count $($t),*);
+                const LEN: i32 = 0 $(+ impl_from_to_js_args!(@one $t))*;
             }
         )*
     };
 
-    (@count $($t:ident),*) => {
+    (@count $($t:tt),*) => {
         0 $(+ impl_from_to_js_args!(@1 $t))*
     };
 
-    (@1 $($t:tt)*) => { 1 };
+    (@one $($t:tt)*) => { 1 };
 }
 
 impl_from_to_js_args! {
@@ -179,7 +179,7 @@ mod test {
                 "#,
                 )
                 .unwrap();
-            func.call(RestValues::from(vec![1, 2, 3])).unwrap()
+            func.call(RestArgs::from(vec![1, 2, 3])).unwrap()
         });
         assert_eq!(res.len(), 4);
         assert_eq!(res[0], 3);
@@ -200,7 +200,7 @@ mod test {
                 "#,
                 )
                 .unwrap();
-            func.call((-2, -1, RestValues::from(vec![1, 2]))).unwrap()
+            func.call((-2, -1, RestArgs::from(vec![1, 2]))).unwrap()
         });
         assert_eq!(res.len(), 5);
         assert_eq!(res[0], -2);
@@ -218,7 +218,7 @@ mod test {
             let func = Function::new(
                 ctx,
                 "test_fn",
-                |_ctx, _this: Value, args: RestValues<i8>| -> Result<_> {
+                |_ctx, _this: Value, args: RestArgs<i8>| -> Result<_> {
                     use std::iter::once;
                     Ok(once(args.len() as i8)
                         .chain(args.iter().cloned())
@@ -249,7 +249,7 @@ mod test {
             let func = Function::new(
                 ctx,
                 "test_fn",
-                |_ctx, _this: Value, (arg1, arg2, args): (i8, i8, RestValues<i8>)| -> Result<_> {
+                |_ctx, _this: Value, (arg1, arg2, args): (i8, i8, RestArgs<i8>)| -> Result<_> {
                     use std::iter::once;
                     Ok(once(arg1)
                         .chain(once(arg2))
