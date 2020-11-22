@@ -160,7 +160,7 @@ fn schedule_resolution<'js, V: IntoJs<'js>>(ctx: Ctx<'js>, func: Value<'js>, val
 
 unsafe extern "C" fn resolution_job(
     ctx: *mut qjs::JSContext,
-    argc: std::os::raw::c_int,
+    argc: qjs::c_int,
     argv: *mut qjs::JSValue,
 ) -> qjs::JSValue {
     let this = qjs::JS_GetGlobalObject(ctx);

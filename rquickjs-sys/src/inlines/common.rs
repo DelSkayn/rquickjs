@@ -1,4 +1,4 @@
-pub use ::std::os::raw::{c_char, c_uint, c_void};
+pub use ::std::os::raw::{c_char, c_int, c_uint, c_void};
 
 #[inline]
 pub unsafe fn JS_VALUE_HAS_REF_COUNT(v: JSValue) -> bool {
