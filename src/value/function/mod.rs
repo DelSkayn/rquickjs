@@ -2,7 +2,7 @@ use crate::{
     qjs, value::rf::JsObjectRef, Ctx, FromJs, FromJsArgs, IntoAtom, IntoJs, IntoJsArgs, Object,
     Result, Runtime, SendWhenParallel, String, Value,
 };
-use std::{cell::RefCell, ffi::CString, mem, os::raw::c_int};
+use std::{cell::RefCell, ffi::CString, mem};
 
 mod ffi;
 use ffi::{FuncOpaque, FuncStatic};
@@ -167,7 +167,7 @@ impl<'js> Function<'js> {
                 ctx.ctx,
                 Some(FuncStatic::<F>::call),
                 name.as_ptr(),
-                F::Args::LEN as c_int,
+                F::Args::LEN as qjs::c_int,
                 qjs::JSCFunctionEnum_JS_CFUNC_generic,
                 0,
             );

@@ -20,7 +20,7 @@ impl<'js> FuncOpaque<'js> {
         &self,
         ctx: *mut qjs::JSContext,
         this: qjs::JSValue,
-        argc: std::os::raw::c_int,
+        argc: qjs::c_int,
         argv: *mut qjs::JSValue,
     ) -> Result<qjs::JSValue> {
         let ctx = Ctx::from_ptr(ctx);
@@ -64,7 +64,7 @@ where
     unsafe fn _call(
         ctx: *mut qjs::JSContext,
         this: qjs::JSValue,
-        argc: std::os::raw::c_int,
+        argc: qjs::c_int,
         argv: *mut qjs::JSValue,
     ) -> Result<qjs::JSValue> {
         let ctx = Ctx::from_ptr(ctx);
@@ -80,7 +80,7 @@ where
     pub unsafe extern "C" fn call(
         ctx: *mut qjs::JSContext,
         this: qjs::JSValue,
-        argc: std::os::raw::c_int,
+        argc: qjs::c_int,
         argv: *mut qjs::JSValue,
     ) -> qjs::JSValue {
         //TODO implement some form of poisoning to harden against broken invariants.
@@ -102,9 +102,9 @@ unsafe extern "C" fn cb_call(
     ctx: *mut qjs::JSContext,
     func: qjs::JSValue,
     this: qjs::JSValue,
-    argc: ::std::os::raw::c_int,
+    argc: qjs::c_int,
     argv: *mut qjs::JSValue,
-    _flags: ::std::os::raw::c_int,
+    _flags: qjs::c_int,
 ) -> qjs::JSValue {
     let fn_class = Ctx::from_ptr(ctx).get_opaque().func_class;
     let fn_opaque = &*(qjs::JS_GetOpaque2(ctx, func, fn_class) as *mut FuncOpaque);
