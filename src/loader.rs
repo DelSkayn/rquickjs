@@ -29,9 +29,7 @@ pub trait Loader {
     /// })
     /// # }
     /// ```
-    fn normalize<'js>(&mut self, ctx: Ctx<'js>, base: &Path, name: &Path) -> Result<PathBuf> {
-        default_normalize(ctx, base, name)
-    }
+    fn normalize<'js>(&mut self, ctx: Ctx<'js>, base: &Path, name: &Path) -> Result<PathBuf>;
 
     /// Load module by name
     ///
@@ -46,26 +44,7 @@ pub trait Loader {
     /// ctx.compile(name.as_ref(), source)
     /// # }
     /// ```
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &Path) -> Result<Module<'js>> {
-        default_load(ctx, name)
-    }
-}
-
-fn default_normalize<'js>(_ctx: Ctx<'js>, base: &Path, name: &Path) -> Result<PathBuf> {
-    Ok(if !name.starts_with(".") {
-        name.into()
-    } else {
-        base.parent()
-            .ok_or(Error::Unknown)?
-            .join(name)
-            .canonicalize()?
-    })
-}
-
-fn default_load<'js>(ctx: Ctx<'js>, path: &Path) -> Result<Module<'js>> {
-    let name = path.to_string_lossy();
-    let source: Vec<_> = read(path)?;
-    ctx.compile(name.as_ref(), source)
+    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &Path) -> Result<Module<'js>>;
 }
 
 type DynLoader = Box<dyn Loader>;
@@ -150,5 +129,29 @@ impl LoaderHolder {
         let loader = &mut *(opaque as *mut DynLoader);
 
         Self::load(loader, ctx, &name).unwrap_or_else(|_| ptr::null_mut())
+    }
+}
+
+/// The default module loader
+///
+/// This loader can be used as the nested backing loader in user-defined loaders.
+pub struct DefaultLoader;
+
+impl Loader for DefaultLoader {
+    fn normalize<'js>(&mut self, _ctx: Ctx<'js>, base: &Path, name: &Path) -> Result<PathBuf> {
+        Ok(if !name.starts_with(".") {
+            name.into()
+        } else {
+            base.parent()
+                .ok_or(Error::Unknown)?
+                .join(name)
+                .canonicalize()?
+        })
+    }
+
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &Path) -> Result<Module<'js>> {
+        let name = path.to_string_lossy();
+        let source: Vec<_> = read(path)?;
+        ctx.compile(name.as_ref(), source)
     }
 }
