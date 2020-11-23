@@ -4,7 +4,7 @@ use std::panic::{self, UnwindSafe};
 mod module;
 #[cfg(feature = "exports")]
 pub use module::ExportList;
-pub use module::Module;
+pub use module::{AfterInit, BeforeInit, Module, ModuleDef};
 
 mod string;
 pub use string::String;
