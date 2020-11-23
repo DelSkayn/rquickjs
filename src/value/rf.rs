@@ -6,7 +6,7 @@ use std::{fmt, marker::PhantomData, mem};
 /// free's objects when nessacary. TODO spelling
 pub struct JsRef<'js, Ty: JsRefType> {
     pub(crate) ctx: Ctx<'js>,
-    pub(crate) ptr: *mut libc::c_void,
+    pub(crate) ptr: *mut qjs::c_void,
     marker: PhantomData<Ty>,
 }
 

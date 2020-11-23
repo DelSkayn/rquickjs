@@ -61,6 +61,12 @@ mod promise;
 #[cfg(feature = "futures")]
 pub use promise::{Promise, PromiseJs};
 
+#[cfg(feature = "allocator")]
+mod allocator;
+
+#[cfg(feature = "allocator")]
+pub use allocator::{Allocator, RawMemPtr};
+
 quick_error! {
     /// Error type of the library.
     #[derive(Debug)]

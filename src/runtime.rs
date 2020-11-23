@@ -1,6 +1,9 @@
-use crate::{qjs, Error, RegisteryKey};
+use crate::{qjs, Error, RegisteryKey, Result};
 use fxhash::FxHashSet as HashSet;
 use std::{any::Any, ffi::CString, mem};
+
+#[cfg(feature = "allocator")]
+use crate::{allocator::AllocatorHolder, Allocator};
 
 #[cfg(all(feature = "parallel", feature = "async-std"))]
 use async_std_rs::task::{spawn, yield_now, JoinHandle};
@@ -55,6 +58,10 @@ pub(crate) struct Inner {
     pub(crate) rt: *mut qjs::JSRuntime,
     // To keep rt info alive for the entire duration of the lifetime of rt
     info: Option<CString>,
+
+    #[cfg(feature = "allocator")]
+    #[allow(dead_code)]
+    allocator: Option<AllocatorHolder>,
 }
 
 /// Quickjs runtime, entry point of the library.
@@ -68,13 +75,58 @@ impl Runtime {
     /// Create a new runtime.
     ///
     /// Will generally only fail if not enough memory was available.
-    pub fn new() -> Result<Self, Error> {
-        let rt = unsafe { qjs::JS_NewRuntime() };
+    ///
+    /// # Features
+    /// If the `rust-alloc` feature is enabled the Rust's global allocator will be used in favor of libc's one.
+    pub fn new() -> Result<Self> {
+        #[cfg(not(feature = "rust-alloc"))]
+        {
+            Self::new_raw(
+                unsafe { qjs::JS_NewRuntime() },
+                #[cfg(feature = "allocator")]
+                None,
+            )
+        }
+        #[cfg(feature = "rust-alloc")]
+        Self::new_with_alloc(crate::allocator::RustAllocator)
+    }
+
+    #[cfg(feature = "allocator")]
+    /// Create a new runtime using specified allocator
+    ///
+    /// Will generally only fail if not enough memory was available.
+    ///
+    /// # Features
+    /// This function is only available if the `allocator` feature is enabled.
+    pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
+    where
+        A: Allocator + 'static,
+    {
+        let allocator = AllocatorHolder::new(allocator);
+        let functions = AllocatorHolder::functions::<A>();
+        let opaque = allocator.opaque_ptr();
+
+        Self::new_raw(
+            unsafe { qjs::JS_NewRuntime2(&functions, opaque as _) },
+            Some(allocator),
+        )
+    }
+
+    #[inline]
+    fn new_raw(
+        rt: *mut qjs::JSRuntime,
+        #[cfg(feature = "allocator")] allocator: Option<AllocatorHolder>,
+    ) -> Result<Self> {
         if rt.is_null() {
             return Err(Error::Allocation);
         }
         let runtime = Runtime {
-            inner: Ref::new(Inner { rt, info: None }),
+            inner: Ref::new(Inner {
+                rt,
+                info: None,
+                #[cfg(feature = "allocator")]
+                allocator,
+            }),
         };
         let opaque = Opaque::new(&runtime);
         unsafe {
@@ -89,7 +141,7 @@ impl Runtime {
     }
 
     /// Set the info of the runtime
-    pub fn set_info<S: Into<Vec<u8>>>(&mut self, info: S) -> Result<(), Error> {
+    pub fn set_info<S: Into<Vec<u8>>>(&mut self, info: S) -> Result<()> {
         let mut guard = self.inner.lock();
         let string = CString::new(info)?;
         unsafe { qjs::JS_SetRuntimeInfo(guard.rt, string.as_ptr()) }
@@ -142,7 +194,7 @@ impl Runtime {
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     /// The second returned value is true when pending jobs still in queue.
-    pub fn execute_pending_job(&self) -> (Result<bool, Error>, bool) {
+    pub fn execute_pending_job(&self) -> (Result<bool>, bool) {
         let guard = self.inner.lock();
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
         let result = unsafe { qjs::JS_ExecutePendingJob(guard.rt, ctx_ptr.as_mut_ptr()) };
