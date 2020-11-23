@@ -1,6 +1,13 @@
-use crate::{qjs, Error, RegisteryKey, Result};
+use crate::{
+    context::Ctx,
+    qjs,
+    safe_ref::{Ref, WeakRef},
+    value, Error, Function, RegisteryKey, Result,
+};
 use fxhash::FxHashSet as HashSet;
 use std::{any::Any, ffi::CString, mem};
+
+pub use qjs::JSMemoryUsage as MemoryUsage;
 
 #[cfg(feature = "allocator")]
 use crate::{allocator::AllocatorHolder, Allocator};
@@ -16,12 +23,6 @@ use async_std_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
 use tokio_rs::task::{spawn, yield_now, JoinHandle};
 #[cfg(all(not(feature = "parallel"), feature = "tokio"))]
 use tokio_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
-
-use crate::{
-    context::Ctx,
-    safe_ref::{Ref, WeakRef},
-    value, Function,
-};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -203,6 +204,17 @@ impl Runtime {
         let guard = self.inner.lock();
         unsafe { qjs::JS_RunGC(guard.rt) }
         mem::drop(guard);
+    }
+
+    /// Get memory usage stats
+    pub fn memory_usage(&self) -> MemoryUsage {
+        let guard = self.inner.lock();
+        let mut stats = mem::MaybeUninit::uninit();
+        unsafe {
+            qjs::JS_ComputeMemoryUsage(guard.rt, stats.as_mut_ptr());
+        }
+        mem::drop(guard);
+        unsafe { stats.assume_init() }
     }
 
     /// Test for pending jobs
