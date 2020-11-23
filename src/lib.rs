@@ -72,7 +72,10 @@ pub use allocator::{Allocator, RawMemPtr};
 mod loader;
 
 #[cfg(feature = "loader")]
-pub use loader::{DefaultLoader, Loader};
+pub use loader::{Loader, ScriptLoader};
+
+#[cfg(feature = "dyn-load")]
+pub use loader::NativeLoader;
 
 quick_error! {
     /// Error type of the library.

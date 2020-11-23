@@ -1,5 +1,9 @@
 use crate::{qjs, Ctx, Error, Module, Result};
-use std::{ffi::CStr, ptr};
+use std::{
+    ffi::{CStr, OsStr, OsString},
+    path::Path,
+    ptr,
+};
 
 /// Module loader trait
 ///
@@ -131,100 +135,205 @@ impl LoaderHolder {
     }
 }
 
-/// The default module loader
+/// The script module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
 #[derive(Clone, Debug)]
-pub struct DefaultLoader {
-    pub extensions: Vec<(String, ModuleType)>,
+pub struct ScriptLoader {
+    extensions: Vec<OsString>,
 }
 
-/// The type of module known by default loader
-#[derive(Debug, Clone, Copy)]
-pub enum ModuleType {
-    Script,
-    #[cfg(feature = "dyn-load")]
-    Native,
-}
-
-impl DefaultLoader {
-    pub fn add_extension<X: Into<String>>(
-        &mut self,
-        extension: X,
-        module_type: ModuleType,
-    ) -> &mut Self {
-        self.extensions.push((extension.into(), module_type));
+impl ScriptLoader {
+    pub fn add_extension<X: AsRef<OsStr>>(&mut self, extension: X) -> &mut Self {
+        self.extensions.push(extension.as_ref().into());
         self
     }
 }
 
-impl Loader for DefaultLoader {
+impl Default for ScriptLoader {
+    fn default() -> Self {
+        Self {
+            extensions: vec!["js".into()],
+        }
+    }
+}
+
+impl Loader for ScriptLoader {
     fn normalize<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
-        Ok(if !name.starts_with('.') {
-            name.into()
-        } else {
-            let mut split = base.rsplitn(2, '/');
-            let path = match (split.next(), split.next()) {
-                (_, Some(path)) => path,
-                _ => "",
-            };
-            format!("{}/{}", path, name)
-        })
+        default_normalize(base, name, &self.extensions)
     }
 
     fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
-        use std::{ffi::OsStr, path::Path};
-
         let path = Path::new(name);
-        let (path, module_type) = if let Some(extension) = &path.extension() {
-            if !path.is_file() {
-                return Err(Error::Unknown);
-            }
-            let (_, module_kind) = self
-                .extensions
-                .iter()
-                .find(|(known_extension, _)| &OsStr::new(known_extension) == extension)
-                .ok_or(Error::Unknown)?;
-            (path.into(), module_kind)
-        } else {
-            self.extensions
-                .iter()
-                .filter_map(|(extension, module_kind)| {
-                    let file = path.with_extension(extension);
-                    if file.is_file() {
-                        Some((file, module_kind))
-                    } else {
-                        None
-                    }
-                })
-                .next()
-                .ok_or(Error::Unknown)?
-        };
+        check_extension(&path, &self.extensions)?;
 
-        match module_type {
-            ModuleType::Script => {
-                let source: Vec<_> = std::fs::read(path)?;
-                ctx.compile(name, source)
-            }
-            #[cfg(feature = "dyn-load")]
-            ModuleType::Native => {
-                use dlopen::raw::Library;
+        let source: Vec<_> = std::fs::read(&path)?;
+        ctx.compile(name, source)
+    }
+}
 
-                type LoadFn = unsafe extern "C" fn(
-                    *mut qjs::JSContext,
-                    *const qjs::c_char,
-                ) -> *mut qjs::JSModuleDef;
+#[cfg(feature = "dyn-load")]
+/// The native module loader
+///
+/// This loader can be used as the nested backing loader in user-defined loaders.
+///
+/// # Features
+/// This struct is only available if the `dyn-load` features is enabled.
+#[derive(Clone, Debug)]
+pub struct NativeLoader {
+    extensions: Vec<OsString>,
+}
 
-                let lib = Library::open(path)?;
-                let load_fn: LoadFn = unsafe { lib.symbol("js_init_module") }?;
+#[cfg(feature = "dyn-load")]
+impl NativeLoader {
+    pub fn add_extension<X: AsRef<OsStr>>(&mut self, extension: X) -> &mut Self {
+        self.extensions.push(extension.as_ref().into());
+        self
+    }
+}
 
-                let name = CString::new(name);
-                let module = unsafe { load_fn(ctx.ctx, name, name.as_ptr()) };
-
-                Ok(Module::from_module_def(module))
-            }
+#[cfg(feature = "dyn-load")]
+impl Default for NativeLoader {
+    fn default() -> Self {
+        Self {
+            extensions: vec![
+                #[cfg(target_family = "windows")]
+                {
+                    "dll".into()
+                },
+                #[cfg(all(target_family = "unix"))]
+                {
+                    "so".into()
+                },
+                #[cfg(target_vendor = "apple")]
+                {
+                    "dylib".into()
+                },
+            ],
         }
     }
+}
+
+#[cfg(feature = "dyn-load")]
+impl Loader for NativeLoader {
+    fn normalize<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+        default_normalize(base, name, &self.extensions)
+    }
+
+    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
+        let path = Path::new(name);
+        check_extension(&path, &self.extensions)?;
+
+        use dlopen::raw::Library;
+        use std::ffi::CString;
+
+        type LoadFn =
+            unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
+
+        let lib = Library::open(&path).map_err(|_| Error::Unknown)?;
+        let load_fn: LoadFn =
+            unsafe { lib.symbol("js_init_module") }.map_err(|_| Error::Unknown)?;
+
+        let name = CString::new(name)?;
+        let ptr = unsafe { load_fn(ctx.ctx, name.as_ptr()) };
+
+        if ptr.is_null() {
+            Err(Error::Unknown)
+        } else {
+            Ok(unsafe { Module::from_module_def(ctx, ptr) })
+        }
+    }
+}
+
+fn default_normalize(base: &str, name: &str, extensions: &[OsString]) -> Result<String> {
+    let name = if !name.starts_with('.') {
+        name.into()
+    } else {
+        let mut split = base.rsplitn(2, '/');
+        let path = match (split.next(), split.next()) {
+            (_, Some(path)) => path,
+            _ => "",
+        };
+        format!("{}/{}", path, name)
+    };
+    let path = Path::new(&name);
+    let path = if let Some(extension) = &path.extension() {
+        if !path.is_file() {
+            return Err(Error::Unknown);
+        }
+        let _ = extensions
+            .iter()
+            .find(|known_extension| known_extension == extension)
+            .ok_or(Error::Unknown)?;
+        path.into()
+    } else {
+        extensions
+            .iter()
+            .filter_map(|extension| {
+                let file = path.with_extension(extension);
+                if file.is_file() {
+                    Some(file)
+                } else {
+                    None
+                }
+            })
+            .next()
+            .ok_or(Error::Unknown)?
+    };
+    Ok(path.to_str().ok_or(Error::Unknown)?.into())
+}
+
+fn check_extension(path: &Path, extensions: &[OsString]) -> Result<()> {
+    let extension = path.extension().ok_or(Error::Unknown)?;
+    let _ = extensions
+        .iter()
+        .find(|known_extension| known_extension == &extension)
+        .ok_or(Error::Unknown)?;
+    Ok(())
+}
+
+macro_rules! loader_impls {
+    ($($($t:ident)*,)*) => {
+        $(
+            impl<$($t,)*> Loader for ($($t,)*)
+            where
+                $($t: Loader,)*
+            {
+                #[allow(non_snake_case)]
+                fn normalize<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+                    let ($($t,)*) = self;
+                    $(
+                        if let Ok(name) = $t.normalize(ctx, base, name) {
+                            return Ok(name);
+                        }
+                    )*
+                    Err(Error::Unknown)
+                }
+
+                #[allow(non_snake_case)]
+                fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
+                    let ($($t,)*) = self;
+                    $(
+                        if let Ok(name) = $t.load(ctx, name) {
+                            return Ok(name);
+                        }
+                    )*
+                    Err(Error::Unknown)
+                }
+            }
+        )*
+    };
+}
+
+loader_impls! {
+    A,
+    A B,
+    A B C,
+    A B C D,
+    A B C D E,
+    A B C D E F,
+    A B C D E F G,
+    A B C D E F G H,
 }
 
 #[cfg(test)]
