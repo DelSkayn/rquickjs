@@ -166,7 +166,7 @@ impl Runtime {
     }
 
     /// Set the info of the runtime
-    pub fn set_info<S: Into<Vec<u8>>>(&mut self, info: S) -> Result<()> {
+    pub fn set_info<S: Into<Vec<u8>>>(&self, info: S) -> Result<()> {
         let mut guard = self.inner.lock();
         let string = CString::new(info)?;
         unsafe { qjs::JS_SetRuntimeInfo(guard.rt, string.as_ptr()) }
@@ -288,7 +288,7 @@ mod test {
     use super::*;
     #[test]
     fn base_runtime() {
-        let mut rt = Runtime::new().unwrap();
+        let rt = Runtime::new().unwrap();
         rt.set_info("test runtime").unwrap();
         rt.set_memory_limit(0xFFFF);
         rt.set_gc_threshold(0xFF);
