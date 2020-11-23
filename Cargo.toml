@@ -39,15 +39,38 @@ members = [
 
 [features]
 default = ["exports"]
+
+# Use bindgen to generate bindings at compile-type
+# otherwise bundled bindings will be used
 bindgen = ["rquickjs-sys/bindgen"]
+
+# Enable support of parallel execution
 parallel = ["rquickjs-sys/parallel"]
+
+# Enable support of reading module exports
 exports = ["rquickjs-sys/exports"]
+
+# Enable user-defined module loader support
+# Useful for embedded native modules
 loader = []
+
+# Enable user-defined allocator support
 allocator = []
+
+# Use Rust global allocator by default
+# otherwise libc allocator will be used
 rust-alloc = ["allocator"]
+
+# Enable interop between Rust futures and JS Promises
 futures = []
+
+# Enable Tokio async runtime support
 tokio = ["futures", "tokio-rs"]
+
+# Enable Async-std runtime support
 async-std = ["futures", "async-std-rs"]
+
+# Enable compilation tests
 compile-tests = []
 
 [dev-dependencies]
