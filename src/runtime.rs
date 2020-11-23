@@ -6,7 +6,7 @@ use std::{any::Any, ffi::CString, mem};
 use crate::{allocator::AllocatorHolder, Allocator};
 
 #[cfg(feature = "loader")]
-use crate::{loader::LoaderHolder, Loader};
+use crate::{loader::LoaderHolder, Loader, Resolver};
 
 #[cfg(all(feature = "parallel", feature = "async-std"))]
 use async_std_rs::task::{spawn, yield_now, JoinHandle};
@@ -154,12 +154,13 @@ impl Runtime {
     ///
     /// # Features
     /// This function is only availble if the `loader` feature is enabled.
-    pub fn set_loader<L>(&self, loader: L)
+    pub fn set_loader<R, L>(&self, resolver: R, loader: L)
     where
+        R: Resolver + 'static,
         L: Loader + 'static,
     {
         let mut guard = self.inner.lock();
-        let loader = LoaderHolder::new(loader);
+        let loader = LoaderHolder::new(resolver, loader);
         loader.set_to_runtime(guard.rt);
         guard.loader = Some(loader);
     }

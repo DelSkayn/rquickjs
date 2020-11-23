@@ -72,7 +72,7 @@ pub use allocator::{Allocator, RawMemPtr};
 mod loader;
 
 #[cfg(feature = "loader")]
-pub use loader::{Loader, ScriptLoader};
+pub use loader::{FileResolver, Loader, Resolver, ScriptLoader};
 
 #[cfg(feature = "dyn-load")]
 pub use loader::NativeLoader;
