@@ -155,3 +155,53 @@ impl Loader for DefaultLoader {
         ctx.compile(name.as_ref(), source)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::*;
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn user_loader() {
+        struct TestLoader;
+        impl Loader for TestLoader {
+            fn normalize<'js>(
+                &mut self,
+                _ctx: Ctx<'js>,
+                base: &Path,
+                name: &Path,
+            ) -> Result<PathBuf> {
+                assert_eq!(base, Path::new("test_loader"));
+                assert_eq!(name, Path::new("test"));
+                Ok(name.into())
+            }
+
+            fn load<'js>(&mut self, ctx: Ctx<'js>, path: &Path) -> Result<Module<'js>> {
+                assert_eq!(path, Path::new("test"));
+                ctx.compile(
+                    "test",
+                    r#"
+                      export const n = 123;
+                      export const s = "abc";
+                    "#,
+                )
+            }
+        }
+
+        let rt = Runtime::new().unwrap();
+        rt.set_loader(TestLoader);
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            eprintln!("test");
+            let _module = ctx
+                .compile(
+                    "test_loader",
+                    r#"
+                      import { n, s } from "test";
+                      export default [n, s];
+                    "#,
+                )
+                .unwrap();
+        })
+    }
+}
