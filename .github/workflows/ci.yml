@@ -154,6 +154,16 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
+            features: rust-alloc
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: loader
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
             features: futures
           - task: features
             os: ubuntu-latest
@@ -170,17 +180,17 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,async-std
+            features: default,parallel,allocator,loader,async-std
           - task: channels
             os: ubuntu-latest
             rust: beta
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,async-std
+            features: default,parallel,allocator,loader,async-std
           - task: channels
             os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,async-std
+            features: default,parallel,allocator,loader,async-std
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
