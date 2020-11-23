@@ -5,6 +5,9 @@ use std::{any::Any, ffi::CString, mem};
 #[cfg(feature = "allocator")]
 use crate::{allocator::AllocatorHolder, Allocator};
 
+#[cfg(feature = "loader")]
+use crate::{loader::LoaderHolder, Loader};
+
 #[cfg(all(feature = "parallel", feature = "async-std"))]
 use async_std_rs::task::{spawn, yield_now, JoinHandle};
 #[cfg(all(not(feature = "parallel"), feature = "async-std"))]
@@ -62,6 +65,10 @@ pub(crate) struct Inner {
     #[cfg(feature = "allocator")]
     #[allow(dead_code)]
     allocator: Option<AllocatorHolder>,
+
+    #[cfg(feature = "loader")]
+    #[allow(dead_code)]
+    loader: Option<LoaderHolder>,
 }
 
 /// Quickjs runtime, entry point of the library.
@@ -126,6 +133,8 @@ impl Runtime {
                 info: None,
                 #[cfg(feature = "allocator")]
                 allocator,
+                #[cfg(feature = "loader")]
+                loader: None,
             }),
         };
         let opaque = Opaque::new(&runtime);
@@ -138,6 +147,21 @@ impl Runtime {
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
         WeakRuntime(self.inner.weak())
+    }
+
+    #[cfg(feature = "loader")]
+    /// Set the module loader
+    ///
+    /// # Features
+    /// This function is only availble if the `loader` feature is enabled.
+    pub fn set_loader<L>(&self, loader: L)
+    where
+        L: Loader + 'static,
+    {
+        let mut guard = self.inner.lock();
+        let loader = LoaderHolder::new(loader);
+        loader.set_to_runtime(guard.rt);
+        guard.loader = Some(loader);
     }
 
     /// Set the info of the runtime

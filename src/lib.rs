@@ -53,7 +53,8 @@ use std::result::Result as StdResult;
 use std::string::String as StdString;
 pub use value::*;
 
-pub(crate) use rquickjs_sys as qjs;
+#[doc(hidden)]
+pub use rquickjs_sys as qjs;
 
 #[cfg(feature = "futures")]
 mod promise;
@@ -66,6 +67,12 @@ mod allocator;
 
 #[cfg(feature = "allocator")]
 pub use allocator::{Allocator, RawMemPtr};
+
+#[cfg(feature = "loader")]
+mod loader;
+
+#[cfg(feature = "loader")]
+pub use loader::Loader;
 
 quick_error! {
     /// Error type of the library.
