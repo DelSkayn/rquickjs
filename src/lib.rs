@@ -72,7 +72,7 @@ pub use allocator::{Allocator, RawMemPtr};
 mod loader;
 
 #[cfg(feature = "loader")]
-pub use loader::Loader;
+pub use loader::{DefaultLoader, Loader};
 
 quick_error! {
     /// Error type of the library.

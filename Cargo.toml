@@ -32,6 +32,11 @@ optional = true
 default-features = false
 features = ["default", "unstable"]
 
+[dependencies.dlopen]
+package = "dlopen"
+version = "^0.1"
+optional = true
+
 [workspace]
 members = [
     "./rquickjs-sys"
@@ -51,8 +56,10 @@ parallel = ["rquickjs-sys/parallel"]
 exports = ["rquickjs-sys/exports"]
 
 # Enable user-defined module loader support
-# Useful for embedded native modules
 loader = []
+
+# Enable native module loading support
+dyn-load = ["loader", "dlopen"]
 
 # Enable user-defined allocator support
 allocator = []
