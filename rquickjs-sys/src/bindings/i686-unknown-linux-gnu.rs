@@ -2579,6 +2579,13 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn JS_GetModuleExport(
+        ctx: *mut JSContext,
+        m: *mut JSModuleDef,
+        export_name: *const ::std::os::raw::c_char,
+    ) -> JSValue;
+}
+extern "C" {
     pub fn JS_GetModuleExportEntriesCount(m: *mut JSModuleDef) -> ::std::os::raw::c_int;
 }
 extern "C" {
