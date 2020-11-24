@@ -6,14 +6,14 @@ use std::{
 };
 
 /// Module definition trait
-pub trait ModuleDef<'js> {
+pub trait ModuleDef {
     /// The exports should be added here
-    fn before_init(_ctx: Ctx<'js>, _module: &Module<'js, BeforeInit>) -> Result<()> {
+    fn before_init<'js>(_ctx: Ctx<'js>, _module: &Module<'js, BeforeInit>) -> Result<()> {
         Ok(())
     }
 
     /// The exports should be set here
-    fn after_init(_ctx: Ctx<'js>, _module: &Module<'js, AfterInit>) -> Result<()> {
+    fn after_init<'js>(_ctx: Ctx<'js>, _module: &Module<'js, AfterInit>) -> Result<()> {
         Ok(())
     }
 }
@@ -103,7 +103,7 @@ impl<'js> Module<'js> {
 /// use rquickjs::{ModuleDef, module_init};
 ///
 /// struct MyModule;
-/// impl<'js> ModuleDef<'js> for MyModule {}
+/// impl ModuleDef for MyModule {}
 ///
 /// module_init!(MyModule);
 /// // or
@@ -133,7 +133,7 @@ impl<'js> Module<'js> {
         name: *const qjs::c_char,
     ) -> *mut qjs::JSModuleDef
     where
-        D: ModuleDef<'js>,
+        D: ModuleDef,
     {
         let ctx = Ctx::from_ptr(ctx);
         let name = if let Ok(name) = CStr::from_ptr(name).to_str() {
@@ -169,7 +169,7 @@ impl<'js> Module<'js, BeforeInit> {
     /// Create native JS module
     pub fn new<D, N>(ctx: Ctx<'js>, name: N) -> Result<Self>
     where
-        D: ModuleDef<'js>,
+        D: ModuleDef,
         N: AsRef<str>,
     {
         let name = CString::new(name.as_ref())?;
@@ -187,7 +187,7 @@ impl<'js> Module<'js, BeforeInit> {
         ptr: *mut qjs::JSModuleDef,
     ) -> qjs::c_int
     where
-        D: ModuleDef<'js>,
+        D: ModuleDef,
     {
         let ctx = Ctx::from_ptr(ctx);
         let module = Module::<AfterInit>::from_module_def(ctx, ptr);
