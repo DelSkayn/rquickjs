@@ -239,11 +239,10 @@ impl<'js> Ctx<'js> {
 }
 
 mod test {
-
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
-        use crate::{Context, FromJs, Function, Runtime};
+        use crate::{Context, Function, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::build(&runtime)
@@ -255,12 +254,8 @@ mod test {
             let module = ctx
                 .compile("test", "export default async () => 1;")
                 .unwrap();
-            for (key, value) in module.export_list() {
-                if key.to_string().unwrap() == "default" {
-                    let func = Function::from_js(ctx, value).unwrap();
-                    func.call::<(), ()>(()).unwrap();
-                }
-            }
+            let func: Function = module.get("default").unwrap();
+            func.call::<(), ()>(()).unwrap();
         });
     }
 }

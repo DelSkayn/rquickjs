@@ -2,9 +2,9 @@ use crate::{context::Ctx, qjs, Error, Result};
 use std::panic::{self, UnwindSafe};
 
 mod module;
-#[cfg(feature = "exports")]
-pub use module::ExportList;
 pub use module::{AfterInit, BeforeInit, Module, ModuleDef};
+#[cfg(feature = "exports")]
+pub use module::{ExportEntriesIter, ExportNamesIter};
 
 mod string;
 pub use string::String;
