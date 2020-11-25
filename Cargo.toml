@@ -50,6 +50,9 @@ members = [
 [features]
 default = ["exports"]
 
+# Features which is used for documentation
+rustdoc = ["exports", "loader", "allocator", "dyn-load", "async-std"]
+
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
 bindgen = ["rquickjs-sys/bindgen"]
@@ -87,3 +90,6 @@ compile-tests = []
 
 [dev-dependencies]
 trybuild = "1.0.23"
+
+[package.metadata.docs.rs]
+features = ["rustdoc"]
