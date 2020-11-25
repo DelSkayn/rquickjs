@@ -106,18 +106,15 @@ unsafe extern "C" fn cb_call(
     argv: *mut qjs::JSValue,
     _flags: qjs::c_int,
 ) -> qjs::JSValue {
-    let fn_class = Ctx::from_ptr(ctx).get_opaque().func_class;
-    let fn_opaque = &*(qjs::JS_GetOpaque2(ctx, func, fn_class) as *mut FuncOpaque);
+    let ctx = Ctx::from_ptr(ctx);
+    let fn_class = ctx.get_opaque().func_class;
+    let fn_opaque = &*(qjs::JS_GetOpaque2(ctx.ctx, func, fn_class) as *mut FuncOpaque);
     handle_panic(
-        ctx,
+        ctx.ctx,
         AssertUnwindSafe(|| {
             fn_opaque
-                .call(ctx, this, argc, argv)
-                .unwrap_or_else(|error| {
-                    let error = error.to_string();
-                    let error_str = CString::new(error).unwrap();
-                    qjs::JS_ThrowInternalError(ctx, error_str.as_ptr())
-                })
+                .call(ctx.ctx, this, argc, argv)
+                .unwrap_or_else(|error| error.throw(ctx))
         }),
     )
 }

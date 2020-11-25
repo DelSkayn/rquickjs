@@ -101,43 +101,13 @@ pub(crate) unsafe fn handle_exception<'js>(
 
 pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
     let exception_val = qjs::JS_GetException(ctx.ctx);
+
     if let Some(x) = ctx.get_opaque().panic.take() {
         panic::resume_unwind(x);
     }
 
-    let atom_stack = Atom::from_str(ctx, "stack");
-    let atom_file_name = Atom::from_str(ctx, "fileName");
-    let atom_line_number = Atom::from_str(ctx, "lineNumber");
-    let atom_message = Atom::from_str(ctx, "message");
-    // Dont know if is this is always correct
-    // TODO test exceptions
-    let message = Value::from_js_value(
-        ctx,
-        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_message.atom),
-    )
-    .unwrap();
-    let stack = Value::from_js_value(
-        ctx,
-        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_stack.atom),
-    )
-    .unwrap();
-    let file = Value::from_js_value(
-        ctx,
-        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_file_name.atom),
-    )
-    .unwrap();
-    let line = Value::from_js_value(
-        ctx,
-        qjs::JS_GetProperty(ctx.ctx, exception_val, atom_line_number.atom),
-    )
-    .unwrap();
-    qjs::JS_FreeValue(ctx.ctx, exception_val);
-    Error::Exception {
-        message: FromJs::from_js(ctx, message).unwrap(),
-        file: FromJs::from_js(ctx, file).unwrap_or_else(|_| "unknown".to_string()),
-        line: f64::from_js(ctx, line).unwrap() as u32,
-        stack: FromJs::from_js(ctx, stack).unwrap(),
-    }
+    let exception = Value::from_js_value(ctx, exception_val).unwrap();
+    Error::from_js(ctx, exception).unwrap()
 }
 
 impl<'js> Value<'js> {
