@@ -14,19 +14,38 @@ impl<'js> IntoJs<'js> for Value<'js> {
 
 impl<'js> IntoJs<'js> for StdString {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let s = String::from_str(ctx, self.as_str())?;
-        Ok(Value::String(s))
+        self.as_str().into_js(ctx)
     }
 }
 
-impl<'js, 'a> IntoJs<'js> for &'a str {
+impl<'js> IntoJs<'js> for &StdString {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let s = String::from_str(ctx, self)?;
-        Ok(Value::String(s))
+        self.as_str().into_js(ctx)
+    }
+}
+
+impl<'js> IntoJs<'js> for &str {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::String(String::from_str(ctx, self)?))
+    }
+}
+
+impl<'js, T> IntoJs<'js> for &[T]
+where
+    for<'a> &'a T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.iter().collect_js::<Array>(ctx).map(Value::Array)
     }
 }
 
 impl<'js> IntoJs<'js> for () {
+    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::Undefined)
+    }
+}
+
+impl<'js> IntoJs<'js> for &() {
     fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
         Ok(Value::Undefined)
     }
@@ -44,10 +63,35 @@ where
     }
 }
 
+impl<'js, T> IntoJs<'js> for &Option<T>
+where
+    for<'a> &'a T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(match self {
+            Some(value) => value.into_js(ctx)?,
+            _ => Value::Undefined,
+        })
+    }
+}
+
 impl<'js, T, E> IntoJs<'js> for StdResult<T, E>
 where
     T: IntoJs<'js>,
     E: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(match self {
+            Ok(value) => value.into_js(ctx)?,
+            Err(error) => error.into_js(ctx)?,
+        })
+    }
+}
+
+impl<'js, T, E> IntoJs<'js> for &StdResult<T, E>
+where
+    for<'a> &'a T: IntoJs<'js>,
+    for<'a> &'a E: IntoJs<'js>,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Ok(match self {
@@ -82,6 +126,17 @@ macro_rules! tojs_impls {
                         .map(Value::Array)
                 }
             }
+
+            impl<'js, T> IntoJs<'js> for &$type<T>
+            where
+                for<'a> &'a T: IntoJs<'js>,
+            {
+                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    self.into_iter()
+                        .collect_js::<Array>(ctx)
+                        .map(Value::Array)
+                }
+            }
         )*
     };
 
@@ -99,6 +154,18 @@ macro_rules! tojs_impls {
                         .map(Value::Object)
                 }
             }
+
+            impl<'js, K, V> IntoJs<'js> for &$type<K, V>
+            where
+                for<'a> &'a K: IntoAtom<'js>,
+                for<'a> &'a V: IntoJs<'js>,
+            {
+                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    self.into_iter()
+                        .collect_js::<Object>(ctx)
+                        .map(Value::Object)
+                }
+            }
         )*
     };
 
@@ -108,6 +175,12 @@ macro_rules! tojs_impls {
             impl<'js> IntoJs<'js> for $type {
                 fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
                     Ok(Value::$jstype(self as _))
+                }
+            }
+
+            impl<'js> IntoJs<'js> for &$type {
+                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    (*self).into_js(ctx)
                 }
             }
         )*
@@ -127,6 +200,12 @@ macro_rules! tojs_impls {
                         }
                     })?;
                     Ok(Value::$jstype(val as _))
+                }
+            }
+
+            impl<'js> IntoJs<'js> for &$type {
+                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    (*self).into_js(ctx)
                 }
             }
         )*
