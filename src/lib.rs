@@ -119,6 +119,14 @@ quick_error! {
         IntoJs{from: &'static str, to: &'static str, message: Option<StdString>} {
             display("error converting from type '{}', to '{}': {}",from,to,message.as_ref().map(|s| s.as_str()).unwrap_or(""))
         }
+        #[cfg(feature = "loader")]
+        Resolving{base: StdString, name: StdString, message: Option<StdString>}{
+            display("error resolving module '{}' with base '{}': {}", name, base, message.as_ref().unwrap_or(&StdString::new()))
+        }
+        #[cfg(feature = "loader")]
+        Loading{name: StdString, message: Option<StdString>}{
+            display("error loading module '{}': {}", name, message.as_ref().unwrap_or(&StdString::new()))
+        }
         /// An io error
         IO(e: io::Error){
             display("IO Error: {}",e)
@@ -129,6 +137,31 @@ quick_error! {
 }
 
 impl Error {
+    #[cfg(feature = "loader")]
+    /// Create resolving error
+    pub fn resolving<B, N, M>(base: B, name: N, message: Option<M>) -> Self
+    where
+        StdString: From<B> + From<N> + From<M>,
+    {
+        Error::Resolving {
+            base: base.into(),
+            name: name.into(),
+            message: message.map(|message| message.into()),
+        }
+    }
+
+    #[cfg(feature = "loader")]
+    /// Create loading error
+    pub fn loading<N, M>(name: N, message: Option<M>) -> Self
+    where
+        StdString: From<N> + From<M>,
+    {
+        Error::Loading {
+            name: name.into(),
+            message: message.map(|message| message.into()),
+        }
+    }
+
     /// Returns whether the error is a quickjs generated exception.
     pub fn is_exception(&self) -> bool {
         matches!(*self, Error::Exception{..})
@@ -153,6 +186,11 @@ impl Error {
             InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } => {
                 let message = self.to_cstring();
                 unsafe { qjs::JS_ThrowTypeError(ctx.ctx, message.as_ptr()) }
+            }
+            #[cfg(feature = "loader")]
+            Resolving { .. } | Loading { .. } => {
+                let message = self.to_cstring();
+                unsafe { qjs::JS_ThrowReferenceError(ctx.ctx, message.as_ptr()) }
             }
             Unknown => {
                 let message = self.to_cstring();

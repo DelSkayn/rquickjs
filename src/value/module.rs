@@ -1,4 +1,4 @@
-use crate::{qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
+use crate::{qjs, value, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
@@ -157,30 +157,38 @@ impl<'js> Module<'js> {
         D: ModuleDef,
     {
         let ctx = Ctx::from_ptr(ctx);
-        let name = if let Ok(name) = CStr::from_ptr(name).to_str() {
-            name
-        } else {
-            return ptr::null_mut() as _;
-        };
-        if let Ok(module) = Module::<BeforeInit>::new::<D, _>(ctx, name) {
-            module.ptr
-        } else {
-            ptr::null_mut() as _
+        let name = CStr::from_ptr(name);
+        match Self::_init::<D>(ctx, name) {
+            Ok(module) => module.as_module_def(),
+            Err(error) => {
+                error.throw(ctx);
+                ptr::null_mut() as _
+            }
         }
+    }
+
+    fn _init<D>(ctx: Ctx<'js>, name: &CStr) -> Result<Module<'js, BeforeInit>>
+    where
+        D: ModuleDef,
+    {
+        let name = name.to_str()?;
+        Module::new::<D, _>(ctx, name)
     }
 
     /// Set exported entry by name
     ///
     /// NOTE: Exported entries should be added before module instantiating using [Module::add].
-    pub fn set<N, V>(&self, name: N, value: V) -> Result<()>
+    pub fn set<N, T>(&self, name: N, value: T) -> Result<()>
     where
         N: AsRef<str>,
-        V: IntoJs<'js>,
+        T: IntoJs<'js>,
     {
         let name = CString::new(name.as_ref())?;
         let value = value.into_js(self.ctx)?;
-        unsafe {
-            qjs::JS_SetModuleExport(self.ctx.ctx, self.ptr, name.as_ptr(), value.as_js_value());
+        let value = unsafe { qjs::JS_DupValue(value.as_js_value()) };
+        if unsafe { qjs::JS_SetModuleExport(self.ctx.ctx, self.ptr, name.as_ptr(), value) } < 0 {
+            unsafe { qjs::JS_FreeValue(self.ctx.ctx, value) };
+            return Err(unsafe { value::get_exception(self.ctx) });
         }
         Ok(())
     }
@@ -196,10 +204,12 @@ impl<'js> Module<'js, BeforeInit> {
     {
         let ctx = Ctx::from_ptr(ctx);
         let module = Module::<AfterInit>::from_module_def(ctx, ptr);
-        if let Ok(_) = D::after_init(ctx, &module) {
-            0
-        } else {
-            -1
+        match D::after_init(ctx, &module) {
+            Ok(_) => 0,
+            Err(error) => {
+                error.throw(ctx);
+                -1
+            }
         }
     }
 
