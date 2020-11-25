@@ -51,7 +51,7 @@ pub trait Loader {
     /// ctx.compile(name, source)
     /// # }
     /// ```
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>>;
+    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, BeforeInit>>;
 }
 
 struct LoaderOpaque {
@@ -248,11 +248,11 @@ impl Default for ScriptLoader {
 }
 
 impl Loader for ScriptLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js>> {
         check_extensions(&path, &self.extensions)?;
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, BeforeInit>> {
 
         let source: Vec<_> = std::fs::read(&path)?;
-        ctx.compile(path, source)
+        ctx.compile_only(path, source)
     }
 }
 
@@ -300,7 +300,7 @@ impl Default for NativeLoader {
 
 #[cfg(feature = "dyn-load")]
 impl Loader for NativeLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js>> {
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, BeforeInit>> {
         use dlopen::raw::Library;
         use std::ffi::CString;
 

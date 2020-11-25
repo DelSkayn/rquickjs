@@ -138,7 +138,7 @@ impl<'js> Value<'js> {
             }
             qjs::JS_TAG_MODULE => {
                 // Just to make sure things are properly cleaned up;
-                Module::from_js_value(ctx, v);
+                Module::<AfterInit>::from_js_value(ctx, v);
                 panic!("recieved module JSValue for Value, Value should not handle modules.")
             }
             _ => {
@@ -180,7 +180,7 @@ impl<'js> Value<'js> {
             }
             qjs::JS_TAG_MODULE => {
                 // Just to make sure things are properly cleaned up;
-                Module::from_js_value(ctx, v);
+                Module::<AfterInit>::from_js_value(ctx, v);
                 panic!("recieved module JSValue for Value, Value should not handle modules.")
             }
             _ => {

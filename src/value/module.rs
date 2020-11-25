@@ -57,13 +57,10 @@ impl<'js, S> Module<'js, S> {
         }
     }
 
-    #[allow(dead_code)]
     pub(crate) fn as_module_def(&self) -> *mut qjs::JSModuleDef {
         self.ptr
     }
-}
 
-impl<'js> Module<'js> {
     pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, js_val: qjs::JSValue) -> Self {
         debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(js_val), qjs::JS_TAG_MODULE);
         let ptr = qjs::JS_VALUE_GET_PTR(js_val) as _;
@@ -74,7 +71,9 @@ impl<'js> Module<'js> {
     pub(crate) fn as_js_value(&self) -> qjs::JSValue {
         qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.ptr as *mut _)
     }
+}
 
+impl<'js> Module<'js> {
     /// Returns the name of the module
     pub fn name<N>(&self) -> Result<N>
     where
@@ -127,6 +126,28 @@ macro_rules! module_init {
 }
 
 impl<'js> Module<'js> {
+    /// Create native JS module
+    pub fn new<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js, BeforeInit>>
+    where
+        D: ModuleDef,
+        N: AsRef<str>,
+    {
+        let name = CString::new(name.as_ref())?;
+        let ptr = unsafe {
+            qjs::JS_NewCModule(
+                ctx.ctx,
+                name.as_ptr(),
+                Some(Module::<BeforeInit>::init_fn::<D>),
+            )
+        };
+        if ptr.is_null() {
+            return Err(Error::Allocation);
+        }
+        let module = unsafe { Module::<BeforeInit>::from_module_def(ctx, ptr) };
+        D::before_init(ctx, &module)?;
+        Ok(module)
+    }
+
     /// The function for loading native JS module
     pub unsafe extern "C" fn init<D>(
         ctx: *mut qjs::JSContext,
@@ -166,22 +187,6 @@ impl<'js> Module<'js> {
 }
 
 impl<'js> Module<'js, BeforeInit> {
-    /// Create native JS module
-    pub fn new<D, N>(ctx: Ctx<'js>, name: N) -> Result<Self>
-    where
-        D: ModuleDef,
-        N: AsRef<str>,
-    {
-        let name = CString::new(name.as_ref())?;
-        let ptr = unsafe { qjs::JS_NewCModule(ctx.ctx, name.as_ptr(), Some(Self::init_fn::<D>)) };
-        if ptr.is_null() {
-            return Err(Error::Allocation);
-        }
-        let module = unsafe { Module::<BeforeInit>::from_module_def(ctx, ptr) };
-        D::before_init(ctx, &module)?;
-        Ok(module)
-    }
-
     unsafe extern "C" fn init_fn<D>(
         ctx: *mut qjs::JSContext,
         ptr: *mut qjs::JSModuleDef,
