@@ -71,8 +71,8 @@ impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
 impl<'js, Ty: JsRefType> Clone for JsRef<'js, Ty> {
     fn clone(&self) -> Self {
         unsafe {
-            let p = self.ptr as *mut qjs::JSRefCountHeader;
-            (*p).ref_count += 1;
+            let p = &mut *(self.ptr as *mut qjs::JSRefCountHeader);
+            p.ref_count += 1;
         }
         JsRef {
             ctx: self.ctx,
@@ -85,9 +85,9 @@ impl<'js, Ty: JsRefType> Clone for JsRef<'js, Ty> {
 impl<Ty: JsRefType> Drop for JsRef<'_, Ty> {
     fn drop(&mut self) {
         unsafe {
-            let p = self.ptr as *mut qjs::JSRefCountHeader;
-            (*p).ref_count -= 1;
-            if (*p).ref_count <= 0 {
+            let p = &mut *(self.ptr as *mut qjs::JSRefCountHeader);
+            p.ref_count -= 1;
+            if p.ref_count <= 0 {
                 let v = self.as_js_value();
                 qjs::__JS_FreeValue(self.ctx.ctx, v);
             }
