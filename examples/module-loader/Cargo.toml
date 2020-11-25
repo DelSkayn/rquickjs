@@ -1,0 +1,10 @@
+[package]
+name = "module-loader"
+version = "0.1.0"
+authors = ["K. <kayo@illumium.org>"]
+edition = "2018"
+publish = false
+
+[dependencies.rquickjs]
+path = "../.."
+features = ["async-std", "rust-alloc", "loader", "dyn-load"]

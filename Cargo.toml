@@ -42,7 +42,9 @@ optional = true
 
 [workspace]
 members = [
-    "./rquickjs-sys"
+    "rquickjs-sys",
+    "examples/native-module",
+    "examples/module-loader",
 ]
 
 [features]
