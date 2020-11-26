@@ -47,7 +47,7 @@ members = [
 ]
 
 [features]
-default = ["exports", "max-args-8"]
+default = ["exports"]
 
 # Features which is used for documentation
 rustdoc = ["exports", "loader", "allocator", "dyn-load", "async-std"]
@@ -85,13 +85,7 @@ tokio = ["futures", "tokio-rs"]
 async-std = ["futures", "async-std-rs"]
 
 # Max number of function args
-max-args-1 = []
-max-args-2 = ["max-args-1"]
-max-args-3 = ["max-args-2"]
-max-args-4 = ["max-args-3"]
-max-args-5 = ["max-args-4"]
-max-args-6 = ["max-args-5"]
-max-args-7 = ["max-args-6"]
+max-args-7 = []
 max-args-8 = ["max-args-7"]
 max-args-9 = ["max-args-8"]
 max-args-10 = ["max-args-9"]

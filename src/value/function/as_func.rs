@@ -157,19 +157,15 @@ macro_rules! as_fn_impls {
     (@one $($t:tt)*) => { 1 };
 }
 
-as_fn_impls!(,);
-#[cfg(feature = "max-args-1")]
-as_fn_impls!(A,);
-#[cfg(feature = "max-args-2")]
-as_fn_impls!(A B,);
-#[cfg(feature = "max-args-3")]
-as_fn_impls!(A B C,);
-#[cfg(feature = "max-args-4")]
-as_fn_impls!(A B C D,);
-#[cfg(feature = "max-args-5")]
-as_fn_impls!(A B C D E,);
-#[cfg(feature = "max-args-6")]
-as_fn_impls!(A B C D E G,);
+as_fn_impls! {
+    ,
+    A,
+    A B,
+    A B C,
+    A B C D,
+    A B C D E,
+    A B C D E G,
+}
 #[cfg(feature = "max-args-7")]
 as_fn_impls!(A B C D E G H,);
 #[cfg(feature = "max-args-8")]

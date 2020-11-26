@@ -52,19 +52,15 @@ macro_rules! as_args_impls {
     (@this $this:ident This<T>) => { Some($this) };
 }
 
-as_args_impls!(,);
-#[cfg(feature = "max-args-1")]
-as_args_impls!(A,);
-#[cfg(feature = "max-args-2")]
-as_args_impls!(A B,);
-#[cfg(feature = "max-args-3")]
-as_args_impls!(A B C,);
-#[cfg(feature = "max-args-4")]
-as_args_impls!(A B C D,);
-#[cfg(feature = "max-args-5")]
-as_args_impls!(A B C D E,);
-#[cfg(feature = "max-args-6")]
-as_args_impls!(A B C D E F,);
+as_args_impls! {
+    ,
+    A,
+    A B,
+    A B C,
+    A B C D,
+    A B C D E,
+    A B C D E F,
+}
 #[cfg(feature = "max-args-7")]
 as_args_impls!(A B C D E F G,);
 #[cfg(feature = "max-args-8")]
