@@ -2,7 +2,6 @@ use crate::{qjs, Ctx, Value};
 use std::{
     iter::{ExactSizeIterator, FusedIterator},
     mem,
-    ops::{Deref, DerefMut},
 };
 
 /// An iterator over a list of js values
@@ -140,91 +139,5 @@ impl<'js> ArgsValue<'js> {
 impl<'js> Drop for ArgsValue<'js> {
     fn drop(&mut self) {
         mem::drop(self.iter())
-    }
-}
-
-/// An list of values to pass to JS
-///
-/// Passed to functions as arguments when calling.
-#[derive(Clone, Default)]
-pub struct ArgsValueJs<'js>(Vec<Value<'js>>);
-
-impl<'js> ArgsValueJs<'js> {
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl<'js> From<Vec<Value<'js>>> for ArgsValueJs<'js> {
-    fn from(vec: Vec<Value<'js>>) -> Self {
-        Self(vec)
-    }
-}
-
-impl<'js> Into<Vec<Value<'js>>> for ArgsValueJs<'js> {
-    fn into(self) -> Vec<Value<'js>> {
-        self.0
-    }
-}
-
-impl<'js> Deref for ArgsValueJs<'js> {
-    type Target = Vec<Value<'js>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'js> DerefMut for ArgsValueJs<'js> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// Rest values
-#[derive(Clone, Default)]
-pub struct RestArgs<T>(pub Vec<T>);
-
-impl<T> RestArgs<T> {
-    pub fn new() -> Self {
-        Self(Vec::new())
-    }
-}
-
-impl<T> From<Vec<T>> for RestArgs<T> {
-    fn from(vec: Vec<T>) -> Self {
-        Self(vec)
-    }
-}
-
-impl<T> Into<Vec<T>> for RestArgs<T> {
-    fn into(self) -> Vec<T> {
-        self.0
-    }
-}
-
-impl<T> AsRef<Vec<T>> for RestArgs<T> {
-    fn as_ref(&self) -> &Vec<T> {
-        &self.0
-    }
-}
-
-impl<T> AsMut<Vec<T>> for RestArgs<T> {
-    fn as_mut(&mut self) -> &mut Vec<T> {
-        &mut self.0
-    }
-}
-
-impl<T> Deref for RestArgs<T> {
-    type Target = Vec<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for RestArgs<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
     }
 }

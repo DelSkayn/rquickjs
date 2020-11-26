@@ -120,6 +120,7 @@ macro_rules! module_init {
             ctx: *mut $crate::qjs::JSContext,
             module_name: *const $crate::qjs::c_char,
         ) -> *mut $crate::qjs::JSModuleDef {
+            $crate::Function::init_raw(ctx);
             $crate::Module::init::<$type>(ctx, module_name)
         }
     };

@@ -15,15 +15,13 @@ pub use array::Array;
 mod symbol;
 pub use symbol::Symbol;
 pub mod function;
-pub use function::{AsFunction, AsFunctionMut, Function, IntoFunction};
+pub use function::{Args, AsArguments, AsFunction, AsFunctionMut, Function, Method, This};
 mod convert;
 pub use convert::*;
 mod atom;
 pub use atom::*;
 pub(crate) mod rf;
 use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
-mod multi;
-pub use multi::{ArgsValue, ArgsValueJs, RestArgs, ValueIter};
 
 /// The `FromIterator` trait to use with `Ctx`
 pub trait FromIteratorJs<'js, A>: Sized {

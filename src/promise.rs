@@ -1,4 +1,7 @@
-use crate::{qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result, StdResult, Value};
+use crate::{
+    markers::SendWhenParallel, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result,
+    StdResult, This, Value,
+};
 use std::{
     fmt::Display,
     future::Future,
@@ -27,50 +30,38 @@ impl<T> Default for State<T> {
     }
 }
 
-macro_rules! fromjs_for_promise {
-    ($($extra_guards: tt)*) => {
-        impl<'js, T> FromJs<'js> for Promise<T>
-        where
-            T: FromJs<'js> + 'static,
-            $(T: $extra_guards,)*
-        {
-            fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-                let obj = Object::from_js(ctx, value)?;
-                let then: Function = obj.get("then")?;
-                let state = Arc::new(Mutex::new(State::default()));
-                let on_ok = Function::new(ctx, "onSuccess", {
-                    let state = state.clone();
-                    move |ctx, _this: Value, (value,): (Value,)| {
-                        let mut state = state.lock().unwrap();
-                        state.result = T::from_js(ctx, value).into();
-                        if let Some(waker) = state.waker.take() {
-                            waker.wake();
-                        }
-                        Ok(())
-                    }
-                })?;
-                let on_err = Function::new(ctx, "onError", {
-                    let state = state.clone();
-                    move |_ctx, _this: Value, (error,): (Error,)| {
-                        let mut state = state.lock().unwrap();
-                        state.result = Err(error).into();
-                        if let Some(waker) = state.waker.take() {
-                            waker.wake();
-                        }
-                        Ok(())
-                    }
-                })?;
-                then.call_on(obj, (on_ok, on_err))?;
-                Ok(Self { state })
+impl<'js, T> FromJs<'js> for Promise<T>
+where
+    T: FromJs<'js> + SendWhenParallel + 'static,
+{
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let obj = Object::from_js(ctx, value)?;
+        let then: Function = obj.get("then")?;
+        let state = Arc::new(Mutex::new(State::default()));
+        let on_ok = Function::new(ctx, "onSuccess", {
+            let state = state.clone();
+            move |ctx: Ctx<'js>, value: Value<'js>| {
+                let mut state = state.lock().unwrap();
+                state.result = Some(T::from_js(ctx, value));
+                if let Some(waker) = state.waker.take() {
+                    waker.wake();
+                }
             }
-        }
-    };
+        })?;
+        let on_err = Function::new(ctx, "onError", {
+            let state = state.clone();
+            move |error: Error| {
+                let mut state = state.lock().unwrap();
+                state.result = Some(Err(error));
+                if let Some(waker) = state.waker.take() {
+                    waker.wake();
+                }
+            }
+        })?;
+        then.call((This(obj), on_ok, on_err))?;
+        Ok(Self { state })
+    }
 }
-
-#[cfg(not(feature = "parallel"))]
-fromjs_for_promise!();
-#[cfg(feature = "parallel")]
-fromjs_for_promise!(Send);
 
 impl<T> Future for Promise<T> {
     type Output = Result<T>;

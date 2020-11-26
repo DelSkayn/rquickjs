@@ -26,7 +26,61 @@ impl<'js> FromJs<'js> for StdString {
     }
 }
 
-macro_rules! fromjs_impls {
+fn not_enough_values() -> Error {
+    Error::FromJs {
+        from: "array",
+        to: "tuple",
+        message: Some("Not enough values".into()),
+    }
+}
+
+fn too_many_values() -> Error {
+    Error::FromJs {
+        from: "array",
+        to: "tuple",
+        message: Some("Too many values".into()),
+    }
+}
+
+macro_rules! from_js_impls {
+    // for tuple types
+    (tup: $($($type:ident)*,)*) => {
+        $(
+            impl<'js, $($type,)*> FromJs<'js> for ($($type,)*)
+            where
+                $($type: FromJs<'js>,)*
+            {
+                #[allow(non_snake_case)]
+                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    let array = match value {
+                        Value::Array(array) => array,
+                        other => {
+                            return Err(Error::FromJs{
+                                from: other.type_name(),
+                                to: "tuple",
+                                message: None,
+                            });
+                        }
+                    };
+
+                    let tuple_len = 0 $(+ from_js_impls!(@one $type))*;
+                    let array_len = array.len();
+                    if array_len != tuple_len {
+                        return if array_len < tuple_len {
+                            Err(not_enough_values())
+                        } else {
+                            Err(too_many_values())
+                        };
+                    }
+
+                    Ok((
+                        $(array.get::<$type>(from_js_impls!(@idx $type))?,)*
+                    ))
+                }
+            }
+        )*
+    };
+
     // for list-like Rust types
     (list: $($type:ident $(($($guard:tt)*))* ,)*) => {
         $(
@@ -79,7 +133,7 @@ macro_rules! fromjs_impls {
     };
 
     // for primitive types which needs coercion
-    ($($type:ty => $coerce:ident,)*) => {
+    (val: $($type:ty => $coerce:ident,)*) => {
         $(
             impl<'js> FromJs<'js> for $type {
                 fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
@@ -101,7 +155,7 @@ macro_rules! fromjs_impls {
     };
 
     // for primitive types which needs coercion and optional try_from
-    ($($type:ty: $origtype:ty,)*) => {
+    (val: $($type:ty: $origtype:ty,)*) => {
         $(
             impl<'js> FromJs<'js> for $type {
                 fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
@@ -120,7 +174,7 @@ macro_rules! fromjs_impls {
     };
 
     // for JS Value types
-    ($($type:ident $(($($stype:ident),*))*: $typename:literal,)*) => {
+    (js: $($type:ident $(($($stype:ident),*))*: $typename:literal,)*) => {
         $(
             impl<'js> FromJs<'js> for $type<'js> {
                 fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
@@ -139,9 +193,29 @@ macro_rules! fromjs_impls {
             }
         )*
     };
+
+    (@one $($t:tt)*) => { 1 };
+
+    (@idx A) => { 0 };
+    (@idx B) => { 1 };
+    (@idx C) => { 2 };
+    (@idx D) => { 3 };
+    (@idx E) => { 4 };
+    (@idx F) => { 5 };
+    (@idx G) => { 6 };
+    (@idx H) => { 7 };
+    (@idx I) => { 8 };
+    (@idx J) => { 9 };
+    (@idx K) => { 10 };
+    (@idx L) => { 11 };
+    (@idx M) => { 12 };
+    (@idx N) => { 13 };
+    (@idx O) => { 14 };
+    (@idx P) => { 15 };
 }
 
-fromjs_impls! {
+from_js_impls! {
+    val:
     i8: i32,
     u8: i32,
 
@@ -151,7 +225,8 @@ fromjs_impls! {
     u32: u64,
 }
 
-fromjs_impls! {
+from_js_impls! {
+    val:
     bool => coerce_bool,
 
     i32 => coerce_i32,
@@ -162,14 +237,35 @@ fromjs_impls! {
     f64 => coerce_f64,
 }
 
-fromjs_impls! {
+from_js_impls! {
+    js:
     String: "string",
     Function: "function",
     Array: "array",
     Object(Array, Function): "object",
 }
 
-fromjs_impls! {
+from_js_impls! {
+    tup:
+    A,
+    A B,
+    A B C,
+    A B C D,
+    A B C D E,
+    A B C D E F,
+    A B C D E F G,
+    A B C D E F G H,
+    A B C D E F G H I,
+    A B C D E F G H I J,
+    A B C D E F G H I J K,
+    A B C D E F G H I J K L,
+    A B C D E F G H I J K L M,
+    A B C D E F G H I J K L M N,
+    A B C D E F G H I J K L M N O,
+    A B C D E F G H I J K L M N O P,
+}
+
+from_js_impls! {
     list:
     Vec,
     VecDeque,
@@ -178,7 +274,7 @@ fromjs_impls! {
     BTreeSet (Eq + Ord),
 }
 
-fromjs_impls! {
+from_js_impls! {
     map:
     HashMap (Eq + Hash),
     BTreeMap (Eq + Ord),

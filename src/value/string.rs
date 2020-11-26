@@ -48,12 +48,8 @@ mod test {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
-            let val = ctx.eval::<Value, _>(" 'foo bar baz' ");
-            if let Ok(Value::String(x)) = val {
-                assert_eq!(x.to_string().unwrap(), "foo bar baz".to_string())
-            } else {
-                panic!("val not a string");
-            };
+            let s: String = ctx.eval(" 'foo bar baz' ").unwrap();
+            assert_eq!(s.to_string().unwrap(), "foo bar baz");
         });
     }
 
@@ -63,8 +59,8 @@ mod test {
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
             let string = String::from_str(ctx, "foo").unwrap();
-            let func = ctx.eval::<Function, _>("(x) =>  x + 'bar'").unwrap();
-            let text: StdString = func.call(string).unwrap();
+            let func: Function = ctx.eval("x =>  x + 'bar'").unwrap();
+            let text: StdString = (string,).apply(&func).unwrap();
             assert_eq!(text, "foobar".to_string());
         });
     }

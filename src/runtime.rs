@@ -38,8 +38,7 @@ impl WeakRuntime {
 pub struct Opaque {
     /// The registery, used to keep track of which registery values belong to this runtime.
     pub registery: HashSet<RegisteryKey>,
-    /// The function callback, used for its finalizer to be able to free closures.
-    pub func_class: u32,
+
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
 
@@ -51,7 +50,6 @@ impl Opaque {
     fn new(runtime: &Runtime) -> Self {
         Opaque {
             registery: HashSet::default(),
-            func_class: Function::new_class(runtime),
             panic: None,
             runtime: runtime.weak(),
         }
@@ -128,6 +126,7 @@ impl Runtime {
         if rt.is_null() {
             return Err(Error::Allocation);
         }
+        unsafe { Function::init_raw_rt(rt) };
         let runtime = Runtime {
             inner: Ref::new(Inner {
                 rt,
