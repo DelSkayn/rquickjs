@@ -51,10 +51,14 @@ impl ModuleDef for NativeModule {
         module.set("s", "abc")?;
         module.set(
             "f",
-            Function::new2(ctx, "f", |a: f64, b: f64| (a + b) * 0.5)?,
+            Function::new(ctx, "f", |a: f64, b: f64| (a + b) * 0.5)?,
         )?;
         Ok(())
     }
+}
+
+fn print(msg: String) {
+    println!("{}", msg);
 }
 
 fn main() {
@@ -79,10 +83,7 @@ fn main() {
     ctx.with(|ctx| {
         let global = ctx.globals();
         global
-            .set(
-                "print",
-                Function::new2(ctx, "print", |msg: String| println!("{}", msg)).unwrap(),
-            )
+            .set("print", Function::new(ctx, "print", print).unwrap())
             .unwrap();
 
         println!("import script module");

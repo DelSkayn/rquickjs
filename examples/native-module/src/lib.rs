@@ -15,7 +15,7 @@ impl ModuleDef for NativeModule {
         module.set("s", "abc")?;
         module.set(
             "f",
-            Function::new2(ctx, "f", |a: f64, b: f64| (a + b) * 0.5)?,
+            Function::new(ctx, "f", |a: f64, b: f64| (a + b) * 0.5)?,
         )?;
         Ok(())
     }
