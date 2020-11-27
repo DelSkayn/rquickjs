@@ -126,7 +126,7 @@ macro_rules! from_js_impls {
                             });
                         }
                     };
-                    object.own_props(true)?.collect::<Result<$type<_, _>>>()
+                    object.own_props(true).collect::<Result<$type<_, _>>>()
                 }
             }
         )*

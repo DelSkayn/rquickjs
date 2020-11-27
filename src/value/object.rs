@@ -83,52 +83,33 @@ impl<'js> Object<'js> {
     }
 
     /// Get own property names of an object
-    pub fn own_keys<K: FromAtom<'js>>(
-        &self,
-        enumerable_only: bool,
-    ) -> Result<ObjectKeysIter<'js, K>> {
-        let mut enums = mem::MaybeUninit::uninit();
-        let mut count = mem::MaybeUninit::uninit();
+    pub fn own_keys<K: FromAtom<'js>>(&self, enumerable_only: bool) -> ObjectKeysIter<'js, K> {
+        let mut flags = qjs::JS_GPN_STRING_MASK as i32;
+        if enumerable_only {
+            flags |= qjs::JS_GPN_ENUM_ONLY as i32;
+        }
 
-        let (enums, count) = unsafe {
-            let mut flags = qjs::JS_GPN_STRING_MASK as i32;
-            if enumerable_only {
-                flags |= qjs::JS_GPN_ENUM_ONLY as i32;
-            }
-            if qjs::JS_GetOwnPropertyNames(
-                self.0.ctx.ctx,
-                enums.as_mut_ptr(),
-                count.as_mut_ptr(),
-                self.0.as_js_value(),
-                flags,
-            ) < 0
-            {
-                return Err(value::get_exception(self.0.ctx));
-            }
-            let enums = enums.assume_init();
-            let count = count.assume_init();
-            (enums, count)
-        };
-
-        Ok(ObjectKeysIter {
-            ctx: self.0.ctx,
-            enums,
-            count,
-            index: 0,
+        ObjectKeysIter {
+            state: Some(IterState::new(&self.0, flags)),
             marker: PhantomData,
-        })
+        }
     }
 
     /// Get own properties of an object
     pub fn own_props<K: FromAtom<'js>, V: FromJs<'js>>(
         &self,
         enumerable_only: bool,
-    ) -> Result<ObjectIter<'js, K, V>> {
-        Ok(ObjectIter {
-            own_keys: Ok(self.own_keys(enumerable_only)?).into(),
+    ) -> ObjectIter<'js, K, V> {
+        let mut flags = qjs::JS_GPN_STRING_MASK as i32;
+        if enumerable_only {
+            flags |= qjs::JS_GPN_ENUM_ONLY as i32;
+        }
+
+        ObjectIter {
+            state: Some(IterState::new(&self.0, flags)),
             object: self.clone(),
             marker: PhantomData,
-        })
+        }
     }
 
     /// Check if the object is a function.
@@ -162,12 +143,76 @@ impl<'js> Object<'js> {
     }
 }
 
-/// The iterator for an object own keys
-pub struct ObjectKeysIter<'js, K> {
+struct IterState<'js> {
     ctx: Ctx<'js>,
     enums: *mut qjs::JSPropertyEnum,
     index: u32,
     count: u32,
+}
+
+impl<'js> IterState<'js> {
+    fn new(obj: &JsObjectRef<'js>, flags: i32) -> Result<Self> {
+        let ctx = obj.ctx;
+
+        let mut enums = mem::MaybeUninit::uninit();
+        let mut count = mem::MaybeUninit::uninit();
+
+        let (enums, count) = unsafe {
+            if qjs::JS_GetOwnPropertyNames(
+                ctx.ctx,
+                enums.as_mut_ptr(),
+                count.as_mut_ptr(),
+                obj.as_js_value(),
+                flags,
+            ) < 0
+            {
+                return Err(value::get_exception(ctx));
+            }
+            let enums = enums.assume_init();
+            let count = count.assume_init();
+            (enums, count)
+        };
+
+        Ok(Self {
+            ctx,
+            enums,
+            count,
+            index: 0,
+        })
+    }
+}
+
+impl<'js> Drop for IterState<'js> {
+    fn drop(&mut self) {
+        // Free atoms which doesn't consumed by the iterator
+        for index in self.index..self.count {
+            let elem = unsafe { &*self.enums.offset(index as isize) };
+            unsafe { qjs::JS_FreeAtom(self.ctx.ctx, elem.atom) };
+        }
+
+        // This is safe because iterator cannot outlive ctx
+        unsafe { qjs::js_free(self.ctx.ctx, self.enums as _) };
+    }
+}
+
+impl<'js> Iterator for IterState<'js> {
+    type Item = Atom<'js>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.count {
+            let elem = unsafe { &*self.enums.offset(self.index as isize) };
+            self.index += 1;
+            let atom = unsafe { Atom::from_atom_val(self.ctx, elem.atom) };
+            Some(atom)
+        } else {
+            None
+        }
+    }
+}
+
+/// The iterator for an object own keys
+pub struct ObjectKeysIter<'js, K> {
+    state: Option<Result<IterState<'js>>>,
     marker: PhantomData<K>,
 }
 
@@ -178,26 +223,27 @@ where
     type Item = Result<K>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.count {
-            let elem = unsafe { &*self.enums.offset(self.index as isize) };
-            self.index += 1;
-            let atom = unsafe { Atom::from_atom_val(self.ctx, elem.atom) };
-            return Some(FromAtom::from_atom(atom));
+        if let Some(Ok(state)) = &mut self.state {
+            match state.next() {
+                Some(atom) => Some(K::from_atom(atom)),
+                None => {
+                    self.state = None;
+                    None
+                }
+            }
+        } else if let None = &self.state {
+            None
+        } else if let Some(Err(error)) = self.state.take() {
+            Some(Err(error))
+        } else {
+            unreachable!();
         }
-        None
-    }
-}
-
-impl<'js, K> Drop for ObjectKeysIter<'js, K> {
-    fn drop(&mut self) {
-        // This is safe because iterator cannot outlife ctx
-        unsafe { qjs::js_free(self.ctx.ctx, self.enums as *mut _) }
     }
 }
 
 /// The iterator for an object own properties
 pub struct ObjectIter<'js, K, V> {
-    own_keys: Option<Result<ObjectKeysIter<'js, Atom<'js>>>>,
+    state: Option<Result<IterState<'js>>>,
     object: Object<'js>,
     marker: PhantomData<(K, V)>,
 }
@@ -210,23 +256,23 @@ where
     type Item = Result<(K, V)>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        match &mut self.own_keys {
-            None => return None,
-            Some(Ok(own_keys)) => {
-                return match own_keys.next() {
-                    Some(Ok(atom)) => Some(
-                        K::from_atom(atom.clone())
-                            .and_then(|key| self.object.get(atom).map(|val| (key, val))),
-                    ),
-                    Some(Err(error)) => Some(Err(error)),
-                    _ => None,
+        if let Some(Ok(state)) = &mut self.state {
+            match state.next() {
+                Some(atom) => Some(
+                    K::from_atom(atom.clone())
+                        .and_then(|key| self.object.get(atom).map(|val| (key, val))),
+                ),
+                None => {
+                    self.state = None;
+                    None
                 }
             }
-            _ => (),
-        }
-        match self.own_keys.take() {
-            Some(Err(error)) => Some(Err(error)),
-            _ => unreachable!(),
+        } else if let None = &self.state {
+            None
+        } else if let Some(Err(error)) = self.state.take() {
+            Some(Err(error))
+        } else {
+            unreachable!();
         }
     }
 }
@@ -236,8 +282,9 @@ impl<'js> IntoIterator for Object<'js> {
     type IntoIter = ObjectIter<'js, Atom<'js>, Value<'js>>;
 
     fn into_iter(self) -> Self::IntoIter {
+        let flags = qjs::JS_GPN_STRING_MASK as i32;
         ObjectIter {
-            own_keys: self.own_keys(true).into(),
+            state: Some(IterState::new(&self.0, flags)),
             object: self,
             marker: PhantomData,
         }
@@ -353,7 +400,6 @@ mod test {
                 .unwrap();
             let keys = val
                 .own_keys(true)
-                .unwrap()
                 .collect::<Result<Vec<StdString>>>()
                 .unwrap();
             assert_eq!(keys.len(), 4);
@@ -382,7 +428,6 @@ mod test {
                 .unwrap();
             let pairs = val
                 .own_props(true)
-                .unwrap()
                 .collect::<Result<Vec<(StdString, StdString)>>>()
                 .unwrap();
             assert_eq!(pairs.len(), 3);
@@ -422,6 +467,33 @@ mod test {
             assert_eq!(Array::from_js(ctx, pairs[2].1.clone()).unwrap().len(), 0);
             assert_eq!(pairs[3].0.clone().to_string().unwrap(), "");
             assert_eq!(pairs[3].1, Value::Undefined);
+        })
+    }
+
+    #[test]
+    fn iter_take() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let val: Object = ctx
+                .eval(
+                    r#"
+                   ({
+                     123: 123,
+                     str: "abc",
+                     arr: [],
+                     '': undefined,
+                   })
+                "#,
+                )
+                .unwrap();
+            let keys = val
+                .own_keys(true)
+                .take(1)
+                .collect::<Result<Vec<StdString>>>()
+                .unwrap();
+            assert_eq!(keys.len(), 1);
+            assert_eq!(keys[0], "123");
         })
     }
 
