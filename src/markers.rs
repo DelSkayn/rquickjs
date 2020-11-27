@@ -8,7 +8,11 @@ use std::marker::PhantomData;
 pub type Invariant<'a> = PhantomData<Cell<&'a ()>>;
 
 /// The marker trait which requires `Send` when `parallel` feature is used
+#[cfg(not(feature = "parallel"))]
 pub trait SendWhenParallel {}
+
+#[cfg(feature = "parallel")]
+pub trait SendWhenParallel: Send {}
 
 #[cfg(not(feature = "parallel"))]
 impl<T> SendWhenParallel for T {}

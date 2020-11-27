@@ -1,6 +1,6 @@
 use crate::{
-    markers::SendWhenParallel, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result,
-    StdResult, This, Value,
+    qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result, SendWhenParallel, StdResult, This,
+    Value,
 };
 use std::{
     fmt::Display,
