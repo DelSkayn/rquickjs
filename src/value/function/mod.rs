@@ -14,7 +14,7 @@ use args::ArgsValue;
 pub use as_args::AsArguments;
 pub use as_func::{AsFunction, AsFunctionMut};
 use ffi::FuncOpaque;
-pub use types::{Args, Method, This};
+pub use types::{Args, JsFn, JsFnMut, Method, This};
 
 /// Rust representation of a javascript function.
 #[derive(Debug, Clone, PartialEq)]
@@ -436,5 +436,35 @@ mod test {
         assert_eq!(res[2], 2);
         assert_eq!(res[3], 1);
         assert_eq!(res[4], 2);
+    }
+
+    #[test]
+    fn js_fn_wrappers() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let global = ctx.globals();
+            global
+                .set(
+                    "cat",
+                    JsFn::new("name", |a: StdString, b: StdString| format!("{}{}", a, b)),
+                )
+                .unwrap();
+            let res: StdString = ctx.eval("cat(\"foo\", \"bar\")").unwrap();
+            assert_eq!(res, "foobar");
+
+            let mut log = Vec::<StdString>::new();
+            global
+                .set(
+                    "log",
+                    JsFnMut::new_unnamed(move |msg: StdString| {
+                        log.push(msg);
+                        log.len() as u32
+                    }),
+                )
+                .unwrap();
+            let n: u32 = ctx.eval("log(\"foo\") + log(\"bar\")").unwrap();
+            assert_eq!(n, 3);
+        });
     }
 }

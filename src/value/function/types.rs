@@ -1,4 +1,8 @@
-use std::ops::{Deref, DerefMut};
+use crate::{AsFunction, AsFunctionMut, Ctx, Function, IntoJs, Result, SendWhenParallel, Value};
+use std::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 /// The wrapper for method functions
 #[repr(transparent)]
@@ -17,32 +21,6 @@ impl<F> Deref for Method<F> {
         &self.0
     }
 }
-
-/*
-/// The wrapper for function results
-#[repr(transparent)]
-pub struct ResultJs<T, E>(pub StdResult<T, E>);
-
-impl<T, E> From<StdResult<T, E>> for ResultJs<T, E> {
-    fn from(result: StdResult<T, E>) -> Self {
-        Self(result)
-    }
-}
-
-impl<T, E> AsRef<StdResult<T, E>> for ResultJs<T, E> {
-    fn as_ref(&self) -> &StdResult<T, E> {
-        &self.0
-    }
-}
-
-impl<T, E> Deref for ResultJs<T, E> {
-    type Target = StdResult<T, E>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-*/
 
 /// The wrapper to specify `this` argument
 #[derive(Clone, Copy, Debug, Default)]
@@ -132,5 +110,107 @@ impl<T> Deref for Args<T> {
 impl<T> DerefMut for Args<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+/// The wrapper for functions which implements `Fn` trait
+///
+/// ```
+/// # use rquickjs::JsFn;
+/// let my_func = JsFn::new("my_func", || 42);
+/// let print = JsFn::new_unnamed(|m: String| println!("{}", m));
+/// ```
+pub struct JsFn<F>(pub F);
+
+impl<'js, F, A, R> JsFn<(F, PhantomData<(A, R)>)>
+where
+    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+{
+    /// Wrap anonymous function
+    pub fn new_unnamed(func: F) -> Self {
+        Self((func, PhantomData))
+    }
+}
+
+impl<'js, S, F, A, R> JsFn<(S, F, PhantomData<(A, R)>)>
+where
+    S: AsRef<str>,
+    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+{
+    /// Wrap named function
+    pub fn new(name: S, func: F) -> Self {
+        Self((name, func, PhantomData))
+    }
+}
+
+impl<'js, F, A, R> IntoJs<'js> for JsFn<(F, PhantomData<(A, R)>)>
+where
+    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let (func, _) = self.0;
+        Function::new(ctx, "", func).map(Value::Function)
+    }
+}
+
+impl<'js, S, F, A, R> IntoJs<'js> for JsFn<(S, F, PhantomData<(A, R)>)>
+where
+    S: AsRef<str>,
+    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let (name, func, _) = self.0;
+        Function::new(ctx, name, func).map(Value::Function)
+    }
+}
+
+/// The wrapper for functions which implements `Fn` trait
+///
+/// ```
+/// # use rquickjs::JsFn;
+/// let my_func = JsFn::new("my_func", || 42);
+/// let print = JsFn::new_unnamed(|m: String| println!("{}", m));
+/// ```
+pub struct JsFnMut<F>(pub F);
+
+impl<'js, F, A, R> JsFnMut<(F, PhantomData<(A, R)>)>
+where
+    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
+{
+    /// Wrap anonymous function
+    pub fn new_unnamed(func: F) -> Self {
+        Self((func, PhantomData))
+    }
+}
+
+impl<'js, S, F, A, R> JsFnMut<(S, F, PhantomData<(A, R)>)>
+where
+    S: AsRef<str>,
+    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
+{
+    /// Wrap named function
+    pub fn new(name: S, func: F) -> Self {
+        Self((name, func, PhantomData))
+    }
+}
+
+impl<'js, F, A, R> IntoJs<'js> for JsFnMut<(F, PhantomData<(A, R)>)>
+where
+    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let (func, _) = self.0;
+        Function::new_mut(ctx, "", func).map(Value::Function)
+    }
+}
+
+impl<'js, S, F, A, R> IntoJs<'js> for JsFnMut<(S, F, PhantomData<(A, R)>)>
+where
+    S: AsRef<str>,
+    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let (name, func, _) = self.0;
+        Function::new_mut(ctx, name, func).map(Value::Function)
     }
 }
