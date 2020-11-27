@@ -1,7 +1,7 @@
 use crate::{
     qjs,
     value::{self, rf::JsObjectRef},
-    Atom, Ctx, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, Result, Value,
+    Array, Atom, Ctx, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, Result, Value,
 };
 use std::{
     iter::{IntoIterator, Iterator},
@@ -144,6 +144,21 @@ impl<'js> Object<'js> {
     /// Check if the object is as error.
     pub fn is_error(&self) -> bool {
         unsafe { qjs::JS_IsError(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
+    }
+
+    /// Convert into array
+    pub fn into_function(self) -> Function<'js> {
+        Function::from_object(self)
+    }
+
+    /// Convert into array
+    pub fn into_array(self) -> Array<'js> {
+        Array::from_object(self)
+    }
+
+    /// Convert into value
+    pub fn into_value(self) -> Value<'js> {
+        Value::Object(self)
     }
 }
 

@@ -1,9 +1,4 @@
-use crate::{
-    context::Ctx,
-    qjs,
-    value::{self, rf::JsStringRef},
-    Error, Result,
-};
+use crate::{context::Ctx, qjs, value, value::rf::JsStringRef, Error, Result, Value};
 use std::{mem, slice, str, string::String as StdString};
 
 /// Rust representation of a javascript string.
@@ -37,6 +32,11 @@ impl<'js> String<'js> {
             let js_val = value::handle_exception(ctx, js_val)?;
             JsStringRef::from_js_value(ctx, js_val)
         }))
+    }
+
+    /// Convert into value
+    pub fn into_value(self) -> Value<'js> {
+        Value::String(self)
     }
 }
 

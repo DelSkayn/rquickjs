@@ -114,14 +114,28 @@ impl<'js> Function<'js> {
         R::from_js(self.0.ctx, res)
     }
 
+    /// Convert into object
     pub fn into_object(self) -> Object<'js> {
         Object(self.0)
+    }
+
+    /// Convert from object
+    pub fn from_object(object: Object<'js>) -> Self {
+        Function(object.0)
+    }
+
+    /// Convert into value
+    pub fn into_value(self) -> Value<'js> {
+        Value::Function(self)
     }
 
     pub(crate) unsafe fn init_raw_rt(rt: *mut qjs::JSRuntime) {
         FuncOpaque::register(rt);
     }
 
+    /// Initialize from module init function
+    ///
+    /// NOTE: Do not call it directly. You usually should use [module_init] instead.
     pub unsafe fn init_raw(ctx: *mut qjs::JSContext) {
         Self::init_raw_rt(qjs::JS_GetRuntime(ctx));
     }

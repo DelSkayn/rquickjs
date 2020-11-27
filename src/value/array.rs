@@ -25,12 +25,19 @@ impl<'js> Array<'js> {
         }
     }
 
+    /// Convert into object
     pub fn into_object(self) -> Object<'js> {
         Object(self.0)
     }
 
+    /// Convert from object
     pub fn from_object(object: Object<'js>) -> Self {
         Array(object.0)
+    }
+
+    /// Convert into value
+    pub fn into_value(self) -> Value<'js> {
+        Value::Array(self)
     }
 
     /// Get the lenght of the javascript array.
