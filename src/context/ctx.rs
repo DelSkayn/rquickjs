@@ -2,11 +2,8 @@ use crate::{
     markers::Invariant,
     qjs,
     runtime::Opaque,
-    value::{
-        self,
-        rf::{JsObjectRef, JsStringRef},
-        String,
-    },
+    value,
+    value::{JsObjectRef, JsStringRef, String},
     BeforeInit, Context, FromJs, Function, Object, RegisteryKey, Result, Value,
 };
 

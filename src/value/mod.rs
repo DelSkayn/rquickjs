@@ -1,29 +1,33 @@
-use crate::{context::Ctx, qjs, Error, Result};
+mod array;
+mod atom;
+mod convert;
+mod function;
+mod module;
+mod object;
+mod persistent;
+mod rf;
+mod string;
+mod symbol;
+
 use std::panic::{self, UnwindSafe};
 
-mod module;
+use crate::{context::Ctx, qjs, Error, Result};
+
 pub use module::{AfterInit, BeforeInit, Module, ModuleDef};
 #[cfg(feature = "exports")]
 pub use module::{ExportEntriesIter, ExportNamesIter};
 
-mod string;
-pub use string::String;
-mod object;
-pub use object::Object;
-mod array;
 pub use array::Array;
-mod symbol;
-pub use symbol::Symbol;
-pub mod function;
+pub use atom::*;
+pub use convert::*;
 pub use function::{
     Args, AsArguments, AsFunction, AsFunctionMut, Function, JsFn, JsFnMut, Method, This,
 };
-mod convert;
-pub use convert::*;
-mod atom;
-pub use atom::*;
-pub(crate) mod rf;
-use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
+pub use object::Object;
+pub use persistent::Persistent;
+pub use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
+pub use string::String;
+pub use symbol::Symbol;
 
 /// The `FromIterator` trait to use with `Ctx`
 pub trait FromIteratorJs<'js, A>: Sized {
@@ -240,4 +244,24 @@ impl<'js> Value<'js> {
             Value::Function(_) => "function",
         }
     }
+}
+
+macro_rules! conv_impls {
+    ($($type:ident,)*) => {
+        $(
+            impl<'js> From<$type<'js>> for Value<'js> {
+                fn from(value: $type<'js>) -> Self {
+                    Value::$type(value)
+                }
+            }
+        )*
+    };
+}
+
+conv_impls! {
+    Function,
+    Symbol,
+    String,
+    Object,
+    Array,
 }
