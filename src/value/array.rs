@@ -46,7 +46,7 @@ impl<'js> Array<'js> {
         unsafe {
             let val = qjs::JS_GetPropertyStr(self.0.ctx.ctx, v, b"length\0".as_ptr() as *const _);
             assert!(qjs::JS_IsInt(val));
-            qjs::JS_VALUE_GET_INT(val) as usize
+            qjs::JS_VALUE_GET_INT(val) as _
         }
     }
 
@@ -56,21 +56,21 @@ impl<'js> Array<'js> {
     }
 
     /// Get the value at an index in the javascript array.
-    pub fn get<V: FromJs<'js>>(&self, idx: u32) -> Result<V> {
+    pub fn get<V: FromJs<'js>>(&self, idx: usize) -> Result<V> {
         let obj = self.0.as_js_value();
         let val = unsafe {
-            let val = qjs::JS_GetPropertyUint32(self.0.ctx.ctx, obj, idx);
+            let val = qjs::JS_GetPropertyUint32(self.0.ctx.ctx, obj, idx as _);
             Value::from_js_value(self.0.ctx, val)
         }?;
         V::from_js(self.0.ctx, val)
     }
 
     /// Set the value at an index in the javascript array.
-    pub fn set<V: IntoJs<'js>>(&self, idx: u32, val: V) -> Result<()> {
+    pub fn set<V: IntoJs<'js>>(&self, idx: usize, val: V) -> Result<()> {
         let obj = self.0.as_js_value();
         let val = val.into_js(self.0.ctx)?.into_js_value();
         unsafe {
-            if -1 == qjs::JS_SetPropertyUint32(self.0.ctx.ctx, obj, idx, val) {
+            if -1 == qjs::JS_SetPropertyUint32(self.0.ctx.ctx, obj, idx as _, val) {
                 return Err(value::get_exception(self.0.ctx));
             }
         }
@@ -79,7 +79,7 @@ impl<'js> Array<'js> {
 
     /// Get iterator over elments of an array
     pub fn iter<T: FromJs<'js>>(&self) -> ArrayIter<'js, T> {
-        let count = self.len() as u32;
+        let count = self.len() as _;
         ArrayIter {
             array: self.clone(),
             index: 0,
@@ -105,7 +105,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
-            let res = self.array.get(self.index);
+            let res = self.array.get(self.index as _);
             self.index += 1;
             Some(res)
         } else {
@@ -119,7 +119,7 @@ impl<'js> IntoIterator for Array<'js> {
     type IntoIter = ArrayIter<'js, Value<'js>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let count = self.len() as u32;
+        let count = self.len() as _;
         ArrayIter {
             array: self,
             index: 0,
@@ -142,7 +142,7 @@ where
         let array = Array::new(ctx)?;
         for (idx, item) in iter.into_iter().enumerate() {
             let item = item.into_js(ctx)?;
-            array.set(idx as u32, item)?;
+            array.set(idx as _, item)?;
         }
         Ok(array)
     }
