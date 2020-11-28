@@ -23,7 +23,7 @@ pub use convert::*;
 pub use function::{
     Args, AsArguments, AsFunction, AsFunctionMut, Function, JsFn, JsFnMut, Method, This,
 };
-pub use object::Object;
+pub use object::{Object, ObjectDef};
 pub use persistent::Persistent;
 pub use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
 pub use string::String;

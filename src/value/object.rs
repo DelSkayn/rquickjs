@@ -9,6 +9,14 @@ use std::{
     mem,
 };
 
+/// The helper trait to define objects
+pub trait ObjectDef {
+    /// Initialize object contents
+    ///
+    /// You should set fields with specific values using [Object::set] method.
+    fn init<'js>(ctx: Ctx<'js>, object: &Object<'js>) -> Result<()>;
+}
+
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
 pub struct Object<'js>(pub(crate) JsObjectRef<'js>);
@@ -21,6 +29,24 @@ impl<'js> Object<'js> {
             let val = value::handle_exception(ctx, val)?;
             Ok(Object(JsObjectRef::from_js_value(ctx, val)))
         }
+    }
+
+    /// Initialize an object using `ObjectDef`
+    pub fn init_def<T>(&self) -> Result<()>
+    where
+        T: ObjectDef,
+    {
+        T::init(self.0.ctx, &self)
+    }
+
+    /// Create an object using `ObjectDef`
+    pub fn new_def<T>(ctx: Ctx<'js>) -> Result<Self>
+    where
+        T: ObjectDef,
+    {
+        let obj = Self::new(ctx)?;
+        T::init(ctx, &obj)?;
+        Ok(obj)
     }
 
     /// Get a new value
