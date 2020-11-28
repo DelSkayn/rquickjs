@@ -13,6 +13,7 @@ proc-macro-crate = "^0.1"
 proc-macro-error = "^1"
 quote = "^1"
 syn = { version = "^1", features = ["full"] }
+case = "^1"
 
 [dev-dependencies.rquickjs]
 path = "../"

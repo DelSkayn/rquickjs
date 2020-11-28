@@ -20,10 +20,10 @@ This macro allows register Rust functions, modules and objects to use it from Ja
 ### Single function binding
 
 ```
-use rquickjs::{Runtime, Context, bind};
+use rquickjs::{Runtime, Context, ObjectDef, bind};
 
 #[bind]
-fn add2(a: f32, b: f32) -> f32 {
+pub fn add2(a: f32, b: f32) -> f32 {
     a + b
 }
 
@@ -32,7 +32,7 @@ let ctx = Context::full(&rt).unwrap();
 
 ctx.with(|ctx| {
     let glob = ctx.globals();
-    register_add2(ctx, glob).unwrap();
+    Add2::init(ctx, &glob).unwrap();
 
     let res: f32 = ctx.eval(r#"add2(1, 2)"#).unwrap();
     assert_eq!(res, 3.0);
@@ -42,10 +42,12 @@ ctx.with(|ctx| {
 ### Module with two functions
 
 ```
-use rquickjs::{Runtime, Context, bind};
+use rquickjs::{Runtime, Context, Object, bind};
 
 #[bind]
-mod math {
+pub mod math {
+    pub const PI: f32 = core::f32::consts::PI;
+
     pub fn add2(a: f32, b: f32) -> f32 {
         a + b
     }
@@ -60,7 +62,7 @@ let ctx = Context::full(&rt).unwrap();
 
 ctx.with(|ctx| {
     let glob = ctx.globals();
-    register_math(ctx, glob).unwrap();
+    glob.set("math", Object::new_def::<Math>(ctx).unwrap()).unwrap();
 
     let res: f32 = ctx.eval(r#"math.mul2(3, math.add2(1, 2))"#).unwrap();
     assert_eq!(res, 9.0);
@@ -72,10 +74,10 @@ ctx.with(|ctx| {
 ```
 # #[async_std::main]
 # async fn main() {
-use rquickjs::{Runtime, Context, Promise, bind};
+use rquickjs::{Runtime, Context, Promise, ObjectDef, bind};
 
 #[bind]
-async fn sleep(msecs: u64) {
+pub async fn sleep(msecs: u64) {
     async_std::task::sleep(
         std::time::Duration::from_millis(msecs)
     ).await;
@@ -84,14 +86,14 @@ async fn sleep(msecs: u64) {
 let rt = Runtime::new().unwrap();
 let ctx = Context::full(&rt).unwrap();
 
+rt.spawn_pending_jobs(None);
+
 let promise: Promise<()> = ctx.with(|ctx| {
     let glob = ctx.globals();
-    register_sleep(ctx, glob).unwrap();
+    Sleep::init(ctx, &glob).unwrap();
 
     ctx.eval(r#"sleep(100)"#).unwrap()
 });
-
-rt.spawn_pending_jobs(true);
 
 promise.await;
 # }

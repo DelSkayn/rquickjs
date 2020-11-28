@@ -1,6 +1,6 @@
 use crate::{abort, Expander, Tokens};
-use quote::quote;
-use syn::{punctuated::Punctuated, FnArg, Ident, ItemFn, Pat, ReturnType, Signature, Token, Type};
+use quote::{format_ident, quote};
+use syn::{punctuated::Punctuated, FnArg, Ident, ItemFn, Pat, Signature, Token};
 
 impl Expander {
     /// Expand function
@@ -15,7 +15,7 @@ impl Expander {
                     ident,
                     inputs,
                     variadic,
-                    output,
+                    //output,
                     ..
                 },
             ..
@@ -24,7 +24,7 @@ impl Expander {
         if let Some(unsafety) = unsafety {
             abort!(
                 unsafety.span,
-                "Binding of unsafe functions is not supported."
+                "Binding of unsafe functions is weird and not supported."
             );
         }
         if let Some(variadic) = variadic {
@@ -36,100 +36,38 @@ impl Expander {
         let is_async = asyncness.is_some();
 
         let lib_crate = &self.lib_crate;
+        let exports = &self.exports;
+
         let name = format!("{}", ident);
         let path = self.path(path, ident);
 
         let arg_names = self.arg_names(inputs);
-        let arg_types = self.arg_types(inputs);
 
-        let fn_call = quote! { #path(#(#arg_names),*) };
-
-        let fn_call = if is_async {
-            quote! { #fn_call.await }
+        let fn_decl = if is_async {
+            quote! {
+                |#(#arg_names),*|
+                #lib_crate::PromiseJs(#path(#(#arg_names),*))
+            }
         } else {
-            fn_call
-        };
-
-        let ret_kind = self.return_kind(output);
-
-        let fn_call = match ret_kind {
-            None => quote! {
-                #fn_call;
-                Ok(())
-            },
-            Some(true) => quote! {
-                #fn_call.map_err(|error| error.into())
-            },
-            Some(false) => quote! {
-                Ok(#fn_call)
-            },
-        };
-
-        let fn_call = if is_async {
-            quote! { Ok(#lib_crate::PromiseJs(async move { #fn_call })) }
-        } else {
-            fn_call
-        };
-
-        let arg_names_decl = match arg_names.len() {
-            0 => quote! { _ },
-            //1 => quote! { #arg_names },
-            _ => quote! { (#(#arg_names,)*) },
-        };
-
-        let arg_types_decl = match arg_types.len() {
-            0 => quote! { () },
-            //1 => quote! { #arg_types },
-            _ => quote! { (#(#arg_types,)*) },
+            quote! { #path }
         };
 
         quote! {
-            obj.set(#name, #lib_crate::Function::new(ctx, #name, |ctx: #lib_crate::Ctx<'_>, this: #lib_crate::Value<'_>, #arg_names_decl: #arg_types_decl| -> #lib_crate::Result<_> {
-                #fn_call
-            })?)
+            #exports.set(#name, #lib_crate::JsFn::new(#name, #fn_decl))?;
         }
     }
 
     /// Extract function arguments names (excluding self)
-    pub fn arg_names<'a>(&self, args: &'a Punctuated<FnArg, Token![,]>) -> Vec<&'a Ident> {
+    pub fn arg_names(&self, args: &Punctuated<FnArg, Token![,]>) -> Vec<Ident> {
         args.iter()
             .filter_map(|arg| match arg {
-                FnArg::Receiver(_) => None,
+                FnArg::Receiver(_) => Some(format_ident!("self_")),
                 FnArg::Typed(arg) => Some(match &*arg.pat {
-                    Pat::Ident(pat) => &pat.ident,
+                    Pat::Ident(pat) => pat.ident.clone(),
                     _ => abort!(arg.colon_token, "Only named arguments is supported."),
                 }),
             })
             .collect()
-    }
-
-    /// Extract function arguments types (excluding self)
-    pub fn arg_types<'a>(&self, args: &'a Punctuated<FnArg, Token![,]>) -> Vec<&'a Type> {
-        args.iter()
-            .filter_map(|arg| match arg {
-                FnArg::Receiver(_recv) => None,
-                FnArg::Typed(arg) => Some(&*arg.ty),
-            })
-            .collect()
-    }
-
-    /// Analyze function output
-    pub fn return_kind(&self, output: &ReturnType) -> Option<bool> {
-        match output {
-            // Function does not returns anything
-            ReturnType::Default => return None,
-            ReturnType::Type(_, type_) => {
-                if let Type::Path(path) = &**type_ {
-                    match path.path.segments.last() {
-                        // Function can return value or throw exception
-                        Some(seg) if seg.ident == "Result" => return Some(true),
-                        _ => (),
-                    }
-                }
-            }
-        }
-        // Function returns value and cannot throw exception
-        Some(false)
     }
 }
 
@@ -150,16 +88,13 @@ mod test {
 
         let actual = expander.function(&path, &item);
         let expected = quote! {
-            obj.set("doit", rquickjs::Function::new(ctx, "doit", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, _: ()| -> rquickjs::Result<_> {
-                doit();
-                Ok(())
-            })?)
+            exports.set("doit", rquickjs::JsFn::new("doit", doit))?;
         };
         assert_eq!(actual.to_string(), expected.to_string());
     }
 
     #[test]
-    fn fn_no_args_no_throw() {
+    fn fn_no_args() {
         let item = parse_quote! {
             fn geti() -> i32 { 1 }
         };
@@ -169,33 +104,13 @@ mod test {
 
         let actual = expander.function(&path, &item);
         let expected = quote! {
-            obj.set("geti", rquickjs::Function::new(ctx, "geti", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, _: ()| -> rquickjs::Result<_> {
-                Ok(geti())
-            })?)
+            exports.set("geti", rquickjs::JsFn::new("geti", geti))?;
         };
         assert_eq!(actual.to_string(), expected.to_string());
     }
 
     #[test]
-    fn fn_no_args_may_throw() {
-        let item = parse_quote! {
-            fn test() -> Result<()> { Ok(()) }
-        };
-
-        let expander = Expander::new();
-        let path = Vec::new();
-
-        let actual = expander.function(&path, &item);
-        let expected = quote! {
-            obj.set("test", rquickjs::Function::new(ctx, "test", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, _: ()| -> rquickjs::Result<_> {
-                test().map_err(|error| error.into())
-            })?)
-        };
-        assert_eq!(actual.to_string(), expected.to_string());
-    }
-
-    #[test]
-    fn fn_one_arg_no_throw() {
+    fn fn_one_arg() {
         let item = parse_quote! {
             fn incr(val: i32) -> i32 { val + 1 }
         };
@@ -205,15 +120,13 @@ mod test {
 
         let actual = expander.function(&path, &item);
         let expected = quote! {
-            obj.set("incr", rquickjs::Function::new(ctx, "incr", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, val: i32| -> rquickjs::Result<_> {
-                Ok(incr(val))
-            })?)
+            exports.set("incr", rquickjs::JsFn::new("incr", incr))?;
         };
         assert_eq!(actual.to_string(), expected.to_string());
     }
 
     #[test]
-    fn fn_two_args_no_throw() {
+    fn fn_two_args() {
         let item = parse_quote! {
             fn add2(a: i32, b: i32) -> i32 { a + b }
         };
@@ -223,9 +136,7 @@ mod test {
 
         let actual = expander.function(&path, &item);
         let expected = quote! {
-            obj.set("add2", rquickjs::Function::new(ctx, "add2", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, (a, b): (i32, i32)| -> rquickjs::Result<_> {
-                Ok(add2(a, b))
-            })?)
+            exports.set("add2", rquickjs::JsFn::new("add2", add2))?;
         };
         assert_eq!(actual.to_string(), expected.to_string());
     }
@@ -241,32 +152,7 @@ mod test {
 
         let actual = expander.function(&path, &item);
         let expected = quote! {
-            obj.set("doit", rquickjs::Function::new(ctx, "doit", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, _: ()| -> rquickjs::Result<_> {
-                Ok(rquickjs::PromiseJs(async move {
-                    doit().await;
-                    Ok(())
-                }))
-            })?)
-        };
-        assert_eq!(actual.to_string(), expected.to_string());
-    }
-
-    #[test]
-    fn async_fn_no_args_may_throw() {
-        let item = parse_quote! {
-            async fn test() -> Result<()> { Ok(()) }
-        };
-
-        let expander = Expander::new();
-        let path = Vec::new();
-
-        let actual = expander.function(&path, &item);
-        let expected = quote! {
-            obj.set("test", rquickjs::Function::new(ctx, "test", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, _: ()| -> rquickjs::Result<_> {
-                Ok(rquickjs::PromiseJs(async move {
-                    test().await.map_err(|error| error.into())
-                }))
-            })?)
+            exports.set("doit", rquickjs::JsFn::new("doit", | | rquickjs::PromiseJs(doit())))?;
         };
         assert_eq!(actual.to_string(), expected.to_string());
     }
@@ -284,11 +170,7 @@ mod test {
 
         let actual = expander.function(&path, &item);
         let expected = quote! {
-            obj.set("mul2", rquickjs::Function::new(ctx, "mul2", |ctx: rquickjs::Ctx<'_>, this: rquickjs::Value<'_>, (a, b): (f64, f64)| -> rquickjs::Result<_> {
-                Ok(rquickjs::PromiseJs(async move {
-                    Ok(mul2(a, b).await)
-                }))
-            })?)
+            exports.set("mul2", rquickjs::JsFn::new("mul2", |a, b| rquickjs::PromiseJs(mul2(a, b))))?;
         };
         assert_eq!(actual.to_string(), expected.to_string());
     }
