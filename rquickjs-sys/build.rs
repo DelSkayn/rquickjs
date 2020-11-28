@@ -10,10 +10,28 @@ fn main() {
     pretty_env_logger::init();
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_PARALLEL");
-    println!("cargo:rerun-if-env-changed=CARGO_FEATURE_EXPORTS");
-    println!("cargo:rerun-if-env-changed=CARGO_BINDGEN");
-    println!("cargo:rerun-if-env-changed=CARGO_UPDATE_BINDINGS");
+
+    let features = [
+        "parallel",
+        "exports",
+        "bindgen",
+        "update-bindings",
+        "dump-bytecode",
+        "dump-gc",
+        "dump-gc-free",
+        "dump-leaks",
+        "dump-mem",
+        "dump-objects",
+        "dump-atoms",
+        "dump-shapes",
+        "dump-module-resolve",
+        "dump-promise",
+        "dump-read-object",
+    ];
+
+    for feature in &features {
+        println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
+    }
 
     let src_dir = Path::new("quickjs");
     let patches_dir = Path::new("patches");
@@ -47,17 +65,25 @@ fn main() {
     let patch_files = ["rquickjs.patch"];
 
     let mut defines = vec![
-        ("_GNU_SOURCE", None),
-        ("CONFIG_VERSION", Some("\"2020-01-19\"")),
-        ("CONFIG_BIGNUM", None),
+        ("_GNU_SOURCE".into(), None),
+        ("CONFIG_VERSION".into(), Some("\"2020-01-19\"")),
+        ("CONFIG_BIGNUM".into(), None),
     ];
 
     if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
-        defines.push(("CONFIG_MODULE_EXPORTS", None));
+        defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
     }
 
     if env::var("CARGO_FEATURE_PARALLEL").is_ok() {
-        defines.push(("CONFIG_PARALLEL", None));
+        defines.push(("CONFIG_PARALLEL".into(), None));
+    }
+
+    for feature in &features {
+        if feature.starts_with("dump-") {
+            if env::var(feature_to_cargo(feature)).is_ok() {
+                defines.push((feature_to_define(feature), None));
+            }
+        }
     }
 
     for file in source_files.iter().chain(header_files.iter()) {
@@ -87,6 +113,14 @@ fn main() {
     }
 
     builder.compile("libquickjs.a");
+}
+
+fn feature_to_cargo(name: impl AsRef<str>) -> String {
+    format!("CARGO_FEATURE_{}", feature_to_define(name))
+}
+
+fn feature_to_define(name: impl AsRef<str>) -> String {
+    name.as_ref().to_uppercase().replace('-', "_")
 }
 
 fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {

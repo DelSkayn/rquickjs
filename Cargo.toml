@@ -99,6 +99,20 @@ max-args-14 = ["max-args-13"]
 max-args-15 = ["max-args-14"]
 max-args-16 = ["max-args-15"]
 
+# Enable QuickJS dumps for debug
+dump-bytecode = ["rquickjs-sys/dump-bytecode"]
+dump-gc = ["rquickjs-sys/dump-gc"]
+dump-gc-free = ["rquickjs-sys/dump-gc-free"]
+# Dump JS values which still alive when runtime is freed
+dump-leaks = ["rquickjs-sys/dump-leaks"]
+dump-mem = ["rquickjs-sys/dump-mem"]
+dump-objects = ["rquickjs-sys/dump-objects"]
+dump-atoms = ["rquickjs-sys/dump-atoms"]
+dump-shapes = ["rquickjs-sys/dump-shapes"]
+dump-module-resolve = ["rquickjs-sys/dump-module-resolve"]
+dump-promise = ["rquickjs-sys/dump-promise"]
+dump-read-object = ["rquickjs-sys/dump-read-object"]
+
 # Enable compilation tests
 compile-tests = []
 
