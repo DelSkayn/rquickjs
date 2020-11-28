@@ -200,7 +200,7 @@ mod test {
             let rt = Runtime::new().unwrap();
             let ctx = Context::full(&rt).unwrap();
 
-            rt.spawn_pending_jobs(false);
+            rt.spawn_pending_jobs(None);
 
             let res: Promise<i32> = ctx.with(|ctx| {
                 let global = ctx.globals();
@@ -224,7 +224,7 @@ mod test {
             let rt = Runtime::new().unwrap();
             let ctx = Context::full(&rt).unwrap();
 
-            rt.spawn_pending_jobs(false);
+            rt.spawn_pending_jobs(None);
 
             ctx.with(|ctx| {
                 let global = ctx.globals();
@@ -245,7 +245,7 @@ mod test {
             let rt = Runtime::new().unwrap();
             let ctx = Context::full(&rt).unwrap();
 
-            rt.spawn_pending_jobs(false);
+            rt.spawn_pending_jobs(None);
 
             let _res: Promise<()> = ctx.with(|ctx| {
                 let global = ctx.globals();

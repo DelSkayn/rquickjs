@@ -229,43 +229,61 @@ impl Runtime {
     /// Execute first pending job
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    /// The second returned value is true when pending jobs still in queue.
-    pub fn execute_pending_job(&self) -> (Result<bool>, bool) {
+    pub fn execute_pending_job(&self) -> Result<bool> {
         let guard = self.inner.lock();
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
         let result = unsafe { qjs::JS_ExecutePendingJob(guard.rt, ctx_ptr.as_mut_ptr()) };
         if result == 0 {
             // no jobs executed
-            return (Ok(false), false);
+            return Ok(false);
         }
         let ctx_ptr = unsafe { ctx_ptr.assume_init() };
-        let has_pending = 0 != unsafe { qjs::JS_IsJobPending(guard.rt) };
         if result == 1 {
             // single job executed
-            return (Ok(false), has_pending);
+            return Ok(true);
         }
         // exception thrown
         let ctx = Ctx::from_ptr(ctx_ptr);
         let res = Err(unsafe { value::get_exception(ctx) });
         mem::drop(guard);
-        (res, has_pending)
+        res
     }
 
     #[cfg(any(feature = "tokio", feature = "async-std"))]
     /// Execute pending jobs using async runtime
     ///
-    /// When `until_empty` is `true` execution will be stopped if no pending jobs still in queue.
-    /// When `until_empty` is `false` execution will never been stopped. All newly added pending tasks will be executed as well.
+    /// When `max_idle_cycles` is `Some(N)` execution will be stopped if no pending jobs still in queue while N polling cycles.
+    /// When `max_idle_cycles` is `None` execution will not been stopped until runtime is dropped. All newly added pending tasks will be executed as well.
     ///
+    /// # Features
     /// Either __tokio__ or __async-std__ runtime is supported depending from used cargo feature.
-    pub fn spawn_pending_jobs(&self, until_empty: bool) -> JoinHandle<()> {
-        let rt = self.clone();
-
+    pub fn spawn_pending_jobs(&self, max_idle_cycles: Option<usize>) -> JoinHandle<()> {
+        let rt = self.weak();
         spawn(async move {
-            loop {
-                let (_, has_pending) = rt.execute_pending_job();
-                if !has_pending && until_empty {
-                    break;
+            let mut idle_cycles = 0;
+            'run: while let Some(rt) = rt.try_ref() {
+                loop {
+                    match rt.execute_pending_job() {
+                        Ok(false) => {
+                            // queue was empty
+                            idle_cycles += 1;
+                            break;
+                        }
+                        result => {
+                            if let Err(error) = result {
+                                eprintln!("Error when pending job executing: {}", error);
+                            }
+                            idle_cycles = 0;
+                            // task was executed
+                            yield_now().await;
+                        }
+                    }
+                }
+                // queue was empty
+                if let Some(max_idle_cycles) = max_idle_cycles {
+                    if idle_cycles >= max_idle_cycles {
+                        break 'run;
+                    }
                 }
                 yield_now().await;
             }
@@ -287,12 +305,16 @@ impl Drop for Inner {
 // sending the runtime to other threads should be fine.
 #[cfg(feature = "parallel")]
 unsafe impl Send for Runtime {}
+#[cfg(feature = "parallel")]
+unsafe impl Send for WeakRuntime {}
 
 // Since a global lock needs to be locked for safe use
 // using runtime in a sync way should be safe as
 // simultanious accesses is syncronized behind a lock.
 #[cfg(feature = "parallel")]
 unsafe impl Sync for Runtime {}
+#[cfg(feature = "parallel")]
+unsafe impl Sync for WeakRuntime {}
 
 #[cfg(test)]
 mod test {
