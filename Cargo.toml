@@ -78,6 +78,9 @@ rust-alloc = ["allocator"]
 # Enable interop between Rust futures and JS Promises
 futures = []
 
+# Enable deferred Promise resolution
+deferred-resolution = []
+
 # Enable Tokio async runtime support
 tokio = ["futures", "tokio-rs"]
 
