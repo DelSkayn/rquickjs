@@ -1,61 +1,10 @@
 use rquickjs::{
-    AfterInit, BeforeInit, Context, Ctx, Error, FileResolver, Function, Loader, Module, ModuleDef,
-    NativeLoader, Resolver, Result, Runtime, ScriptLoader,
+    BuiltinLoader, BuiltinResolver, Context, FileResolver, Function, ModuleLoader, NativeLoader,
+    Runtime, ScriptLoader,
 };
 
-struct BundleResolver;
-
-impl Resolver for BundleResolver {
-    fn resolve(&mut self, _ctx: Ctx, base: &str, name: &str) -> Result<String> {
-        if name.starts_with("bundle/") {
-            Ok(name.into())
-        } else {
-            Err(Error::resolving::<_, _, &str>(base, name, None))
-        }
-    }
-}
-
-struct BundleLoader;
-
-impl Loader for BundleLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, BeforeInit>> {
-        if name == "bundle/script_module" {
-            ctx.compile_only(
-                name,
-                r#"
-export const n = 123;
-export const s = "abc";
-export const f = (a, b) => (a + b) * 0.5;
-"#,
-            )
-        } else if name == "bundle/native_module" {
-            Module::new::<NativeModule, _>(ctx, name)
-        } else {
-            Err(Error::loading::<_, &str>(name, None))
-        }
-    }
-}
-
-struct NativeModule;
-
-impl ModuleDef for NativeModule {
-    fn before_init<'js>(_ctx: Ctx<'js>, module: &Module<'js, BeforeInit>) -> Result<()> {
-        module.add("n")?;
-        module.add("s")?;
-        module.add("f")?;
-        Ok(())
-    }
-
-    fn after_init<'js>(ctx: Ctx<'js>, module: &Module<'js, AfterInit>) -> Result<()> {
-        module.set("n", 123)?;
-        module.set("s", "abc")?;
-        module.set(
-            "f",
-            Function::new(ctx, "f", |a: f64, b: f64| (a + b) * 0.5)?,
-        )?;
-        Ok(())
-    }
-}
+mod bundle;
+use bundle::{NativeModule, SCRIPT_MODULE};
 
 fn print(msg: String) {
     println!("{}", msg);
@@ -63,15 +12,17 @@ fn print(msg: String) {
 
 fn main() {
     let resolver = (
-        BundleResolver,
+        BuiltinResolver::default()
+            .with_module("bundle/script_module")
+            .with_module("bundle/native_module"),
         FileResolver::default()
-            .add_path("./")
-            .add_path("../../target/debug")
-            .add_native()
-            .build(),
+            .with_path("./")
+            .with_path("../../target/debug")
+            .with_native(),
     );
     let loader = (
-        BundleLoader,
+        BuiltinLoader::default().with_module("bundle/script_module", SCRIPT_MODULE),
+        ModuleLoader::default().with_module("bundle/native_module", NativeModule),
         ScriptLoader::default(),
         NativeLoader::default(),
     );

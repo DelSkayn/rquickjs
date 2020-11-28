@@ -7,4 +7,9 @@ publish = false
 
 [dependencies.rquickjs]
 path = "../.."
-features = ["async-std", "rust-alloc", "loader", "dyn-load"]
+default-features = false
+features = ["exports", "async-std", "rust-alloc", "loader", "dyn-load"]
+
+[features]
+#default = ["macro"]
+macro = ["rquickjs/macro"]

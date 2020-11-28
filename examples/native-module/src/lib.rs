@@ -1,24 +1,13 @@
-use rquickjs::{module_init, AfterInit, BeforeInit, Ctx, Function, Module, ModuleDef, Result};
+#[cfg(not(feature = "macro"))]
+mod hand_written;
 
-struct NativeModule;
+#[cfg(not(feature = "macro"))]
+use hand_written::NativeModule;
 
-impl ModuleDef for NativeModule {
-    fn before_init<'js>(_ctx: Ctx<'js>, module: &Module<'js, BeforeInit>) -> Result<()> {
-        module.add("n")?;
-        module.add("s")?;
-        module.add("f")?;
-        Ok(())
-    }
+#[cfg(feature = "macro")]
+mod using_macro;
 
-    fn after_init<'js>(ctx: Ctx<'js>, module: &Module<'js, AfterInit>) -> Result<()> {
-        module.set("n", 123)?;
-        module.set("s", "abc")?;
-        module.set(
-            "f",
-            Function::new(ctx, "f", |a: f64, b: f64| (a + b) * 0.5)?,
-        )?;
-        Ok(())
-    }
-}
+#[cfg(feature = "macro")]
+use using_macro::NativeModule;
 
-module_init!(NativeModule);
+rquickjs::module_init!(NativeModule);

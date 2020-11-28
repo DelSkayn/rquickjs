@@ -10,4 +10,9 @@ crate-type = ["cdylib"]
 
 [dependencies.rquickjs]
 path = "../.."
+default-features = false
 features = ["async-std", "rust-alloc"]
+
+[features]
+#default = ["macro"]
+macro = ["rquickjs/macro"]
