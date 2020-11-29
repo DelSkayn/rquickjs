@@ -175,7 +175,7 @@ unsafe extern "C" fn resolution_job(
     qjs::JS_Call(ctx, func, this, argc, argv)
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(feature = "async-std", feature = "tokio")))]
 mod test {
     use crate::*;
 
