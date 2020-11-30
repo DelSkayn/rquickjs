@@ -94,11 +94,6 @@ where
     T::Output: IntoJs<'js> + 'static,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        #[cfg(feature = "async-std")]
-        use async_std_rs::task::spawn_local as spawn;
-        #[cfg(feature = "tokio")]
-        use tokio_rs::task::spawn_local as spawn;
-
         let (promise, then, catch) = ctx.promise()?;
 
         let then = Persistent::save(ctx, then)?.outlive();
@@ -111,7 +106,7 @@ where
         let ctx = ctx.ctx;
         let future = self.0;
 
-        spawn(async move {
+        crate::async_shim::spawn_local(async move {
             let result = future.await;
 
             let rt_lock = runtime.inner.lock();
@@ -135,7 +130,7 @@ where
             mem::drop(rt_lock);
         });
 
-        Ok(Value::Object(promise))
+        Ok(promise.into_value())
     }
 }
 
@@ -177,18 +172,7 @@ unsafe extern "C" fn resolution_job(
 
 #[cfg(all(test, any(feature = "async-std", feature = "tokio")))]
 mod test {
-    use crate::*;
-
-    #[cfg(feature = "async-std")]
-    use async_std_rs::task::block_on;
-    #[cfg(feature = "tokio")]
-    fn block_on<F: std::future::Future>(future: F) -> F::Output {
-        tokio_rs::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(future)
-    }
+    use crate::{async_shim::block_on, *};
 
     #[test]
     fn async_fn_no_throw() {

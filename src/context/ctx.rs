@@ -191,16 +191,13 @@ impl<'js> Ctx<'js> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
 
         Ok(unsafe {
-            let promise = Object(JsObjectRef::from_js_value(
+            let promise = value::handle_exception(
                 self,
-                value::handle_exception(
-                    self,
-                    qjs::JS_NewPromiseCapability(self.ctx, funcs.as_mut_ptr() as *mut qjs::JSValue),
-                )?,
-            ));
+                qjs::JS_NewPromiseCapability(self.ctx, funcs.as_mut_ptr() as _),
+            )?;
             let (then, catch) = funcs.assume_init();
             (
-                promise,
+                Object(JsObjectRef::from_js_value(self, promise)),
                 Function(JsObjectRef::from_js_value(self, then)),
                 Function(JsObjectRef::from_js_value(self, catch)),
             )

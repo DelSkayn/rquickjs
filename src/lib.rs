@@ -55,6 +55,11 @@ pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 #[doc(hidden)]
 pub use rquickjs_sys as qjs;
 
+pub(crate) mod async_shim;
+
+#[cfg(any(feature = "tokio", feature = "async-std"))]
+pub use crate::async_shim::JoinHandle;
+
 #[cfg(feature = "futures")]
 mod promise;
 

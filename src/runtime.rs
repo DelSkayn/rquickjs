@@ -15,14 +15,8 @@ use crate::{allocator::AllocatorHolder, Allocator};
 #[cfg(feature = "loader")]
 use crate::{loader::LoaderHolder, Loader, Resolver};
 
-#[cfg(all(feature = "parallel", feature = "async-std"))]
-use async_std_rs::task::{spawn, yield_now, JoinHandle};
-#[cfg(all(not(feature = "parallel"), feature = "async-std"))]
-use async_std_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
-#[cfg(all(feature = "parallel", feature = "tokio"))]
-use tokio_rs::task::{spawn, yield_now, JoinHandle};
-#[cfg(all(not(feature = "parallel"), feature = "tokio"))]
-use tokio_rs::task::{spawn_local as spawn, yield_now, JoinHandle};
+#[cfg(any(feature = "tokio", feature = "async-std"))]
+pub use crate::async_shim::JoinHandle;
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -258,8 +252,10 @@ impl Runtime {
     /// # Features
     /// Either __tokio__ or __async-std__ runtime is supported depending from used cargo feature.
     pub fn spawn_pending_jobs(&self, max_idle_cycles: Option<usize>) -> JoinHandle<()> {
+        use crate::async_shim::{spawn_parallel, yield_now};
+
         let rt = self.weak();
-        spawn(async move {
+        spawn_parallel(async move {
             let mut idle_cycles = 0;
             'run: while let Some(rt) = rt.try_ref() {
                 loop {
