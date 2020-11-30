@@ -97,7 +97,7 @@ impl<'js> Function<'js> {
     {
         let this = this
             .unwrap_or_else(|| Ok(Value::Object(self.0.ctx.globals())))?
-            .as_js_value();
+            .into_js_value();
         let args = args
             .map(|res| res.map(|arg| arg.into_js_value()))
             .collect::<Result<Vec<_>>>()?;
@@ -109,6 +109,7 @@ impl<'js> Function<'js> {
             for arg in args {
                 qjs::JS_FreeValue(ctx, arg);
             }
+            qjs::JS_FreeValue(ctx, this);
             Value::from_js_value(self.0.ctx, val)
         }?;
         R::from_js(self.0.ctx, res)
