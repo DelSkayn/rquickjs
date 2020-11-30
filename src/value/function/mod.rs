@@ -147,18 +147,153 @@ mod test {
     use crate::*;
 
     #[test]
-    fn js_call() {
+    fn call_js_fn_with_no_args_and_no_return() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
-            let f: Function = ctx.eval("(a) => a + 4").unwrap();
-            let res = (3,).apply(&f).unwrap();
-            println!("{:?}", res);
-            assert_eq!(i32::from_js(ctx, res).unwrap(), 7);
-            let f: Function = ctx.eval("(a,b) => a * b + 4").unwrap();
-            let res = (3, 4).apply(&f).unwrap();
-            println!("{:?}", res);
-            assert_eq!(i32::from_js(ctx, res).unwrap(), 16);
+            let f: Function = ctx.eval("() => {}").unwrap();
+
+            let _: () = ().apply(&f).unwrap();
+            let _: () = f.call(()).unwrap();
+        })
+    }
+
+    #[test]
+    fn call_js_fn_with_no_args_and_return() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let f: Function = ctx.eval("() => 42").unwrap();
+
+            let res: i32 = ().apply(&f).unwrap();
+            assert_eq!(res, 42);
+
+            let res: i32 = f.call(()).unwrap();
+            assert_eq!(res, 42);
+        })
+    }
+
+    #[test]
+    fn call_js_fn_with_1_arg_and_return() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let f: Function = ctx.eval("a => a + 4").unwrap();
+
+            let res: i32 = (3,).apply(&f).unwrap();
+            assert_eq!(res, 7);
+
+            let res: i32 = f.call((1,)).unwrap();
+            assert_eq!(res, 5);
+        })
+    }
+
+    #[test]
+    fn call_js_fn_with_2_args_and_return() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let f: Function = ctx.eval("(a, b) => a * b + 4").unwrap();
+
+            let res: i32 = (3, 4).apply(&f).unwrap();
+            assert_eq!(res, 16);
+
+            let res: i32 = f.call((5, 1)).unwrap();
+            assert_eq!(res, 9);
+        })
+    }
+
+    #[test]
+    fn call_js_fn_with_var_args_and_return() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        let res: Vec<i8> = ctx.with(|ctx| {
+            let func: Function = ctx
+                .eval(
+                    r#"
+                  (...x) => [x.length, ...x]
+                "#,
+                )
+                .unwrap();
+            func.call((Args(vec![1, 2, 3]),)).unwrap()
+        });
+        assert_eq!(res.len(), 4);
+        assert_eq!(res[0], 3);
+        assert_eq!(res[1], 1);
+        assert_eq!(res[2], 2);
+        assert_eq!(res[3], 3);
+    }
+
+    #[test]
+    fn call_js_fn_with_rest_args_and_return() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        let res: Vec<i8> = ctx.with(|ctx| {
+            let func: Function = ctx
+                .eval(
+                    r#"
+                  (a, b, ...x) => [a, b, x.length, ...x]
+                "#,
+                )
+                .unwrap();
+            func.call((-2, -1, Args(vec![1, 2]))).unwrap()
+        });
+        assert_eq!(res.len(), 5);
+        assert_eq!(res[0], -2);
+        assert_eq!(res[1], -1);
+        assert_eq!(res[2], 2);
+        assert_eq!(res[3], 1);
+        assert_eq!(res[4], 2);
+    }
+
+    #[test]
+    fn call_js_fn_with_no_args_and_throw() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let f: Function = ctx
+                .eval("() => { throw new Error('unimplemented'); }")
+                .unwrap();
+
+            if let Err(Error::Exception { message, .. }) = f.call::<_, ()>(()) {
+                assert_eq!(message, "unimplemented");
+            } else {
+                panic!("Should throws");
+            }
+        })
+    }
+
+    #[test]
+    fn call_js_fn_with_this_and_no_args_and_return() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let f: Function = ctx.eval("function f() { return this.val; } f").unwrap();
+            let obj = Object::new(ctx).unwrap();
+            obj.set("val", 42).unwrap();
+
+            let res: i32 = (This(obj.clone()),).apply(&f).unwrap();
+            assert_eq!(res, 42);
+            let res: i32 = f.call((This(obj),)).unwrap();
+            assert_eq!(res, 42);
+        })
+    }
+
+    #[test]
+    fn call_js_fn_with_this_and_1_arg_and_return() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let f: Function = ctx
+                .eval("function f(a) { return this.val * a; } f")
+                .unwrap();
+            let obj = Object::new(ctx).unwrap();
+            obj.set("val", 3).unwrap();
+
+            let res: i32 = (This(obj.clone()), 2).apply(&f).unwrap();
+            assert_eq!(res, 6);
+            let res: i32 = f.call((This(obj), 3)).unwrap();
+            assert_eq!(res, 9);
         })
     }
 
@@ -351,49 +486,6 @@ mod test {
             let id: u32 = ctx.eval("new_id()").unwrap();
             assert_eq!(id, 13);
         })
-    }
-
-    #[test]
-    fn call_js_fn_with_var_args() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        let res: Vec<i8> = ctx.with(|ctx| {
-            let func: Function = ctx
-                .eval(
-                    r#"
-                  (...x) => [x.length, ...x]
-                "#,
-                )
-                .unwrap();
-            func.call((Args(vec![1, 2, 3]),)).unwrap()
-        });
-        assert_eq!(res.len(), 4);
-        assert_eq!(res[0], 3);
-        assert_eq!(res[1], 1);
-        assert_eq!(res[2], 2);
-        assert_eq!(res[3], 3);
-    }
-
-    #[test]
-    fn call_js_fn_with_rest_args() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        let res: Vec<i8> = ctx.with(|ctx| {
-            let func: Function = ctx
-                .eval(
-                    r#"
-                  (a, b, ...x) => [a, b, x.length, ...x]
-                "#,
-                )
-                .unwrap();
-            func.call((-2, -1, Args(vec![1, 2]))).unwrap()
-        });
-        assert_eq!(res.len(), 5);
-        assert_eq!(res[0], -2);
-        assert_eq!(res[1], -1);
-        assert_eq!(res[2], 2);
-        assert_eq!(res[3], 1);
-        assert_eq!(res[4], 2);
     }
 
     #[test]
