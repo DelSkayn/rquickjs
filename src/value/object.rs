@@ -1,7 +1,8 @@
 use crate::{
     qjs,
     value::{self, rf::JsObjectRef},
-    Array, Atom, Ctx, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, Result, Value,
+    Array, Atom, Ctx, Error, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, Result,
+    Value,
 };
 use std::{
     iter::{IntoIterator, Iterator},
@@ -135,6 +136,33 @@ impl<'js> Object<'js> {
             state: Some(IterState::new(&self.0, flags)),
             object: self.clone(),
             marker: PhantomData,
+        }
+    }
+
+    /// Get an object prototype
+    pub fn get_prototype(&self) -> Result<Object<'js>> {
+        Ok(Object(unsafe {
+            let proto = qjs::JS_GetPrototype(self.0.ctx.ctx, self.0.as_js_value());
+            if qjs::JS_IsNull(proto) {
+                return Err(Error::Unknown);
+            } else {
+                JsObjectRef::from_js_value(self.0.ctx, proto)
+            }
+        }))
+    }
+
+    /// Set an object prototype
+    pub fn set_prototype(&self, proto: &Object<'js>) -> Result<()> {
+        unsafe {
+            if 1 != qjs::JS_SetPrototype(
+                self.0.ctx.ctx,
+                self.0.as_js_value(),
+                proto.0.as_js_value(),
+            ) {
+                Err(value::get_exception(self.0.ctx))
+            } else {
+                Ok(())
+            }
         }
     }
 

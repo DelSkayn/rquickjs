@@ -1,6 +1,6 @@
 use crate::{
-    qjs, value::rf::JsObjectRef, Ctx, FromJs, IntoAtom, IntoJs, Object, Result, SendWhenParallel,
-    Value,
+    qjs, value, value::rf::JsObjectRef, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result,
+    SendWhenParallel, Value,
 };
 use std::cell::RefCell;
 
@@ -27,7 +27,9 @@ impl<'js> Function<'js> {
         F: AsFunction<'js_, A, R> + SendWhenParallel + 'static,
     {
         let func = FuncOpaque::new(move |ctx, this, args| func.call(ctx, this, args));
-        Self::new_raw(ctx, name, F::LEN, func)
+        let func = Self::new_raw(ctx, name, F::LEN, func)?;
+        F::post(ctx, &func)?;
+        Ok(func)
     }
 
     pub fn new_mut<'js_, F, A, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
@@ -41,7 +43,9 @@ impl<'js> Function<'js> {
                 .expect("Mutable function callback is already in use! Could it have been called recursively?");
             func.call(ctx, this, args)
         });
-        Self::new_raw(ctx, name, F::LEN, func)
+        let func = Self::new_raw(ctx, name, F::LEN, func)?;
+        F::post(ctx, &func)?;
+        Ok(func)
     }
 
     pub fn new_raw<N>(ctx: Ctx<'js>, name: N, len: u32, func: FuncOpaque) -> Result<Self>
@@ -113,6 +117,56 @@ impl<'js> Function<'js> {
             Value::from_js_value(self.0.ctx, val)
         }?;
         R::from_js(self.0.ctx, res)
+    }
+
+    /// Check that function is a constructor
+    pub fn is_constructor(&self) -> bool {
+        0 != unsafe { qjs::JS_IsConstructor(self.0.ctx.ctx, self.0.as_js_value()) }
+    }
+
+    /// Mark the function as a constructor
+    pub fn set_constructor(&self, flag: bool) {
+        unsafe {
+            qjs::JS_SetConstructorBit(
+                self.0.ctx.ctx,
+                self.0.as_js_value(),
+                if flag { 1 } else { 0 },
+            )
+        };
+    }
+
+    /// Set a function prototype
+    ///
+    /// Actually this method does the following:
+    /// ```js
+    /// func.prototype = proto;
+    /// proto.constructor = func;
+    /// ```
+    pub fn set_prototype(&self, proto: &Object<'js>) {
+        unsafe {
+            qjs::JS_SetConstructor(self.0.ctx.ctx, self.0.as_js_value(), proto.0.as_js_value())
+        };
+    }
+
+    /// Get a function prototype
+    ///
+    /// Actually this method returns the `func.prototype`.
+    pub fn get_prototype(&self) -> Result<Object<'js>> {
+        Ok(Object(unsafe {
+            let proto = value::handle_exception(
+                self.0.ctx,
+                qjs::JS_GetPropertyStr(
+                    self.0.ctx.ctx,
+                    self.0.as_js_value(),
+                    "prototype\0".as_ptr() as _,
+                ),
+            )?;
+            if qjs::JS_IsObject(proto) {
+                JsObjectRef::from_js_value(self.0.ctx, proto)
+            } else {
+                return Err(Error::Unknown);
+            }
+        }))
     }
 
     /// Convert into object

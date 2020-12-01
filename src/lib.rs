@@ -50,6 +50,11 @@ mod value;
 pub use markers::SendWhenParallel;
 pub use value::*;
 
+#[cfg(feature = "classes")]
+mod class;
+#[cfg(feature = "classes")]
+pub use class::{Class, ClassDef, ClassId, Constructor, WithProto};
+
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
 #[doc(hidden)]

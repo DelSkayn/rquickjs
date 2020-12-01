@@ -1,5 +1,8 @@
 use super::ArgsValue;
-use crate::{context::Ctx, Args, Error, FromJs, IntoJs, Method, Result, This, Value};
+use crate::{context::Ctx, Args, Error, FromJs, Function, IntoJs, Method, Result, This, Value};
+
+#[cfg(feature = "classes")]
+use crate::{Class, ClassDef, Constructor};
 
 /// The trait to wrap rust function to JS directly
 pub trait AsFunction<'js, A, R> {
@@ -8,6 +11,11 @@ pub trait AsFunction<'js, A, R> {
 
     /// Calling function from JS side
     fn call(&self, ctx: Ctx<'js>, this: Value<'js>, args: ArgsValue<'js>) -> Result<Value<'js>>;
+
+    /// Post-processing the function
+    fn post<'js_>(_ctx: Ctx<'js_>, _func: &Function<'js_>) -> Result<()> {
+        Ok(())
+    }
 }
 
 /// The trait to wrap rust function to JS directly
@@ -18,13 +26,20 @@ pub trait AsFunctionMut<'js, A, R> {
     /// Calling function from JS side
     fn call(&mut self, ctx: Ctx<'js>, this: Value<'js>, args: ArgsValue<'js>)
         -> Result<Value<'js>>;
+
+    /// Post-processing the function
+    fn post<'js_>(_ctx: Ctx<'js_>, _func: &Function<'js_>) -> Result<()> {
+        Ok(())
+    }
 }
 
 macro_rules! as_fn_impls {
     ($($($t:ident)*,)*) => {
         $(
-            // for Method<fn>
-            as_fn_impls!(@fun [method AsFunction &] $($t)*);
+            // for Method<Fn>
+            as_fn_impls!(@fun [Method AsFunction &] $($t)*);
+            // for Constructor<Fn>
+            as_fn_impls!(@fun [Constructor AsFunction &] $($t)*);
             // for Fn
             as_fn_impls!(@fun [Fn AsFunction &] $($t)*);
             // for FnMut
@@ -57,9 +72,10 @@ macro_rules! as_fn_impls {
     // $ts - succeeded type parameters
     // $ap - preceded arg types
     // $as - succeeded arg types
-    (@imp [method $i:tt $($s:tt)*] $($t:ident)*; $($tp:ident)*: $([$($ap:tt)*]),*; $($ts:ident)*: $([$($as:tt)*]),*; ) => {
-        impl<'js, S, $($tp,)* $($t,)* $($ts,)* R> $i<'js, (S, $($($ap)*,)* $($t,)* $($($as)*,)*), R> for Method<fn(S, $($($ap)*,)* $($t,)* $($($as)*,)*) -> R>
+    (@imp [Method $i:tt $($s:tt)*] $($t:ident)*; $($tp:ident)*: $([$($ap:tt)*]),*; $($ts:ident)*: $([$($as:tt)*]),*; ) => {
+        impl<'js, F, S, $($tp,)* $($t,)* $($ts,)* R> $i<'js, (S, $($($ap)*,)* $($t,)* $($($as)*,)*), R> for Method<F>
         where
+            F: Fn(S, $($($ap)*,)* $($t,)* $($($as)*,)*) -> R,
             S: FromJs<'js>,
             $($tp: FromJs<'js>,)*
             $($t: FromJs<'js>,)*
@@ -88,9 +104,12 @@ macro_rules! as_fn_impls {
     // $ts - succeeded type parameters
     // $ap - preceded arg types
     // $as - succeeded arg types
-    (@imp [fn $i:tt $($s:tt)*] $($t:ident)*; $($tp:ident)*: $([$($ap:tt)*]),*; $($ts:ident)*: $([$($as:tt)*]),*; ) => {
-        impl<'js, $($tp,)* $($t,)* $($ts,)* R> $i<'js, ($($($ap)*,)* $($t,)* $($($as)*,)*), R> for Static<fn($($($ap)*,)* $($t,)* $($($as)*,)*) -> R>
+    (@imp [Constructor $i:tt $($s:tt)*] $($t:ident)*; $($tp:ident)*: $([$($ap:tt)*]),*; $($ts:ident)*: $([$($as:tt)*]),*; ) => {
+        #[cfg(feature = "classes")]
+        impl<'js, C, F, $($tp,)* $($t,)* $($ts,)* R> $i<'js, (C, $($($ap)*,)* $($t,)* $($($as)*,)*), R> for Constructor<C, F>
         where
+            C: ClassDef,
+            F: Fn($($($ap)*,)* $($t,)* $($($as)*,)*) -> R,
             $($tp: FromJs<'js>,)*
             $($t: FromJs<'js>,)*
             $($ts: FromJs<'js>,)*
@@ -100,12 +119,35 @@ macro_rules! as_fn_impls {
 
             #[allow(unused_mut, unused)]
             fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsValue<'js>) -> Result<Value<'js>> {
+                let proto = match &this {
+                    // called as constructor (with new keyword)
+                    Value::Function(new_target) => new_target.get_prototype(),
+                    // called as a function
+                    _ => Class::<C>::prototype(ctx),
+                }?;
                 let mut args = args.iter();
-                self(
+                let res = self(
                     $(as_fn_impls!(@arg ctx this args $($ap)*),)*
                     $($t::from_js(ctx, args.next().ok_or_else(not_enough_args)?)?,)*
                     $(as_fn_impls!(@arg ctx this args $($as)*),)*
-                ).into_js(ctx)
+                ).into_js(ctx)?;
+                if let Value::Object(obj) = &res {
+                    obj.set_prototype(&proto)?;
+                    Ok(res)
+                } else {
+                    Err(Error::IntoJs {
+                        from: "value",
+                        to: C::CLASS_NAME,
+                        message: None,
+                    })
+                }
+            }
+
+            fn post<'js_>(ctx: Ctx<'js_>, func: &Function<'js_>) -> Result<()> {
+                func.set_constructor(true);
+                let proto = Class::<C>::prototype(ctx)?;
+                func.set_prototype(&proto);
+                Ok(())
             }
         }
     };
@@ -161,31 +203,31 @@ as_fn_impls! {
     ,
     A,
     A B,
-    A B C,
-    A B C D,
-    A B C D E,
-    A B C D E G,
+    A B D,
+    A B D E,
+    A B D E G,
+    A B D E G H,
 }
 #[cfg(feature = "max-args-7")]
-as_fn_impls!(A B C D E G H,);
-#[cfg(feature = "max-args-8")]
 as_fn_impls!(A B C D E G H I,);
-#[cfg(feature = "max-args-9")]
+#[cfg(feature = "max-args-8")]
 as_fn_impls!(A B C D E G H I J,);
-#[cfg(feature = "max-args-10")]
+#[cfg(feature = "max-args-9")]
 as_fn_impls!(A B C D E G H I J K,);
-#[cfg(feature = "max-args-11")]
+#[cfg(feature = "max-args-10")]
 as_fn_impls!(A B C D E G H I J K L,);
-#[cfg(feature = "max-args-12")]
+#[cfg(feature = "max-args-11")]
 as_fn_impls!(A B C D E G H I J K L M,);
-#[cfg(feature = "max-args-13")]
+#[cfg(feature = "max-args-12")]
 as_fn_impls!(A B C D E G H I J K L M N,);
-#[cfg(feature = "max-args-14")]
+#[cfg(feature = "max-args-13")]
 as_fn_impls!(A B C D E G H I J K L M N O,);
-#[cfg(feature = "max-args-15")]
+#[cfg(feature = "max-args-14")]
 as_fn_impls!(A B C D E G H I J K L M N O P,);
-#[cfg(feature = "max-args-16")]
+#[cfg(feature = "max-args-15")]
 as_fn_impls!(A B C D E G H I J K L M N O P U,);
+#[cfg(feature = "max-args-16")]
+as_fn_impls!(A B C D E G H I J K L M N O P U V,);
 
 fn not_enough_args() -> Error {
     Error::FromJs {
