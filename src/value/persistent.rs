@@ -190,17 +190,21 @@ mod test {
     fn persistent_function() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
+
         let func = ctx.with(|ctx| {
             ctx.eval::<Persistent<Function>, _>("a => a + 1")
                 .unwrap()
                 .outlive()
         });
+
         let res: i32 = ctx.with(|ctx| {
             let func = func.clone().inlive().restore(ctx).unwrap();
             func.call((2,)).unwrap()
         });
         assert_eq!(res, 3);
-        let res: i32 = ctx.with(|ctx| {
+
+        let ctx2 = Context::full(&rt).unwrap();
+        let res: i32 = ctx2.with(|ctx| {
             let func = func.inlive().restore(ctx).unwrap();
             func.call((0,)).unwrap()
         });

@@ -165,9 +165,7 @@ mod test {
 
     #[test]
     fn base() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val = ctx.eval::<Value, _>(r#"1+1"#);
 
             assert_eq!(val.unwrap(), Value::Int(2));
@@ -190,9 +188,7 @@ mod test {
     #[cfg(feature = "exports")]
     #[test]
     fn module() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let _value: Module = ctx
                 .compile(
                     "test_mod",
@@ -228,9 +224,7 @@ mod test {
 
     #[test]
     fn exception() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val = ctx.eval::<(), _>("bla?#@!@ ");
             if let Err(e) = val {
                 assert!(e.is_exception());

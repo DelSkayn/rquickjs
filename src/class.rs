@@ -324,20 +324,14 @@ mod test {
         struct Bar(pub i32);
         class_def!(Bar);
 
-        let rt = Runtime::new().unwrap();
-        let ctx: Context = Context::full(&rt).unwrap();
+        test_with(|ctx| {
+            let global = ctx.globals();
 
-        ctx.with(|ctx| {
             Class::<Foo>::register(ctx).unwrap();
             Class::<Bar>::register(ctx).unwrap();
 
-            let global = ctx.globals();
             global.set("foo", Foo("I'm foo".into())).unwrap();
             global.set("bar", Bar(14)).unwrap();
-        });
-
-        ctx.with(|ctx| {
-            let global = ctx.globals();
 
             let foo: &Foo = global.get("foo").unwrap();
             assert_eq!(foo.0, "I'm foo");
@@ -358,18 +352,13 @@ mod test {
             } else {
                 panic!("An error was expected");
             }
-        });
 
-        ctx.with(|ctx| {
             // which doesn't fail
             Class::<Bar>::register(ctx).unwrap();
             Class::<Foo>::register(ctx).unwrap();
         });
 
-        let rt = Runtime::new().unwrap();
-        let ctx: Context = Context::full(&rt).unwrap();
-
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             // which doesn't fail too
             Class::<Foo>::register(ctx).unwrap();
             Class::<Bar>::register(ctx).unwrap();
@@ -404,10 +393,7 @@ mod test {
             }
         );
 
-        let rt = Runtime::new().unwrap();
-        let ctx: Context = Context::full(&rt).unwrap();
-
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             Class::<Point>::register(ctx).unwrap();
 
             let global = ctx.globals();

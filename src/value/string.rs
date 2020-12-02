@@ -45,9 +45,7 @@ mod test {
     use crate::*;
     #[test]
     fn from_javascript() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let s: String = ctx.eval(" 'foo bar baz' ").unwrap();
             assert_eq!(s.to_string().unwrap(), "foo bar baz");
         });
@@ -55,9 +53,7 @@ mod test {
 
     #[test]
     fn to_javascript() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let string = String::from_str(ctx, "foo").unwrap();
             let func: Function = ctx.eval("x =>  x + 'bar'").unwrap();
             let text: StdString = (string,).apply(&func).unwrap();

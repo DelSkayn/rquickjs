@@ -374,9 +374,7 @@ mod test {
 
     #[test]
     fn from_javascript() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let module: Module = ctx
                 .compile(
                     "Test",

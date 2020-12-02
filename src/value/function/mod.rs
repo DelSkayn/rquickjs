@@ -202,9 +202,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_no_args_and_no_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f: Function = ctx.eval("() => {}").unwrap();
 
             let _: () = ().apply(&f).unwrap();
@@ -214,9 +212,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_no_args_and_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f: Function = ctx.eval("() => 42").unwrap();
 
             let res: i32 = ().apply(&f).unwrap();
@@ -229,9 +225,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_1_arg_and_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f: Function = ctx.eval("a => a + 4").unwrap();
 
             let res: i32 = (3,).apply(&f).unwrap();
@@ -244,9 +238,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_2_args_and_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f: Function = ctx.eval("(a, b) => a * b + 4").unwrap();
 
             let res: i32 = (3, 4).apply(&f).unwrap();
@@ -259,9 +251,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_var_args_and_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        let res: Vec<i8> = ctx.with(|ctx| {
+        let res: Vec<i8> = test_with(|ctx| {
             let func: Function = ctx
                 .eval(
                     r#"
@@ -280,9 +270,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_rest_args_and_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        let res: Vec<i8> = ctx.with(|ctx| {
+        let res: Vec<i8> = test_with(|ctx| {
             let func: Function = ctx
                 .eval(
                     r#"
@@ -302,9 +290,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_no_args_and_throw() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f: Function = ctx
                 .eval("() => { throw new Error('unimplemented'); }")
                 .unwrap();
@@ -319,9 +305,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_this_and_no_args_and_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f: Function = ctx.eval("function f() { return this.val; } f").unwrap();
             let obj = Object::new(ctx).unwrap();
             obj.set("val", 42).unwrap();
@@ -335,9 +319,7 @@ mod test {
 
     #[test]
     fn call_js_fn_with_this_and_1_arg_and_return() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f: Function = ctx
                 .eval("function f(a) { return this.val * a; } f")
                 .unwrap();
@@ -357,9 +339,7 @@ mod test {
 
     #[test]
     fn static_callback() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let f = Function::new(ctx, "test", test).unwrap();
             let eval: Function = ctx.eval("a => { a() }").unwrap();
             (f.clone(),).apply::<()>(&eval).unwrap();
@@ -377,9 +357,7 @@ mod test {
     #[test]
     fn const_callback() {
         use std::sync::{Arc, Mutex};
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let called = Arc::new(Mutex::new(false));
             let called_clone = called.clone();
             let f = Function::new(ctx, "test", move || {
@@ -403,9 +381,7 @@ mod test {
 
     #[test]
     fn mutable_callback() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let mut v = 0;
             let f = Function::new_mut(ctx, "test", move || {
                 v += 1;
@@ -432,9 +408,7 @@ mod test {
         expected = "Mutable function callback is already in use! Could it have been called recursively?"
     )]
     fn recursive_mutable_callback() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let mut v = 0;
             let f = Function::new_mut(ctx, "test", move |ctx: Ctx| {
                 v += 1;
@@ -453,9 +427,7 @@ mod test {
 
     #[test]
     fn multiple_const_callbacks() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let globals = ctx.globals();
             globals
                 .set("one", Function::new(ctx, "id", || 1f64).unwrap())
@@ -477,9 +449,7 @@ mod test {
 
     #[test]
     fn mutable_callback_which_can_fail() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let globals = ctx.globals();
             let mut id_alloc = 0;
             globals
@@ -509,9 +479,7 @@ mod test {
 
     #[test]
     fn mutable_callback_with_ctx_which_reads_globals() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let globals = ctx.globals();
             let mut id_alloc = 0;
             globals
@@ -544,9 +512,7 @@ mod test {
 
     #[test]
     fn call_rust_fn_with_var_args() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        let res: Vec<i8> = ctx.with(|ctx| {
+        let res: Vec<i8> = test_with(|ctx| {
             let func = Function::new(ctx, "test_fn", |args: Args<i8>| {
                 use std::iter::once;
                 once(args.len() as i8)
@@ -571,9 +537,7 @@ mod test {
 
     #[test]
     fn call_rust_fn_with_rest_args() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        let res: Vec<i8> = ctx.with(|ctx| {
+        let res: Vec<i8> = test_with(|ctx| {
             let func = Function::new(ctx, "test_fn", |arg1: i8, arg2: i8, args: Args<i8>| {
                 use std::iter::once;
                 once(arg1)
@@ -601,9 +565,7 @@ mod test {
 
     #[test]
     fn js_fn_wrappers() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let global = ctx.globals();
             global
                 .set(

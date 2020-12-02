@@ -85,3 +85,13 @@ pub use loader::{FileResolver, Loader, Resolver, ScriptLoader};
 
 #[cfg(feature = "dyn-load")]
 pub use loader::NativeLoader;
+
+#[cfg(test)]
+pub(crate) fn test_with<'js, F, R>(func: F) -> R
+where
+    F: FnOnce(Ctx) -> R,
+{
+    let rt = Runtime::new().unwrap();
+    let ctx = Context::full(&rt).unwrap();
+    ctx.with(func)
+}

@@ -153,9 +153,7 @@ mod test {
     use crate::*;
     #[test]
     fn from_javascript() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val = ctx.eval::<Value, _>(
                 r#"
                 let a = [1,2,3,4,10,"b"]
@@ -180,9 +178,7 @@ mod test {
 
     #[test]
     fn into_object() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val = ctx
                 .eval::<Array, _>(
                     r#"
@@ -198,9 +194,7 @@ mod test {
 
     #[test]
     fn into_iter() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val: Array = ctx
                 .eval(
                     r#"
@@ -218,9 +212,7 @@ mod test {
 
     #[test]
     fn iter() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val: Array = ctx
                 .eval(
                     r#"
@@ -239,9 +231,7 @@ mod test {
 
     #[test]
     fn collect_js() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let array = [1i32, 2, 3]
                 .iter()
                 .cloned()

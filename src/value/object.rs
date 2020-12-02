@@ -372,9 +372,7 @@ mod test {
     use std::string::String as StdString;
     #[test]
     fn from_javascript() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val = ctx.eval::<Value, _>(
                 r#"
                 let obj = {};
@@ -402,9 +400,7 @@ mod test {
 
     #[test]
     fn types() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val: Object = ctx
                 .eval(
                     r#"
@@ -437,9 +433,7 @@ mod test {
 
     #[test]
     fn own_keys_iter() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val: Object = ctx
                 .eval(
                     r#"
@@ -466,9 +460,7 @@ mod test {
 
     #[test]
     fn own_props_iter() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val: Object = ctx
                 .eval(
                     r#"
@@ -496,9 +488,7 @@ mod test {
 
     #[test]
     fn into_iter() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val: Object = ctx
                 .eval(
                     r#"
@@ -526,9 +516,7 @@ mod test {
 
     #[test]
     fn iter_take() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let val: Object = ctx
                 .eval(
                     r#"
@@ -553,9 +541,7 @@ mod test {
 
     #[test]
     fn collect_js() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
+        test_with(|ctx| {
             let object = [("a", "bc"), ("$_", ""), ("", "xyz")]
                 .iter()
                 .cloned()
