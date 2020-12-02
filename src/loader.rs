@@ -13,6 +13,15 @@ mod native_loader;
 #[cfg(feature = "dyn-load")]
 pub use native_loader::NativeLoader;
 
+mod builtin_resolver;
+pub use builtin_resolver::BuiltinResolver;
+
+mod builtin_loader;
+pub use builtin_loader::BuiltinLoader;
+
+mod module_loader;
+pub use module_loader::ModuleLoader;
+
 /// Module resolver trait
 ///
 /// # Features
