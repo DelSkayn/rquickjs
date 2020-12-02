@@ -55,6 +55,11 @@ mod class;
 #[cfg(feature = "classes")]
 pub use class::{Class, ClassDef, ClassId, Constructor, WithProto};
 
+#[cfg(feature = "properties")]
+mod property;
+#[cfg(feature = "properties")]
+pub use property::{AsProperty, NoConfigurable, NoEnumerable, NoWritable};
+
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
 #[doc(hidden)]

@@ -50,7 +50,7 @@ members = [
 default = ["exports"]
 
 # Features which is used for documentation
-rustdoc = ["exports", "loader", "allocator", "dyn-load", "classes", "async-std"]
+rustdoc = ["exports", "loader", "allocator", "dyn-load", "classes", "properties", "async-std"]
 
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
@@ -77,6 +77,9 @@ rust-alloc = ["allocator"]
 
 # Enable user-defined classes support
 classes = []
+
+# Enable user-defined properties support
+properties = []
 
 # Enable interop between Rust futures and JS Promises
 futures = []
