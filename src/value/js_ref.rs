@@ -1,4 +1,4 @@
-use crate::{context::Ctx, qjs};
+use crate::{qjs, Ctx};
 use std::{fmt, marker::PhantomData, mem};
 
 /// A owned reference to a javascript object.

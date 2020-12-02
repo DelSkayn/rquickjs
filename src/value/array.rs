@@ -1,8 +1,4 @@
-use crate::{
-    qjs,
-    value::{self, rf::JsObjectRef},
-    Ctx, FromIteratorJs, FromJs, IntoJs, Object, Result, Value,
-};
+use crate::{qjs, value, Ctx, FromIteratorJs, FromJs, IntoJs, JsObjectRef, Object, Result, Value};
 use std::{
     iter::{IntoIterator, Iterator},
     marker::PhantomData,

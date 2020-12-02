@@ -1,7 +1,7 @@
 #[cfg(feature = "deferred-resolution")]
 use crate::qjs;
 use crate::{
-    safe_ref::Ref, Ctx, Error, FromJs, Function, IntoJs, JsFn, Object, Persistent, Result,
+    Ctx, Error, FromJs, Function, IntoJs, JsFn, Object, Persistent, Result, SafeRef,
     SendWhenParallel, This, Value,
 };
 use std::{
@@ -13,7 +13,7 @@ use std::{
 
 /// Future-aware promise
 pub struct Promise<T> {
-    state: Ref<State<T>>,
+    state: SafeRef<State<T>>,
 }
 
 struct State<T> {
@@ -44,7 +44,7 @@ where
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let obj = Object::from_js(ctx, value)?;
         let then: Function = obj.get("then")?;
-        let state = Ref::new(State::default());
+        let state = SafeRef::new(State::default());
         let on_ok = JsFn::new("onSuccess", {
             let state = state.clone();
             move |ctx: Ctx<'js>, value: Value<'js>| {

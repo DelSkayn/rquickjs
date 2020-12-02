@@ -12,19 +12,19 @@ pub use std::cell::RefMut as RefGuard;
 pub use std::sync::MutexGuard as RefGuard;
 
 #[repr(transparent)]
-pub struct Ref<T>(
+pub struct SafeRef<T>(
     #[cfg(not(feature = "parallel"))] Rc<RefCell<T>>,
     #[cfg(feature = "parallel")] Arc<Mutex<T>>,
 );
 
-impl<T> Clone for Ref<T> {
+impl<T> Clone for SafeRef<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
 #[cfg(not(feature = "parallel"))]
-impl<T> Ref<T> {
+impl<T> SafeRef<T> {
     pub fn new(inner: T) -> Self {
         Self(Rc::new(RefCell::new(inner)))
     }
@@ -37,13 +37,13 @@ impl<T> Ref<T> {
         Ok(self.0.borrow_mut())
     }
 
-    pub fn weak(&self) -> WeakRef<T> {
-        WeakRef(Rc::downgrade(&self.0))
+    pub fn weak(&self) -> SafeWeakRef<T> {
+        SafeWeakRef(Rc::downgrade(&self.0))
     }
 }
 
 #[cfg(feature = "parallel")]
-impl<T> Ref<T> {
+impl<T> SafeRef<T> {
     pub fn new(inner: T) -> Self {
         Self(Arc::new(Mutex::new(inner)))
     }
@@ -59,25 +59,25 @@ impl<T> Ref<T> {
         }
     }
 
-    pub fn weak(&self) -> WeakRef<T> {
-        WeakRef(Arc::downgrade(&self.0))
+    pub fn weak(&self) -> SafeWeakRef<T> {
+        SafeWeakRef(Arc::downgrade(&self.0))
     }
 }
 
 #[repr(transparent)]
-pub struct WeakRef<T>(
+pub struct SafeWeakRef<T>(
     #[cfg(not(feature = "parallel"))] Weak<RefCell<T>>,
     #[cfg(feature = "parallel")] Weak<Mutex<T>>,
 );
 
-impl<T> Clone for WeakRef<T> {
+impl<T> Clone for SafeWeakRef<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }
 }
 
-impl<T> WeakRef<T> {
-    pub fn try_ref(&self) -> Option<Ref<T>> {
-        self.0.upgrade().map(Ref)
+impl<T> SafeWeakRef<T> {
+    pub fn try_ref(&self) -> Option<SafeRef<T>> {
+        self.0.upgrade().map(SafeRef)
     }
 }

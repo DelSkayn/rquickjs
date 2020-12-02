@@ -1,9 +1,4 @@
-use crate::{
-    context::Ctx,
-    qjs,
-    safe_ref::{Ref, WeakRef},
-    value, Error, Function, RegisteryKey, Result,
-};
+use crate::{qjs, value, Ctx, Error, Function, RegisteryKey, Result, SafeRef, SafeWeakRef};
 use fxhash::FxHashSet as HashSet;
 use std::{any::Any, ffi::CString, mem};
 
@@ -20,7 +15,7 @@ pub use crate::async_shim::JoinHandle;
 
 #[derive(Clone)]
 #[repr(transparent)]
-pub struct WeakRuntime(WeakRef<Inner>);
+pub struct WeakRuntime(SafeWeakRef<Inner>);
 
 impl WeakRuntime {
     pub fn try_ref(&self) -> Option<Runtime> {
@@ -68,7 +63,7 @@ pub(crate) struct Inner {
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Runtime {
-    pub(crate) inner: Ref<Inner>,
+    pub(crate) inner: SafeRef<Inner>,
 }
 
 impl Runtime {
@@ -122,7 +117,7 @@ impl Runtime {
         }
         unsafe { Function::init_raw_rt(rt) };
         let runtime = Runtime {
-            inner: Ref::new(Inner {
+            inner: SafeRef::new(Inner {
                 rt,
                 info: None,
                 #[cfg(feature = "allocator")]

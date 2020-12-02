@@ -1,5 +1,5 @@
 use crate::{
-    qjs, value, value::rf::JsObjectRef, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result,
+    qjs, value, Ctx, Error, FromJs, IntoAtom, IntoJs, JsObjectRef, Object, Result,
     SendWhenParallel, Value,
 };
 use std::cell::RefCell;

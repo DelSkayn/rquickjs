@@ -1,5 +1,5 @@
 use super::ArgsValue;
-use crate::{context::Ctx, Args, Error, FromJs, Function, IntoJs, Method, Result, This, Value};
+use crate::{Args, Ctx, Error, FromJs, Function, IntoJs, Method, Result, This, Value};
 
 #[cfg(feature = "classes")]
 use crate::{Class, ClassDef, Constructor};

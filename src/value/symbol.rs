@@ -1,4 +1,4 @@
-use crate::{value::rf::JsSymbolRef, Value};
+use crate::{JsSymbolRef, Value};
 
 /// Rust representation of a javascript symbol.
 #[derive(Debug, Clone, PartialEq)]

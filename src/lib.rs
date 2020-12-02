@@ -36,19 +36,22 @@
 
 #![allow(clippy::needless_lifetimes)]
 
+mod markers;
+pub use markers::SendWhenParallel;
 mod result;
 pub use result::{Error, Result};
+mod safe_ref;
+pub(crate) use safe_ref::{SafeRef, SafeWeakRef};
+mod runtime;
+pub use runtime::Runtime;
 mod context;
+pub use context::{Context, ContextBuilder, Ctx, MultiWith};
+mod value;
+pub use value::*;
 mod registery_key;
 pub use registery_key::RegisteryKey;
-mod runtime;
-mod safe_ref;
-pub use context::{Context, ContextBuilder, Ctx, MultiWith};
-pub use runtime::Runtime;
-mod markers;
-mod value;
-pub use markers::SendWhenParallel;
-pub use value::*;
+mod persistent;
+pub use persistent::Persistent;
 
 #[cfg(feature = "classes")]
 mod class;

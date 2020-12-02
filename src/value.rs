@@ -2,16 +2,15 @@ mod array;
 mod atom;
 mod convert;
 mod function;
+mod js_ref;
 mod module;
 mod object;
-mod persistent;
-mod rf;
 mod string;
 mod symbol;
 
-use std::panic::{self, UnwindSafe};
+use std::{panic, panic::UnwindSafe};
 
-use crate::{context::Ctx, qjs, Error, Result};
+use crate::{qjs, Ctx, Error, Result};
 
 pub use module::{AfterInit, BeforeInit, Module, ModuleDef};
 #[cfg(feature = "exports")]
@@ -23,9 +22,8 @@ pub use convert::*;
 pub use function::{
     Args, AsArguments, AsFunction, AsFunctionMut, Function, JsFn, JsFnMut, Method, This,
 };
+pub(crate) use js_ref::{JsObjectRef, JsStringRef, JsSymbolRef};
 pub use object::{Object, ObjectDef};
-pub use persistent::Persistent;
-pub use rf::{JsObjectRef, JsStringRef, JsSymbolRef};
 pub use string::String;
 pub use symbol::Symbol;
 
