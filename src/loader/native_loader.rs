@@ -14,18 +14,16 @@ pub struct NativeLoader {
 }
 
 impl NativeLoader {
-    /// Add file extension
+    /// Add library file extension
     pub fn add_extension<X: Into<String>>(&mut self, extension: X) -> &mut Self {
         self.extensions.push(extension.into());
         self
     }
 
-    /// Build loader
-    pub fn build(&self) -> Self {
-        Self {
-            extensions: self.extensions.clone(),
-            libs: Vec::new(),
-        }
+    /// Add library file extension
+    pub fn with_extension<X: Into<String>>(&mut self, extension: X) -> &mut Self {
+        self.add_extension(extension);
+        self
     }
 }
 

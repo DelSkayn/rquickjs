@@ -12,16 +12,15 @@ pub struct BuiltinResolver {
 
 impl BuiltinResolver {
     /// Add builtin module
-    pub fn add_builtin<P: Into<String>>(&mut self, path: P) -> &mut Self {
+    pub fn add_module<P: Into<String>>(&mut self, path: P) -> &mut Self {
         self.modules.insert(path.into());
         self
     }
 
-    /// Build resolver
-    pub fn build(&self) -> Self {
-        Self {
-            modules: self.modules.clone(),
-        }
+    /// Add builtin module
+    pub fn with_module<P: Into<String>>(mut self, path: P) -> Self {
+        self.add_module(path);
+        self
     }
 }
 
