@@ -48,10 +48,13 @@ mod context;
 pub use context::{Context, ContextBuilder, Ctx, MultiWith};
 mod value;
 pub use value::*;
-mod registery_key;
-pub use registery_key::RegisteryKey;
 mod persistent;
 pub use persistent::Persistent;
+
+#[cfg(feature = "registery")]
+mod registery_key;
+#[cfg(feature = "registery")]
+pub use registery_key::RegisteryKey;
 
 #[cfg(feature = "classes")]
 mod class;

@@ -1,6 +1,10 @@
-use crate::{qjs, value, Ctx, Error, Function, RegisteryKey, Result, SafeRef, SafeWeakRef};
-use fxhash::FxHashSet as HashSet;
+use crate::{qjs, value, Ctx, Error, Function, Result, SafeRef, SafeWeakRef};
 use std::{any::Any, ffi::CString, mem};
+
+#[cfg(feature = "registery")]
+use crate::RegisteryKey;
+#[cfg(feature = "registery")]
+use fxhash::FxHashSet as HashSet;
 
 pub use qjs::JSMemoryUsage as MemoryUsage;
 
@@ -25,6 +29,7 @@ impl WeakRuntime {
 
 /// Opaque book keeping data for rust.
 pub struct Opaque {
+    #[cfg(feature = "registery")]
     /// The registery, used to keep track of which registery values belong to this runtime.
     pub registery: HashSet<RegisteryKey>,
 
@@ -38,6 +43,7 @@ pub struct Opaque {
 impl Opaque {
     fn new(runtime: &Runtime) -> Self {
         Opaque {
+            #[cfg(feature = "registery")]
             registery: HashSet::default(),
             panic: None,
             runtime: runtime.weak(),

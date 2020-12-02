@@ -10,8 +10,9 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[dependencies]
-fxhash = "0.2.1"
+[dependencies.fxhash]
+version = "0.2.1"
+optional = true
 
 [dependencies.rquickjs-sys]
 version = "0.0.4"
@@ -58,6 +59,9 @@ bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
 parallel = ["rquickjs-sys/parallel"]
+
+# Enable runtime registery
+registery = ["fxhash"]
 
 # Enable support of reading module exports
 exports = ["rquickjs-sys/exports"]

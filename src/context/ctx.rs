@@ -1,13 +1,10 @@
 use crate::{
-    markers::Invariant,
-    qjs,
-    runtime::Opaque,
-    value,
-    value::{JsObjectRef, JsStringRef, String},
-    BeforeInit, Context, FromJs, Function, Object, RegisteryKey, Result, Value,
+    markers::Invariant, qjs, runtime::Opaque, value, BeforeInit, Context, FromJs, Function,
+    JsObjectRef, JsStringRef, Module, Object, Result, String, Value,
 };
 
-use crate::Module;
+#[cfg(feature = "registery")]
+use crate::RegisteryKey;
 
 use std::{
     ffi::{CStr, CString},
@@ -204,9 +201,20 @@ impl<'js> Ctx<'js> {
         })
     }
 
+    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
+        let ptr = qjs::JS_GetRuntimeOpaque(qjs::JS_GetRuntime(self.ctx));
+        &mut *(ptr as *mut _)
+    }
+}
+
+#[cfg(feature = "registery")]
+impl<'js> Ctx<'js> {
     /// Store a value in the registery so references to it can be kept outside the scope of context use.
     ///
     /// A registered value can be retrieved from any context belonging to the same runtime.
+    ///
+    /// # Features
+    /// This method is only available if a `registery` feature is enabled.
     pub fn register(self, v: Value<'js>) -> RegisteryKey {
         unsafe {
             let register = self.get_opaque();
@@ -217,6 +225,9 @@ impl<'js> Ctx<'js> {
     }
 
     /// Remove a value from the registery.
+    ///
+    /// # Features
+    /// This method is only available if a `registery` feature is enabled.
     pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
             let register = self.get_opaque();
@@ -229,21 +240,19 @@ impl<'js> Ctx<'js> {
     }
 
     /// Get a value from the registery.
+    ///
+    /// # Features
+    /// This method is only available if a `registery` feature is enabled.
     pub fn get_register(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
-            let register = self.get_opaque();
-            if register.registery.contains(&k) {
+            let opaque = self.get_opaque();
+            if opaque.registery.contains(&k) {
                 let value = Value::from_js_value_const(self, k.0).unwrap();
                 Some(value)
             } else {
                 None
             }
         }
-    }
-
-    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
-        let ptr = qjs::JS_GetRuntimeOpaque(qjs::JS_GetRuntime(self.ctx));
-        &mut *(ptr as *mut _)
     }
 }
 
