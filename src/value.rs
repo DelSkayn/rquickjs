@@ -27,6 +27,31 @@ pub use object::{Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
 
+/// The trait to get raw JS values from referenced JS types
+pub trait AsJsValueRef<'js> {
+    fn as_js_value_ref(&self) -> qjs::JSValue;
+}
+
+macro_rules! as_js_value_ref_impls {
+    ($($t:ident,)*) => {
+        $(
+            impl<'js> AsJsValueRef<'js> for $t<'js> {
+                fn as_js_value_ref(&self) -> qjs::JSValue {
+                    self.0.as_js_value()
+                }
+            }
+        )*
+    };
+}
+
+as_js_value_ref_impls! {
+    Function,
+    Symbol,
+    String,
+    Object,
+    Array,
+}
+
 /// The `FromIterator` trait to use with `Ctx`
 pub trait FromIteratorJs<'js, A>: Sized {
     type Item;

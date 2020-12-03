@@ -18,6 +18,7 @@ pub trait ObjectDef {
 
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
+#[repr(transparent)]
 pub struct Object<'js>(pub(crate) JsObjectRef<'js>);
 
 impl<'js> Object<'js> {

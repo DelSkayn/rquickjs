@@ -49,7 +49,7 @@ pub use context::{Context, ContextBuilder, Ctx, MultiWith};
 mod value;
 pub use value::*;
 mod persistent;
-pub use persistent::Persistent;
+pub use persistent::{Outlive, Persistent};
 
 #[cfg(feature = "registery")]
 mod registery_key;
@@ -59,7 +59,7 @@ pub use registery_key::RegisteryKey;
 #[cfg(feature = "classes")]
 mod class;
 #[cfg(feature = "classes")]
-pub use class::{Class, ClassDef, ClassId, Constructor, WithProto};
+pub use class::{Class, ClassDef, ClassId, Constructor, RefsMarker, WithProto};
 
 #[cfg(feature = "properties")]
 mod property;

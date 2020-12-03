@@ -10,6 +10,7 @@ use std::{
 /// However arrays in quickjs are optimized when they do not have any holes.
 /// This value represents such a optimized array.
 #[derive(Debug, PartialEq, Clone)]
+#[repr(transparent)]
 pub struct Array<'js>(pub(crate) JsObjectRef<'js>);
 
 impl<'js> Array<'js> {

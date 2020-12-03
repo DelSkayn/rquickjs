@@ -1,4 +1,7 @@
-use crate::{qjs, value, Ctx, Error, FromJs, IntoJs, JsObjectRef, Object, Result, Value};
+use crate::{
+    qjs, value, AsJsValueRef, Ctx, Error, FromJs, IntoJs, JsObjectRef, Object, Outlive, Result,
+    Value,
+};
 use std::{
     ffi::CString,
     marker::PhantomData,
@@ -82,6 +85,16 @@ pub trait ClassDef {
     fn init_proto<'js>(_ctx: Ctx<'js>, _proto: &Object<'js>) -> Result<()> {
         Ok(())
     }
+
+    /// The class has internal references to JS values
+    ///
+    /// Needed for correct garbage collection
+    const HAS_REFS: bool = false;
+
+    /// Mark internal references to JS values
+    ///
+    /// Should be implemented to work with garbage collector
+    fn mark_refs(&self, _marker: &RefsMarker) {}
 }
 
 /// The class object interface
@@ -90,30 +103,71 @@ pub trait ClassDef {
 /// This type is only available if the `classes` feature is enabled.
 ///
 /// FIXME: Maybe it should be private.
-pub struct Class<C>(PhantomData<C>);
+pub struct Class<'js, C>(pub(crate) Object<'js>, PhantomData<C>);
 
-impl<C> Class<C>
+impl<'js, 't, C> Outlive<'t> for Class<'js, C> {
+    type Target = Class<'t, C>;
+}
+
+impl<'js, C> AsJsValueRef<'js> for Class<'js, C> {
+    fn as_js_value_ref(&self) -> qjs::JSValue {
+        self.0.as_js_value_ref()
+    }
+}
+
+impl<'js, C> Deref for Class<'js, C> {
+    type Target = Object<'js>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'js, C> AsRef<C> for Class<'js, C>
+where
+    C: ClassDef,
+{
+    fn as_ref(&self) -> &C {
+        let obj = &self.0;
+        Class::<C>::try_ref(obj.0.ctx, obj).unwrap()
+    }
+}
+
+impl<'js, C> AsMut<C> for Class<'js, C>
+where
+    C: ClassDef,
+{
+    fn as_mut(&mut self) -> &mut C {
+        let obj = &self.0;
+        Class::<C>::try_mut(obj.0.ctx, obj).unwrap()
+    }
+}
+
+impl<'js, C> Class<'js, C>
 where
     C: ClassDef,
 {
     /// Wrap constructor of class
     pub fn constructor<F>(func: F) -> Constructor<C, F> {
-        Constructor(Self(PhantomData), func)
+        Constructor(func, PhantomData)
     }
 
     /// Instantiate the object of class
-    pub fn instance<'js>(ctx: Ctx<'js>, value: C) -> Result<Object<'js>> {
+    pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
         let class_id = *C::class_id().as_ref();
         let val = unsafe {
             value::handle_exception(ctx, qjs::JS_NewObjectClass(ctx.ctx, class_id as _))
         }?;
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
-        Ok(unsafe { Object(JsObjectRef::from_js_value(ctx, val)) })
+        Ok(Self(
+            Object(unsafe { JsObjectRef::from_js_value(ctx, val) }),
+            PhantomData,
+        ))
     }
 
     /// Instantiate the object of class with given prototype
-    pub fn instance_proto<'js>(ctx: Ctx<'js>, value: C, proto: Object<'js>) -> Result<Object<'js>> {
+    pub fn instance_proto(ctx: Ctx<'js>, value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
         let class_id = *C::class_id().as_ref();
         let val = unsafe {
             value::handle_exception(
@@ -123,18 +177,26 @@ where
         }?;
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
-        Ok(unsafe { Object(JsObjectRef::from_js_value(ctx, val)) })
+        Ok(Self(
+            Object(unsafe { JsObjectRef::from_js_value(ctx, val) }),
+            PhantomData,
+        ))
     }
 
     /// Get reference from object
-    pub fn reference<'js, 'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r C> {
-        Self::reference_mut(ctx, value).map(|r| &*r)
+    pub fn try_ref<'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r C> {
+        Ok(unsafe { &*Self::try_ptr(ctx.ctx, value.0.as_js_value())? })
     }
 
     /// Get mutable reference from object
-    pub fn reference_mut<'js, 'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r mut C> {
+    pub fn try_mut<'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r mut C> {
+        Ok(unsafe { &mut *Self::try_ptr(ctx.ctx, value.0.as_js_value())? })
+    }
+
+    /// Get instance pointer from object
+    unsafe fn try_ptr(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Result<*mut C> {
         let class_id = *C::class_id().as_ref();
-        let ptr = unsafe { qjs::JS_GetOpaque2(ctx.ctx, value.0.as_js_value(), class_id) as *mut C };
+        let ptr = qjs::JS_GetOpaque2(ctx, value, class_id) as *mut C;
         if ptr.is_null() {
             return Err(Error::FromJs {
                 from: "object",
@@ -142,11 +204,11 @@ where
                 message: None,
             });
         }
-        Ok(unsafe { &mut *ptr })
+        Ok(ptr)
     }
 
     /// Register the class
-    pub fn register<'js>(ctx: Ctx<'js>) -> Result<()> {
+    pub fn register(ctx: Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
         let class_id = unsafe { qjs::JS_NewClassID(C::class_id().as_mut()) };
         let class_name = CString::new(C::CLASS_NAME)?;
@@ -154,8 +216,12 @@ where
             let class_def = qjs::JSClassDef {
                 class_name: class_name.as_ptr(),
                 finalizer: Some(Self::finalizer),
-                gc_mark: None, //Some(Self::gc_mark),
-                call: None,    //Some(Self::call),
+                gc_mark: if C::HAS_REFS {
+                    Some(Self::gc_mark)
+                } else {
+                    None
+                },
+                call: None, //Some(Self::call),
                 exotic: ptr::null_mut(),
             };
             if 0 != unsafe { qjs::JS_NewClass(rt, class_id, &class_def) } {
@@ -179,25 +245,65 @@ where
     }
 
     /// Get the own prototype object of a class
-    pub fn prototype<'js>(ctx: Ctx<'js>) -> Result<Object<'js>> {
+    pub fn prototype(ctx: Ctx<'js>) -> Result<Object<'js>> {
         let class_id = *C::class_id().as_ref();
         Ok(Object(unsafe {
             JsObjectRef::from_js_value(ctx, qjs::JS_GetClassProto(ctx.ctx, class_id))
         }))
     }
 
-    /*unsafe extern "C" fn gc_mark(
-        _rt: *mut qjs::JSRuntime,
-        _val: qjs::JSValue,
-        _mark_func: qjs::JS_MarkFunc,
+    unsafe extern "C" fn gc_mark(
+        rt: *mut qjs::JSRuntime,
+        val: qjs::JSValue,
+        mark_func: qjs::JS_MarkFunc,
     ) {
-    }*/
+        let class_id = *C::class_id().as_ref();
+        let ptr = qjs::JS_GetOpaque(val, class_id) as *mut C;
+        assert!(!ptr.is_null());
+        let inst = &mut *ptr;
+        let marker = RefsMarker { rt, mark_func };
+        inst.mark_refs(&marker);
+    }
 
     unsafe extern "C" fn finalizer(rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
         let class_id = *C::class_id().as_ref();
-        let data = Box::from_raw(qjs::JS_GetOpaque(val, class_id) as *mut C);
+        let ptr = qjs::JS_GetOpaque(val, class_id) as *mut C;
+        assert!(!ptr.is_null());
+        let inst = Box::from_raw(ptr);
         qjs::JS_FreeValueRT(rt, val);
-        mem::drop(data);
+        mem::drop(inst);
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct RefsMarker {
+    rt: *mut qjs::JSRuntime,
+    mark_func: qjs::JS_MarkFunc,
+}
+
+impl RefsMarker {
+    pub fn mark<'js, T: AsJsValueRef<'js>>(&self, value: &T) {
+        unsafe { qjs::JS_MarkValue(self.rt, value.as_js_value_ref(), self.mark_func) };
+    }
+}
+
+impl<'js, C> IntoJs<'js> for Class<'js, C>
+where
+    C: ClassDef,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.0.into_js(ctx)
+    }
+}
+
+impl<'js, C> FromJs<'js> for Class<'js, C>
+where
+    C: ClassDef,
+{
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let value = Object::from_js(ctx, value)?;
+        let _ = Class::<C>::try_ref(ctx, &value)?;
+        Ok(Class(value, PhantomData))
     }
 }
 
@@ -206,7 +312,7 @@ where
     C: ClassDef,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Class::<C>::instance(ctx, self).map(Value::Object)
+        Class::<C>::instance(ctx, self).map(|Class(obj, _)| Value::Object(obj))
     }
 }
 
@@ -216,7 +322,7 @@ where
 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let value = Object::from_js(ctx, value)?;
-        Class::<C>::reference(ctx, &value)
+        Class::<C>::try_ref(ctx, &value)
     }
 }
 
@@ -226,7 +332,7 @@ where
 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let value = Object::from_js(ctx, value)?;
-        Class::<C>::reference_mut(ctx, &value)
+        Class::<C>::try_mut(ctx, &value)
     }
 }
 
@@ -235,11 +341,11 @@ where
 /// # Features
 /// This type is only available if the `classes` feature is enabled.
 #[repr(transparent)]
-pub struct Constructor<C, F>(pub Class<C>, pub F);
+pub struct Constructor<C, F>(F, PhantomData<C>);
 
 impl<C, F> AsRef<F> for Constructor<C, F> {
     fn as_ref(&self) -> &F {
-        &self.1
+        &self.0
     }
 }
 
@@ -247,7 +353,7 @@ impl<C, F> Deref for Constructor<C, F> {
     type Target = F;
 
     fn deref(&self) -> &Self::Target {
-        &self.1
+        &self.0
     }
 }
 
@@ -265,7 +371,7 @@ where
     C: ClassDef,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Class::<C>::instance_proto(ctx, self.0, self.1).map(Value::Object)
+        Class::<C>::instance_proto(ctx, self.0, self.1).map(|Class(obj, _)| Value::Object(obj))
     }
 }
 
@@ -275,26 +381,41 @@ where
 /// This type is only available if the `classes` feature is enabled.
 #[macro_export]
 macro_rules! class_def {
-    ($name:ident) => {
-        $crate::class_def!{@decl $name}
+    ($name:ident $($rest:tt)*) => {
+        $crate::class_def!{@decl $name
+                           $crate::class_def!{@parse $($rest)*}}
     };
 
-    ($name:ident ($proto:ident) { $($body:tt)* }) => {
-        $crate::class_def!{@decl $name
-                           $crate::class_def!{@proto _ctx $proto $($body)*}}
+    (@parse ($proto:ident) { $($body:tt)* } $($rest:tt)*) => {
+        $crate::class_def!{@proto _ctx $proto $($body)*}
+        $crate::class_def!{@parse $($rest)*}
     };
 
-    ($name:ident ($ctx:ident, $proto:ident) { $($body:tt)* }) => {
-        $crate::class_def!{@decl $name
-                           $crate::class_def!{@proto $ctx $proto $($body)*}}
+    (@parse ($ctx:ident, $proto:ident) { $($body:tt)* } $($rest:tt)*) => {
+        $crate::class_def!{@proto $ctx $proto $($body)*}
+        $crate::class_def!{@parse $($rest)*}
     };
+
+    (@parse ~($self:ident, $marker:ident) { $($body:tt)* } $($rest:tt)*) => {
+        $crate::class_def!{@mark $self $marker $($body)*}
+        $crate::class_def!{@parse $($rest)*}
+    };
+
+    (@parse) => {};
 
     (@proto $ctx:ident $proto:ident $($body:tt)*) => {
         const HAS_PROTO: bool = true;
-
         fn init_proto<'js>($ctx: $crate::Ctx<'js>, $proto: &$crate::Object<'js>) -> $crate::Result<()> {
             $($body)*
             Ok(())
+        }
+    };
+
+    (@mark $self:ident $marker:ident $($body:tt)*) => {
+        const HAS_REFS: bool = true;
+        fn mark_refs(&self, $marker: &$crate::RefsMarker) {
+            let $self = self;
+            $($body)*
         }
     };
 
@@ -442,5 +563,127 @@ mod test {
                 .unwrap();
             assert_eq!(res, 17.0);
         });
+    }
+
+    mod internal_refs {
+        use super::*;
+        use std::collections::HashSet;
+
+        struct A {
+            refs: HashSet<Persistent<Class<'static, A>>>,
+        }
+
+        impl Default for A {
+            fn default() -> Self {
+                Self {
+                    refs: HashSet::new(),
+                }
+            }
+        }
+
+        impl<'js> Class<'js, A> {
+            pub fn add(mut self, val: Persistent<Class<'js, A>>) {
+                self.as_mut().refs.insert(val.outlive());
+            }
+
+            pub fn rm(mut self, val: Persistent<Class<'js, A>>) {
+                self.as_mut().refs.remove(&val.outlive());
+            }
+        }
+
+        class_def!(
+            A (proto) {
+                proto.set("add", JsFn::new("add", Method(Class::<A>::add)))?;
+                proto.set("rm", JsFn::new("rm", Method(Class::<A>::rm)))?;
+            }
+            ~(this, marker) {
+                for obj in &this.refs {
+                    marker.mark(obj);
+                }
+            }
+        );
+
+        #[test]
+        fn single_ref() {
+            test_with(|ctx| {
+                Class::<A>::register(ctx).unwrap();
+
+                let global = ctx.globals();
+                global
+                    .set("A", JsFn::new("A", Class::<A>::constructor(A::default)))
+                    .unwrap();
+
+                // a -> b
+                let _: () = ctx
+                    .eval(
+                        r#"
+                        let a = new A();
+                        a.name = "a";
+                        let b = new A();
+                        b.name = "b";
+                        a.add(b);
+                    "#,
+                    )
+                    .unwrap();
+            });
+        }
+
+        #[test]
+        fn cross_refs() {
+            test_with(|ctx| {
+                Class::<A>::register(ctx).unwrap();
+
+                let global = ctx.globals();
+                global
+                    .set("A", JsFn::new("A", Class::<A>::constructor(A::default)))
+                    .unwrap();
+
+                // a -> b
+                // b -> a
+                let _: () = ctx
+                    .eval(
+                        r#"
+                        let a = new A();
+                        a.name = "a";
+                        let b = new A();
+                        b.name = "b";
+                        a.add(b);
+                        b.add(a);
+                    "#,
+                    )
+                    .unwrap();
+            });
+        }
+
+        #[test]
+        fn ref_loops() {
+            test_with(|ctx| {
+                Class::<A>::register(ctx).unwrap();
+
+                let global = ctx.globals();
+                global
+                    .set("A", JsFn::new("A", Class::<A>::constructor(A::default)))
+                    .unwrap();
+
+                // a -> b
+                // b -> c
+                // c -> a
+                let _: () = ctx
+                    .eval(
+                        r#"
+                        let a = new A();
+                        a.name = "a";
+                        let b = new A();
+                        b.name = "b";
+                        let c = new A();
+                        c.name = "c";
+                        a.add(b);
+                        b.add(c);
+                        c.add(a);
+                    "#,
+                    )
+                    .unwrap();
+            });
+        }
     }
 }

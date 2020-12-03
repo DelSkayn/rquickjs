@@ -3,6 +3,7 @@ use std::{mem, slice, str};
 
 /// Rust representation of a javascript string.
 #[derive(Debug, Clone, PartialEq)]
+#[repr(transparent)]
 pub struct String<'js>(pub(crate) JsStringRef<'js>);
 
 impl<'js> String<'js> {

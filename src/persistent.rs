@@ -1,4 +1,6 @@
-use crate::{qjs, Array, Ctx, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value};
+use crate::{
+    qjs, Array, AsJsValueRef, Ctx, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
+};
 use std::{
     cmp::PartialEq,
     hash::{Hash, Hasher},
@@ -73,6 +75,15 @@ impl<T> Clone for Persistent<T> {
 impl<'t, T> Drop for Persistent<T> {
     fn drop(&mut self) {
         unsafe { qjs::JS_FreeValueRT(self.rt, self.value) };
+    }
+}
+
+impl<'js, T> AsJsValueRef<'js> for Persistent<T>
+where
+    T: AsJsValueRef<'js>,
+{
+    fn as_js_value_ref(&self) -> qjs::JSValue {
+        self.value
     }
 }
 
