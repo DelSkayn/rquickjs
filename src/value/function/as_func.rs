@@ -1,4 +1,4 @@
-use super::ArgsValue;
+use super::ArgsIter;
 use crate::{Args, Ctx, Error, FromJs, Function, IntoJs, Method, Result, This, Value};
 
 #[cfg(feature = "classes")]
@@ -10,7 +10,7 @@ pub trait AsFunction<'js, A, R> {
     const LEN: u32;
 
     /// Calling function from JS side
-    fn call(&self, ctx: Ctx<'js>, this: Value<'js>, args: ArgsValue<'js>) -> Result<Value<'js>>;
+    fn call(&self, ctx: Ctx<'js>, this: Value<'js>, args: ArgsIter<'js>) -> Result<Value<'js>>;
 
     /// Post-processing the function
     fn post<'js_>(_ctx: Ctx<'js_>, _func: &Function<'js_>) -> Result<()> {
@@ -24,8 +24,7 @@ pub trait AsFunctionMut<'js, A, R> {
     const LEN: u32;
 
     /// Calling function from JS side
-    fn call(&mut self, ctx: Ctx<'js>, this: Value<'js>, args: ArgsValue<'js>)
-        -> Result<Value<'js>>;
+    fn call(&mut self, ctx: Ctx<'js>, this: Value<'js>, args: ArgsIter<'js>) -> Result<Value<'js>>;
 
     /// Post-processing the function
     fn post<'js_>(_ctx: Ctx<'js_>, _func: &Function<'js_>) -> Result<()> {
@@ -85,8 +84,7 @@ macro_rules! as_fn_impls {
             const LEN: u32 = 0 $(+ as_fn_impls!(@one $t))*;
 
             #[allow(unused_mut, unused)]
-            fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsValue<'js>) -> Result<Value<'js>> {
-                let mut args = args.iter();
+            fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsIter<'js>) -> Result<Value<'js>> {
                 self(
                     S::from_js(ctx, this.clone())?,
                     $(as_fn_impls!(@arg ctx this args $($ap)*),)*
@@ -118,14 +116,13 @@ macro_rules! as_fn_impls {
             const LEN: u32 = 0 $(+ as_fn_impls!(@one $t))*;
 
             #[allow(unused_mut, unused)]
-            fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsValue<'js>) -> Result<Value<'js>> {
+            fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsIter<'js>) -> Result<Value<'js>> {
                 let proto = match &this {
                     // called as constructor (with new keyword)
                     Value::Function(new_target) => new_target.get_prototype(),
                     // called as a function
                     _ => Class::<C>::prototype(ctx),
                 }?;
-                let mut args = args.iter();
                 let res = self(
                     $(as_fn_impls!(@arg ctx this args $($ap)*),)*
                     $($t::from_js(ctx, args.next().ok_or_else(not_enough_args)?)?,)*
@@ -172,8 +169,7 @@ macro_rules! as_fn_impls {
             const LEN: u32 = 0 $(+ as_fn_impls!(@one $t))*;
 
             #[allow(unused_mut, unused)]
-            fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsValue<'js>) -> Result<Value<'js>> {
-                let mut args = args.iter();
+            fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsIter<'js>) -> Result<Value<'js>> {
                 self(
                     $(as_fn_impls!(@arg ctx this args $($ap)*),)*
                     $($t::from_js(ctx, args.next().ok_or_else(not_enough_args)?)?,)*

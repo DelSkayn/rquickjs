@@ -10,7 +10,7 @@ mod as_func;
 mod ffi;
 mod types;
 
-use args::ArgsValue;
+use args::ArgsIter;
 pub use as_args::AsArguments;
 pub use as_func::{AsFunction, AsFunctionMut};
 use ffi::FuncOpaque;

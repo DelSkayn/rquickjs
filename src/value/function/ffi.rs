@@ -1,16 +1,16 @@
-use super::ArgsValue;
+use super::ArgsIter;
 use crate::{qjs, value::handle_panic, Ctx, Result, Value};
 use std::{panic, panic::AssertUnwindSafe, ptr};
 
 static mut FUNC_CLASS: qjs::JSClassID = 0;
 
 #[repr(transparent)]
-pub struct FuncOpaque<'js>(Box<dyn Fn(Ctx<'js>, Value<'js>, ArgsValue<'js>) -> Result<Value<'js>>>);
+pub struct FuncOpaque<'js>(Box<dyn Fn(Ctx<'js>, Value<'js>, ArgsIter<'js>) -> Result<Value<'js>>>);
 
 impl<'js> FuncOpaque<'js> {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(Ctx<'js>, Value<'js>, ArgsValue<'js>) -> Result<Value<'js>> + 'static,
+        F: Fn(Ctx<'js>, Value<'js>, ArgsIter<'js>) -> Result<Value<'js>> + 'static,
     {
         Self(Box::new(func))
     }
@@ -31,7 +31,7 @@ impl<'js> FuncOpaque<'js> {
         let ctx = Ctx::from_ptr(ctx);
 
         let this = Value::from_js_value_const(ctx, this)?;
-        let args = ArgsValue::from_value_count_const(ctx, argc as usize, argv);
+        let args = ArgsIter::from_value_count_const(ctx, argc as usize, argv);
 
         let res = (self.0)(ctx, this, args)?;
 
