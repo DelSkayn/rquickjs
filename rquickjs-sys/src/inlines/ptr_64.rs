@@ -29,7 +29,7 @@ pub unsafe fn JS_VALUE_GET_PTR(v: JSValue) -> *mut c_void {
 }
 
 #[inline]
-pub fn JS_MKVAL(tag: i32, val: i32) -> JSValue {
+pub const fn JS_MKVAL(tag: i32, val: i32) -> JSValue {
     JSValue {
         u: JSValueUnion { int32: val },
         tag: tag as _,

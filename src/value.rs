@@ -219,10 +219,16 @@ impl<'js> Value<'js> {
     fn to_js_value_common(&self) -> qjs::JSValue {
         match self {
             Value::Int(x) => qjs::JS_MKVAL(qjs::JS_TAG_INT, *x),
-            Value::Bool(x) => qjs::JS_MKVAL(qjs::JS_TAG_BOOL, if *x { 1 } else { 0 }),
-            Value::Null => qjs::JS_MKVAL(qjs::JS_TAG_NULL, 0),
-            Value::Undefined => qjs::JS_MKVAL(qjs::JS_TAG_UNDEFINED, 0),
-            Value::Uninitialized => qjs::JS_MKVAL(qjs::JS_TAG_UNINITIALIZED, 0),
+            Value::Bool(x) => {
+                if *x {
+                    qjs::JS_TRUE
+                } else {
+                    qjs::JS_FALSE
+                }
+            }
+            Value::Null => qjs::JS_NULL,
+            Value::Undefined => qjs::JS_UNDEFINED,
+            Value::Uninitialized => qjs::JS_UNINITIALIZED,
             Value::Float(x) => qjs::JS_NewFloat64(*x),
             _ => unreachable!(),
         }

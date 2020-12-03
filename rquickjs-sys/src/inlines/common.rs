@@ -2,6 +2,13 @@ pub use ::std::os::raw::{c_char, c_int, c_uint, c_void};
 
 pub type JSValueConst = JSValue;
 
+pub const JS_NULL: JSValue = JS_MKVAL(JS_TAG_NULL, 0);
+pub const JS_UNDEFINED: JSValue = JS_MKVAL(JS_TAG_UNDEFINED, 0);
+pub const JS_FALSE: JSValue = JS_MKVAL(JS_TAG_BOOL, 0);
+pub const JS_TRUE: JSValue = JS_MKVAL(JS_TAG_BOOL, 1);
+pub const JS_EXCEPTION: JSValue = JS_MKVAL(JS_TAG_EXCEPTION, 0);
+pub const JS_UNINITIALIZED: JSValue = JS_MKVAL(JS_TAG_UNINITIALIZED, 0);
+
 #[inline]
 pub unsafe fn JS_VALUE_HAS_REF_COUNT(v: JSValue) -> bool {
     JS_VALUE_GET_TAG(v) as c_uint >= JS_TAG_FIRST as c_uint
@@ -83,6 +90,12 @@ pub unsafe fn JS_IsSymbol(v: JSValue) -> bool {
 pub unsafe fn JS_IsObject(v: JSValue) -> bool {
     let tag = JS_VALUE_GET_TAG(v);
     tag == JS_TAG_OBJECT
+}
+
+#[inline]
+pub unsafe fn JS_ValueRefCount(v: JSValue) -> c_int {
+    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
+    p.ref_count
 }
 
 #[inline]
