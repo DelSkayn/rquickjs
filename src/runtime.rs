@@ -292,7 +292,8 @@ impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt);
-            let _opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            let opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            mem::drop(opaque);
             qjs::JS_FreeRuntime(self.rt)
         }
     }

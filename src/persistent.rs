@@ -2,7 +2,9 @@ use crate::{
     qjs, Array, AsJsValueRef, Ctx, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
 };
 use std::{
+    cell::Cell,
     cmp::PartialEq,
+    fmt,
     hash::{Hash, Hasher},
     marker::PhantomData,
     mem,
@@ -39,15 +41,15 @@ outlive_impls! {
 /// # let rt = Runtime::new().unwrap();
 /// # let ctx = Context::full(&rt).unwrap();
 /// let func = ctx.with(|ctx| {
-///     ctx.eval::<Persistent<Function>, _>("a => a + 1").unwrap().outlive()
+///     Persistent::save(ctx, ctx.eval::<Function, _>("a => a + 1").unwrap())
 /// });
 /// let res: i32 = ctx.with(|ctx| {
-///     let func = func.clone().inlive().restore(ctx).unwrap();
+///     let func = func.clone().restore(ctx).unwrap();
 ///     func.call((2,)).unwrap()
 /// });
 /// assert_eq!(res, 3);
 /// let res: i32 = ctx.with(|ctx| {
-///     let func = func.inlive().restore(ctx).unwrap();
+///     let func = func.restore(ctx).unwrap();
 ///     func.call((0,)).unwrap()
 /// });
 /// assert_eq!(res, 1);
@@ -56,105 +58,86 @@ outlive_impls! {
 /// NOTE: Be careful and ensure that no persistent links outlives the runtime.
 ///
 pub struct Persistent<T> {
-    rt: *mut qjs::JSRuntime,
-    value: qjs::JSValue,
+    pub(crate) rt: *mut qjs::JSRuntime,
+    pub(crate) value: Cell<qjs::JSValue>,
     marker: PhantomData<T>,
 }
 
 impl<T> Clone for Persistent<T> {
     fn clone(&self) -> Self {
-        let value = unsafe { qjs::JS_DupValue(self.value) };
-        Self {
-            rt: self.rt,
-            value,
-            marker: PhantomData,
-        }
+        let value = unsafe { qjs::JS_DupValue(self.value.get()) };
+        Self::new_raw(self.rt, value)
+    }
+}
+
+impl<T> fmt::Debug for Persistent<T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_struct("Persistent")
+            .field("rt", &self.rt)
+            .field("ptr", &unsafe { qjs::JS_VALUE_GET_PTR(self.value.get()) })
+            .finish()
     }
 }
 
 impl<'t, T> Drop for Persistent<T> {
     fn drop(&mut self) {
-        unsafe { qjs::JS_FreeValueRT(self.rt, self.value) };
-    }
-}
-
-impl<'js, T> AsJsValueRef<'js> for Persistent<T>
-where
-    T: AsJsValueRef<'js>,
-{
-    fn as_js_value_ref(&self) -> qjs::JSValue {
-        self.value
+        unsafe { qjs::JS_FreeValueRT(self.rt, self.value.get()) };
     }
 }
 
 impl<T> Persistent<T> {
+    fn new_raw(rt: *mut qjs::JSRuntime, value: qjs::JSValue) -> Self {
+        Self {
+            rt,
+            value: Cell::new(value),
+            marker: PhantomData,
+        }
+    }
+
     /// Save the value of an arbitrary type
-    pub fn save<'js>(ctx: Ctx<'js>, value: T) -> Result<Persistent<T>>
+    pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target>
     where
-        T: IntoJs<'js>,
+        T: AsJsValueRef<'js> + Outlive<'static>,
     {
+        let value = val.as_js_value_ref();
+        mem::forget(val);
+        let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
+
+        Persistent::new_raw(rt, value)
+    }
+
+    /// Restore the value of an arbitrary type
+    pub fn restore<'js>(self, ctx: Ctx<'js>) -> Result<T::Target>
+    where
+        T: Outlive<'js>,
+        T::Target: FromJs<'js>,
+    {
+        let value = unsafe { Value::from_js_value(ctx, self.value.get()) }?;
+        mem::forget(self);
+        T::Target::from_js(ctx, value)
+    }
+
+    fn ptr(&self) -> *mut qjs::c_void {
+        unsafe { qjs::JS_VALUE_GET_PTR(self.value.get()) }
+    }
+
+    fn tag(&self) -> qjs::c_int {
+        unsafe { qjs::JS_VALUE_GET_TAG(self.value.get()) }
+    }
+}
+
+impl<'js, 't, T> FromJs<'js> for Persistent<T>
+where
+    T: Outlive<'js>,
+    T::Target: FromJs<'js> + IntoJs<'js>,
+{
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Persistent<T>> {
+        let value = T::Target::from_js(ctx, value)?;
         let value = value.into_js(ctx)?;
         let value = value.into_js_value();
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
 
-        Ok(Self {
-            rt,
-            value,
-            marker: PhantomData,
-        })
-    }
-
-    /// Restore the value of an arbitrary type
-    pub fn restore<'js>(self, ctx: Ctx<'js>) -> Result<T>
-    where
-        T: FromJs<'js>,
-    {
-        let value = unsafe { Value::from_js_value(ctx, self.value) }?;
-        mem::forget(self);
-        T::from_js(ctx, value)
-    }
-
-    pub fn outlive(self) -> Persistent<T::Target>
-    where
-        T: Outlive<'static>,
-    {
-        let Self { rt, value, .. } = self;
-        mem::forget(self);
-        Persistent {
-            rt,
-            value,
-            marker: PhantomData,
-        }
-    }
-
-    pub fn inlive<'js>(self) -> Persistent<T::Target>
-    where
-        T: Outlive<'js>,
-    {
-        let Self { rt, value, .. } = self;
-        mem::forget(self);
-        Persistent {
-            rt,
-            value,
-            marker: PhantomData,
-        }
-    }
-}
-
-impl<'js, T> FromJs<'js> for Persistent<T>
-where
-    T: FromJs<'js> + IntoJs<'js>,
-{
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Persistent<T>> {
-        let value = T::from_js(ctx, value)?;
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
-        let value = value.into_js(ctx)?.into_js_value();
-
-        Ok(Self {
-            rt,
-            value,
-            marker: PhantomData,
-        })
+        Ok(Self::new_raw(rt, value))
     }
 }
 
@@ -163,31 +146,28 @@ where
     T: Outlive<'t>,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let value = unsafe { Value::from_js_value(ctx, self.value) }?;
+        let value = unsafe { Value::from_js_value(ctx, self.value.get()) }?;
         mem::forget(self);
         value.into_js(ctx)
     }
 }
 
+#[cfg(feature = "parallel")]
 unsafe impl<T> Send for Persistent<T> {}
-unsafe impl<T> Sync for Persistent<T> {}
 
 impl<T> Hash for Persistent<T> {
     fn hash<H>(&self, state: &mut H)
     where
         H: Hasher,
     {
-        unsafe { qjs::JS_VALUE_GET_PTR(self.value) }.hash(state);
-        unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) }.hash(state);
+        self.ptr().hash(state);
+        self.tag().hash(state);
     }
 }
 
 impl<T, S> PartialEq<Persistent<S>> for Persistent<T> {
     fn eq(&self, other: &Persistent<S>) -> bool {
-        (unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) }
-            == unsafe { qjs::JS_VALUE_GET_NORM_TAG(other.value) })
-            && (unsafe { qjs::JS_VALUE_GET_PTR(self.value) }
-                == unsafe { qjs::JS_VALUE_GET_PTR(other.value) })
+        (self.tag() == other.tag()) && (self.ptr() == other.ptr())
     }
 }
 
@@ -203,20 +183,19 @@ mod test {
         let ctx = Context::full(&rt).unwrap();
 
         let func = ctx.with(|ctx| {
-            ctx.eval::<Persistent<Function>, _>("a => a + 1")
-                .unwrap()
-                .outlive()
+            let func: Function = ctx.eval("a => a + 1").unwrap();
+            Persistent::save(ctx, func)
         });
 
         let res: i32 = ctx.with(|ctx| {
-            let func = func.clone().inlive().restore(ctx).unwrap();
+            let func = func.clone().restore(ctx).unwrap();
             func.call((2,)).unwrap()
         });
         assert_eq!(res, 3);
 
         let ctx2 = Context::full(&rt).unwrap();
         let res: i32 = ctx2.with(|ctx| {
-            let func = func.inlive().restore(ctx).unwrap();
+            let func = func.restore(ctx).unwrap();
             func.call((0,)).unwrap()
         });
         assert_eq!(res, 1);

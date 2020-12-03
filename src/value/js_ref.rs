@@ -33,7 +33,7 @@ impl<'js, Ty: JsRefType> PartialEq for JsRef<'js, Ty> {
 impl<'js, Ty: JsRefType> JsRef<'js, Ty> {
     /// creates a ref from a js value we have ownership of.
     pub unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
-        debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(value), Ty::TAG);
+        debug_assert_eq!(qjs::JS_VALUE_GET_TAG(value), Ty::TAG);
         JsRef {
             ctx,
             value,

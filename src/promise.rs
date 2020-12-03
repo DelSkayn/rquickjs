@@ -96,8 +96,8 @@ where
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let (promise, then, catch) = ctx.promise()?;
 
-        let then = Persistent::save(ctx, then)?.outlive();
-        let catch = Persistent::save(ctx, catch)?.outlive();
+        let then = Persistent::save(ctx, then);
+        let catch = Persistent::save(ctx, catch);
 
         let runtime = unsafe { &ctx.get_opaque().runtime }
             .try_ref()
@@ -115,13 +115,13 @@ where
             match result.into_js(ctx) {
                 Ok(value) => {
                     mem::drop(catch);
-                    resolve(ctx, then.inlive().restore(ctx).unwrap(), value)
+                    resolve(ctx, then.restore(ctx).unwrap(), value)
                 }
                 Err(error) => {
                     mem::drop(then);
                     resolve(
                         ctx,
-                        catch.inlive().restore(ctx).unwrap(),
+                        catch.restore(ctx).unwrap(),
                         error.into_js(ctx).unwrap(),
                     )
                 }

@@ -1,5 +1,6 @@
 use crate::{
-    qjs, value, AsJsValueRef, Ctx, Error, FromJs, IntoJs, JsRef, Object, Outlive, Result, Value,
+    qjs, value, AsJsValueRef, Ctx, Error, FromJs, IntoJs, JsRef, Object, Outlive, Persistent,
+    Result, Value,
 };
 use std::{
     ffi::CString,
@@ -281,8 +282,14 @@ pub struct RefsMarker {
 }
 
 impl RefsMarker {
-    pub fn mark<'js, T: AsJsValueRef<'js>>(&self, value: &T) {
-        unsafe { qjs::JS_MarkValue(self.rt, value.as_js_value_ref(), self.mark_func) };
+    pub fn mark<'js, T>(&self, value: &Persistent<T>) {
+        let val = value.value.get();
+        if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(val) } {
+            unsafe { qjs::JS_MarkValue(self.rt, val, self.mark_func) };
+            if 0 == unsafe { qjs::JS_ValueRefCount(val) } {
+                value.value.set(qjs::JS_UNDEFINED);
+            }
+        }
     }
 }
 
@@ -590,12 +597,12 @@ mod test {
         }
 
         impl<'js> Class<'js, A> {
-            pub fn add(mut self, val: Persistent<Class<'js, A>>) {
-                self.as_mut().refs.insert(val.outlive());
+            pub fn add(mut self, val: Persistent<Class<'static, A>>) {
+                self.as_mut().refs.insert(val);
             }
 
-            pub fn rm(mut self, val: Persistent<Class<'js, A>>) {
-                self.as_mut().refs.remove(&val.outlive());
+            pub fn rm(mut self, val: Persistent<Class<'static, A>>) {
+                self.as_mut().refs.remove(&val);
             }
         }
 
@@ -629,7 +636,8 @@ mod test {
                         r#"
                         let a = new A("a");
                         let b = new A("b");
-                        a.add(b);
+                        //a.add(b);
+                        b.add(a);
                     "#,
                     )
                     .unwrap();
@@ -683,6 +691,31 @@ mod test {
                         a.add(b);
                         b.add(c);
                         c.add(a);
+                    "#,
+                    )
+                    .unwrap();
+            });
+        }
+
+        #[test]
+        fn managed_rm() {
+            test_with(|ctx| {
+                Class::<A>::register(ctx).unwrap();
+
+                let global = ctx.globals();
+                global
+                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
+                    .unwrap();
+
+                let _: () = ctx
+                    .eval(
+                        r#"
+                        let a = new A("a");
+                        let b = new A("b");
+                        a.add(b);
+                        b.add(a);
+                        a.rm(b);
+                        b.rm(a);
                     "#,
                     )
                     .unwrap();
