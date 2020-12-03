@@ -22,7 +22,7 @@ pub use convert::*;
 pub use function::{
     Args, AsArguments, AsFunction, AsFunctionMut, Function, JsFn, JsFnMut, Method, This,
 };
-pub(crate) use js_ref::{JsObjectRef, JsStringRef, JsSymbolRef};
+pub(crate) use js_ref::{JsRef, JsRefType};
 pub use object::{Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
@@ -167,7 +167,11 @@ impl<'js> Value<'js> {
         }
     }
 
-    unsafe fn from_js_object(ctx: Ctx<'js>, val: qjs::JSValue, vref: JsObjectRef<'js>) -> Self {
+    unsafe fn from_js_object(
+        ctx: Ctx<'js>,
+        val: qjs::JSValue,
+        vref: JsRef<'js, Object<'js>>,
+    ) -> Self {
         if qjs::JS_IsArray(ctx.ctx, val) == 1 {
             Array(vref).into_value()
         } else if qjs::JS_IsFunction(ctx.ctx, val) == 1 {
@@ -184,12 +188,12 @@ impl<'js> Value<'js> {
         //TODO test for overflow in down cast
         //Should probably not happen
         match qjs::JS_VALUE_GET_NORM_TAG(val) {
-            qjs::JS_TAG_STRING => Ok(String(JsStringRef::from_js_value(ctx, val)).into_value()),
-            qjs::JS_TAG_SYMBOL => Ok(Symbol(JsSymbolRef::from_js_value(ctx, val)).into_value()),
+            qjs::JS_TAG_STRING => Ok(String(JsRef::from_js_value(ctx, val)).into_value()),
+            qjs::JS_TAG_SYMBOL => Ok(Symbol(JsRef::from_js_value(ctx, val)).into_value()),
             qjs::JS_TAG_OBJECT => Ok(Self::from_js_object(
                 ctx,
                 val,
-                JsObjectRef::from_js_value(ctx, val),
+                JsRef::from_js_value(ctx, val),
             )),
             tag => Self::from_js_value_common(ctx, tag, val),
         }
@@ -201,16 +205,12 @@ impl<'js> Value<'js> {
         //TODO test for overflow in down cast
         //Should probably not happen
         match qjs::JS_VALUE_GET_NORM_TAG(val) {
-            qjs::JS_TAG_STRING => {
-                Ok(String(JsStringRef::from_js_value_const(ctx, val)).into_value())
-            }
-            qjs::JS_TAG_SYMBOL => {
-                Ok(Symbol(JsSymbolRef::from_js_value_const(ctx, val)).into_value())
-            }
+            qjs::JS_TAG_STRING => Ok(String(JsRef::from_js_value_const(ctx, val)).into_value()),
+            qjs::JS_TAG_SYMBOL => Ok(Symbol(JsRef::from_js_value_const(ctx, val)).into_value()),
             qjs::JS_TAG_OBJECT => Ok(Self::from_js_object(
                 ctx,
                 val,
-                JsObjectRef::from_js_value_const(ctx, val),
+                JsRef::from_js_value_const(ctx, val),
             )),
             tag => Self::from_js_value_common(ctx, tag, val),
         }

@@ -1,6 +1,5 @@
 use crate::{
-    qjs, value, AsJsValueRef, Ctx, Error, FromJs, IntoJs, JsObjectRef, Object, Outlive, Result,
-    Value,
+    qjs, value, AsJsValueRef, Ctx, Error, FromJs, IntoJs, JsRef, Object, Outlive, Result, Value,
 };
 use std::{
     ffi::CString,
@@ -161,7 +160,7 @@ where
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
-            Object(unsafe { JsObjectRef::from_js_value(ctx, val) }),
+            Object(unsafe { JsRef::from_js_value(ctx, val) }),
             PhantomData,
         ))
     }
@@ -178,7 +177,7 @@ where
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
-            Object(unsafe { JsObjectRef::from_js_value(ctx, val) }),
+            Object(unsafe { JsRef::from_js_value(ctx, val) }),
             PhantomData,
         ))
     }
@@ -248,7 +247,7 @@ where
     pub fn prototype(ctx: Ctx<'js>) -> Result<Object<'js>> {
         let class_id = *C::class_id().as_ref();
         Ok(Object(unsafe {
-            JsObjectRef::from_js_value(ctx, qjs::JS_GetClassProto(ctx.ctx, class_id))
+            JsRef::from_js_value(ctx, qjs::JS_GetClassProto(ctx.ctx, class_id))
         }))
     }
 
@@ -259,7 +258,7 @@ where
     ) {
         let class_id = *C::class_id().as_ref();
         let ptr = qjs::JS_GetOpaque(val, class_id) as *mut C;
-        assert!(!ptr.is_null());
+        debug_assert!(!ptr.is_null());
         let inst = &mut *ptr;
         let marker = RefsMarker { rt, mark_func };
         inst.mark_refs(&marker);
@@ -268,7 +267,7 @@ where
     unsafe extern "C" fn finalizer(rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
         let class_id = *C::class_id().as_ref();
         let ptr = qjs::JS_GetOpaque(val, class_id) as *mut C;
-        assert!(!ptr.is_null());
+        debug_assert!(!ptr.is_null());
         let inst = Box::from_raw(ptr);
         qjs::JS_FreeValueRT(rt, val);
         mem::drop(inst);
@@ -570,12 +569,21 @@ mod test {
         use std::collections::HashSet;
 
         struct A {
+            name: StdString,
             refs: HashSet<Persistent<Class<'static, A>>>,
         }
 
-        impl Default for A {
-            fn default() -> Self {
+        impl Drop for A {
+            fn drop(&mut self) {
+                println!("A::drop {}", self.name);
+            }
+        }
+
+        impl A {
+            fn new(name: StdString) -> Self {
+                println!("A::new {}", name);
                 Self {
+                    name,
                     refs: HashSet::new(),
                 }
             }
@@ -593,10 +601,12 @@ mod test {
 
         class_def!(
             A (proto) {
+                println!("A::register");
                 proto.set("add", JsFn::new("add", Method(Class::<A>::add)))?;
                 proto.set("rm", JsFn::new("rm", Method(Class::<A>::rm)))?;
             }
             ~(this, marker) {
+                println!("A::mark {}", this.name);
                 for obj in &this.refs {
                     marker.mark(obj);
                 }
@@ -610,17 +620,15 @@ mod test {
 
                 let global = ctx.globals();
                 global
-                    .set("A", JsFn::new("A", Class::<A>::constructor(A::default)))
+                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
                     .unwrap();
 
                 // a -> b
                 let _: () = ctx
                     .eval(
                         r#"
-                        let a = new A();
-                        a.name = "a";
-                        let b = new A();
-                        b.name = "b";
+                        let a = new A("a");
+                        let b = new A("b");
                         a.add(b);
                     "#,
                     )
@@ -635,7 +643,7 @@ mod test {
 
                 let global = ctx.globals();
                 global
-                    .set("A", JsFn::new("A", Class::<A>::constructor(A::default)))
+                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
                     .unwrap();
 
                 // a -> b
@@ -643,10 +651,8 @@ mod test {
                 let _: () = ctx
                     .eval(
                         r#"
-                        let a = new A();
-                        a.name = "a";
-                        let b = new A();
-                        b.name = "b";
+                        let a = new A("a");
+                        let b = new A("b");
                         a.add(b);
                         b.add(a);
                     "#,
@@ -662,7 +668,7 @@ mod test {
 
                 let global = ctx.globals();
                 global
-                    .set("A", JsFn::new("A", Class::<A>::constructor(A::default)))
+                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
                     .unwrap();
 
                 // a -> b
@@ -671,12 +677,9 @@ mod test {
                 let _: () = ctx
                     .eval(
                         r#"
-                        let a = new A();
-                        a.name = "a";
-                        let b = new A();
-                        b.name = "b";
-                        let c = new A();
-                        c.name = "c";
+                        let a = new A("a");
+                        let b = new A("b");
+                        let c = new A("c");
                         a.add(b);
                         b.add(c);
                         c.add(a);

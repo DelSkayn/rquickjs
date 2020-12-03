@@ -1,4 +1,4 @@
-use crate::{qjs, value, Ctx, FromIteratorJs, FromJs, IntoJs, JsObjectRef, Object, Result, Value};
+use crate::{qjs, value, Ctx, FromIteratorJs, FromJs, IntoJs, JsRef, Object, Result, Value};
 use std::{
     iter::{IntoIterator, Iterator},
     marker::PhantomData,
@@ -11,14 +11,14 @@ use std::{
 /// This value represents such a optimized array.
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
-pub struct Array<'js>(pub(crate) JsObjectRef<'js>);
+pub struct Array<'js>(pub(crate) JsRef<'js, Object<'js>>);
 
 impl<'js> Array<'js> {
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
         unsafe {
             let val = qjs::JS_NewArray(ctx.ctx);
             value::handle_exception(ctx, val)?;
-            Ok(Array(JsObjectRef::from_js_value(ctx, val)))
+            Ok(Array(JsRef::from_js_value(ctx, val)))
         }
     }
 

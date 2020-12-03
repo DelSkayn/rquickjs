@@ -1,10 +1,14 @@
-use crate::{qjs, value, Ctx, Error, JsStringRef, Result, StdString, Value};
+use crate::{qjs, value, Ctx, Error, JsRef, JsRefType, Result, StdString, Value};
 use std::{mem, slice, str};
 
 /// Rust representation of a javascript string.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(transparent)]
-pub struct String<'js>(pub(crate) JsStringRef<'js>);
+pub struct String<'js>(pub(crate) JsRef<'js, Self>);
+
+impl<'js> JsRefType for String<'js> {
+    const TAG: i32 = qjs::JS_TAG_STRING;
+}
 
 impl<'js> String<'js> {
     /// Convert the javascript string to a rust string.
@@ -31,7 +35,7 @@ impl<'js> String<'js> {
         Ok(String(unsafe {
             let js_val = qjs::JS_NewStringLen(ctx.ctx, ptr as _, len as _);
             let js_val = value::handle_exception(ctx, js_val)?;
-            JsStringRef::from_js_value(ctx, js_val)
+            JsRef::from_js_value(ctx, js_val)
         }))
     }
 

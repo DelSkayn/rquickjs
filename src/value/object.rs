@@ -1,6 +1,6 @@
 use crate::{
     qjs, value, Array, Atom, Ctx, Error, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom,
-    IntoJs, JsObjectRef, Result, Value,
+    IntoJs, JsRef, JsRefType, Result, Value,
 };
 use std::{
     iter::{IntoIterator, Iterator},
@@ -19,7 +19,11 @@ pub trait ObjectDef {
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
-pub struct Object<'js>(pub(crate) JsObjectRef<'js>);
+pub struct Object<'js>(pub(crate) JsRef<'js, Self>);
+
+impl<'js> JsRefType for Object<'js> {
+    const TAG: i32 = qjs::JS_TAG_OBJECT;
+}
 
 impl<'js> Object<'js> {
     /// Create a new javascript object
@@ -27,7 +31,7 @@ impl<'js> Object<'js> {
         unsafe {
             let val = qjs::JS_NewObject(ctx.ctx);
             let val = value::handle_exception(ctx, val)?;
-            Ok(Object(JsObjectRef::from_js_value(ctx, val)))
+            Ok(Object(JsRef::from_js_value(ctx, val)))
         }
     }
 
@@ -145,7 +149,7 @@ impl<'js> Object<'js> {
             if qjs::JS_IsNull(proto) {
                 return Err(Error::Unknown);
             } else {
-                JsObjectRef::from_js_value(self.0.ctx, proto)
+                JsRef::from_js_value(self.0.ctx, proto)
             }
         }))
     }
@@ -204,7 +208,7 @@ struct IterState<'js> {
 }
 
 impl<'js> IterState<'js> {
-    fn new(obj: &JsObjectRef<'js>, flags: i32) -> Result<Self> {
+    fn new(obj: &JsRef<'js, Object<'js>>, flags: i32) -> Result<Self> {
         let ctx = obj.ctx;
 
         let mut enums = mem::MaybeUninit::uninit();

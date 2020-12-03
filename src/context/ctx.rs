@@ -1,6 +1,6 @@
 use crate::{
-    markers::Invariant, qjs, runtime::Opaque, value, BeforeInit, Context, FromJs, Function,
-    JsObjectRef, JsStringRef, Module, Object, Result, String, Value,
+    markers::Invariant, qjs, runtime::Opaque, value, BeforeInit, Context, FromJs, Function, JsRef,
+    Module, Object, Result, String, Value,
 };
 
 #[cfg(feature = "registery")]
@@ -120,7 +120,7 @@ impl<'js> Ctx<'js> {
             // js_val should be a string now
             // String itself will check for the tag when debug_assertions are enabled
             // but is should always be string
-            Ok(String(JsStringRef::from_js_value(self, js_val)))
+            Ok(String(JsRef::from_js_value(self, js_val)))
         }
     }
 
@@ -179,7 +179,7 @@ impl<'js> Ctx<'js> {
     pub fn globals(self) -> Object<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);
-            Object(JsObjectRef::from_js_value(self, v))
+            Object(JsRef::from_js_value(self, v))
         }
     }
 
@@ -194,9 +194,9 @@ impl<'js> Ctx<'js> {
             )?;
             let (then, catch) = funcs.assume_init();
             (
-                Object(JsObjectRef::from_js_value(self, promise)),
-                Function(JsObjectRef::from_js_value(self, then)),
-                Function(JsObjectRef::from_js_value(self, catch)),
+                Object(JsRef::from_js_value(self, promise)),
+                Function(JsRef::from_js_value(self, then)),
+                Function(JsRef::from_js_value(self, catch)),
             )
         })
     }

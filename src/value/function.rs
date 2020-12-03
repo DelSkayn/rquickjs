@@ -1,6 +1,6 @@
 use crate::{
-    qjs, value, Ctx, Error, FromJs, IntoAtom, IntoJs, JsObjectRef, Object, Result,
-    SendWhenParallel, Value,
+    qjs, value, Ctx, Error, FromJs, IntoAtom, IntoJs, JsRef, Object, Result, SendWhenParallel,
+    Value,
 };
 use std::cell::RefCell;
 
@@ -18,7 +18,7 @@ pub use types::{Args, JsFn, JsFnMut, Method, This};
 
 /// Rust representation of a javascript function.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Function<'js>(pub(crate) JsObjectRef<'js>);
+pub struct Function<'js>(pub(crate) JsRef<'js, Object<'js>>);
 
 impl<'js> Function<'js> {
     pub fn new<'js_, F, A, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
@@ -76,7 +76,7 @@ impl<'js> Function<'js> {
                 name_value.into_js_value(),
                 qjs::JS_PROP_CONFIGURABLE as _,
             );
-            JsObjectRef::from_js_value(ctx, func_obj)
+            JsRef::from_js_value(ctx, func_obj)
         }))
     }
 
@@ -162,7 +162,7 @@ impl<'js> Function<'js> {
                 ),
             )?;
             if qjs::JS_IsObject(proto) {
-                JsObjectRef::from_js_value(self.0.ctx, proto)
+                JsRef::from_js_value(self.0.ctx, proto)
             } else {
                 return Err(Error::Unknown);
             }

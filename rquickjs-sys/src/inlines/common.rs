@@ -1,5 +1,7 @@
 pub use ::std::os::raw::{c_char, c_int, c_uint, c_void};
 
+pub type JSValueConst = JSValue;
+
 #[inline]
 pub unsafe fn JS_VALUE_HAS_REF_COUNT(v: JSValue) -> bool {
     JS_VALUE_GET_TAG(v) as c_uint >= JS_TAG_FIRST as c_uint
@@ -84,34 +86,51 @@ pub unsafe fn JS_IsObject(v: JSValue) -> bool {
 }
 
 #[inline]
+pub unsafe fn JS_FreeValueRef(ctx: *mut JSContext, v: JSValue) {
+    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
+    p.ref_count -= 1;
+    if p.ref_count <= 0 {
+        __JS_FreeValue(ctx, v)
+    }
+}
+
+#[inline]
 pub unsafe fn JS_FreeValue(ctx: *mut JSContext, v: JSValue) {
     if JS_VALUE_HAS_REF_COUNT(v) {
-        let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
-        p.ref_count -= 1;
-        if p.ref_count <= 0 {
-            __JS_FreeValue(ctx, v)
-        }
+        JS_FreeValueRef(ctx, v);
+    }
+}
+
+#[inline]
+pub unsafe fn JS_FreeValueRefRT(rt: *mut JSRuntime, v: JSValue) {
+    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
+    p.ref_count -= 1;
+    if p.ref_count <= 0 {
+        __JS_FreeValueRT(rt, v)
     }
 }
 
 #[inline]
 pub unsafe fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue) {
     if JS_VALUE_HAS_REF_COUNT(v) {
-        let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
-        p.ref_count -= 1;
-        if p.ref_count <= 0 {
-            __JS_FreeValueRT(rt, v)
-        }
+        JS_FreeValueRefRT(rt, v);
     }
+}
+
+#[inline]
+pub unsafe fn JS_DupValueRef(v: JSValueConst) -> JSValue {
+    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
+    p.ref_count += 1;
+    v
 }
 
 #[inline]
 pub unsafe fn JS_DupValue(v: JSValue) -> JSValue {
     if JS_VALUE_HAS_REF_COUNT(v) {
-        let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
-        p.ref_count += 1;
+        JS_DupValueRef(v)
+    } else {
+        v
     }
-    v
 }
 
 #[inline]
