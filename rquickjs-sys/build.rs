@@ -19,6 +19,7 @@ fn main() {
         "dump-bytecode",
         "dump-gc",
         "dump-gc-free",
+        "dump-free",
         "dump-leaks",
         "dump-mem",
         "dump-objects",

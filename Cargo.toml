@@ -113,6 +113,7 @@ max-args-16 = ["max-args-15"]
 dump-bytecode = ["rquickjs-sys/dump-bytecode"]
 dump-gc = ["rquickjs-sys/dump-gc"]
 dump-gc-free = ["rquickjs-sys/dump-gc-free"]
+dump-free = ["rquickjs-sys/dump-free"]
 # Dump JS values which still alive when runtime is freed
 dump-leaks = ["rquickjs-sys/dump-leaks"]
 dump-mem = ["rquickjs-sys/dump-mem"]
