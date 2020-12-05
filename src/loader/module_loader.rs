@@ -49,7 +49,7 @@ impl Loader for ModuleLoader {
     fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, BeforeInit>> {
         match self.modules.remove(path) {
             Some(module_init) => module_init.0(ctx, path),
-            _ => Err(Error::loading::<_, &str>(path, None)),
+            _ => Err(Error::new_loading(path)),
         }
     }
 }

@@ -118,7 +118,7 @@ impl Resolver for FileResolver {
             };
             self.try_patterns(&path)
         }
-        .ok_or_else(|| Error::resolving::<_, _, &str>(base, name, None))?;
+        .ok_or_else(|| Error::new_resolving(base, name))?;
 
         Ok(path.to_string())
     }

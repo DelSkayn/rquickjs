@@ -39,7 +39,7 @@ impl Loader for BuiltinLoader {
     fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, BeforeInit>> {
         match self.modules.remove(path) {
             Some(source) => ctx.compile_only(path, source),
-            _ => Err(Error::loading::<_, &str>(path, None)),
+            _ => Err(Error::new_loading(path)),
         }
     }
 }

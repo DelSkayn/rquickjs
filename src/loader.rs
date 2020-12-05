@@ -203,10 +203,11 @@ macro_rules! loader_impls {
                         }
                     )*
                     // Unable to resolve module name
-                    let message = if messages.is_empty() { None } else {
-                        Some(messages.join("\n"))
-                    };
-                    Err(Error::resolving(base, name, message))
+                    Err(if messages.is_empty() {
+                        Error::new_resolving(base, name)
+                    } else {
+                        Error::new_resolving_message(base, name, messages.join("\n"))
+                    })
                 }
             }
 
@@ -228,10 +229,11 @@ macro_rules! loader_impls {
                         }
                     )*
                     // Unable to load module
-                    let message = if messages.is_empty() { None } else {
-                        Some(messages.join("\n"))
-                    };
-                    Err(Error::loading(name, message))
+                    Err(if messages.is_empty() {
+                        Error::new_loading(name)
+                    } else {
+                        Error::new_loading_message(name, messages.join("\n"))
+                    })
                 }
             }
         )*
@@ -260,7 +262,11 @@ mod test {
             if base == "loader" && name == "test" {
                 Ok(name.into())
             } else {
-                Err(Error::resolving(base, name, Some("unable to resolve")))
+                Err(Error::new_resolving_message(
+                    base,
+                    name,
+                    "unable to resolve",
+                ))
             }
         }
     }
@@ -278,7 +284,7 @@ mod test {
                     "#,
                 )
             } else {
-                Err(Error::loading(name, Some("unable to load")))
+                Err(Error::new_loading_message(name, "unable to load"))
             }
         }
     }

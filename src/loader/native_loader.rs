@@ -53,15 +53,17 @@ impl Loader for NativeLoader {
         use std::ffi::CString;
 
         if !check_extensions(&path, &self.extensions) {
-            return Err(Error::loading::<_, &str>(path, None));
+            return Err(Error::new_loading(path));
         }
 
         type LoadFn =
             unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
 
-        let lib = Library::open(&path).map_err(|_| Error::Unknown)?;
-        let load_fn: LoadFn =
-            unsafe { lib.symbol("js_init_module") }.map_err(|_| Error::Unknown)?;
+        let lib = Library::open(&path)
+            .map_err(|_| Error::new_loading_message(path, "Unable to open library"))?;
+        let load_fn: LoadFn = unsafe { lib.symbol("js_init_module") }.map_err(|_| {
+            Error::new_loading_message(path, "Unable to find symbol `js_init_module`")
+        })?;
 
         let name = CString::new(path)?;
         let ptr = unsafe { load_fn(ctx.ctx, name.as_ptr()) };

@@ -64,32 +64,137 @@ pub enum Error {
 impl Error {
     #[cfg(feature = "loader")]
     /// Create resolving error
-    pub fn resolving<B, N, M>(base: B, name: N, message: Option<M>) -> Self
+    pub fn new_resolving<B, N>(base: B, name: N) -> Self
+    where
+        StdString: From<B> + From<N>,
+    {
+        Error::Resolving {
+            base: base.into(),
+            name: name.into(),
+            message: None,
+        }
+    }
+
+    #[cfg(feature = "loader")]
+    /// Create resolving error with message
+    pub fn new_resolving_message<B, N, M>(base: B, name: N, msg: M) -> Self
     where
         StdString: From<B> + From<N> + From<M>,
     {
         Error::Resolving {
             base: base.into(),
             name: name.into(),
-            message: message.map(|message| message.into()),
+            message: Some(msg.into()),
+        }
+    }
+
+    #[cfg(feature = "loader")]
+    /// Returns whether the error is a resolving error
+    pub fn is_resolving(&self) -> bool {
+        if let Error::Resolving { .. } = self {
+            true
+        } else {
+            false
         }
     }
 
     #[cfg(feature = "loader")]
     /// Create loading error
-    pub fn loading<N, M>(name: N, message: Option<M>) -> Self
+    pub fn new_loading<N>(name: N) -> Self
+    where
+        StdString: From<N>,
+    {
+        Error::Loading {
+            name: name.into(),
+            message: None,
+        }
+    }
+
+    #[cfg(feature = "loader")]
+    /// Create loading error
+    pub fn new_loading_message<N, M>(name: N, msg: M) -> Self
     where
         StdString: From<N> + From<M>,
     {
         Error::Loading {
             name: name.into(),
-            message: message.map(|message| message.into()),
+            message: Some(msg.into()),
+        }
+    }
+
+    #[cfg(feature = "loader")]
+    /// Returns whether the error is a loading error
+    pub fn is_loading(&self) -> bool {
+        if let Error::Loading { .. } = self {
+            true
+        } else {
+            false
         }
     }
 
     /// Returns whether the error is a quickjs generated exception.
     pub fn is_exception(&self) -> bool {
         matches!(*self, Error::Exception{..})
+    }
+
+    /// Create from JS conversion error
+    pub fn new_from_js(from: &'static str, to: &'static str) -> Self {
+        Error::FromJs {
+            from,
+            to,
+            message: None,
+        }
+    }
+
+    /// Create from JS conversion error with message
+    pub fn new_from_js_message<M>(from: &'static str, to: &'static str, msg: M) -> Self
+    where
+        StdString: From<M>,
+    {
+        Error::FromJs {
+            from,
+            to,
+            message: Some(msg.into()),
+        }
+    }
+
+    /// Create into JS conversion error
+    pub fn new_into_js(from: &'static str, to: &'static str) -> Self {
+        Error::IntoJs {
+            from,
+            to,
+            message: None,
+        }
+    }
+
+    /// Create into JS conversion error with message
+    pub fn new_into_js_message<M>(from: &'static str, to: &'static str, msg: M) -> Self
+    where
+        StdString: From<M>,
+    {
+        Error::IntoJs {
+            from,
+            to,
+            message: Some(msg.into()),
+        }
+    }
+
+    /// Returns whether the error is a from JS conversion error
+    pub fn is_from_js(&self) -> bool {
+        if let Error::FromJs { .. } = self {
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns whether the error is an into JS conversion error
+    pub fn is_into_js(&self) -> bool {
+        if let Error::IntoJs { .. } = self {
+            true
+        } else {
+            false
+        }
     }
 
     /// Optimized conversion to CString

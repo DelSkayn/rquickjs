@@ -48,7 +48,7 @@ impl Resolver for BuiltinResolver {
         if self.modules.contains(&full) {
             Ok(full)
         } else {
-            Err(Error::resolving::<_, _, &str>(base, name, None))
+            Err(Error::new_resolving(base, name))
         }
     }
 }
