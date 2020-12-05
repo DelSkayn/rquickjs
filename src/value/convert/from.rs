@@ -1,5 +1,5 @@
 use super::FromJs;
-use crate::{value, Array, Ctx, Error, FromAtom, Function, Object, Result, String, Value};
+use crate::{value, Array, Ctx, Error, FromAtom, Function, Object, Result, String, Symbol, Value};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     convert::TryFrom,
@@ -240,6 +240,7 @@ from_js_impls! {
 from_js_impls! {
     js:
     String: "string",
+    Symbol: "symbol",
     Function: "function",
     Array: "array",
     Object(Array, Function): "object",
@@ -317,5 +318,35 @@ where
                 Err(e) => Ok(Err(e)),
             }
         }
+    }
+}
+
+macro_rules! into_fns {
+    ($($(#[$metas:meta])* $name:ident: $type:literal => $variant:ident,)*) => {
+        $(
+            $(#[$metas])*
+            pub fn $name(self) -> Result<$variant<'js>> {
+                if let Value::$variant(value) = self {
+                    Ok(value)
+                } else {
+                    Err(Error::FromJs { from: self.type_name(), to: $type, message: None })
+                }
+            }
+        )*
+    };
+}
+
+impl<'js> Value<'js> {
+    into_fns! {
+        /// Try convert into object
+        into_object: "object" => Object,
+        /// Try convert into array
+        into_array: "array" => Array,
+        /// Try convert into function
+        into_function: "function" => Function,
+        /// Try convert into string
+        into_string: "string" => String,
+        /// Try convert into symbol
+        into_symbol: "symbol" => Symbol,
     }
 }

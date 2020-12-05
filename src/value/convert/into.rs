@@ -1,5 +1,7 @@
 use super::IntoJs;
-use crate::{Array, Ctx, Error, Function, IntoAtom, IteratorJs, Object, Result, String, Value};
+use crate::{
+    Array, Ctx, Error, Function, IntoAtom, IteratorJs, Object, Result, String, Symbol, Value,
+};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     result::Result as StdResult,
@@ -247,6 +249,7 @@ macro_rules! into_js_impls {
 into_js_impls! {
     js:
     String,
+    Symbol,
     Array,
     Object,
     Function,
