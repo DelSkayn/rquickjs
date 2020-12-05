@@ -57,7 +57,7 @@ members = [
 default = ["exports"]
 
 # Features which is used for documentation
-rustdoc = ["exports", "loader", "allocator", "dyn-load", "classes", "properties", "async-std"]
+rustdoc = ["exports", "loader", "allocator", "dyn-load", "classes", "properties", "async-std", "macro"]
 
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used

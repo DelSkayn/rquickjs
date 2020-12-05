@@ -80,7 +80,7 @@ pub use crate::async_shim::JoinHandle;
 mod promise;
 
 #[cfg(feature = "macro")]
-pub use rquickjs_macro::bind;
+pub use rquickjs_macro::{bind, FromJs, IntoJs};
 
 #[cfg(feature = "futures")]
 pub use promise::{Promise, PromiseJs};

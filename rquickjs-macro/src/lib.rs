@@ -2,12 +2,13 @@ mod attrs;
 mod bind;
 mod config;
 mod context;
+mod derive;
 mod shim;
 
 use darling::FromMeta;
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro_error::proc_macro_error;
-use syn::parse_macro_input;
+use syn::{parse_macro_input, DeriveInput};
 
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::{abort, emit_error as error, emit_warning as warning};
@@ -16,6 +17,7 @@ use attrs::*;
 use bind::*;
 use config::*;
 use context::*;
+use derive::*;
 use shim::*;
 
 /**
@@ -152,5 +154,163 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
         abort!("{}", error);
     });
     let output = binder.expand(attr, item);
+    output.into()
+}
+
+/**
+# A macro to derive [rquickjs::FromJs] for an arbitrary structured types
+
+## Examples
+
+### Unit struct
+
+```
+use rquickjs::FromJs;
+
+#[derive(FromJs)]
+struct MyUnit;
+```
+
+### Tuple struct
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+struct MyTuple(i32, String);
+```
+
+### Struct with fields
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+struct MyStruct {
+    int: i32,
+    text: String,
+}
+```
+
+### Unit enum
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+enum MyEnum {
+    A,
+    B,
+}
+```
+
+### Tuple enum
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Enum with fields
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+enum MyEnum {
+    Foo { x: f64, y: f64 },
+    Bar { msg: String },
+}
+```
+
+ */
+#[proc_macro_error]
+#[proc_macro_derive(FromJs, attributes(bind))]
+pub fn from_js(input: TokenStream1) -> TokenStream1 {
+    let input: DeriveInput = parse_macro_input!(input);
+
+    let config = Config::new();
+    let binder = FromJs::new(config);
+    let output = binder.expand(input);
+
+    output.into()
+}
+
+/**
+# A macro to derive [rquickjs::IntoJs] for an arbitrary structured types
+
+## Examples
+
+### Unit struct
+
+```
+use rquickjs::IntoJs;
+
+#[derive(IntoJs)]
+struct MyUnit;
+```
+
+### Tuple struct
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+struct MyTuple(i32, String);
+```
+
+### Struct with fields
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+struct MyStruct {
+int: i32,
+text: String,
+}
+```
+
+### Unit enum
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+enum MyEnum {
+    Foo,
+    Bar,
+}
+```
+
+### Tuple enum
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Enum with fields
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+enum MyEnum {
+Foo { x: f64, y: f64 },
+Bar { msg: String },
+}
+```
+
+ */
+#[proc_macro_error]
+#[proc_macro_derive(IntoJs, attributes(bind))]
+pub fn into_js(input: TokenStream1) -> TokenStream1 {
+    let input: DeriveInput = parse_macro_input!(input);
+
+    let config = Config::new();
+    let binder = IntoJs::new(config);
+    let output = binder.expand(input);
+
     output.into()
 }
