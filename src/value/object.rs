@@ -112,6 +112,16 @@ impl<'js> Object<'js> {
         Ok(())
     }
 
+    /// Check the object for empty
+    pub fn is_empty(&self) -> bool {
+        self.own_keys::<Atom>(false).next().is_none()
+    }
+
+    /// Get the number of properties
+    pub fn len(&self) -> usize {
+        self.own_keys::<Atom>(false).count()
+    }
+
     /// Get own property names of an object
     pub fn own_keys<K: FromAtom<'js>>(&self, enumerable_only: bool) -> ObjectKeysIter<'js, K> {
         let mut flags = qjs::JS_GPN_STRING_MASK as i32;
