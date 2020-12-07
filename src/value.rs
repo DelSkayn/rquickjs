@@ -258,20 +258,53 @@ impl<'js> Value<'js> {
 
     #[doc(hidden)]
     pub fn type_name(&self) -> &'static str {
-        match *self {
-            Value::Int(_) => "integer",
-            Value::Bool(_) => "bool",
-            Value::Null => "null",
-            Value::Undefined => "undefined",
-            Value::Uninitialized => "uninitialized",
-            Value::Float(_) => "float",
-            Value::Symbol(_) => "symbol",
-            Value::String(_) => "string",
-            Value::Object(_) => "object",
-            Value::Array(_) => "array",
-            Value::Function(_) => "function",
-        }
+        self.type_of().as_str()
     }
+}
+
+macro_rules! type_impls {
+    ($($t:ident => $s:ident,)*) => {
+        /// The type of value
+        pub enum Type {
+            $($t,)*
+        }
+
+        impl Type {
+            pub fn as_str(&self) -> &'static str {
+                match self {
+                    $(Type::$t => stringify!($s),)*
+                }
+            }
+        }
+
+        impl<'js> Value<'js> {
+            /// Get the type of value
+            pub fn type_of(&self) -> Type {
+                match self {
+                    $(type_impls!(@pat $t) => Type::$t,)*
+                }
+            }
+        }
+    };
+
+    (@pat Uninitialized) => { Value::Uninitialized };
+    (@pat Undefined) => { Value::Undefined };
+    (@pat Null) => { Value::Null };
+    (@pat $t:ident) => { Value::$t(_) };
+}
+
+type_impls! {
+    Uninitialized => uninitialized,
+    Undefined => undefined,
+    Null => null,
+    Bool => bool,
+    Int => int,
+    Float => float,
+    String => string,
+    Symbol => symbol,
+    Object => object,
+    Array => array,
+    Function => function,
 }
 
 macro_rules! conv_impls {
