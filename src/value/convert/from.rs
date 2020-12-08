@@ -1,10 +1,10 @@
-use super::FromJs;
-use crate::{value, Array, Ctx, Error, FromAtom, Function, Object, Result, String, Symbol, Value};
+use crate::{
+    handle_exception, Array, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type,
+    Value,
+};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
-    convert::TryFrom,
     hash::Hash,
-    string::String as StdString,
 };
 
 impl<'js> FromJs<'js> for Value<'js> {
@@ -15,30 +15,39 @@ impl<'js> FromJs<'js> for Value<'js> {
 
 impl<'js> FromJs<'js> for StdString {
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        match value {
-            Value::String(x) => Ok(x.to_string()?),
-            x => Err(Error::FromJs {
-                from: x.type_name(),
-                to: "string",
-                message: None,
-            }),
-        }
+        String::from_value(value).and_then(|string| string.to_string())
     }
 }
 
-fn not_enough_values() -> Error {
-    Error::FromJs {
-        from: "array",
-        to: "tuple",
-        message: Some("Not enough values".into()),
+fn tuple_match_size(actual: usize, expected: usize) -> Result<()> {
+    if actual == expected {
+        Ok(())
+    } else {
+        Err(Error::new_from_js_message(
+            "array",
+            "tuple",
+            if actual < expected {
+                "Not enough values"
+            } else {
+                "Too many values"
+            },
+        ))
     }
 }
 
-fn too_many_values() -> Error {
-    Error::FromJs {
-        from: "array",
-        to: "tuple",
-        message: Some("Too many values".into()),
+fn number_match_range<T: PartialOrd>(
+    val: T,
+    min: T,
+    max: T,
+    from: &'static str,
+    to: &'static str,
+) -> Result<()> {
+    if val < min {
+        Err(Error::new_from_js_message(from, to, "Underflow"))
+    } else if val > max {
+        Err(Error::new_from_js_message(from, to, "Overflow"))
+    } else {
+        Ok(())
     }
 }
 
@@ -50,28 +59,12 @@ macro_rules! from_js_impls {
             where
                 $($type: FromJs<'js>,)*
             {
-                #[allow(non_snake_case)]
                 fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-                    let array = match value {
-                        Value::Array(array) => array,
-                        other => {
-                            return Err(Error::FromJs{
-                                from: other.type_name(),
-                                to: "tuple",
-                                message: None,
-                            });
-                        }
-                    };
+                    let array = Array::from_value(value)?;
 
                     let tuple_len = 0 $(+ from_js_impls!(@one $type))*;
                     let array_len = array.len();
-                    if array_len != tuple_len {
-                        return if array_len < tuple_len {
-                            Err(not_enough_values())
-                        } else {
-                            Err(too_many_values())
-                        };
-                    }
+                    tuple_match_size(array_len, tuple_len)?;
 
                     Ok((
                         $(array.get::<$type>(from_js_impls!(@idx $type))?,)*
@@ -89,16 +82,7 @@ macro_rules! from_js_impls {
                 T: FromJs<'js> $(+ $($guard)*)*,
             {
                 fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-                    let array = match value {
-                        Value::Array(array) => array,
-                        other => {
-                            return Err(Error::FromJs{
-                                from: other.type_name(),
-                                to: "array",
-                                message: None,
-                            });
-                        }
-                    };
+                    let array = Array::from_value(value)?;
                     array.iter().collect::<Result<$type<_>>>()
                 }
             }
@@ -114,83 +98,41 @@ macro_rules! from_js_impls {
                 V: FromJs<'js>,
             {
                 fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-                    let object = match value {
-                        Value::Object(object) => object,
-                        Value::Array(array) => array.into_object(),
-                        Value::Function(func) => func.into_object(),
-                        other => {
-                            return Err(Error::FromJs{
-                                from: other.type_name(),
-                                to: "object",
-                                message: None,
-                            });
-                        }
-                    };
+                    let object = Object::from_value(value)?;
                     object.own_props(true).collect::<Result<$type<_, _>>>()
                 }
             }
         )*
     };
 
-    // for primitive types which needs coercion
-    (val: $($type:ty => $coerce:ident,)*) => {
+    // for basic primitive types (int and float)
+    // (ex. f64 => Float as_float Int as_int)
+    (val: $($type:ty => $($jstype:ident $getfn:ident)*,)*) => {
         $(
             impl<'js> FromJs<'js> for $type {
-                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-                    let type_name = value.type_name();
-                    ctx.$coerce(value).map_err(|error| {
-                        if error.is_exception() {
-                            Error::FromJs{
-                                from: type_name,
-                                to: stringify!($type),
-                                message: Some(error.to_string()),
-                            }
-                        } else {
-                            error
-                        }
-                    })
-                }
-            }
-        )*
-    };
-
-    // for primitive types which needs coercion and optional try_from
-    (val: $($type:ty: $origtype:ty,)*) => {
-        $(
-            impl<'js> FromJs<'js> for $type {
-                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-                    <$origtype>::from_js(ctx, value).and_then(|value| {
-                        <$type>::try_from(value).map_err(|_error| {
-                            Error::FromJs{
-                                from: stringify!($origtype),
-                                to: stringify!($type),
-                                message: None,
-                            }
-                        })
-                    })
-                }
-            }
-        )*
-    };
-
-    // for JS Value types
-    (js: $($type:ident $(($($stype:ident),*))*: $typename:literal,)*) => {
-        $(
-            impl<'js> FromJs<'js> for $type<'js> {
-                fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-                    match value {
-                        Value::$type(value) => Ok(value),
-                        $($(
-                        Value::$stype(value) => Ok(value.into_object()),
-                        )*)*
-                        other => Err(Error::FromJs{
-                            from: other.type_name(),
-                            to: $typename,
-                            message: None,
-                        }),
+                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    let type_ = value.type_of();
+                    match type_ {
+                        $(Type::$jstype => Ok(unsafe { value.$getfn() } as _),)*
+                        _ => Err(Error::new_from_js(type_.as_str(), stringify!($type))),
                     }
                 }
             }
+        )*
+    };
+
+    // for other primitive types
+    (val: $($base:ident: $($type:ident)*,)*) => {
+        $(
+            $(
+                impl<'js> FromJs<'js> for $type {
+                    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                        let num = <$base>::from_js(ctx, value)?;
+                        number_match_range(num, $type::MIN as $base, $type::MAX as $base, stringify!($base), stringify!($type))?;
+                        Ok(num as $type)
+                    }
+                }
+            )*
         )*
     };
 
@@ -216,34 +158,15 @@ macro_rules! from_js_impls {
 
 from_js_impls! {
     val:
-    i8: i32,
-    u8: i32,
-
-    i16: i32,
-    u16: i32,
-
-    u32: u64,
+    i32: i8 u8 i16 u16,
+    f64: u32 u64 i64,
 }
 
 from_js_impls! {
     val:
-    bool => coerce_bool,
-
-    i32 => coerce_i32,
-
-    i64 => coerce_i64,
-    u64 => coerce_u64,
-
-    f64 => coerce_f64,
-}
-
-from_js_impls! {
-    js:
-    String: "string",
-    Symbol: "symbol",
-    Function: "function",
-    Array: "array",
-    Object(Array, Function): "object",
+    bool => Bool get_bool,
+    i32 => Int get_int,
+    f64 => Float get_float Int get_int,
 }
 
 from_js_impls! {
@@ -287,24 +210,28 @@ impl<'js> FromJs<'js> for f32 {
     }
 }
 
+/// Convert from JS as any
 impl<'js> FromJs<'js> for () {
     fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
         Ok(())
     }
 }
 
+/// Convert from JS as optional
 impl<'js, T> FromJs<'js> for Option<T>
 where
     T: FromJs<'js>,
 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        match value {
-            Value::Undefined | Value::Uninitialized | Value::Null => Ok(None),
-            other => T::from_js(ctx, other).map(Some),
+        if value.type_of().is_void() {
+            Ok(None)
+        } else {
+            T::from_js(ctx, value).map(Some)
         }
     }
 }
 
+/// Convert from JS as result
 impl<'js, T> FromJs<'js> for Result<T>
 where
     T: FromJs<'js>,
@@ -313,40 +240,10 @@ where
     //Expections are generally handled when returned from a function
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         unsafe {
-            match value::handle_exception(ctx, value.into_js_value()) {
-                Ok(x) => T::from_js(ctx, Value::from_js_value(ctx, x)?).map(Ok),
-                Err(e) => Ok(Err(e)),
+            match handle_exception(ctx, value.into_js_value()) {
+                Ok(val) => T::from_js(ctx, Value::from_js_value(ctx, val)).map(Ok),
+                Err(error) => Ok(Err(error)),
             }
         }
-    }
-}
-
-macro_rules! into_fns {
-    ($($(#[$metas:meta])* $name:ident: $type:literal => $variant:ident,)*) => {
-        $(
-            $(#[$metas])*
-            pub fn $name(self) -> Result<$variant<'js>> {
-                if let Value::$variant(value) = self {
-                    Ok(value)
-                } else {
-                    Err(Error::FromJs { from: self.type_name(), to: $type, message: None })
-                }
-            }
-        )*
-    };
-}
-
-impl<'js> Value<'js> {
-    into_fns! {
-        /// Try convert into object
-        into_object: "object" => Object,
-        /// Try convert into array
-        into_array: "array" => Array,
-        /// Try convert into function
-        into_function: "function" => Function,
-        /// Try convert into string
-        into_string: "string" => String,
-        /// Try convert into symbol
-        into_symbol: "symbol" => Symbol,
     }
 }

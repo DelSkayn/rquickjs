@@ -1,4 +1,6 @@
-use crate::{qjs, value, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
+use crate::{
+    get_exception, handle_exception, qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value,
+};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
@@ -90,8 +92,11 @@ impl<'js> Module<'js> {
         T: FromJs<'js>,
     {
         let meta = unsafe {
-            Value::from_js_value(self.ctx, qjs::JS_GetImportMeta(self.ctx.ctx, self.ptr))
-        }?;
+            Value::from_js_value(
+                self.ctx,
+                handle_exception(self.ctx, qjs::JS_GetImportMeta(self.ctx.ctx, self.ptr))?,
+            )
+        };
         T::from_js(self.ctx, meta)
     }
 }
@@ -128,6 +133,7 @@ macro_rules! module_init {
 
 impl<'js> Module<'js> {
     /// Create native JS module
+    #[allow(clippy::new_ret_no_self)]
     pub fn new<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js, BeforeInit>>
     where
         D: ModuleDef,
@@ -150,6 +156,9 @@ impl<'js> Module<'js> {
     }
 
     /// The function for loading native JS module
+    ///
+    /// # Safety
+    /// This function should only be called from `js_module_init` function.
     pub unsafe extern "C" fn init<D>(
         ctx: *mut qjs::JSContext,
         name: *const qjs::c_char,
@@ -189,7 +198,7 @@ impl<'js> Module<'js> {
         let value = unsafe { qjs::JS_DupValue(value.as_js_value()) };
         if unsafe { qjs::JS_SetModuleExport(self.ctx.ctx, self.ptr, name.as_ptr(), value) } < 0 {
             unsafe { qjs::JS_FreeValue(self.ctx.ctx, value) };
-            return Err(unsafe { value::get_exception(self.ctx) });
+            return Err(unsafe { get_exception(self.ctx) });
         }
         Ok(())
     }
@@ -241,9 +250,12 @@ impl<'js> Module<'js> {
         let value = unsafe {
             Value::from_js_value(
                 self.ctx,
-                qjs::JS_GetModuleExport(self.ctx.ctx, self.ptr, name.as_ptr()),
+                handle_exception(
+                    self.ctx,
+                    qjs::JS_GetModuleExport(self.ctx.ctx, self.ptr, name.as_ptr()),
+                )?,
             )
-        }?;
+        };
         T::from_js(self.ctx, value)
     }
 
@@ -360,7 +372,7 @@ where
         };
         let value = unsafe {
             let js_val = qjs::JS_GetModuleExportEntry(ctx.ctx, ptr, self.index);
-            Value::from_js_value(ctx, js_val).unwrap()
+            Value::from_js_value(ctx, js_val)
         };
         self.index += 1;
         Some(N::from_atom(name).and_then(|name| T::from_js(ctx, value).map(|value| (name, value))))
@@ -407,7 +419,7 @@ mod test {
                     .unwrap();
 
                 assert_eq!(entries[0].0, "a");
-                assert_eq!(entries[0].1, Value::Int(2));
+                assert_eq!(i32::from_js(ctx, entries[0].1.clone()).unwrap(), 2);
                 assert_eq!(entries[1].0, "foo");
                 assert_eq!(entries[2].0, "Baz");
             }

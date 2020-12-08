@@ -1,5 +1,6 @@
 use crate::{
-    qjs, value, AsFunction, Ctx, IntoAtom, IntoJs, JsFn, Object, Result, SendWhenParallel, Value,
+    get_exception, qjs, AsFunction, Ctx, IntoAtom, IntoJs, JsFn, Object, Result, SendWhenParallel,
+    Undefined, Value,
 };
 
 impl<'js> Object<'js> {
@@ -43,7 +44,7 @@ impl<'js> Object<'js> {
                 flags,
             );
             if res < 0 {
-                return Err(value::get_exception(self.0.ctx));
+                return Err(get_exception(self.0.ctx));
             }
         }
         Ok(())
@@ -152,7 +153,7 @@ macro_rules! as_property_impls {
     (@flag S $($f:tt)*) => { (qjs::JS_PROP_HAS_SET as PropertyFlags) | as_property_impls!(@flag $($f)*) };
     (@flag RO $($f:tt)*) => { NoWritable::modify(as_property_impls!(@flag $($f)*)) };
 
-    (@val $this:ident $ctx:ident _) => { Value::Undefined };
+    (@val $this:ident $ctx:ident _) => { Undefined.into_js($ctx)? };
     (@val $this:ident $ctx:ident T) => { $this.0.into_js($ctx)? };
     (@val $this:ident $ctx:ident G) => { JsFn::new("get", $this.0).into_js($ctx)? };
     (@val $this:ident $ctx:ident S) => { JsFn::new("set", $this.1).into_js($ctx)? };

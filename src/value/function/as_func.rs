@@ -117,27 +117,22 @@ macro_rules! as_fn_impls {
 
             #[allow(unused_mut, unused)]
             fn call($($s)* self, ctx: Ctx<'js>, this: Value<'js>, mut args: ArgsIter<'js>) -> Result<Value<'js>> {
-                let proto = match &this {
+                let proto = this.as_function()
                     // called as constructor (with new keyword)
-                    Value::Function(new_target) => new_target.get_prototype(),
+                    .map(|func| func.get_prototype())
                     // called as a function
-                    _ => Class::<C>::prototype(ctx),
-                }?;
+                    .unwrap_or_else(|| Class::<C>::prototype(ctx))?;
+
                 let res = self(
                     $(as_fn_impls!(@arg ctx this args $($ap)*),)*
                     $($t::from_js(ctx, args.next().ok_or_else(not_enough_args)?)?,)*
                     $(as_fn_impls!(@arg ctx this args $($as)*),)*
                 ).into_js(ctx)?;
-                if let Value::Object(obj) = &res {
-                    obj.set_prototype(&proto)?;
-                    Ok(res)
-                } else {
-                    Err(Error::IntoJs {
-                        from: "value",
-                        to: C::CLASS_NAME,
-                        message: None,
-                    })
-                }
+
+                res.as_object().ok_or_else(|| {
+                    Error::new_into_js(res.type_of().as_str(), C::CLASS_NAME)
+                })?.set_prototype(&proto)?;
+                Ok(res)
             }
 
             fn post<'js_>(ctx: Ctx<'js_>, func: &Function<'js_>) -> Result<()> {

@@ -1,6 +1,6 @@
 use crate::{
-    qjs, value, Array, Atom, Ctx, Error, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom,
-    IntoJs, JsRef, JsRefType, Result, Value,
+    get_exception, handle_exception, qjs, Array, Atom, Ctx, Error, FromAtom, FromIteratorJs,
+    FromJs, Function, IntoAtom, IntoJs, Result, Value,
 };
 use std::{
     iter::{IntoIterator, Iterator},
@@ -19,20 +19,16 @@ pub trait ObjectDef {
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
-pub struct Object<'js>(pub(crate) JsRef<'js, Self>);
-
-impl<'js> JsRefType for Object<'js> {
-    const TAG: i32 = qjs::JS_TAG_OBJECT;
-}
+pub struct Object<'js>(pub(crate) Value<'js>);
 
 impl<'js> Object<'js> {
     /// Create a new javascript object
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
-        unsafe {
+        Ok(unsafe {
             let val = qjs::JS_NewObject(ctx.ctx);
-            let val = value::handle_exception(ctx, val)?;
-            Ok(Object(JsRef::from_js_value(ctx, val)))
-        }
+            let val = handle_exception(ctx, val)?;
+            Object::from_js_value(ctx, val)
+        })
     }
 
     /// Initialize an object using `ObjectDef`
@@ -56,10 +52,11 @@ impl<'js> Object<'js> {
     /// Get a new value
     pub fn get<K: IntoAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
         let atom = k.into_atom(self.0.ctx);
-        unsafe {
+        V::from_js(self.0.ctx, unsafe {
             let val = qjs::JS_GetProperty(self.0.ctx.ctx, self.0.as_js_value(), atom.atom);
-            V::from_js(self.0.ctx, Value::from_js_value(self.0.ctx, val)?)
-        }
+            let val = handle_exception(self.0.ctx, val)?;
+            Value::from_js_value(self.0.ctx, val)
+        })
     }
 
     /// check wether the object contains a certain key.
@@ -71,7 +68,7 @@ impl<'js> Object<'js> {
         unsafe {
             let res = qjs::JS_HasProperty(self.0.ctx.ctx, self.0.as_js_value(), atom.atom);
             if res < 0 {
-                return Err(value::get_exception(self.0.ctx));
+                return Err(get_exception(self.0.ctx));
             }
             Ok(res == 1)
         }
@@ -89,7 +86,7 @@ impl<'js> Object<'js> {
                 val.into_js_value(),
             ) < 0
             {
-                return Err(value::get_exception(self.0.ctx));
+                return Err(get_exception(self.0.ctx));
             }
         }
         Ok(())
@@ -106,7 +103,7 @@ impl<'js> Object<'js> {
                 qjs::JS_PROP_THROW as i32,
             ) < 0
             {
-                return Err(value::get_exception(self.0.ctx));
+                return Err(get_exception(self.0.ctx));
             }
         }
         Ok(())
@@ -154,14 +151,14 @@ impl<'js> Object<'js> {
 
     /// Get an object prototype
     pub fn get_prototype(&self) -> Result<Object<'js>> {
-        Ok(Object(unsafe {
+        Ok(unsafe {
             let proto = qjs::JS_GetPrototype(self.0.ctx.ctx, self.0.as_js_value());
             if qjs::JS_IsNull(proto) {
                 return Err(Error::Unknown);
             } else {
-                JsRef::from_js_value(self.0.ctx, proto)
+                Object::from_js_value(self.0.ctx, proto)
             }
-        }))
+        })
     }
 
     /// Set an object prototype
@@ -172,41 +169,29 @@ impl<'js> Object<'js> {
                 self.0.as_js_value(),
                 proto.0.as_js_value(),
             ) {
-                Err(value::get_exception(self.0.ctx))
+                Err(get_exception(self.0.ctx))
             } else {
                 Ok(())
             }
         }
     }
 
-    /// Check if the object is a function.
-    pub fn is_function(&self) -> bool {
-        unsafe { qjs::JS_IsFunction(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
+    /// Convert into a function
+    pub fn into_function(self) -> Option<Function<'js>> {
+        if self.is_function() {
+            Some(Function(self.0))
+        } else {
+            None
+        }
     }
 
-    /// Check if the object is an array.
-    pub fn is_array(&self) -> bool {
-        unsafe { qjs::JS_IsArray(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
-    }
-
-    /// Check if the object is as error.
-    pub fn is_error(&self) -> bool {
-        unsafe { qjs::JS_IsError(self.0.ctx.ctx, self.0.as_js_value()) != 0 }
-    }
-
-    /// Convert into array
-    pub fn into_function(self) -> Function<'js> {
-        Function::from_object(self)
-    }
-
-    /// Convert into array
-    pub fn into_array(self) -> Array<'js> {
-        Array::from_object(self)
-    }
-
-    /// Convert into value
-    pub fn into_value(self) -> Value<'js> {
-        Value::Object(self)
+    /// Convert into an array
+    pub fn into_array(self) -> Option<Array<'js>> {
+        if self.is_array() {
+            Some(Array(self.0))
+        } else {
+            None
+        }
     }
 }
 
@@ -218,7 +203,7 @@ struct IterState<'js> {
 }
 
 impl<'js> IterState<'js> {
-    fn new(obj: &JsRef<'js, Object<'js>>, flags: i32) -> Result<Self> {
+    fn new(obj: &Value<'js>, flags: i32) -> Result<Self> {
         let ctx = obj.ctx;
 
         let mut enums = mem::MaybeUninit::uninit();
@@ -229,11 +214,11 @@ impl<'js> IterState<'js> {
                 ctx.ctx,
                 enums.as_mut_ptr(),
                 count.as_mut_ptr(),
-                obj.as_js_value(),
+                obj.value,
                 flags,
             ) < 0
             {
-                return Err(value::get_exception(ctx));
+                return Err(get_exception(ctx));
             }
             let enums = enums.assume_init();
             let count = count.assume_init();
@@ -298,7 +283,7 @@ where
                     None
                 }
             }
-        } else if let None = &self.state {
+        } else if self.state.is_none() {
             None
         } else if let Some(Err(error)) = self.state.take() {
             Some(Err(error))
@@ -334,7 +319,7 @@ where
                     None
                 }
             }
-        } else if let None = &self.state {
+        } else if self.state.is_none() {
             None
         } else if let Some(Err(error)) = self.state.take() {
             Some(Err(error))
@@ -382,32 +367,33 @@ where
 #[cfg(test)]
 mod test {
     use crate::*;
-    use std::string::String as StdString;
+
     #[test]
     fn from_javascript() {
         test_with(|ctx| {
-            let val = ctx.eval::<Value, _>(
-                r#"
+            let val: Object = ctx
+                .eval(
+                    r#"
                 let obj = {};
                 obj['a'] = 3;
                 obj[3] = 'a';
                 obj
             "#,
-            );
-            if let Ok(Value::Object(x)) = val {
-                let text: StdString = x.get(Value::Int(3)).unwrap();
-                assert_eq!(text.as_str(), "a");
-                let int: i32 = x.get("a").unwrap();
-                assert_eq!(int, 3);
-                let int: StdString = x.get(3).unwrap();
-                assert_eq!(int, "a");
-                x.set("hallo", "foo").unwrap();
-                assert_eq!(x.get::<_, StdString>("hallo").unwrap(), "foo".to_string());
-                x.remove("hallo").unwrap();
-                assert_eq!(x.get::<_, Value>("hallo").unwrap(), Value::Undefined)
-            } else {
-                panic!();
-            };
+                )
+                .unwrap();
+
+            let text: StdString = val.get(3).unwrap();
+            assert_eq!(text, "a");
+            let int: i32 = val.get("a").unwrap();
+            assert_eq!(int, 3);
+            let int: StdString = val.get(3).unwrap();
+            assert_eq!(int, "a");
+            val.set("hallo", "foo").unwrap();
+            let text: StdString = val.get("hallo").unwrap();
+            assert_eq!(text, "foo".to_string());
+            val.remove("hallo").unwrap();
+            let text: Option<StdString> = val.get("hallo").unwrap();
+            assert_eq!(text, None);
         });
     }
 
@@ -517,13 +503,16 @@ mod test {
             let pairs = val.into_iter().collect::<Result<Vec<_>>>().unwrap();
             assert_eq!(pairs.len(), 4);
             assert_eq!(pairs[0].0.clone().to_string().unwrap(), "123");
-            assert_eq!(pairs[0].1, Value::Int(123));
+            assert_eq!(i32::from_js(ctx, pairs[0].1.clone()).unwrap(), 123);
             assert_eq!(pairs[1].0.clone().to_string().unwrap(), "str");
             assert_eq!(StdString::from_js(ctx, pairs[1].1.clone()).unwrap(), "abc");
             assert_eq!(pairs[2].0.clone().to_string().unwrap(), "arr");
             assert_eq!(Array::from_js(ctx, pairs[2].1.clone()).unwrap().len(), 0);
             assert_eq!(pairs[3].0.clone().to_string().unwrap(), "");
-            assert_eq!(pairs[3].1, Value::Undefined);
+            assert_eq!(
+                Undefined::from_js(ctx, pairs[3].1.clone()).unwrap(),
+                Undefined
+            );
         })
     }
 

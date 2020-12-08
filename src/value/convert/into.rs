@@ -1,12 +1,8 @@
-use super::IntoJs;
 use crate::{
-    Array, Ctx, Error, Function, IntoAtom, IteratorJs, Object, Result, String, Symbol, Value,
+    Array, Ctx, Error, IntoAtom, IntoJs, IteratorJs, Object, Result, StdResult, StdString, String,
+    Value,
 };
-use std::{
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
-    result::Result as StdResult,
-    string::String as StdString,
-};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque};
 
 impl<'js> IntoJs<'js> for Value<'js> {
     fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
@@ -28,7 +24,7 @@ impl<'js> IntoJs<'js> for &StdString {
 
 impl<'js> IntoJs<'js> for &str {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Ok(Value::String(String::from_str(ctx, self)?))
+        String::from_str(ctx, self).map(|String(value)| value)
     }
 }
 
@@ -37,19 +33,19 @@ where
     for<'a> &'a T: IntoJs<'js>,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        self.iter().collect_js::<Array>(ctx).map(Value::Array)
+        self.iter().collect_js(ctx).map(|Array(value)| value)
     }
 }
 
 impl<'js> IntoJs<'js> for () {
-    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
-        Ok(Value::Undefined)
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::new_undefined(ctx))
     }
 }
 
 impl<'js> IntoJs<'js> for &() {
-    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
-        Ok(Value::Undefined)
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::new_undefined(ctx))
     }
 }
 
@@ -60,7 +56,7 @@ where
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Ok(match self {
             Some(value) => value.into_js(ctx)?,
-            _ => Value::Undefined,
+            _ => Value::new_undefined(ctx),
         })
     }
 }
@@ -72,7 +68,7 @@ where
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Ok(match self {
             Some(value) => value.into_js(ctx)?,
-            _ => Value::Undefined,
+            _ => Value::new_undefined(ctx),
         })
     }
 }
@@ -101,17 +97,6 @@ where
 }
 
 macro_rules! into_js_impls {
-    // for JS Value sub-types
-    (js: $($type:ident,)*) => {
-        $(
-            impl<'js> IntoJs<'js> for $type<'js> {
-                fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
-                    Ok(Value::$type(self))
-                }
-            }
-        )*
-    };
-
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
         $(
@@ -124,7 +109,7 @@ macro_rules! into_js_impls {
                     let ($($type,)*) = self;
                     let array = Array::new(ctx)?;
                     $(array.set(into_js_impls!(@idx $type), $type)?;)*
-                    Ok(Value::Array(array))
+                    Ok(array.0)
                 }
             }
         )*
@@ -139,8 +124,8 @@ macro_rules! into_js_impls {
             {
                 fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
-                        .collect_js::<Array>(ctx)
-                        .map(Value::Array)
+                        .collect_js(ctx)
+                        .map(|Array(value)| value)
                 }
             }
 
@@ -150,8 +135,8 @@ macro_rules! into_js_impls {
             {
                 fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
-                        .collect_js::<Array>(ctx)
-                        .map(Value::Array)
+                        .collect_js(ctx)
+                        .map(|Array(value)| value)
                 }
             }
         )*
@@ -167,8 +152,8 @@ macro_rules! into_js_impls {
             {
                 fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
-                        .collect_js::<Object>(ctx)
-                        .map(Value::Object)
+                        .collect_js(ctx)
+                        .map(|Object(value)| value)
                 }
             }
 
@@ -179,52 +164,54 @@ macro_rules! into_js_impls {
             {
                 fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
-                        .collect_js::<Object>(ctx)
-                        .map(Value::Object)
+                        .collect_js(ctx)
+                        .map(|Object(value)| value)
                 }
             }
         )*
     };
 
-    // for primitive types
-    (val: $($type:ty: $jstype:ident,)*) => {
+    // for primitive types using `new` function
+    (val: $($new:ident: $($type:ident)*,)*) => {
         $(
-            impl<'js> IntoJs<'js> for $type {
-                fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
-                    Ok(Value::$jstype(self as _))
+            $(
+                impl<'js> IntoJs<'js> for $type {
+                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                        Ok(Value::$new(ctx, self as _))
+                    }
                 }
-            }
 
-            impl<'js> IntoJs<'js> for &$type {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                    (*self).into_js(ctx)
+                impl<'js> IntoJs<'js> for &$type {
+                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                        (*self).into_js(ctx)
+                    }
                 }
-            }
+            )*
         )*
     };
 
-    // for primitive types which needs error-prone casting (ex. u32 -> i32)
-    (val: $($type:ty => $totype:ty: $jstype:ident,)*) => {
+    // for primitive types with two alternatives
+    // (ex. u32 may try convert as i32 or else as f64)
+    (val: $($alt1:ident $alt2:ident => $($type:ty)*,)*) => {
         $(
-            impl<'js> IntoJs<'js> for $type {
-                fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
-                    use std::convert::TryFrom;
-                    let val = <$totype>::try_from(self).map_err(|_| {
-                        $crate::Error::IntoJs{
-                            from: stringify!($type),
-                            to: stringify!($totype),
-                            message: None,
+            $(
+                impl<'js> IntoJs<'js> for $type {
+                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                        let val = self as $alt1;
+                        if val as $type == self {
+                            val.into_js(ctx)
+                        } else {
+                            (self as $alt2).into_js(ctx)
                         }
-                    })?;
-                    Ok(Value::$jstype(val as _))
+                    }
                 }
-            }
 
-            impl<'js> IntoJs<'js> for &$type {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                    (*self).into_js(ctx)
+                impl<'js> IntoJs<'js> for &$type {
+                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                        (*self).into_js(ctx)
+                    }
                 }
-            }
+            )*
         )*
     };
 
@@ -244,15 +231,6 @@ macro_rules! into_js_impls {
     (@idx N) => { 13 };
     (@idx O) => { 14 };
     (@idx P) => { 15 };
-}
-
-into_js_impls! {
-    js:
-    String,
-    Symbol,
-    Array,
-    Object,
-    Function,
 }
 
 into_js_impls! {
@@ -292,22 +270,12 @@ into_js_impls! {
 
 into_js_impls! {
     val:
-    bool: Bool,
-
-    i8: Int,
-    i16: Int,
-    i32: Int,
-
-    u8: Int,
-    u16: Int,
-
-    f32: Float,
-    f64: Float,
+    new_bool: bool,
+    new_int: i8 i16 i32 u8 u16,
+    new_float: f32 f64,
 }
 
 into_js_impls! {
     val:
-    i64 => i32: Int,
-    u32 => i32: Int,
-    u64 => i32: Int,
+    i32 f64 => i64 u32 u64,
 }

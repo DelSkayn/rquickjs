@@ -1,6 +1,4 @@
-use super::{FromAtom, IntoAtom};
-use crate::{value::*, Ctx, Result};
-use std::string::String as StdString;
+use crate::{Atom, Ctx, FromAtom, IntoAtom, Result, StdString, String, Value};
 
 impl<'js> FromAtom<'js> for Atom<'js> {
     fn from_atom(atom: Atom<'js>) -> Result<Self> {
@@ -50,25 +48,23 @@ impl<'js> IntoAtom<'js> for StdString {
     }
 }
 
-impl<'js> IntoAtom<'js> for u32 {
-    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
-        Atom::from_u32(ctx, self)
-    }
+macro_rules! into_atom_impls {
+	  ($($from:ident: $($type:ident)*,)*) => {
+		    $(
+            $(
+                impl<'js> IntoAtom<'js> for $type {
+                    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+                        Atom::$from(ctx, self as _)
+                    }
+                }
+            )*
+        )*
+	  };
 }
 
-macro_rules! impl_for_to_js(
-    ($ty:ty, $Var:ident) => {
-        impl<'js> IntoAtom<'js> for $ty {
-            fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
-                Atom::from_value(ctx, &Value::$Var(self))
-            }
-        }
-    }
-);
-
-impl_for_to_js!(String<'js>, String);
-impl_for_to_js!(Object<'js>, Object);
-impl_for_to_js!(Array<'js>, Array);
-impl_for_to_js!(Function<'js>, Function);
-impl_for_to_js!(i32, Int);
-impl_for_to_js!(bool, Bool);
+into_atom_impls! {
+    from_bool: bool,
+    from_u32: u8 u16 u32,
+    from_i32: i8 i16 i32,
+    from_f64: f32 f64,
+}

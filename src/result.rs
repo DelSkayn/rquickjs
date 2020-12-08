@@ -5,6 +5,8 @@ use std::{
     ffi::{CString, NulError},
     fmt::{Display, Formatter, Result as FmtResult},
     io::Error as IoError,
+    panic,
+    panic::UnwindSafe,
     str::Utf8Error,
 };
 
@@ -370,11 +372,7 @@ impl<'js> FromJs<'js> for Error {
                 stack: obj.get("stack").unwrap_or_else(|_| "".into()),
             })
         } else {
-            Err(Error::FromJs {
-                from: "object",
-                to: "error",
-                message: None,
-            })
+            Err(Error::new_from_js("object", "error"))
         }
     }
 }
@@ -382,33 +380,75 @@ impl<'js> FromJs<'js> for Error {
 impl<'js> IntoJs<'js> for &Error {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         use Error::*;
-        let value = unsafe { Value::from_js_value(ctx, qjs::JS_NewError(ctx.ctx)) }?;
-        if let Value::Object(obj) = &value {
-            match self {
-                Exception {
-                    message,
-                    file,
-                    line,
-                    stack,
-                } => {
-                    if !message.is_empty() {
-                        obj.set("message", message)?;
-                    }
-                    if !file.is_empty() {
-                        obj.set("fileName", file)?;
-                    }
-                    if *line >= 0 {
-                        obj.set("lineNumber", *line)?;
-                    }
-                    if !stack.is_empty() {
-                        obj.set("stack", stack)?;
-                    }
+        let value = unsafe {
+            Object::from_js_value(ctx, handle_exception(ctx, qjs::JS_NewError(ctx.ctx))?)
+        };
+        match self {
+            Exception {
+                message,
+                file,
+                line,
+                stack,
+            } => {
+                if !message.is_empty() {
+                    value.set("message", message)?;
                 }
-                error => {
-                    obj.set("message", error.to_string())?;
+                if !file.is_empty() {
+                    value.set("fileName", file)?;
+                }
+                if *line >= 0 {
+                    value.set("lineNumber", *line)?;
+                }
+                if !stack.is_empty() {
+                    value.set("stack", stack)?;
                 }
             }
+            error => {
+                value.set("message", error.to_string())?;
+            }
         }
-        Ok(value)
+        Ok(value.0)
     }
+}
+
+pub(crate) fn handle_panic<F: FnOnce() -> qjs::JSValue + UnwindSafe>(
+    ctx: *mut qjs::JSContext,
+    f: F,
+) -> qjs::JSValue {
+    unsafe {
+        match panic::catch_unwind(f) {
+            Ok(x) => x,
+            Err(e) => {
+                Ctx::from_ptr(ctx).get_opaque().panic = Some(e);
+                qjs::JS_Throw(ctx, qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
+            }
+        }
+    }
+}
+
+/// Handle possible exceptions in JSValue's and turn them into errors
+/// Will return the JSValue if it is not an exception
+///
+/// # Safety
+/// Assumes to have ownership of the JSValue
+pub(crate) unsafe fn handle_exception<'js>(
+    ctx: Ctx<'js>,
+    js_val: qjs::JSValue,
+) -> Result<qjs::JSValue> {
+    if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
+        Ok(js_val)
+    } else {
+        Err(get_exception(ctx))
+    }
+}
+
+pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
+    let exception_val = qjs::JS_GetException(ctx.ctx);
+
+    if let Some(x) = ctx.get_opaque().panic.take() {
+        panic::resume_unwind(x);
+    }
+
+    let exception = Value::from_js_value(ctx, exception_val);
+    Error::from_js(ctx, exception).unwrap()
 }

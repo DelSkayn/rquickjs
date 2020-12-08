@@ -1,6 +1,6 @@
 use crate::{
-    qjs, value, AsJsValueRef, Ctx, Error, FromJs, IntoJs, JsRef, Object, Outlive, Persistent,
-    Result, Value,
+    handle_exception, qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Persistent, Result, Type,
+    Value,
 };
 use std::{
     ffi::CString,
@@ -109,17 +109,23 @@ impl<'js, 't, C> Outlive<'t> for Class<'js, C> {
     type Target = Class<'t, C>;
 }
 
-impl<'js, C> AsJsValueRef<'js> for Class<'js, C> {
-    fn as_js_value_ref(&self) -> qjs::JSValue {
-        self.0.as_js_value_ref()
-    }
-}
-
 impl<'js, C> Deref for Class<'js, C> {
     type Target = Object<'js>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<'js, C> AsRef<Object<'js>> for Class<'js, C> {
+    fn as_ref(&self) -> &Object<'js> {
+        &self.0
+    }
+}
+
+impl<'js, C> AsRef<Value<'js>> for Class<'js, C> {
+    fn as_ref(&self) -> &Value<'js> {
+        &(self.0).0
     }
 }
 
@@ -155,13 +161,11 @@ where
     /// Instantiate the object of class
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
         let class_id = *C::class_id().as_ref();
-        let val = unsafe {
-            value::handle_exception(ctx, qjs::JS_NewObjectClass(ctx.ctx, class_id as _))
-        }?;
+        let val = unsafe { handle_exception(ctx, qjs::JS_NewObjectClass(ctx.ctx, class_id as _)) }?;
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
-            Object(unsafe { JsRef::from_js_value(ctx, val) }),
+            unsafe { Object::from_js_value(ctx, val) },
             PhantomData,
         ))
     }
@@ -170,7 +174,7 @@ where
     pub fn instance_proto(ctx: Ctx<'js>, value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
         let class_id = *C::class_id().as_ref();
         let val = unsafe {
-            value::handle_exception(
+            handle_exception(
                 ctx,
                 qjs::JS_NewObjectProtoClass(ctx.ctx, proto.0.as_js_value(), class_id as _),
             )
@@ -178,7 +182,7 @@ where
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
-            Object(unsafe { JsRef::from_js_value(ctx, val) }),
+            unsafe { Object::from_js_value(ctx, val) },
             PhantomData,
         ))
     }
@@ -248,8 +252,46 @@ where
     pub fn prototype(ctx: Ctx<'js>) -> Result<Object<'js>> {
         let class_id = *C::class_id().as_ref();
         Ok(Object(unsafe {
-            JsRef::from_js_value(ctx, qjs::JS_GetClassProto(ctx.ctx, class_id))
+            let proto = qjs::JS_GetClassProto(ctx.ctx, class_id);
+            let proto = Value::from_js_value(ctx, proto);
+            let type_ = proto.type_of();
+            if type_ == Type::Object {
+                proto
+            } else {
+                return Err(Error::new_from_js_message(
+                    type_.as_str(),
+                    "prototype",
+                    "Unregistered class",
+                ));
+            }
         }))
+    }
+
+    /// Get class from value
+    pub fn from_object(value: Object<'js>) -> Result<Self> {
+        if value.instance_of::<C>() {
+            Ok(Self(value, PhantomData))
+        } else {
+            Err(Error::new_from_js("object", C::CLASS_NAME))
+        }
+    }
+
+    /// Get reference to object
+    #[inline]
+    pub fn as_object(&self) -> &Object<'js> {
+        &self.0
+    }
+
+    /// Convert to object
+    #[inline]
+    pub fn into_object(self) -> Object<'js> {
+        self.0
+    }
+
+    /// Convert to value
+    #[inline]
+    pub fn into_value(self) -> Value<'js> {
+        self.into_object().0
     }
 
     unsafe extern "C" fn gc_mark(
@@ -272,6 +314,30 @@ where
         let inst = Box::from_raw(ptr);
         qjs::JS_FreeValueRT(rt, val);
         mem::drop(inst);
+    }
+}
+
+impl<'js> Object<'js> {
+    /// Check the object for instance of
+    ///
+    /// # Features
+    /// This function is only available if a `classes` feature is enabled
+    pub fn instance_of<C: ClassDef>(&self) -> bool {
+        let class_id = *C::class_id().as_ref();
+        let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.ctx, self.0.value, class_id) };
+        !ptr.is_null()
+    }
+
+    /// Convert object into instance of class
+    ///
+    /// # Features
+    /// This function is only available if a `classes` feature is enabled
+    pub fn into_instance<C: ClassDef>(self) -> Option<Class<'js, C>> {
+        if self.instance_of::<C>() {
+            Some(Class(self, PhantomData))
+        } else {
+            None
+        }
     }
 }
 
@@ -308,8 +374,7 @@ where
 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let value = Object::from_js(ctx, value)?;
-        let _ = Class::<C>::try_ref(ctx, &value)?;
-        Ok(Class(value, PhantomData))
+        Class::<C>::from_object(value)
     }
 }
 
@@ -318,7 +383,7 @@ where
     C: ClassDef,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Class::<C>::instance(ctx, self).map(|Class(obj, _)| Value::Object(obj))
+        Class::<C>::instance(ctx, self).map(|Class(Object(val), _)| val)
     }
 }
 
@@ -377,7 +442,7 @@ where
     C: ClassDef,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Class::<C>::instance_proto(ctx, self.0, self.1).map(|Class(obj, _)| Value::Object(obj))
+        Class::<C>::instance_proto(ctx, self.0, self.1).map(|Class(Object(val), _)| val)
     }
 }
 

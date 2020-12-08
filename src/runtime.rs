@@ -1,4 +1,4 @@
-use crate::{qjs, value, Ctx, Error, Function, Result, SafeRef, SafeWeakRef};
+use crate::{get_exception, qjs, Ctx, Error, Function, Result, SafeRef, SafeWeakRef};
 use std::{any::Any, ffi::CString, mem};
 
 #[cfg(feature = "registery")]
@@ -239,7 +239,7 @@ impl Runtime {
         }
         // exception thrown
         let ctx = Ctx::from_ptr(ctx_ptr);
-        let res = Err(unsafe { value::get_exception(ctx) });
+        let res = Err(unsafe { get_exception(ctx) });
         mem::drop(guard);
         res
     }

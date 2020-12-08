@@ -1,14 +1,10 @@
-use crate::{qjs, value, Ctx, Error, JsRef, JsRefType, Result, StdString, Value};
+use crate::{handle_exception, qjs, Ctx, Error, Result, StdString, Value};
 use std::{mem, slice, str};
 
 /// Rust representation of a javascript string.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(transparent)]
-pub struct String<'js>(pub(crate) JsRef<'js, Self>);
-
-impl<'js> JsRefType for String<'js> {
-    const TAG: i32 = qjs::JS_TAG_STRING;
-}
+pub struct String<'js>(pub(crate) Value<'js>);
 
 impl<'js> String<'js> {
     /// Convert the javascript string to a rust string.
@@ -25,23 +21,18 @@ impl<'js> String<'js> {
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr as _, len as _) };
         let result = str::from_utf8(bytes).map(|s| s.into());
         unsafe { qjs::JS_FreeCString(self.0.ctx.ctx, ptr) };
-        result.map_err(Error::from)
+        Ok(result?)
     }
 
     /// Create a new js string from an rust string.
     pub fn from_str(ctx: Ctx<'js>, s: &str) -> Result<Self> {
         let len = s.as_bytes().len();
         let ptr = s.as_ptr();
-        Ok(String(unsafe {
+        Ok(unsafe {
             let js_val = qjs::JS_NewStringLen(ctx.ctx, ptr as _, len as _);
-            let js_val = value::handle_exception(ctx, js_val)?;
-            JsRef::from_js_value(ctx, js_val)
-        }))
-    }
-
-    /// Convert into value
-    pub fn into_value(self) -> Value<'js> {
-        Value::String(self)
+            let js_val = handle_exception(ctx, js_val)?;
+            String::from_js_value(ctx, js_val)
+        })
     }
 }
 

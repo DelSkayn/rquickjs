@@ -1,5 +1,5 @@
 use super::ArgsIter;
-use crate::{qjs, value::handle_panic, Ctx, Result, Value};
+use crate::{handle_panic, qjs, Ctx, Result, Value};
 use std::{panic, panic::AssertUnwindSafe, ptr};
 
 static mut FUNC_CLASS: qjs::JSClassID = 0;
@@ -15,7 +15,7 @@ impl<'js> FuncOpaque<'js> {
         Self(Box::new(func))
     }
 
-    pub unsafe fn to_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
+    pub unsafe fn into_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
         let obj = qjs::JS_NewObjectClass(ctx.ctx, FUNC_CLASS as _);
         qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(self)) as _);
         obj
@@ -30,7 +30,7 @@ impl<'js> FuncOpaque<'js> {
     ) -> Result<qjs::JSValue> {
         let ctx = Ctx::from_ptr(ctx);
 
-        let this = Value::from_js_value_const(ctx, this)?;
+        let this = Value::from_js_value_const(ctx, this);
         let args = ArgsIter::from_value_count_const(ctx, argc as usize, argv);
 
         let res = (self.0)(ctx, this, args)?;

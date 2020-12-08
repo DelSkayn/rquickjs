@@ -34,7 +34,7 @@ impl<'js> Iterator for ArgsIter<'js> {
         unsafe {
             let ptr = self.ptr.add(self.index);
             self.index += 1;
-            Some(Value::from_js_value_const(self.ctx, *ptr).unwrap())
+            Some(Value::from_js_value_const(self.ctx, *ptr))
         }
     }
 

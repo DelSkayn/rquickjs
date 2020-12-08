@@ -1,4 +1,7 @@
-use crate::{qjs, value, Ctx, FromIteratorJs, FromJs, IntoJs, JsRef, Object, Result, Value};
+use crate::{
+    get_exception, handle_exception, qjs, Ctx, Error, FromIteratorJs, FromJs, IntoJs, Object,
+    Result, Value,
+};
 use std::{
     iter::{IntoIterator, Iterator},
     marker::PhantomData,
@@ -11,37 +14,23 @@ use std::{
 /// This value represents such a optimized array.
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
-pub struct Array<'js>(pub(crate) JsRef<'js, Object<'js>>);
+pub struct Array<'js>(pub(crate) Value<'js>);
 
 impl<'js> Array<'js> {
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
-        unsafe {
+        Ok(Array(unsafe {
             let val = qjs::JS_NewArray(ctx.ctx);
-            value::handle_exception(ctx, val)?;
-            Ok(Array(JsRef::from_js_value(ctx, val)))
-        }
-    }
-
-    /// Convert into object
-    pub fn into_object(self) -> Object<'js> {
-        Object(self.0)
-    }
-
-    /// Convert from object
-    pub fn from_object(object: Object<'js>) -> Self {
-        Array(object.0)
-    }
-
-    /// Convert into value
-    pub fn into_value(self) -> Value<'js> {
-        Value::Array(self)
+            handle_exception(ctx, val)?;
+            Value::from_js_value(ctx, val)
+        }))
     }
 
     /// Get the lenght of the javascript array.
     pub fn len(&self) -> usize {
-        let v = self.0.as_js_value();
+        let ctx = self.0.ctx;
+        let value = self.0.as_js_value();
         unsafe {
-            let val = qjs::JS_GetPropertyStr(self.0.ctx.ctx, v, b"length\0".as_ptr() as *const _);
+            let val = qjs::JS_GetPropertyStr(ctx.ctx, value, b"length\0".as_ptr() as *const _);
             assert!(qjs::JS_IsInt(val));
             qjs::JS_VALUE_GET_INT(val) as _
         }
@@ -54,21 +43,24 @@ impl<'js> Array<'js> {
 
     /// Get the value at an index in the javascript array.
     pub fn get<V: FromJs<'js>>(&self, idx: usize) -> Result<V> {
+        let ctx = self.0.ctx;
         let obj = self.0.as_js_value();
         let val = unsafe {
-            let val = qjs::JS_GetPropertyUint32(self.0.ctx.ctx, obj, idx as _);
-            Value::from_js_value(self.0.ctx, val)
-        }?;
-        V::from_js(self.0.ctx, val)
+            let val = qjs::JS_GetPropertyUint32(ctx.ctx, obj, idx as _);
+            let val = handle_exception(ctx, val)?;
+            Value::from_js_value(ctx, val)
+        };
+        V::from_js(ctx, val)
     }
 
     /// Set the value at an index in the javascript array.
     pub fn set<V: IntoJs<'js>>(&self, idx: usize, val: V) -> Result<()> {
+        let ctx = self.0.ctx;
         let obj = self.0.as_js_value();
-        let val = val.into_js(self.0.ctx)?.into_js_value();
+        let val = val.into_js(ctx)?.into_js_value();
         unsafe {
-            if -1 == qjs::JS_SetPropertyUint32(self.0.ctx.ctx, obj, idx as _, val) {
-                return Err(value::get_exception(self.0.ctx));
+            if 0 > qjs::JS_SetPropertyUint32(ctx.ctx, obj, idx as _, val) {
+                return Err(get_exception(ctx));
             }
         }
         Ok(())
@@ -82,6 +74,27 @@ impl<'js> Array<'js> {
             index: 0,
             count,
             marker: PhantomData,
+        }
+    }
+
+    /// Reference as an object
+    #[inline]
+    pub fn as_object(&self) -> &Object<'js> {
+        unsafe { &*(self as *const _ as *const Object) }
+    }
+
+    /// Convert into an object
+    #[inline]
+    pub fn into_object(self) -> Object<'js> {
+        Object(self.0)
+    }
+
+    /// Convert from an object
+    pub fn from_object(object: Object<'js>) -> Result<Self> {
+        if object.is_array() {
+            Ok(Self(object.0))
+        } else {
+            Err(Error::new_from_js("object", "array"))
         }
     }
 }
@@ -151,33 +164,28 @@ mod test {
     #[test]
     fn from_javascript() {
         test_with(|ctx| {
-            let val = ctx.eval::<Value, _>(
-                r#"
+            let val: Array = ctx
+                .eval(
+                    r#"
                 let a = [1,2,3,4,10,"b"]
                 a[6] = {}
                 a[10] = () => {"hallo"};
                 a
                 "#,
-            );
-            if let Ok(Value::Array(x)) = val {
-                assert_eq!(x.len(), 11);
-                assert_eq!(x.get::<i32>(3).unwrap(), 4);
-                assert_eq!(x.get::<i32>(4).unwrap(), 10);
-                if let Ok(Value::Object(_)) = x.get(6) {
-                } else {
-                    panic!();
-                }
-            } else {
-                panic!();
-            };
+                )
+                .unwrap();
+            assert_eq!(val.len(), 11);
+            assert_eq!(val.get::<i32>(3).unwrap(), 4);
+            assert_eq!(val.get::<i32>(4).unwrap(), 10);
+            let _six: Object = val.get(6).unwrap();
         });
     }
 
     #[test]
     fn into_object() {
         test_with(|ctx| {
-            let val = ctx
-                .eval::<Array, _>(
+            let val: Array = ctx
+                .eval(
                     r#"
                 let a = [1,2,3];
                 a
@@ -201,9 +209,9 @@ mod test {
                 .unwrap();
             let elems: Vec<_> = val.into_iter().collect::<Result<_>>().unwrap();
             assert_eq!(elems.len(), 3);
-            assert_eq!(elems[0], Value::Int(1));
+            assert_eq!(i8::from_js(ctx, elems[0].clone()).unwrap(), 1);
             assert_eq!(StdString::from_js(ctx, elems[1].clone()).unwrap(), "abcd");
-            assert_eq!(elems[2], Value::Bool(true));
+            assert_eq!(bool::from_js(ctx, elems[2].clone()).unwrap(), true);
         })
     }
 

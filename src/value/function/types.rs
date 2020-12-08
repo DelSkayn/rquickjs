@@ -149,7 +149,7 @@ where
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let (func, _) = self.0;
-        Function::new(ctx, "", func).map(Value::Function)
+        Function::new(ctx, "", func).map(Value::from)
     }
 }
 
@@ -160,7 +160,7 @@ where
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let (name, func, _) = self.0;
-        Function::new(ctx, name, func).map(Value::Function)
+        Function::new(ctx, name, func).map(Value::from)
     }
 }
 
@@ -200,7 +200,7 @@ where
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let (func, _) = self.0;
-        Function::new_mut(ctx, "", func).map(Value::Function)
+        Function::new_mut(ctx, "", func).map(Value::from)
     }
 }
 
@@ -211,6 +211,6 @@ where
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let (name, func, _) = self.0;
-        Function::new_mut(ctx, name, func).map(Value::Function)
+        Function::new_mut(ctx, name, func).map(Value::from)
     }
 }

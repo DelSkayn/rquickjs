@@ -1,6 +1,6 @@
 use crate::{
-    markers::Invariant, qjs, runtime::Opaque, value, BeforeInit, Context, FromJs, Function, JsRef,
-    Module, Object, Result, String, Value,
+    handle_exception, markers::Invariant, qjs, runtime::Opaque, BeforeInit, Context, FromJs,
+    Function, Module, Object, Result, Value,
 };
 
 #[cfg(feature = "registery")]
@@ -46,19 +46,17 @@ impl<'js> Ctx<'js> {
         let len = src.len();
         let src = CString::new(src)?;
         let val = qjs::JS_Eval(self.ctx, src.as_ptr(), len as _, file_name.as_ptr(), flag);
-        value::handle_exception(self, val)?;
-        Ok(val)
+        handle_exception(self, val)
     }
 
     /// Evaluate a script in global context
     pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
         let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
         let flag = qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT;
-        unsafe {
+        V::from_js(self, unsafe {
             let val = self._eval(source, file_name, flag as i32)?;
-            let val = Value::from_js_value(self, val)?;
-            V::from_js(self, val)
-        }
+            Value::from_js_value(self, val)
+        })
     }
 
     /// Evaluate a script directly from a file.
@@ -72,11 +70,10 @@ impl<'js> Ctx<'js> {
                 .into_owned(),
         )?;
         let flag = qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT;
-        unsafe {
+        V::from_js(self, unsafe {
             let val = self._eval(buffer, file_name.as_c_str(), flag as i32)?;
-            let val = Value::from_js_value(self, val)?;
-            V::from_js(self, val)
-        }
+            Value::from_js_value(self, val)
+        })
     }
 
     /// Compile a module for later use.
@@ -90,9 +87,9 @@ impl<'js> Ctx<'js> {
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
         unsafe {
             let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
-            value::handle_exception(self, js_val)?;
+            //handle_exception(self, js_val)?;
             let ret = qjs::JS_EvalFunction(self.ctx, js_val);
-            value::handle_exception(self, ret)?;
+            handle_exception(self, ret)?;
             Ok(Module::from_js_value(self, js_val))
         }
     }
@@ -107,71 +104,8 @@ impl<'js> Ctx<'js> {
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
         unsafe {
             let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
-            value::handle_exception(self, js_val)?;
+            handle_exception(self, js_val)?;
             Ok(Module::<BeforeInit>::from_js_value(self, js_val))
-        }
-    }
-
-    /// Coerce a value to a string in the same way javascript would coerce values.
-    pub fn coerce_string(self, v: Value<'js>) -> Result<String<'js>> {
-        unsafe {
-            let js_val = qjs::JS_ToString(self.ctx, v.as_js_value());
-            value::handle_exception(self, js_val)?;
-            // js_val should be a string now
-            // String itself will check for the tag when debug_assertions are enabled
-            // but is should always be string
-            Ok(String(JsRef::from_js_value(self, js_val)))
-        }
-    }
-
-    /// Coerce a value to a `i32` in the same way javascript would coerce values.
-    pub fn coerce_i32(self, v: Value<'js>) -> Result<i32> {
-        unsafe {
-            let mut val: i32 = 0;
-            if qjs::JS_ToInt32(self.ctx, &mut val, v.as_js_value()) < 0 {
-                return Err(value::get_exception(self));
-            }
-            Ok(val)
-        }
-    }
-
-    pub fn coerce_i64(self, v: Value<'js>) -> Result<i64> {
-        unsafe {
-            let mut val: i64 = 0;
-            if qjs::JS_ToInt64(self.ctx, &mut val, v.as_js_value()) < 0 {
-                return Err(value::get_exception(self));
-            }
-            Ok(val)
-        }
-    }
-
-    pub fn coerce_u64(self, v: Value<'js>) -> Result<u64> {
-        unsafe {
-            let mut val: u64 = 0;
-            if qjs::JS_ToIndex(self.ctx, &mut val, v.as_js_value()) < 0 {
-                return Err(value::get_exception(self));
-            }
-            Ok(val)
-        }
-    }
-
-    pub fn coerce_f64(self, v: Value<'js>) -> Result<f64> {
-        unsafe {
-            let mut val: f64 = 0.0;
-            if qjs::JS_ToFloat64(self.ctx, &mut val, v.as_js_value()) < 0 {
-                return Err(value::get_exception(self));
-            }
-            Ok(val)
-        }
-    }
-
-    pub fn coerce_bool(self, v: Value<'js>) -> Result<bool> {
-        unsafe {
-            let val = qjs::JS_ToBool(self.ctx, v.as_js_value());
-            if val < 0 {
-                return Err(value::get_exception(self));
-            }
-            Ok(val == 1)
         }
     }
 
@@ -179,7 +113,7 @@ impl<'js> Ctx<'js> {
     pub fn globals(self) -> Object<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);
-            Object(JsRef::from_js_value(self, v))
+            Object::from_js_value(self, v)
         }
     }
 
@@ -188,15 +122,15 @@ impl<'js> Ctx<'js> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
 
         Ok(unsafe {
-            let promise = value::handle_exception(
+            let promise = handle_exception(
                 self,
                 qjs::JS_NewPromiseCapability(self.ctx, funcs.as_mut_ptr() as _),
             )?;
             let (then, catch) = funcs.assume_init();
             (
-                Object(JsRef::from_js_value(self, promise)),
-                Function(JsRef::from_js_value(self, then)),
-                Function(JsRef::from_js_value(self, catch)),
+                Object::from_js_value(self, promise),
+                Function::from_js_value(self, then),
+                Function::from_js_value(self, catch),
             )
         })
     }
@@ -232,7 +166,7 @@ impl<'js> Ctx<'js> {
         unsafe {
             let register = self.get_opaque();
             if (*register).registery.remove(&k) {
-                Some(Value::from_js_value(self, k.0).unwrap())
+                Some(Value::from_js_value(self, k.0))
             } else {
                 None
             }
@@ -247,8 +181,7 @@ impl<'js> Ctx<'js> {
         unsafe {
             let opaque = self.get_opaque();
             if opaque.registery.contains(&k) {
-                let value = Value::from_js_value_const(self, k.0).unwrap();
-                Some(value)
+                Some(Value::from_js_value_const(self, k.0))
             } else {
                 None
             }

@@ -1,6 +1,4 @@
-use crate::{
-    qjs, Array, AsJsValueRef, Ctx, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
-};
+use crate::{qjs, Array, Ctx, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value};
 use std::{
     cell::Cell,
     cmp::PartialEq,
@@ -97,9 +95,9 @@ impl<T> Persistent<T> {
     /// Save the value of an arbitrary type
     pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target>
     where
-        T: AsJsValueRef<'js> + Outlive<'static>,
+        T: AsRef<Value<'js>> + Outlive<'static>,
     {
-        let value = val.as_js_value_ref();
+        let value = val.as_ref().value;
         mem::forget(val);
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
 
@@ -112,7 +110,7 @@ impl<T> Persistent<T> {
         T: Outlive<'js>,
         T::Target: FromJs<'js>,
     {
-        let value = unsafe { Value::from_js_value(ctx, self.value.get()) }?;
+        let value = unsafe { Value::from_js_value(ctx, self.value.get()) };
         mem::forget(self);
         T::Target::from_js(ctx, value)
     }
@@ -146,7 +144,7 @@ where
     T: Outlive<'t>,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let value = unsafe { Value::from_js_value(ctx, self.value.get()) }?;
+        let value = unsafe { Value::from_js_value(ctx, self.value.get()) };
         mem::forget(self);
         value.into_js(ctx)
     }

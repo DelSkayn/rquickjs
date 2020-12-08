@@ -1,5 +1,5 @@
 use crate::{
-    qjs, value, Ctx, Error, FromJs, IntoAtom, IntoJs, JsRef, Object, Result, SendWhenParallel,
+    handle_exception, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result, SendWhenParallel,
     Value,
 };
 use std::cell::RefCell;
@@ -18,7 +18,7 @@ pub use types::{Args, JsFn, JsFnMut, Method, This};
 
 /// Rust representation of a javascript function.
 #[derive(Debug, Clone, PartialEq)]
-pub struct Function<'js>(pub(crate) JsRef<'js, Object<'js>>);
+pub struct Function<'js>(pub(crate) Value<'js>);
 
 impl<'js> Function<'js> {
     pub fn new<'js_, F, A, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
@@ -58,8 +58,8 @@ impl<'js> Function<'js> {
         let name_field = "name".into_atom(ctx);
         let name_value = name.as_ref().into_js(ctx)?;
 
-        Ok(Function(unsafe {
-            let func_obj = func.to_js_value(ctx);
+        Ok(unsafe {
+            let func_obj = func.into_js_value(ctx);
             // Set the `.length` property
             qjs::JS_DefinePropertyValue(
                 ctx.ctx,
@@ -76,8 +76,8 @@ impl<'js> Function<'js> {
                 name_value.into_js_value(),
                 qjs::JS_PROP_CONFIGURABLE as _,
             );
-            JsRef::from_js_value(ctx, func_obj)
-        }))
+            Self::from_js_value(ctx, func_obj)
+        })
     }
 
     /// Call a function with given arguments
@@ -99,24 +99,24 @@ impl<'js> Function<'js> {
         I: Iterator<Item = Result<Value<'js>>>,
         R: FromJs<'js>,
     {
+        let ctx = self.0.ctx;
+        let func = self.0.as_js_value();
         let this = this
-            .unwrap_or_else(|| Ok(Value::Object(self.0.ctx.globals())))?
+            .unwrap_or_else(|| Ok(Value::from(ctx.globals())))?
             .into_js_value();
         let args = args
             .map(|res| res.map(|arg| arg.into_js_value()))
             .collect::<Result<Vec<_>>>()?;
-        let len = args.len();
         let res = unsafe {
-            let ctx = self.0.ctx.ctx;
-            let func = self.0.as_js_value();
-            let val = qjs::JS_Call(ctx, func, this, len as _, args.as_ptr() as _);
+            let val = qjs::JS_Call(ctx.ctx, func, this, args.len() as _, args.as_ptr() as _);
             for arg in args {
-                qjs::JS_FreeValue(ctx, arg);
+                qjs::JS_FreeValue(ctx.ctx, arg);
             }
-            qjs::JS_FreeValue(ctx, this);
-            Value::from_js_value(self.0.ctx, val)
-        }?;
-        R::from_js(self.0.ctx, res)
+            qjs::JS_FreeValue(ctx.ctx, this);
+            let val = handle_exception(ctx, val)?;
+            Value::from_js_value(ctx, val)
+        };
+        R::from_js(ctx, res)
     }
 
     /// Check that function is a constructor
@@ -152,36 +152,40 @@ impl<'js> Function<'js> {
     ///
     /// Actually this method returns the `func.prototype`.
     pub fn get_prototype(&self) -> Result<Object<'js>> {
-        Ok(Object(unsafe {
-            let proto = value::handle_exception(
-                self.0.ctx,
-                qjs::JS_GetPropertyStr(
-                    self.0.ctx.ctx,
-                    self.0.as_js_value(),
-                    "prototype\0".as_ptr() as _,
-                ),
+        let ctx = self.0.ctx;
+        let value = self.0.as_js_value();
+        Ok(unsafe {
+            let proto = handle_exception(
+                ctx,
+                qjs::JS_GetPropertyStr(ctx.ctx, value, "prototype\0".as_ptr() as _),
             )?;
             if qjs::JS_IsObject(proto) {
-                JsRef::from_js_value(self.0.ctx, proto)
+                Object::from_js_value(ctx, proto)
             } else {
                 return Err(Error::Unknown);
             }
-        }))
+        })
     }
 
-    /// Convert into object
+    /// Reference as an object
+    #[inline]
+    pub fn as_object(&self) -> &Object<'js> {
+        unsafe { &*(self as *const _ as *const Object) }
+    }
+
+    /// Convert into an object
+    #[inline]
     pub fn into_object(self) -> Object<'js> {
         Object(self.0)
     }
 
-    /// Convert from object
-    pub fn from_object(object: Object<'js>) -> Self {
-        Function(object.0)
-    }
-
-    /// Convert into value
-    pub fn into_value(self) -> Value<'js> {
-        Value::Function(self)
+    /// Convert from an object
+    pub fn from_object(object: Object<'js>) -> Result<Self> {
+        if object.is_function() {
+            Ok(Self(object.0))
+        } else {
+            Err(Error::new_from_js("object", "function"))
+        }
     }
 
     pub(crate) unsafe fn init_raw_rt(rt: *mut qjs::JSRuntime) {
@@ -191,6 +195,9 @@ impl<'js> Function<'js> {
     /// Initialize from module init function
     ///
     /// NOTE: Do not call it directly. You usually should use [module_init] instead.
+    ///
+    /// # Safety
+    /// Should be called right after initializing the context to register Rust function class.
     pub unsafe fn init_raw(ctx: *mut qjs::JSContext) {
         Self::init_raw_rt(qjs::JS_GetRuntime(ctx));
     }
