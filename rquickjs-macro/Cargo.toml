@@ -13,7 +13,11 @@ proc-macro-crate = "^0.1"
 proc-macro-error = "^1"
 quote = "^1"
 ident_case = "^1"
-darling = "^0.10"
+fnv = "^1"
+
+[dependencies.darling]
+#version = "^0.10"
+git = "https://github.com/TedDriggs/darling"
 
 [dependencies.syn]
 version = "^1"

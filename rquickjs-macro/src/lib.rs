@@ -5,10 +5,10 @@ mod context;
 mod derive;
 mod shim;
 
-use darling::FromMeta;
+use darling::{FromDeriveInput, FromMeta};
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro_error::proc_macro_error;
-use syn::{parse_macro_input, DeriveInput};
+use syn::parse_macro_input;
 
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::{abort, emit_error as error, emit_warning as warning};
@@ -85,9 +85,9 @@ ctx.with(|ctx| {
 use rquickjs::{Runtime, Context, Object, bind};
 
 #[bind(object)]
-#[bind(bare)]
+#[quickjs(bare)]
 pub mod math {
-    #[bind(name = "pi")]
+    #[quickjs(name = "pi")]
     pub const PI: f32 = core::f32::consts::PI;
 
     pub fn add2(a: f32, b: f32) -> f32 {
@@ -148,11 +148,10 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let attr: AttributeArgs = parse_macro_input!(attr);
     let item = parse_macro_input!(item);
 
-    let config = Config::new();
-    let mut binder = Binder::new(config);
     let attr = AttrItem::from_list(&*attr).unwrap_or_else(|error| {
         abort!("{}", error);
     });
+    let mut binder = Binder::new(attr.config());
     let output = binder.expand(attr, item);
     output.into()
 }
@@ -187,21 +186,74 @@ struct MyTuple(i32, String);
 struct MyStruct {
     int: i32,
     text: String,
+    #[quickjs(skip)]
+    skipped: bool,
 }
 ```
 
-### Unit enum
+### Externally tagged enum
 
 ```
 # use rquickjs::FromJs;
 #[derive(FromJs)]
+enum Enum {
+    A(f32),
+    B { s: String },
+    C,
+}
+```
+
+### Internally tagged enum
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(tag = "tag")]
+enum Enum {
+    A(f32),
+    B { s: String },
+    C,
+}
+```
+
+### Adjacently tagged enum
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(tag = "type", content = "data")]
+enum Enum {
+    A(f32),
+    B { s: String },
+    C,
+}
+```
+
+### Untagged unit enum
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(untagged)]
 enum MyEnum {
     A,
     B,
 }
 ```
 
-### Tuple enum
+### Untagged unit enum with discriminant
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(untagged)]
+enum MyEnum {
+    A = 1,
+    B = 2,
+}
+```
+
+### Externally tagged tuple enum
 
 ```
 # use rquickjs::FromJs;
@@ -212,11 +264,48 @@ enum MyEnum {
 }
 ```
 
-### Enum with fields
+### Adjacently tagged tuple enum
 
 ```
 # use rquickjs::FromJs;
 #[derive(FromJs)]
+#[quickjs(tag, content = "data")]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Untagged tuple enum
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(untagged)]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Internally tagged enum with fields
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(tag = "$")]
+enum MyEnum {
+    Foo { x: f64, y: f64 },
+    Bar { msg: String },
+}
+```
+
+### Untagged enum with fields
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(untagged)]
 enum MyEnum {
     Foo { x: f64, y: f64 },
     Bar { msg: String },
@@ -225,14 +314,15 @@ enum MyEnum {
 
  */
 #[proc_macro_error]
-#[proc_macro_derive(FromJs, attributes(bind))]
+#[proc_macro_derive(FromJs, attributes(quickjs))]
 pub fn from_js(input: TokenStream1) -> TokenStream1 {
-    let input: DeriveInput = parse_macro_input!(input);
-
-    let config = Config::new();
+    let input = parse_macro_input!(input);
+    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
+        abort!(input.ident.span(), "FromJs deriving error: {}", error);
+    });
+    let config = input.config();
     let binder = FromJs::new(config);
-    let output = binder.expand(input);
-
+    let output = binder.expand(&input);
     output.into()
 }
 
@@ -264,23 +354,37 @@ struct MyTuple(i32, String);
 # use rquickjs::IntoJs;
 #[derive(IntoJs)]
 struct MyStruct {
-int: i32,
-text: String,
+    int: i32,
+    text: String,
 }
 ```
 
-### Unit enum
+### Untagged unit enum
 
 ```
 # use rquickjs::IntoJs;
 #[derive(IntoJs)]
+#[quickjs(untagged)]
 enum MyEnum {
     Foo,
     Bar,
 }
 ```
 
-### Tuple enum
+### Untagged unit enum with discriminant
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+#[quickjs(untagged)]
+#[repr(i32)]
+enum MyEnum {
+    Foo = 1,
+    Bar = 2,
+}
+```
+
+### Externally tagged tuple enum
 
 ```
 # use rquickjs::IntoJs;
@@ -291,26 +395,64 @@ enum MyEnum {
 }
 ```
 
-### Enum with fields
+### Adjacently tagged tuple enum
 
 ```
 # use rquickjs::IntoJs;
 #[derive(IntoJs)]
+#[quickjs(tag, content = "data")]
 enum MyEnum {
-Foo { x: f64, y: f64 },
-Bar { msg: String },
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Untagged tuple enum
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+#[quickjs(untagged)]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Internally tagged enum with fields
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+#[quickjs(tag = "$")]
+enum MyEnum {
+    Foo { x: f64, y: f64 },
+    Bar { msg: String },
+}
+```
+
+### Untagged enum with fields
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+#[quickjs(untagged)]
+enum MyEnum {
+    Foo { x: f64, y: f64 },
+    Bar { msg: String },
 }
 ```
 
  */
 #[proc_macro_error]
-#[proc_macro_derive(IntoJs, attributes(bind))]
+#[proc_macro_derive(IntoJs, attributes(quickjs))]
 pub fn into_js(input: TokenStream1) -> TokenStream1 {
-    let input: DeriveInput = parse_macro_input!(input);
-
-    let config = Config::new();
+    let input = parse_macro_input!(input);
+    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
+        abort!(input.ident.span(), "IntoJs deriving error: {}", error);
+    });
+    let config = input.config();
     let binder = IntoJs::new(config);
-    let output = binder.expand(input);
-
+    let output = binder.expand(&input);
     output.into()
 }
