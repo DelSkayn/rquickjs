@@ -48,9 +48,11 @@ pub struct Parenthesized<T> {
 impl<T: Parse> Parse for Parenthesized<T> {
     fn parse(input: ParseStream) -> Result<Self> {
         let content;
+        let paren_token = parenthesized!(content in input);
+        let content = content.parse()?;
         Ok(Self {
-            paren_token: parenthesized!(content in input),
-            content: content.parse()?,
+            paren_token,
+            content,
         })
     }
 }

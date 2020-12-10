@@ -1,5 +1,5 @@
-use super::{visible, BindMod, BindProp, Binder, Top};
-use crate::{abort, error, get_attrs, AttrFn, Config, Ident, Source, TokenStream};
+use super::{visible, AttrFn, BindMod, BindProp, Binder, Top};
+use crate::{abort, error, Config, Ident, Source, TokenStream};
 use quote::{format_ident, quote};
 use syn::{FnArg, ItemFn, Pat, Signature};
 
@@ -77,7 +77,7 @@ impl Binder {
             set,
             ctor,
             skip,
-        } = get_attrs(attrs);
+        } = self.get_attrs(attrs);
 
         if !visible(vis) || skip {
             return;
@@ -104,12 +104,12 @@ impl Binder {
         let name = name.unwrap_or_else(|| ident.to_string());
         let args = inputs
             .iter()
-            .filter_map(|arg| match arg {
-                FnArg::Receiver(_) => Some(format_ident!("self_")),
-                FnArg::Typed(arg) => Some(match &*arg.pat {
+            .map(|arg| match arg {
+                FnArg::Receiver(_) => format_ident!("self_"),
+                FnArg::Typed(arg) => match &*arg.pat {
                     Pat::Ident(pat) => pat.ident.clone(),
                     _ => abort!(arg.colon_token, "Only named arguments is supported."),
-                }),
+                },
             })
             .collect::<Vec<_>>();
 

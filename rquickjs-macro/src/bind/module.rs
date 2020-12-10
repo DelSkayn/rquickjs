@@ -1,5 +1,5 @@
-use super::{visible, BindConst, BindFn, BindProp, Binder, Top};
-use crate::{get_attrs, AttrMod, Config, Ident, Source, TokenStream};
+use super::{visible, AttrMod, BindConst, BindFn, BindProp, Binder, Top};
+use crate::{Config, Ident, Source, TokenStream};
 use quote::quote;
 use std::collections::HashMap;
 use syn::ItemMod;
@@ -156,7 +156,7 @@ impl Binder {
             ..
         }: &mut ItemMod,
     ) {
-        let AttrMod { name, bare, skip } = get_attrs(attrs);
+        let AttrMod { name, bare, skip } = self.get_attrs(attrs);
 
         if content.is_none() || !visible(vis) || skip {
             return;
@@ -191,7 +191,7 @@ impl Binder {
 mod test {
     test_cases! {
         module_without_init { module } {
-            #[bind(bare)]
+            #[quickjs(bare)]
             pub mod lib {
                 pub const N: i8 = 3;
                 pub fn doit() {}
@@ -220,7 +220,7 @@ mod test {
         };
 
         module_with_default_init { module, init } {
-            #[bind(bare)]
+            #[quickjs(bare)]
             pub mod lib {
                 pub const N: i8 = 3;
                 pub fn doit() {}

@@ -5,11 +5,12 @@ use syn::Ident;
 #[derive(Debug, Clone)]
 pub struct Config {
     pub lib_crate: Ident,
+    pub bind_attr: Ident,
     pub exports_var: Ident,
 }
 
 fn lib_crate() -> String {
-    env!("CARGO_PKG_NAME").replace("-macro", "").into()
+    env!("CARGO_PKG_NAME").replace("-macro", "")
 }
 
 impl Default for Config {
@@ -17,6 +18,7 @@ impl Default for Config {
         let lib_crate = lib_crate();
         Self {
             lib_crate: format_ident!("{}", lib_crate),
+            bind_attr: format_ident!("quickjs"),
             exports_var: format_ident!("exports"),
         }
     }

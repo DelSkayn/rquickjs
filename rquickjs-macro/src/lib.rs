@@ -1,4 +1,3 @@
-mod attrs;
 mod bind;
 mod config;
 mod context;
@@ -13,7 +12,6 @@ use syn::parse_macro_input;
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::{abort, emit_error as error, emit_warning as warning};
 
-use attrs::*;
 use bind::*;
 use config::*;
 use context::*;

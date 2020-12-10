@@ -17,22 +17,27 @@ macro_rules! test_cases {
     };
 }
 
+mod attrs;
 mod constant;
 mod function;
 mod module;
 mod property;
 
-use crate::{abort, error, AttrItem, AttrItemModInit, Config, Ident, Source, TokenStream};
+use crate::{abort, error, Config, Ident, Source, TokenStream};
+use darling::FromMeta;
 use ident_case::RenameRule;
 use quote::{format_ident, quote};
 use std::collections::HashMap;
 use std::mem::replace;
-use syn::{Item, Visibility};
+use syn::{Attribute, Item, Visibility};
 
+use attrs::*;
 use constant::*;
 use function::*;
 use module::*;
 use property::*;
+
+pub use attrs::AttrItem;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct BindType {
@@ -107,6 +112,10 @@ impl Binder {
         }
     }
 
+    pub fn get_attrs<R: FromMeta + Default + Merge>(&self, attrs: &mut Vec<Attribute>) -> R {
+        get_attrs(&self.config.bind_attr, attrs)
+    }
+
     pub fn bind_item(&mut self, item: &mut Item) {
         use Item::*;
         match item {
@@ -125,6 +134,7 @@ impl Binder {
             module,
             object,
             test,
+            ..
         }: AttrItem,
         mut item: Item,
     ) -> TokenStream {
@@ -175,12 +185,8 @@ impl Binder {
                 let mod_decl = def.module_decl(&self.config);
                 let mod_impl = def.module_impl(&self.config);
 
-                let mod_init = if let AttrItemModInit::Enabled(init) = init {
-                    let init_ident = if let Some(name) = init {
-                        name
-                    } else {
-                        format_ident!("js_init_module")
-                    };
+                let mod_init = if let Some(init) = init {
+                    let init_ident = init.unwrap_or_else(|| format_ident!("js_init_module"));
                     quote! {
                         #[no_mangle]
                         pub unsafe extern "C" fn #init_ident(
@@ -245,8 +251,5 @@ impl Binder {
 
 fn visible(vis: &Visibility) -> bool {
     use Visibility::*;
-    match vis {
-        Public(_) | Crate(_) => true,
-        _ => false,
-    }
+    matches!(vis, Public(_) | Crate(_))
 }

@@ -1,5 +1,5 @@
-use super::{visible, BindMod, BindProp, Binder, Top};
-use crate::{abort, get_attrs, AttrVar, Config, Ident, Source, TokenStream};
+use super::{visible, AttrVar, BindMod, BindProp, Binder, Top};
+use crate::{abort, Config, Ident, Source, TokenStream};
 use quote::quote;
 use syn::ItemConst;
 
@@ -12,7 +12,6 @@ impl BindConst {
     pub fn new(src: &Source, ident: &Ident) -> Self {
         Self {
             src: src.with_ident(ident.clone()),
-            ..Default::default()
         }
     }
 
@@ -29,7 +28,7 @@ impl Binder {
             attrs, vis, ident, ..
         }: &mut ItemConst,
     ) {
-        let AttrVar { name, prop, skip } = get_attrs(attrs);
+        let AttrVar { name, prop, skip } = self.get_attrs(attrs);
         if !visible(vis) || skip {
             return;
         }
@@ -103,7 +102,7 @@ mod test {
         };
 
         num_const_with_name { module, ident = "Constants" } {
-            #[bind(name = "pi")]
+            #[quickjs(name = "pi")]
             pub const PI: f32 = core::math::f32::PI;
         } {
             pub const PI: f32 = core::math::f32::PI;
@@ -123,13 +122,13 @@ mod test {
             }
         };
         private_const {} {
-            #[bind(prop)]
+            #[quickjs(prop)]
             const PI: f32 = core::math::f32::PI;
         } {
             const PI: f32 = core::math::f32::PI;
         };
         skip_const {} {
-            #[bind(skip)]
+            #[quickjs(skip)]
             pub const PI: f32 = core::math::f32::PI;
         } {
             pub const PI: f32 = core::math::f32::PI;

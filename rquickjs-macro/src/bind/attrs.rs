@@ -1,32 +1,9 @@
-use crate::{warning, AttributeArgs, Ident, Parenthesized};
-use darling::FromMeta;
+use crate::{warning, AttributeArgs, Config, Ident, Parenthesized};
+use darling::{util::Override, FromMeta};
 use syn::{parse2, AttrStyle, Attribute, Path};
 
 pub trait Merge {
     fn merge(&mut self, over: Self);
-}
-
-/// Module specifier
-#[derive(Debug, PartialEq, Eq)]
-pub enum AttrItemModInit {
-    Disabled,
-    Enabled(Option<Ident>),
-}
-
-impl Default for AttrItemModInit {
-    fn default() -> Self {
-        Self::Disabled
-    }
-}
-
-impl FromMeta for AttrItemModInit {
-    fn from_word() -> darling::Result<Self> {
-        Ok(Self::Enabled(None))
-    }
-
-    fn from_string(value: &str) -> darling::Result<Self> {
-        Ok(Self::Enabled(Some(Ident::from_string(value)?)))
-    }
 }
 
 /// Root binding item attrs
@@ -36,13 +13,36 @@ pub struct AttrItem {
     /// Module name for export
     pub ident: Option<Ident>,
     /// Create module init function
-    pub init: AttrItemModInit,
+    pub init: Option<Override<Ident>>,
     /// Export as module via ModuleDef
     pub module: bool,
     /// Export as object via ObjectDef
     pub object: bool,
     /// Test export
     pub test: bool,
+    /// Binding attribute name (`quickjs` by default)
+    pub bind: Option<Ident>,
+    /// Library crate name (determined automatically, usually `rquickjs`)
+    #[darling(rename = "crate")]
+    pub crate_: Option<Ident>,
+    /// Exports variable name (`exports` by default)
+    pub exports: Option<Ident>,
+}
+
+impl AttrItem {
+    pub fn config(&self) -> Config {
+        let mut cfg = Config::new();
+        if let Some(crate_) = &self.crate_ {
+            cfg.lib_crate = crate_.clone();
+        }
+        if let Some(bind) = &self.bind {
+            cfg.bind_attr = bind.clone();
+        }
+        if let Some(exports) = &self.exports {
+            cfg.exports_var = exports.clone();
+        }
+        cfg
+    }
 }
 
 /// Module attrs
@@ -130,7 +130,8 @@ impl Merge for AttrFn {
     }
 }
 
-fn is_bind(
+fn is_attr(
+    ident: &Ident,
     style: &AttrStyle,
     Path {
         leading_colon,
@@ -140,10 +141,10 @@ fn is_bind(
     style == &AttrStyle::Outer
         && leading_colon.is_none()
         && segments.len() == 1
-        && segments[0].ident == "bind"
+        && &segments[0].ident == ident
 }
 
-pub fn get_attrs<R: FromMeta + Default + Merge>(attrs: &mut Vec<Attribute>) -> R {
+pub fn get_attrs<R: FromMeta + Default + Merge>(ident: &Ident, attrs: &mut Vec<Attribute>) -> R {
     let mut res = R::default();
 
     attrs.retain(
@@ -153,7 +154,7 @@ pub fn get_attrs<R: FromMeta + Default + Merge>(attrs: &mut Vec<Attribute>) -> R
              tokens,
              ..
          }| {
-            if is_bind(style, path) {
+            if is_attr(ident, style, path) {
                 match parse2(tokens.clone()).map(
                     |Parenthesized {
                          content: AttributeArgs(attrs),
@@ -200,7 +201,7 @@ mod test {
             assert_eq!(
                 attr,
                 AttrItem {
-                    init: AttrItemModInit::Enabled(None),
+                    init: Some(Override::Inherit),
                     ..Default::default()
                 }
             );
@@ -212,7 +213,7 @@ mod test {
             assert_eq!(
                 attr,
                 AttrItem {
-                    init: AttrItemModInit::Enabled(Some(quote::format_ident!(
+                    init: Some(Override::Explicit(quote::format_ident!(
                         "js_init_awesome_module"
                     ))),
                     ..Default::default()
