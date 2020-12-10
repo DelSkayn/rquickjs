@@ -93,11 +93,7 @@ impl Error {
     #[cfg(feature = "loader")]
     /// Returns whether the error is a resolving error
     pub fn is_resolving(&self) -> bool {
-        if let Error::Resolving { .. } = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Error::Resolving { .. })
     }
 
     #[cfg(feature = "loader")]
@@ -127,16 +123,12 @@ impl Error {
     #[cfg(feature = "loader")]
     /// Returns whether the error is a loading error
     pub fn is_loading(&self) -> bool {
-        if let Error::Loading { .. } = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Error::Loading { .. })
     }
 
     /// Returns whether the error is a quickjs generated exception.
     pub fn is_exception(&self) -> bool {
-        matches!(*self, Error::Exception{..})
+        matches!(self, Error::Exception{..})
     }
 
     /// Create from JS conversion error
@@ -183,20 +175,12 @@ impl Error {
 
     /// Returns whether the error is a from JS conversion error
     pub fn is_from_js(&self) -> bool {
-        if let Error::FromJs { .. } = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Error::FromJs { .. })
     }
 
     /// Returns whether the error is an into JS conversion error
     pub fn is_into_js(&self) -> bool {
-        if let Error::IntoJs { .. } = self {
-            true
-        } else {
-            false
-        }
+        matches!(self, Error::IntoJs { .. })
     }
 
     /// Optimized conversion to CString

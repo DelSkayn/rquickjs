@@ -4,7 +4,9 @@ use std::{
     fmt::{Debug, Formatter, Result as FmtResult},
 };
 
-struct ModuleInit(Box<dyn for<'js> Fn(Ctx<'js>, &str) -> Result<Module<'js, BeforeInit>>>);
+type ModuleInitFn = dyn for<'js> FnOnce(Ctx<'js>, &str) -> Result<Module<'js, BeforeInit>>;
+
+struct ModuleInit(Box<ModuleInitFn>);
 
 impl Debug for ModuleInit {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
@@ -25,6 +27,7 @@ impl ModuleLoader {
     pub fn add_module<N: Into<String>, M: ModuleDef>(&mut self, name: N, _module: M) -> &mut Self {
         self.modules.insert(
             name.into(),
+            #[allow(clippy::redundant_closure)]
             ModuleInit(Box::new(|ctx, name| Module::new::<M, _>(ctx, name))),
         );
         self

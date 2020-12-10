@@ -244,6 +244,10 @@ where
     }
 
     /// Register the class using raw context
+    ///
+    /// # Safety
+    /// This function must only be called from `js_module_init` function or should be called right after context initialization.
+    /// From Rust code you should use [Class::register] instead.
     pub unsafe fn register_raw(ctx: *mut qjs::JSContext) {
         Self::register(Ctx::from_ptr(ctx)).unwrap()
     }
@@ -348,7 +352,7 @@ pub struct RefsMarker {
 }
 
 impl RefsMarker {
-    pub fn mark<'js, T>(&self, value: &Persistent<T>) {
+    pub fn mark<T>(&self, value: &Persistent<T>) {
         let val = value.value.get();
         if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(val) } {
             unsafe { qjs::JS_MarkValue(self.rt, val, self.mark_func) };

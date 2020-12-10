@@ -24,7 +24,9 @@ struct State<T> {
 impl<T> State<T> {
     fn resolve(&mut self, result: Result<T>) {
         self.result = Some(result);
-        self.waker.take().map(|waker| waker.wake());
+        if let Some(waker) = self.waker.take() {
+            waker.wake()
+        }
     }
 }
 
