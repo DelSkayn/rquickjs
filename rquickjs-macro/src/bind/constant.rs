@@ -1,7 +1,7 @@
-use super::{visible, AttrVar, BindMod, BindProp, Binder, Top};
-use crate::{abort, Config, Ident, Source, TokenStream};
+use super::{AttrVar, Binder};
+use crate::{error, Config, Ident, Source, TokenStream};
 use quote::quote;
-use syn::ItemConst;
+use syn::{Attribute, ImplItemConst, ItemConst, Visibility};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BindConst {
@@ -15,9 +15,17 @@ impl BindConst {
         }
     }
 
-    pub fn expand(&self, _cfg: &Config) -> TokenStream {
-        let path = &self.src;
-        quote! { #path }
+    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+        let exports_var = &cfg.exports_var;
+        let pure = self.expand_pure(cfg);
+
+        quote! { #exports_var.set(#name, #pure)?; }
+    }
+
+    pub fn expand_pure(&self, _cfg: &Config) -> TokenStream {
+        let src = &self.src;
+
+        quote! { #src }
     }
 }
 
@@ -28,51 +36,42 @@ impl Binder {
             attrs, vis, ident, ..
         }: &mut ItemConst,
     ) {
+        self._bind_constant(attrs, vis, ident);
+    }
+
+    pub(super) fn bind_impl_constant(
+        &mut self,
+        ImplItemConst {
+            attrs, vis, ident, ..
+        }: &mut ImplItemConst,
+    ) {
+        self._bind_constant(attrs, vis, ident);
+    }
+
+    fn _bind_constant(&mut self, attrs: &mut Vec<Attribute>, vis: &Visibility, ident: &Ident) {
         let AttrVar { name, prop, skip } = self.get_attrs(attrs);
-        if !visible(vis) || skip {
+        if !self.visible(vis) || skip {
             return;
         }
 
         self.identify(ident);
 
         let name = name.unwrap_or_else(|| ident.to_string());
+        let src = self.top_src();
+        let decl = BindConst::new(src, ident);
 
-        if let Top::Mod(BindMod {
-            src, consts, props, ..
-        }) = &mut self.top
-        {
-            if prop {
-                let BindProp { val, get, set, .. } =
-                    props.entry(name.clone()).or_insert_with(BindProp::default);
-                if let Some(val) = val {
-                    abort!(
+        if prop {
+            self.top_prop(&name).set_const(&ident, &name, decl);
+        } else {
+            self.top_consts()
+                .entry(name.clone())
+                .and_modify(|def| {
+                    error!(
                         ident,
-                        "Property `{}` already defined with const `{}`",
-                        name,
-                        val.src
+                        "Constant `{}` already defined with `{}`", name, def.src
                     );
-                }
-                if let Some(get) = get {
-                    abort!(
-                        ident,
-                        "Property `{}` already defined with getter `{}`",
-                        name,
-                        get.src
-                    );
-                }
-                if let Some(set) = set {
-                    abort!(
-                        ident,
-                        "Property `{}` already defined with setter `{}`",
-                        name,
-                        set.src
-                    );
-                }
-                *val = Some(BindConst::new(src, ident));
-            } else {
-                let cnst = BindConst::new(src, ident);
-                consts.insert(name, cnst);
-            }
+                })
+                .or_insert(decl);
         }
     }
 }
@@ -81,17 +80,17 @@ impl Binder {
 mod test {
     test_cases! {
         num_const { test } {
-            pub const PI: f32 = core::math::f32::PI;
+            const PI: f32 = core::math::f32::PI;
         } {
             exports.set("PI" , PI)?;
         };
 
         num_const_with_ident { object, ident = "Math" } {
-            pub const PI: f32 = core::math::f32::PI;
+            const PI: f32 = core::math::f32::PI;
         } {
-            pub const PI: f32 = core::math::f32::PI;
+            const PI: f32 = core::math::f32::PI;
 
-            pub struct Math;
+            struct Math;
 
             impl rquickjs::ObjectDef for Math {
                 fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{
@@ -102,12 +101,12 @@ mod test {
         };
 
         num_const_with_name { module, ident = "Constants" } {
-            #[quickjs(name = "pi")]
-            pub const PI: f32 = core::math::f32::PI;
+            #[quickjs(rename = "pi")]
+            const PI: f32 = core::math::f32::PI;
         } {
-            pub const PI: f32 = core::math::f32::PI;
+            const PI: f32 = core::math::f32::PI;
 
-            pub struct Constants;
+            struct Constants;
 
             impl rquickjs::ModuleDef for Constants {
                 fn before_init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::BeforeInit>) -> rquickjs::Result<()>{
@@ -122,16 +121,20 @@ mod test {
             }
         };
         private_const {} {
-            #[quickjs(prop)]
-            const PI: f32 = core::math::f32::PI;
+            mod math {
+                #[quickjs(property)]
+                const PI: f32 = core::math::f32::PI;
+            }
         } {
-            const PI: f32 = core::math::f32::PI;
+            mod math {
+                const PI: f32 = core::math::f32::PI;
+            }
         };
         skip_const {} {
             #[quickjs(skip)]
-            pub const PI: f32 = core::math::f32::PI;
+            const PI: f32 = core::math::f32::PI;
         } {
-            pub const PI: f32 = core::math::f32::PI;
+            const PI: f32 = core::math::f32::PI;
         };
     }
 }

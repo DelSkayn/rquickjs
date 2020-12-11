@@ -1,17 +1,17 @@
-use super::{visible, AttrMod, BindConst, BindFn, BindProp, Binder, Top};
-use crate::{Config, Ident, Source, TokenStream};
+use super::{AttrMod, BindClasses, BindConsts, BindFns, BindMods, BindProps, Binder};
+use crate::{error, Config, Ident, Source, TokenStream};
 use quote::quote;
-use std::collections::HashMap;
 use syn::ItemMod;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BindMod {
     pub src: Source,
     pub bare: bool,
-    pub consts: HashMap<String, BindConst>,
-    pub props: HashMap<String, BindProp>,
-    pub fns: HashMap<String, BindFn>,
-    pub mods: HashMap<String, BindMod>,
+    pub consts: BindConsts,
+    pub props: BindProps,
+    pub fns: BindFns,
+    pub mods: BindMods,
+    pub classes: BindClasses,
 }
 
 impl BindMod {
@@ -34,113 +34,84 @@ impl BindMod {
         self
     }
 
-    pub fn module_decl(&self, cfg: &Config) -> TokenStream {
+    pub fn module_decl(&self, name: &str, cfg: &Config) -> TokenStream {
         let exports_var = &cfg.exports_var;
-        let exports_list = self
-            .consts
-            .keys()
-            .chain(self.props.keys())
-            .chain(self.fns.keys())
-            .chain(
-                self.mods
-                    .iter()
-                    .filter(|(_, &BindMod { bare, .. })| !bare)
-                    .map(|(name, _)| name),
-            );
 
-        let bare_exports = self
-            .mods
-            .iter()
-            .filter(|(_, &BindMod { bare, .. })| bare)
-            .map(|(_, bind)| bind.module_decl(cfg));
+        if self.bare {
+            let exports_list = self
+                .consts
+                .keys()
+                .chain(self.props.keys())
+                .chain(self.fns.keys())
+                .chain(self.classes.keys())
+                .map(|name| quote! { #exports_var.add(#name)?; })
+                .chain(
+                    self.mods
+                        .iter()
+                        .map(|(name, bind)| bind.module_decl(name, cfg)),
+                );
 
-        quote! {
-            #(#exports_var.add(#exports_list)?;)*
-            #(#bare_exports)*
+            quote! { #(#exports_list)* }
+        } else {
+            quote! { #exports_var.add(#name)?; }
         }
     }
 
-    pub fn module_impl(&self, cfg: &Config) -> TokenStream {
-        let lib_crate = &cfg.lib_crate;
-        let exports_var = &cfg.exports_var;
-        let exports_list = self
-            .consts
-            .iter()
-            .map(|(name, bind)| {
-                let value = bind.expand(cfg);
-                quote! { #name, #value }
-            })
-            .chain(self.fns.iter().map(|(name, bind)| {
-                let value = bind.expand(cfg);
-                quote! { #name, #value }
-            }))
-            .chain(
-                self.mods
-                    .iter()
-                    .filter(|(_, &BindMod { bare, .. })| !bare)
-                    .map(|(name, bind)| {
-                        let exports = bind.object_init(cfg);
-                        quote! { #name, {
-                            let #exports_var = #lib_crate::Object::new(_ctx)?;
-                            #exports
-                            #exports_var
-                        } }
-                    }),
-            );
+    pub fn module_impl(&self, name: &str, cfg: &Config) -> TokenStream {
+        if self.bare {
+            let exports_list = self
+                .consts
+                .iter()
+                .map(|(name, bind)| bind.expand(name, cfg))
+                .chain(self.fns.iter().map(|(name, bind)| bind.expand(name, cfg)))
+                .chain(
+                    self.classes
+                        .iter()
+                        .map(|(name, bind)| bind.expand(name, cfg)),
+                )
+                .chain(
+                    self.mods
+                        .iter()
+                        .map(|(name, bind)| bind.module_impl(name, cfg)),
+                );
 
-        let bare_exports = self
-            .mods
-            .iter()
-            .filter(|(_, &BindMod { bare, .. })| bare)
-            .map(|(_, bind)| bind.module_impl(cfg));
-
-        quote! {
-            #(#exports_var.set(#exports_list)?;)*
-            #(#bare_exports)*
+            quote! { #(#exports_list)* }
+        } else {
+            self.object_init(name, cfg)
         }
     }
 
-    pub fn object_init(&self, cfg: &Config) -> TokenStream {
+    pub fn object_init(&self, name: &str, cfg: &Config) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
         let exports_var = &cfg.exports_var;
+
         let exports_list = self
             .consts
             .iter()
-            .map(|(name, bind)| {
-                let value = bind.expand(cfg);
-                quote! { set(#name, #value) }
-            })
-            .chain(self.props.iter().map(|(name, bind)| {
-                let value = bind.expand(cfg);
-                quote! { prop(#name, #value) }
-            }))
-            .chain(self.fns.iter().map(|(name, bind)| {
-                let value = bind.expand(cfg);
-                quote! { set(#name, #value) }
-            }))
+            .map(|(name, bind)| bind.expand(name, cfg))
+            .chain(self.props.iter().map(|(name, bind)| bind.expand(name, cfg)))
+            .chain(self.fns.iter().map(|(name, bind)| bind.expand(name, cfg)))
+            .chain(
+                self.classes
+                    .iter()
+                    .map(|(name, bind)| bind.expand(name, cfg)),
+            )
             .chain(
                 self.mods
                     .iter()
-                    .filter(|(_, &BindMod { bare, .. })| !bare)
-                    .map(|(name, bind)| {
-                        let exports = bind.object_init(cfg);
-                        quote! { set(#name, {
-                            let #exports_var = #lib_crate::Object::new(_ctx)?;
-                            #exports
-                            #exports_var
-                        }) }
-                    }),
+                    .map(|(name, bind)| bind.object_init(name, cfg)),
             );
 
-        let bare_exports = self
-            .mods
-            .iter()
-            .filter(|(_, &BindMod { bare, .. })| bare)
-            .map(|(_, bind)| bind.object_init(cfg));
-
-        quote! {
-            #(#exports_var.#exports_list?;)*
-            #(#bare_exports)*
+        if self.bare {
+            quote! { #(#exports_list)* }
+        } else {
+            quote! {
+                #exports_var.set(#name, {
+                    let #exports_var = #lib_crate::Object::new(_ctx)?;
+                    #(#exports_list)*
+                    #exports_var
+                })?;
+            }
         }
     }
 }
@@ -158,7 +129,7 @@ impl Binder {
     ) {
         let AttrMod { name, bare, skip } = self.get_attrs(attrs);
 
-        if content.is_none() || !visible(vis) || skip {
+        if content.is_none() || !self.visible(vis) || skip {
             return;
         }
 
@@ -167,23 +138,24 @@ impl Binder {
         let items = &mut content.as_mut().unwrap().1;
         let name = name.unwrap_or_else(|| ident.to_string());
 
-        let module = if let Top::Mod(BindMod { src, .. }) = &self.top {
-            BindMod::new(src, ident).bare(bare)
-        } else {
-            unreachable!();
-        };
+        let src = self.top_src();
+        let decl = BindMod::new(src, ident).bare(bare);
 
-        let module = self.with(module, |this| {
+        let decl = self.with(decl, |this| {
             for item in items {
                 this.bind_item(item);
             }
         });
 
-        if let Top::Mod(BindMod { mods, .. }) = &mut self.top {
-            mods.insert(name, module);
-        } else {
-            unreachable!();
-        }
+        self.top_mods()
+            .entry(name.clone())
+            .and_modify(|def| {
+                error!(
+                    ident.span(),
+                    "Module `{}` already defined with `{}`", name, def.src
+                );
+            })
+            .or_insert(decl);
     }
 }
 
@@ -192,17 +164,17 @@ mod test {
     test_cases! {
         module_without_init { module } {
             #[quickjs(bare)]
-            pub mod lib {
+            mod lib {
                 pub const N: i8 = 3;
                 pub fn doit() {}
             }
         } {
-            pub mod lib {
+            mod lib {
                 pub const N: i8 = 3;
                 pub fn doit() {}
             }
 
-            pub struct Lib;
+            struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
                 fn before_init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::BeforeInit>) -> rquickjs::Result<()>{
@@ -221,17 +193,17 @@ mod test {
 
         module_with_default_init { module, init } {
             #[quickjs(bare)]
-            pub mod lib {
+            mod lib {
                 pub const N: i8 = 3;
                 pub fn doit() {}
             }
         } {
-            pub mod lib {
+            mod lib {
                 pub const N: i8 = 3;
                 pub fn doit() {}
             }
 
-            pub struct Lib;
+            struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
                 fn before_init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::BeforeInit>) -> rquickjs::Result<()>{
@@ -248,7 +220,7 @@ mod test {
             }
 
             #[no_mangle]
-            pub unsafe extern "C" fn js_init_module(
+            unsafe extern "C" fn js_init_module(
                 ctx: *mut rquickjs::qjs::JSContext,
                 name: *const rquickjs::qjs::c_char,
             ) -> *mut rquickjs::qjs::JSModuleDef {

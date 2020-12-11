@@ -10,11 +10,16 @@ pub struct Source(Vec<PathSegment>);
 impl Source {
     pub fn with_ident(&self, ident: Ident) -> Self {
         let mut path = self.0.clone();
-        let ident = ident;
         path.push(PathSegment {
             ident,
             arguments: PathArguments::None,
         });
+        Self(path)
+    }
+
+    pub fn parent(&self) -> Self {
+        let mut path = self.0.clone();
+        path.pop();
         Self(path)
     }
 }

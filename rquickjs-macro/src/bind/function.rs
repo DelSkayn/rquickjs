@@ -1,7 +1,7 @@
-use super::{visible, AttrFn, BindMod, BindProp, Binder, Top};
+use super::{AttrFn, Binder};
 use crate::{abort, error, Config, Ident, Source, TokenStream};
 use quote::{format_ident, quote};
-use syn::{FnArg, ItemFn, Pat, Signature};
+use syn::{Attribute, FnArg, ImplItemMethod, ItemFn, Pat, Signature, Visibility};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BindFn {
@@ -11,6 +11,7 @@ pub struct BindFn {
     pub asynch: bool,
     pub constr: bool,
     pub method: bool,
+    pub define: Option<ItemFn>,
 }
 
 impl BindFn {
@@ -38,9 +39,22 @@ impl BindFn {
         self
     }
 
-    pub fn expand(&self, cfg: &Config) -> TokenStream {
+    pub fn define(mut self, def: ItemFn) -> Self {
+        self.define = Some(def);
+        self
+    }
+
+    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+        let exports_var = &cfg.exports_var;
+        let pure = self.expand_pure(cfg);
+
+        quote! { #exports_var.set(#name, #pure)?; }
+    }
+
+    pub fn expand_pure(&self, cfg: &Config) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
-        let name = &self.name;
+
+        let fn_name = &self.name;
         let path = &self.src;
         let bind = if self.asynch {
             let args = &self.args;
@@ -48,8 +62,28 @@ impl BindFn {
         } else {
             quote! { #path }
         };
-        //if self.constr || self.method
-        quote! { #lib_crate::JsFn::new(#name, #bind) }
+        let bind = if self.constr {
+            let class = path.parent();
+            quote! { #lib_crate::Class::<#class>::constructor(#bind) }
+        } else {
+            bind
+        };
+        let bind = if self.method {
+            quote! { #lib_crate::Method(#bind) }
+        } else {
+            bind
+        };
+        let bind = if let Some(define) = &self.define {
+            quote! {
+                {
+                    #define
+                    #bind
+                }
+            }
+        } else {
+            bind
+        };
+        quote! { #lib_crate::JsFn::new(#fn_name, #bind) }
     }
 }
 
@@ -57,19 +91,33 @@ impl Binder {
     pub(super) fn bind_function(
         &mut self,
         ItemFn {
-            attrs,
-            vis,
-            sig:
-                Signature {
-                    asyncness,
-                    unsafety,
-                    ident,
-                    inputs,
-                    variadic,
-                    ..
-                },
-            ..
+            attrs, vis, sig, ..
         }: &mut ItemFn,
+    ) {
+        self._bind_function(attrs, vis, sig);
+    }
+
+    pub(super) fn bind_impl_function(
+        &mut self,
+        ImplItemMethod {
+            attrs, vis, sig, ..
+        }: &mut ImplItemMethod,
+    ) {
+        self._bind_function(attrs, vis, sig);
+    }
+
+    fn _bind_function(
+        &mut self,
+        attrs: &mut Vec<Attribute>,
+        vis: &Visibility,
+        Signature {
+            asyncness,
+            unsafety,
+            ident,
+            inputs,
+            variadic,
+            ..
+        }: &Signature,
     ) {
         let AttrFn {
             name,
@@ -79,29 +127,34 @@ impl Binder {
             skip,
         } = self.get_attrs(attrs);
 
-        if !visible(vis) || skip {
+        if !self.visible(vis) || skip {
             return;
         }
 
         if let Some(unsafety) = unsafety {
             error!(
-                unsafety.span,
+                unsafety,
                 "Binding of unsafe functions is weird and not supported."
             );
             return;
         }
         if let Some(variadic) = variadic {
-            error!(
-                variadic.dots.spans[0],
-                "Binding of variadic functions is not supported."
-            );
+            error!(variadic, "Binding of variadic functions is not supported.");
             return;
         }
+
+        let name = name.unwrap_or_else(|| ident.to_string());
+        let ctor = ctor.unwrap_or_else(|| name == "new");
+        if ctor && !self.top_is_impl() {
+            error!(ident, "Constructor can be defined in impl block only");
+        }
+
+        let has_self = inputs.iter().any(|arg| matches!(arg, FnArg::Receiver(_)));
+        let method = self.top_is_impl() && !ctor && has_self;
 
         self.identify(ident);
 
         let asynch = asyncness.is_some();
-        let name = name.unwrap_or_else(|| ident.to_string());
         let args = inputs
             .iter()
             .map(|arg| match arg {
@@ -113,42 +166,31 @@ impl Binder {
             })
             .collect::<Vec<_>>();
 
-        if let Top::Mod(BindMod {
-            src, fns, props, ..
-        }) = &mut self.top
-        {
-            if ctor {
-                abort!(ident, "Constructor cannot be defined for module");
-            }
+        let src = self.top_src();
+        let decl = BindFn::new(src, ident, &name, &args)
+            .asynch(asynch)
+            .constr(ctor)
+            .method(method);
 
-            macro_rules! xetter {
-                ($($f:ident)*) => {
-                    $(
-                        if let Some(prop) = &$f {
-                            let BindProp { val, $f, .. } = props
-                                .entry(prop.clone())
-                                .or_insert_with(BindProp::default);
-                            if let Some(val) = val {
-                                abort!(ident, "Property `{}` already defined with const `{}`", name, val.src);
-                            }
-                            if let Some(fun) = $f {
-                                abort!(ident, "Property `{}` already has getter `{}`", name, fun.src);
-                            }
-                            *$f = Some(BindFn::new(src, ident, &name, &args).asynch(asynch));
-                        }
-                    )*
-                };
+        if get.is_some() || set.is_some() {
+            if let Some(name) = get {
+                let prop = self.top_prop(&name);
+                prop.set_getter(&ident, &name, decl.clone());
             }
-
-            if get.is_some() || set.is_some() {
-                xetter!(get set);
-            } else {
-                if fns.contains_key(&name) {
-                    abort!(ident, "Function `{}` already defined", name);
-                }
-                let func = BindFn::new(src, ident, &name, &args).asynch(asynch);
-                fns.insert(name, func);
+            if let Some(name) = set {
+                let prop = self.top_prop(&name);
+                prop.set_setter(&ident, &name, decl);
             }
+        } else {
+            self.top_fns()
+                .entry(name.clone())
+                .and_modify(|def| {
+                    error!(
+                        ident,
+                        "Function `{}` already defined with `{}`", name, def.src
+                    );
+                })
+                .or_insert(decl);
         }
     }
 }
@@ -157,21 +199,21 @@ impl Binder {
 mod test {
     test_cases! {
         no_args_no_return { test } {
-            pub fn doit() {}
+            fn doit() {}
         } {
             exports.set("doit", rquickjs::JsFn::new("doit", doit))?;
         };
 
         sync_function { object } {
-            pub fn add2(a: f32, b: f32) -> f32 {
+            fn add2(a: f32, b: f32) -> f32 {
                 a + b
             }
         } {
-            pub fn add2(a: f32, b: f32) -> f32 {
+            fn add2(a: f32, b: f32) -> f32 {
                 a + b
             }
 
-            pub struct Add2;
+            struct Add2;
 
             impl rquickjs::ObjectDef for Add2 {
                 fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{

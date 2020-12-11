@@ -1,6 +1,29 @@
-use crate::{warning, AttributeArgs, Config, Ident, Parenthesized};
+use crate::{warning, AttributeArgs, Config, Ident, Parenthesized, TokenStream};
 use darling::{util::Override, FromMeta};
+use quote::{quote, ToTokens};
 use syn::{parse2, AttrStyle, Attribute, Path};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromMeta)]
+pub enum PubVis {
+    #[darling(rename = "self")]
+    Self_,
+    #[darling(rename = "super")]
+    Super,
+    #[darling(rename = "crate")]
+    Crate,
+}
+
+impl ToTokens for PubVis {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        use PubVis::*;
+        match self {
+            Self_ => quote!(self),
+            Super => quote!(super),
+            Crate => quote!(crate),
+        }
+        .to_tokens(tokens)
+    }
+}
 
 pub trait Merge {
     fn merge(&mut self, over: Self);
@@ -20,6 +43,8 @@ pub struct AttrItem {
     pub object: bool,
     /// Test export
     pub test: bool,
+    /// Export data visibility
+    pub public: Option<Override<PubVis>>,
     /// Binding attribute name (`quickjs` by default)
     pub bind: Option<Ident>,
     /// Library crate name (determined automatically, usually `rquickjs`)
@@ -50,6 +75,7 @@ impl AttrItem {
 #[darling(default)]
 pub struct AttrMod {
     /// Module name for export
+    #[darling(rename = "rename")]
     pub name: Option<String>,
     /// Bare module export
     pub bare: bool,
@@ -76,8 +102,10 @@ impl Merge for AttrMod {
 #[darling(default)]
 pub struct AttrVar {
     /// Variable name for export
+    #[darling(rename = "rename")]
     pub name: Option<String>,
     /// Set as property
+    #[darling(rename = "property")]
     pub prop: bool,
     /// Skip export
     pub skip: bool,
@@ -102,13 +130,17 @@ impl Merge for AttrVar {
 #[darling(default)]
 pub struct AttrFn {
     /// Function name for export
+    #[darling(rename = "rename")]
     pub name: Option<String>,
     /// Use as getter for specified property
+    #[darling(rename = "getter")]
     pub get: Option<String>,
     /// Use as setter for specified property
+    #[darling(rename = "setter")]
     pub set: Option<String>,
     /// Use as constructor
-    pub ctor: bool,
+    #[darling(rename = "constructor")]
+    pub ctor: Override<bool>,
     /// Skip export
     pub skip: bool,
 }
@@ -123,6 +155,77 @@ impl Merge for AttrFn {
         }
         if over.set.is_some() {
             self.set = over.set;
+        }
+        if over.skip {
+            self.skip = true;
+        }
+    }
+}
+
+/// Data attrs
+#[derive(Default, FromMeta, Debug, PartialEq, Eq)]
+#[darling(default)]
+pub struct AttrData {
+    /// Data name for export
+    #[darling(rename = "rename")]
+    pub name: Option<String>,
+    /// Skip export
+    pub skip: bool,
+}
+
+impl Merge for AttrData {
+    fn merge(&mut self, over: Self) {
+        if over.name.is_some() {
+            self.name = over.name;
+        }
+        if over.skip {
+            self.skip = true;
+        }
+    }
+}
+
+/// Data field attrs
+#[derive(Default, FromMeta, Debug, PartialEq, Eq)]
+#[darling(default)]
+pub struct AttrField {
+    /// Variable name for export
+    #[darling(rename = "rename")]
+    pub name: Option<String>,
+    /// Readonly property
+    pub readonly: bool,
+    /// Skip export
+    pub skip: bool,
+}
+
+impl Merge for AttrField {
+    fn merge(&mut self, over: Self) {
+        if over.name.is_some() {
+            self.name = over.name;
+        }
+        if over.readonly {
+            self.readonly = true;
+        }
+        if over.skip {
+            self.skip = true;
+        }
+    }
+}
+
+/// Impl attrs
+#[derive(Default, FromMeta, Debug, PartialEq, Eq)]
+#[darling(default)]
+pub struct AttrImpl {
+    /// Related class name
+    #[darling(rename = "rename")]
+    pub name: Option<String>,
+    /// Skip export
+    pub skip: bool,
+}
+
+impl Merge for AttrImpl {
+    fn merge(&mut self, over: Self) {
+        if over.name.is_some() {
+            self.name = over.name;
         }
         if over.skip {
             self.skip = true;
@@ -220,6 +323,30 @@ mod test {
                 }
             );
         }
+
+        #[test]
+        fn public_default() {
+            let attr: AttrItem = parse! { public };
+            assert_eq!(
+                attr,
+                AttrItem {
+                    public: Some(Override::Inherit),
+                    ..Default::default()
+                }
+            );
+        }
+
+        #[test]
+        fn public_restricted() {
+            let attr: AttrItem = parse! { public = "crate" };
+            assert_eq!(
+                attr,
+                AttrItem {
+                    public: Some(Override::Explicit(PubVis::Crate)),
+                    ..Default::default()
+                }
+            );
+        }
     }
 
     mod mod_attrs {
@@ -232,8 +359,8 @@ mod test {
         }
 
         #[test]
-        fn name() {
-            let attr: AttrMod = parse! { name = "new" };
+        fn rename() {
+            let attr: AttrMod = parse! { rename = "new" };
             assert_eq!(
                 attr,
                 AttrMod {
@@ -269,7 +396,7 @@ mod test {
 
         #[test]
         fn all() {
-            let attr: AttrMod = parse! { name = "new", bare, skip };
+            let attr: AttrMod = parse! { rename = "new", bare, skip };
             assert_eq!(
                 attr,
                 AttrMod {
@@ -303,8 +430,8 @@ mod test {
         }
 
         #[test]
-        fn name() {
-            let attr: AttrVar = parse! { name = "new" };
+        fn rename() {
+            let attr: AttrVar = parse! { rename = "new" };
             assert_eq!(
                 attr,
                 AttrVar {
@@ -315,8 +442,8 @@ mod test {
         }
 
         #[test]
-        fn prop() {
-            let attr: AttrVar = parse! { prop };
+        fn property() {
+            let attr: AttrVar = parse! { property };
             assert_eq!(
                 attr,
                 AttrVar {
@@ -340,7 +467,7 @@ mod test {
 
         #[test]
         fn all() {
-            let attr: AttrVar = parse! { name = "new", prop, skip };
+            let attr: AttrVar = parse! { rename = "new", property, skip };
             assert_eq!(
                 attr,
                 AttrVar {
@@ -358,9 +485,9 @@ mod test {
         }
 
         #[test]
-        #[should_panic(expected = "Unknown literal value `some` at prop")]
+        #[should_panic(expected = "Unknown literal value `some` at property")]
         fn unexpected_value() {
-            let _attr: AttrVar = parse! { prop = "some" };
+            let _attr: AttrVar = parse! { property = "some" };
         }
     }
 
@@ -374,8 +501,8 @@ mod test {
         }
 
         #[test]
-        fn name() {
-            let attr: AttrFn = parse! { name = "new" };
+        fn rename() {
+            let attr: AttrFn = parse! { rename = "new" };
             assert_eq!(
                 attr,
                 AttrFn {
@@ -386,8 +513,8 @@ mod test {
         }
 
         #[test]
-        fn get() {
-            let attr: AttrFn = parse! { get = "prop" };
+        fn getter() {
+            let attr: AttrFn = parse! { getter = "prop" };
             assert_eq!(
                 attr,
                 AttrFn {
@@ -398,8 +525,8 @@ mod test {
         }
 
         #[test]
-        fn set() {
-            let attr: AttrFn = parse! { set = "prop" };
+        fn setter() {
+            let attr: AttrFn = parse! { setter = "prop" };
             assert_eq!(
                 attr,
                 AttrFn {
@@ -423,7 +550,7 @@ mod test {
 
         #[test]
         fn all() {
-            let attr: AttrFn = parse! { name = "new", get = "prop", set = "prop", skip };
+            let attr: AttrFn = parse! { rename = "new", getter = "prop", setter = "prop", skip };
             assert_eq!(
                 attr,
                 AttrFn {
@@ -443,9 +570,9 @@ mod test {
         }
 
         #[test]
-        #[should_panic(expected = "Unexpected literal type `bool` at name")]
+        #[should_panic(expected = "Unexpected literal type `bool` at rename")]
         fn unexpected_value() {
-            let _attr: AttrFn = parse! { name = true };
+            let _attr: AttrFn = parse! { rename = true };
         }
     }
 }

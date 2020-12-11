@@ -14,10 +14,10 @@ proc-macro-error = "^1"
 quote = "^1"
 ident_case = "^1"
 fnv = "^1"
+indexmap = "^1"
 
 [dependencies.darling]
-#version = "^0.10"
-git = "https://github.com/TedDriggs/darling"
+version = "^0.10.3"
 
 [dependencies.syn]
 version = "^1"
