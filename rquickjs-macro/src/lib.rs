@@ -155,7 +155,7 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 }
 
 /**
-# A macro to derive [rquickjs::FromJs] for an arbitrary structured types
+# A macro to derive `FromJs` for an arbitrary structured types
 
 ## Examples
 
@@ -325,7 +325,7 @@ pub fn from_js(input: TokenStream1) -> TokenStream1 {
 }
 
 /**
-# A macro to derive [rquickjs::IntoJs] for an arbitrary structured types
+# A macro to derive `IntoJs` for an arbitrary structured types
 
 ## Examples
 

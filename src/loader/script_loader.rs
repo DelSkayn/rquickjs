@@ -4,6 +4,7 @@ use crate::{BeforeInit, Ctx, Error, Loader, Module, Result};
 /// The script module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug)]
 pub struct ScriptLoader {
     extensions: Vec<String>,

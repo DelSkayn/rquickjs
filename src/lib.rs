@@ -16,25 +16,15 @@
 //! # Converting Values
 //!
 //! This library has multiple traits for converting to and from javascript.
-//! The [`IntoJs`], [`IntoJsArgs`] traits are used for taking rust values
-//! and turning them into javascript values.
-//! [`IntoJsArgs`] is specificly used for place where a specific number of values
-//! need to be converted to javascript like for example the arguments of functions.
-//! [`FromJs`] is for converting javascript value to rust.
+//! The [`IntoJs`] trait are used for taking rust values and turning them into javascript values.
+//! The [`FromJs`] is for converting javascript value to rust.
 //! Note that this trait does some automatic coercion.
 //! For values which represent the name of variables or indecies the
 //! trait [`IntoAtom`] is available to convert values to the represention
 //! quickjs requires.
-//!
-//!
-//! [`Runtime`]: struct.Runtime.html
-//! [`Context`]: struct.Context.html
-//! [`IntoJs`]: trait.IntoJs.html
-//! [`IntoJsMulti`]: trait.IntoJsMulti.html
-//! [`FromJs`]: trait.FromJs.html
-//! [`IntoAtom`]: trait.IntoAtom.html
 
 #![allow(clippy::needless_lifetimes)]
+#![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
 mod markers;
 pub use markers::SendWhenParallel;

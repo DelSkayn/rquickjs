@@ -5,6 +5,7 @@ use std::collections::HashSet;
 /// The builtin module resolver
 ///
 /// This resolver can also be used as the nested backing resolver in user-defined resolvers.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug)]
 pub struct BuiltinResolver {
     modules: HashSet<String>,

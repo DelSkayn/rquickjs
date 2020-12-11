@@ -5,6 +5,7 @@ use std::{
 };
 
 /// Key for a registery of a context.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "registery")))]
 #[derive(Clone, Copy)]
 pub struct RegisteryKey(pub(crate) qjs::JSValue);
 

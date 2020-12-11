@@ -12,6 +12,7 @@ use std::{
 };
 
 /// Future-aware promise
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub struct Promise<T> {
     state: SafeRef<State<T>>,
 }
@@ -80,6 +81,7 @@ impl<T> Future for Promise<T> {
 }
 
 /// Wrapper for futures to convert to JS promises
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[repr(transparent)]
 pub struct PromiseJs<T>(pub T);
 

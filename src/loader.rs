@@ -22,10 +22,8 @@ pub use builtin_loader::BuiltinLoader;
 mod module_loader;
 pub use module_loader::ModuleLoader;
 
-/// Module resolver trait
-///
-/// # Features
-/// This trait is only availble if the `loader` feature is enabled.
+/// Module resolver interface
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Resolver {
     /// Normalize module name
     ///
@@ -49,10 +47,8 @@ pub trait Resolver {
     fn resolve<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String>;
 }
 
-/// Module loader trait
-///
-/// # Features
-/// This trait is only availble if the `loader` feature is enabled.
+/// Module loader interface
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Loader {
     /// Load module by name
     ///

@@ -7,7 +7,7 @@ use std::marker::PhantomData;
 // is variant over that lifetime
 pub type Invariant<'a> = PhantomData<Cell<&'a ()>>;
 
-/// The marker trait which requires `Send` when `parallel` feature is used
+/// The marker trait which requires [`Send`] when `"parallel"` feature is used
 #[cfg(not(feature = "parallel"))]
 pub trait SendWhenParallel {}
 

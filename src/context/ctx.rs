@@ -14,7 +14,7 @@ use std::{
     path::Path,
 };
 
-/// Context in use, passed to [`Context::with`](struct.Context.html#method.with).
+/// Context in use, passed to [`Context::with`].
 #[derive(Clone, Copy, Debug)]
 pub struct Ctx<'js> {
     pub(crate) ctx: *mut qjs::JSContext,
@@ -87,7 +87,6 @@ impl<'js> Ctx<'js> {
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
         unsafe {
             let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
-            //handle_exception(self, js_val)?;
             let ret = qjs::JS_EvalFunction(self.ctx, js_val);
             handle_exception(self, ret)?;
             Ok(Module::from_js_value(self, js_val))
@@ -104,7 +103,6 @@ impl<'js> Ctx<'js> {
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
         unsafe {
             let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
-            handle_exception(self, js_val)?;
             Ok(Module::<BeforeInit>::from_js_value(self, js_val))
         }
     }
@@ -146,9 +144,7 @@ impl<'js> Ctx<'js> {
     /// Store a value in the registery so references to it can be kept outside the scope of context use.
     ///
     /// A registered value can be retrieved from any context belonging to the same runtime.
-    ///
-    /// # Features
-    /// This method is only available if a `registery` feature is enabled.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "registery")))]
     pub fn register(self, v: Value<'js>) -> RegisteryKey {
         unsafe {
             let register = self.get_opaque();
@@ -159,9 +155,7 @@ impl<'js> Ctx<'js> {
     }
 
     /// Remove a value from the registery.
-    ///
-    /// # Features
-    /// This method is only available if a `registery` feature is enabled.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "registery")))]
     pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
             let register = self.get_opaque();
@@ -174,9 +168,7 @@ impl<'js> Ctx<'js> {
     }
 
     /// Get a value from the registery.
-    ///
-    /// # Features
-    /// This method is only available if a `registery` feature is enabled.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "registery")))]
     pub fn get_register(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
             let opaque = self.get_opaque();

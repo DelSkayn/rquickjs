@@ -4,9 +4,7 @@ use crate::{qjs, BeforeInit, Ctx, Error, Loader, Module, Result};
 /// The native module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
-///
-/// # Features
-/// This struct is only available if the `dyn-load` features is enabled.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "dyn-load")))]
 #[derive(Debug)]
 pub struct NativeLoader {
     extensions: Vec<String>,

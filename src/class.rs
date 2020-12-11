@@ -11,9 +11,7 @@ use std::{
 };
 
 /// The type of identifier of class
-///
-/// # Features
-/// This type is only available if the `classes` feature is enabled.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 #[derive(Clone, Copy, Default)]
 #[repr(transparent)]
 pub struct ClassId(pub(crate) qjs::JSClassID);
@@ -50,10 +48,12 @@ impl DerefMut for ClassId {
     }
 }
 
-/// The trait which class should define
+/// The ES6 class definition trait
+///
+/// This trait helps export rust data types to QuickJS so JS code can operate with it as a ES6 classes.
 ///
 /// ```
-/// # use rquickjs::{ClassId, ClassDef, Ctx, Object, Result};
+/// # use rquickjs::{ClassId, ClassDef, Ctx, Object, Result, RefsMarker};
 /// struct MyClass;
 ///
 /// impl ClassDef for MyClass {
@@ -62,15 +62,27 @@ impl DerefMut for ClassId {
 ///         static mut CLASS_ID: ClassId = ClassId::new();
 ///         unsafe { &mut CLASS_ID }
 ///     }
+///
+///     // With prototype
+///     const HAS_PROTO: bool = true;
 ///     fn init_proto<'js>(ctx: Ctx<'js>, proto: &Object<'js>) -> Result<()> {
 ///         Ok(())
 ///     }
+///
+///     // With statics
+///     const HAS_STATIC: bool = true;
+///     fn init_static<'js>(ctx: Ctx<'js>, ctor: &Object<'js>) -> Result<()> {
+///         Ok(())
+///     }
+///
+///     // With internal references
+///     const HAS_REFS: bool = true;
+///     fn mark_refs(&self, marker: &RefsMarker) {
+///         // marker.mark(&self.some_persistent_value);
+///     }
 /// }
 /// ```
-///
-/// # Features
-/// This trait is only available if the `classes` feature is enabled.
-///
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 pub trait ClassDef {
     /// The name of a class
     const CLASS_NAME: &'static str;
@@ -107,10 +119,8 @@ pub trait ClassDef {
 
 /// The class object interface
 ///
-/// # Features
-/// This type is only available if the `classes` feature is enabled.
-///
-/// FIXME: Maybe it should be private.
+// FIXME: Maybe it should be private.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 pub struct Class<'js, C>(pub(crate) Object<'js>, PhantomData<C>);
 
 impl<'js, 't, C> Outlive<'t> for Class<'js, C> {
@@ -339,9 +349,7 @@ where
 
 impl<'js> Object<'js> {
     /// Check the object for instance of
-    ///
-    /// # Features
-    /// This function is only available if a `classes` feature is enabled
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
     pub fn instance_of<C: ClassDef>(&self) -> bool {
         let class_id = *C::class_id().as_ref();
         let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.ctx, self.0.value, class_id) };
@@ -349,9 +357,7 @@ impl<'js> Object<'js> {
     }
 
     /// Convert object into instance of class
-    ///
-    /// # Features
-    /// This function is only available if a `classes` feature is enabled
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
     pub fn into_instance<C: ClassDef>(self) -> Option<Class<'js, C>> {
         if self.instance_of::<C>() {
             Some(Class(self, PhantomData))
@@ -361,6 +367,8 @@ impl<'js> Object<'js> {
     }
 }
 
+/// The helper for QuickJS garbage collector which helps it find internal JS object references.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 #[derive(Clone, Copy)]
 pub struct RefsMarker {
     rt: *mut qjs::JSRuntime,
@@ -368,6 +376,9 @@ pub struct RefsMarker {
 }
 
 impl RefsMarker {
+    /// The function to mark stored JS value references.
+    ///
+    /// You usually should mark all persistent JS objects explicitly in [`ClassDef::mark_refs`] by using this function to make GC working as expected.
     pub fn mark<T>(&self, value: &Persistent<T>) {
         let val = value.value.get();
         if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(val) } {
@@ -428,9 +439,7 @@ where
 }
 
 /// The wrapper for constructor function
-///
-/// # Features
-/// This type is only available if the `classes` feature is enabled.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 #[repr(transparent)]
 pub struct Constructor<C, F>(F, PhantomData<C>);
 
@@ -452,9 +461,7 @@ impl<C, F> Deref for Constructor<C, F> {
 ///
 /// This wrapper helps instantiate a class with desired prototype
 /// which is quite useful with constructors because allows class to be inheritable.
-///
-/// # Features
-/// This type is only available if the `classes` feature is enabled.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 pub struct WithProto<'js, C>(pub C, pub Object<'js>);
 
 impl<'js, C> IntoJs<'js> for WithProto<'js, C>
@@ -467,9 +474,6 @@ where
 }
 
 /// The macro to simplify class definition.
-///
-/// # Features
-/// This type is only available if the `classes` feature is enabled.
 ///
 /// ```
 /// # use rquickjs::{class_def, JsFn, Method};
@@ -497,6 +501,7 @@ where
 ///     }
 /// }
 /// ```
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 #[macro_export]
 macro_rules! class_def {
     ($name:ident $($rest:tt)*) => {

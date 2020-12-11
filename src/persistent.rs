@@ -8,7 +8,9 @@ use std::{
     mem,
 };
 
+/// The trait to help break lifetime rules when JS objects leaves current context via `Persistent` wrapper.
 pub trait Outlive<'t> {
+    /// The target which has the same type as a `Self` but with another lifetime `'t`
     type Target;
 }
 

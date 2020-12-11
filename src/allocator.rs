@@ -5,12 +5,11 @@ mod rust;
 pub use rust::RustAllocator;
 
 /// Raw memory pointer
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
 pub type RawMemPtr = *mut u8;
 
-/// The allocator trait
-///
-/// # Features
-/// This trait is only available if the `allocator` feature is enabled.
+/// The allocator interface
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
 pub trait Allocator {
     /// Allocate new memory
     fn alloc(&mut self, size: usize) -> RawMemPtr;

@@ -25,9 +25,7 @@ impl<'js> Object<'js> {
     /// )).unwrap();
     /// # })
     /// ```
-    ///
-    /// # Features
-    /// This method is only available if a `properties` feature is enabled.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
     pub fn prop<K: IntoAtom<'js>, P: AsProperty<'js, A>, A>(&self, key: K, prop: P) -> Result<()> {
         let ctx = self.0.ctx;
         let key = key.into_atom(ctx);
@@ -57,9 +55,7 @@ const DEFAULT_FLAGS: PropertyFlags =
     (qjs::JS_PROP_HAS_CONFIGURABLE | qjs::JS_PROP_HAS_ENUMERABLE | qjs::JS_PROP_HAS_WRITABLE) as _;
 
 /// The property flag trait
-///
-/// # Features
-/// This method is only available if a `properties` feature is enabled.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
 pub trait AsPropertyFlag {
     fn modify(flags: PropertyFlags) -> PropertyFlags;
 }
@@ -82,6 +78,7 @@ macro_rules! as_property_flag_impls {
     ($($(#[$m:meta])* $t:ident => $op:tt $v:expr,)*) => {
         $(
             $(#[$m])*
+            #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
             pub struct $t;
 
             impl AsPropertyFlag for $t {
@@ -111,10 +108,8 @@ as_property_flag_impls! {
     NoWritable => & !qjs::JS_PROP_HAS_WRITABLE,
 }
 
-/// The property trait
-///
-/// # Features
-/// This trait is only available if a `properties` feature is enabled.
+/// The property interface
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
 pub trait AsProperty<'js, P> {
     /// Property configuration
     ///

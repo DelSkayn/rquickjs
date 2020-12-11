@@ -78,7 +78,7 @@ impl Runtime {
     /// Will generally only fail if not enough memory was available.
     ///
     /// # Features
-    /// If the `rust-alloc` feature is enabled the Rust's global allocator will be used in favor of libc's one.
+    /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new() -> Result<Self> {
         #[cfg(not(feature = "rust-alloc"))]
         {
@@ -96,9 +96,7 @@ impl Runtime {
     /// Create a new runtime using specified allocator
     ///
     /// Will generally only fail if not enough memory was available.
-    ///
-    /// # Features
-    /// This function is only available if the `allocator` feature is enabled.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
     pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
@@ -144,11 +142,9 @@ impl Runtime {
         WeakRuntime(self.inner.weak())
     }
 
-    #[cfg(feature = "loader")]
     /// Set the module loader
-    ///
-    /// # Features
-    /// This function is only availble if the `loader` feature is enabled.
+    #[cfg(feature = "loader")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
     pub fn set_loader<R, L>(&self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
@@ -169,8 +165,7 @@ impl Runtime {
         Ok(())
     }
 
-    /// Set a limit on the max amount of memory the runtime
-    /// will use.
+    /// Set a limit on the max amount of memory the runtime will use.
     ///
     /// Setting the limit to 0 is equivalent to unlimited memory.
     pub fn set_memory_limit(&self, limit: usize) {

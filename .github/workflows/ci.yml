@@ -43,7 +43,7 @@ jobs:
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           profile: minimal
           components: rust-docs
           default: true
@@ -66,7 +66,15 @@ jobs:
           DOCS_RS: 1
         with:
           command: doc
-          args: --features async-std
+          args: --features rustdoc,doc-cfg
+      - name: Upload docs
+        uses: actions/upload-artifact@v2
+        with:
+          name: docs
+          path: |
+            target/doc/rquickjs
+            target/doc/rquickjs-sys
+            target/doc/rquickjs-macro
 
   check:
     runs-on: ubuntu-latest

@@ -260,9 +260,7 @@ impl<'js> Module<'js> {
     }
 
     /// Returns a iterator over the exported names of the module export.
-    ///
-    /// # Features
-    /// This function is only availble if the `exports` feature is enabled.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
     pub fn names<N>(&self) -> ExportNamesIter<'js, N>
     where
         N: FromAtom<'js>,
@@ -276,9 +274,7 @@ impl<'js> Module<'js> {
     }
 
     /// Returns a iterator over the items the module export.
-    ///
-    /// # Features
-    /// This function is only availble if the `exports` feature is enabled.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
     pub fn entries<N, T>(&self) -> ExportEntriesIter<'js, N, T>
     where
         N: FromAtom<'js>,
@@ -307,10 +303,8 @@ impl<'js> Module<'js> {
 }
 
 /// An iterator over the items exported out a module
-///
-/// # Features
-/// This struct is only availble if the `exports` feature is enabled.
 #[cfg(feature = "exports")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
 pub struct ExportNamesIter<'js, N> {
     module: Module<'js>,
     count: i32,
@@ -341,10 +335,8 @@ where
 }
 
 /// An iterator over the items exported out a module
-///
-/// # Features
-/// This struct is only availble if the `exports` feature is enabled.
 #[cfg(feature = "exports")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
 pub struct ExportEntriesIter<'js, N, T> {
     module: Module<'js>,
     count: i32,
