@@ -139,6 +139,7 @@ macro_rules! as_fn_impls {
                 func.set_constructor(true);
                 let proto = Class::<C>::prototype(ctx)?;
                 func.set_prototype(&proto);
+                Class::<C>::static_init(ctx, func)?;
                 Ok(())
             }
         }

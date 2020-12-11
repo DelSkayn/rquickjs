@@ -1,6 +1,6 @@
 use crate::{
-    handle_exception, qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Persistent, Result, Type,
-    Value,
+    handle_exception, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Persistent,
+    Result, Type, Value,
 };
 use std::{
     ffi::CString,
@@ -86,6 +86,14 @@ pub trait ClassDef {
         Ok(())
     }
 
+    /// The class has static data
+    const HAS_STATIC: bool = false;
+
+    /// The static initializer method
+    fn init_static<'js>(_ctx: Ctx<'js>, _static: &Object<'js>) -> Result<()> {
+        Ok(())
+    }
+
     /// The class has internal references to JS values
     ///
     /// Needed for correct garbage collection
@@ -156,6 +164,14 @@ where
     /// Wrap constructor of class
     pub fn constructor<F>(func: F) -> Constructor<C, F> {
         Constructor(func, PhantomData)
+    }
+
+    /// Initialize static data
+    pub fn static_init(ctx: Ctx<'js>, func: &Function<'js>) -> Result<()> {
+        if C::HAS_STATIC {
+            C::init_static(ctx, func.as_object())?;
+        }
+        Ok(())
     }
 
     /// Instantiate the object of class
@@ -454,6 +470,33 @@ where
 ///
 /// # Features
 /// This type is only available if the `classes` feature is enabled.
+///
+/// ```
+/// # use rquickjs::{class_def, JsFn, Method};
+/// #
+/// struct TestClass;
+///
+/// impl TestClass {
+///     fn method(&self) {}
+///     fn static_func() {}
+/// }
+///
+/// class_def! {
+///     TestClass
+///     // optional prototype initializer
+///     (proto) {
+///         proto.set("method", JsFn::new("method", Method(TestClass::method)))?;
+///     }
+///     // optional static initializer
+///     @(ctor) {
+///         ctor.set("static_func", JsFn::new("static_func", TestClass::static_func))?;
+///     }
+///     // optional internal refs marker (for gc)
+///     ~(_self, _marker) {
+///         // mark internal refs if exists
+///     }
+/// }
+/// ```
 #[macro_export]
 macro_rules! class_def {
     ($name:ident $($rest:tt)*) => {
@@ -471,6 +514,16 @@ macro_rules! class_def {
         $crate::class_def!{@parse $($rest)*}
     };
 
+    (@parse @($ctor:ident) { $($body:tt)* } $($rest:tt)*) => {
+        $crate::class_def!{@ctor _ctx $ctor $($body)*}
+        $crate::class_def!{@parse $($rest)*}
+    };
+
+    (@parse @($ctx:ident, $ctor:ident) { $($body:tt)* } $($rest:tt)*) => {
+        $crate::class_def!{@ctor $ctx $ctor $($body)*}
+        $crate::class_def!{@parse $($rest)*}
+    };
+
     (@parse ~($self:ident, $marker:ident) { $($body:tt)* } $($rest:tt)*) => {
         $crate::class_def!{@mark $self $marker $($body)*}
         $crate::class_def!{@parse $($rest)*}
@@ -481,6 +534,14 @@ macro_rules! class_def {
     (@proto $ctx:ident $proto:ident $($body:tt)*) => {
         const HAS_PROTO: bool = true;
         fn init_proto<'js>($ctx: $crate::Ctx<'js>, $proto: &$crate::Object<'js>) -> $crate::Result<()> {
+            $($body)*
+            Ok(())
+        }
+    };
+
+    (@ctor $ctx:ident $ctor:ident $($body:tt)*) => {
+        const HAS_STATIC: bool = true;
+        fn init_static<'js>($ctx: $crate::Ctx<'js>, $ctor: &$crate::Object<'js>) -> $crate::Result<()> {
             $($body)*
             Ok(())
         }
@@ -582,28 +643,28 @@ mod test {
             }
         }
 
-        class_def!(
+        class_def! {
             Point (proto) {
                 proto.set("get_x", JsFn::new("get_x", Method(Point::get_x)))?;
                 proto.set("get_y", JsFn::new("get_y", Method(|Point { y, .. }: &Point| *y)))?;
+            } @(ctor) {
+                ctor.set("zero", JsFn::new("zero", Point::zero))?;
             }
-        );
+        }
 
         test_with(|ctx| {
             Class::<Point>::register(ctx).unwrap();
 
             let global = ctx.globals();
 
-            let ctor = Function::new(ctx, "Point", Class::<Point>::constructor(Point::new))
-                .unwrap()
-                .into_object();
-
-            ctor.set("zero", JsFn::new("zero", Point::zero)).unwrap();
+            let ctor =
+                Function::new(ctx, "Point", Class::<Point>::constructor(Point::new)).unwrap();
 
             {
+                let ctor = ctor.as_object();
                 let proto: Object = ctor.get("prototype").unwrap();
                 let ctor_: Function = proto.get("constructor").unwrap();
-                assert_eq!(ctor_.into_object(), ctor);
+                assert_eq!(&ctor_.into_object(), ctor);
             }
 
             global.set("Point", ctor).unwrap();
