@@ -16,6 +16,42 @@ pub trait ObjectDef {
     fn init<'js>(ctx: Ctx<'js>, object: &Object<'js>) -> Result<()>;
 }
 
+macro_rules! object_def_impls {
+    ($($($t:ident)*,)*) => {
+        $(
+            impl<$($t),*> ObjectDef for ($($t,)*)
+            where
+                $($t: ObjectDef,)*
+            {
+                fn init<'js>(_ctx: Ctx<'js>, _object: &Object<'js>) -> Result<()> {
+                    $($t::init(_ctx, _object)?;)*
+                    Ok(())
+                }
+            }
+        )*
+    };
+}
+
+object_def_impls! {
+    ,
+    A,
+    A B,
+    A B C,
+    A B C D,
+    A B C D E,
+    A B C D E F,
+    A B C D E F G,
+    A B C D E F G H,
+    A B C D E F G H I,
+    A B C D E F G H I J,
+    A B C D E F G H I J K,
+    A B C D E F G H I J K L,
+    A B C D E F G H I J K L M,
+    A B C D E F G H I J K L M N,
+    A B C D E F G H I J K L M N O,
+    A B C D E F G H I J K L M N O P,
+}
+
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]

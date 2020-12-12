@@ -35,6 +35,47 @@ pub trait ModuleDef {
     }
 }
 
+macro_rules! module_def_impls {
+    ($($($t:ident)*,)*) => {
+        $(
+            impl<$($t),*> ModuleDef for ($($t,)*)
+            where
+                $($t: ModuleDef,)*
+            {
+                fn load<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Created>) -> Result<()> {
+                    $($t::load(_ctx, _module)?;)*
+                    Ok(())
+                }
+
+                fn eval<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Loaded<Native>>) -> Result<()> {
+                    $($t::eval(_ctx, _module)?;)*
+                    Ok(())
+                }
+            }
+        )*
+    };
+}
+
+module_def_impls! {
+    ,
+    A,
+    A B,
+    A B C,
+    A B C D,
+    A B C D E,
+    A B C D E F,
+    A B C D E F G,
+    A B C D E F G H,
+    A B C D E F G H I,
+    A B C D E F G H I J,
+    A B C D E F G H I J K,
+    A B C D E F G H I J K L,
+    A B C D E F G H I J K L M,
+    A B C D E F G H I J K L M N,
+    A B C D E F G H I J K L M N O,
+    A B C D E F G H I J K L M N O P,
+}
+
 /// Javascript module with certain exports and imports
 #[derive(Debug, PartialEq)]
 pub struct Module<'js, S = Evaluated>(pub(crate) Value<'js>, pub(crate) PhantomData<S>);
