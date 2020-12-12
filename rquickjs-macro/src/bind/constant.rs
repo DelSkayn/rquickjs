@@ -109,12 +109,12 @@ mod test {
             struct Constants;
 
             impl rquickjs::ModuleDef for Constants {
-                fn before_init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::BeforeInit>) -> rquickjs::Result<()>{
+                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
                     exports.add("pi")?;
                     Ok(())
                 }
 
-                fn after_init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::AfterInit>) -> rquickjs::Result<()>{
+                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
                     exports.set("pi", PI)?;
                     Ok(())
                 }

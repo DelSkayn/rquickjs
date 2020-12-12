@@ -14,5 +14,5 @@ default-features = false
 features = ["async-std", "rust-alloc"]
 
 [features]
-#default = ["macro"]
+default = ["macro"]
 macro = ["rquickjs/macro"]

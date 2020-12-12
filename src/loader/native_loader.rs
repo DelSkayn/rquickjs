@@ -1,5 +1,5 @@
 use super::check_extensions;
-use crate::{qjs, BeforeInit, Ctx, Error, Loader, Module, Result};
+use crate::{Ctx, Error, Loaded, Loader, Module, ModuleLoadFn, Result};
 
 /// The native module loader
 ///
@@ -46,31 +46,24 @@ impl Default for NativeLoader {
 }
 
 impl Loader for NativeLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, BeforeInit>> {
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded>> {
         use dlopen::raw::Library;
-        use std::ffi::CString;
 
         if !check_extensions(&path, &self.extensions) {
             return Err(Error::new_loading(path));
         }
 
-        type LoadFn =
-            unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
-
         let lib = Library::open(&path)
             .map_err(|_| Error::new_loading_message(path, "Unable to open library"))?;
-        let load_fn: LoadFn = unsafe { lib.symbol("js_init_module") }.map_err(|_| {
+        let load: ModuleLoadFn = unsafe { lib.symbol("js_init_module") }.map_err(|_| {
             Error::new_loading_message(path, "Unable to find symbol `js_init_module`")
         })?;
 
-        let name = CString::new(path)?;
-        let ptr = unsafe { load_fn(ctx.ctx, name.as_ptr()) };
+        let module = unsafe { Module::new_raw(ctx, path, load) }
+            .map_err(|_| Error::new_loading_message(path, "Unable to create module"))?;
 
-        if ptr.is_null() {
-            Err(Error::Unknown)
-        } else {
-            self.libs.push(lib);
-            Ok(unsafe { Module::from_module_def(ctx, ptr) })
-        }
+        self.libs.push(lib);
+
+        Ok(module.into_loaded())
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
-    handle_exception, markers::Invariant, qjs, runtime::Opaque, BeforeInit, Context, FromJs,
-    Function, Module, Object, Result, Value,
+    handle_exception, markers::Invariant, qjs, runtime::Opaque, Context, FromJs, Function, Module,
+    Object, Result, Value,
 };
 
 #[cfg(feature = "registery")]
@@ -36,7 +36,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    unsafe fn _eval<S: Into<Vec<u8>>>(
+    pub(crate) unsafe fn eval_raw<S: Into<Vec<u8>>>(
         self,
         source: S,
         file_name: &CStr,
@@ -54,7 +54,7 @@ impl<'js> Ctx<'js> {
         let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
         let flag = qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT;
         V::from_js(self, unsafe {
-            let val = self._eval(source, file_name, flag as i32)?;
+            let val = self.eval_raw(source, file_name, flag as i32)?;
             Value::from_js_value(self, val)
         })
     }
@@ -71,7 +71,7 @@ impl<'js> Ctx<'js> {
         )?;
         let flag = qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT;
         V::from_js(self, unsafe {
-            let val = self._eval(buffer, file_name.as_c_str(), flag as i32)?;
+            let val = self.eval_raw(buffer, file_name.as_c_str(), flag as i32)?;
             Value::from_js_value(self, val)
         })
     }
@@ -82,29 +82,8 @@ impl<'js> Ctx<'js> {
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        let name = CString::new(name)?;
-        let flag =
-            qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
-        unsafe {
-            let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
-            let ret = qjs::JS_EvalFunction(self.ctx, js_val);
-            handle_exception(self, ret)?;
-            Ok(Module::from_js_value(self, js_val))
-        }
-    }
-
-    pub fn compile_only<N, S>(self, name: N, source: S) -> Result<Module<'js, BeforeInit>>
-    where
-        N: Into<Vec<u8>>,
-        S: Into<Vec<u8>>,
-    {
-        let name = CString::new(name)?;
-        let flag =
-            qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
-        unsafe {
-            let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
-            Ok(Module::<BeforeInit>::from_js_value(self, js_val))
-        }
+        let module = Module::new(self, name, source)?;
+        module.eval()
     }
 
     /// Returns the global object of this context.

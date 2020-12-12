@@ -1,5 +1,5 @@
 use super::check_extensions;
-use crate::{BeforeInit, Ctx, Error, Loader, Module, Result};
+use crate::{Ctx, Error, Loaded, Loader, Module, Result};
 
 /// The script module loader
 ///
@@ -33,12 +33,13 @@ impl Default for ScriptLoader {
 }
 
 impl Loader for ScriptLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, BeforeInit>> {
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded>> {
         if !check_extensions(&path, &self.extensions) {
             return Err(Error::new_loading(path));
         }
 
         let source: Vec<_> = std::fs::read(&path)?;
-        ctx.compile_only(path, source)
+        let module = Module::new(ctx, path, source)?;
+        Ok(module.into_loaded())
     }
 }

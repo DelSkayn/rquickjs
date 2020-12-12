@@ -18,6 +18,30 @@ pub trait AsFunction<'js, A, R> {
     }
 }
 
+/*impl<'js, F1, A1, R1, F2, A2, R2> AsFunction<'js, (A1, A2), (R1, R2)> for (F1, F2)
+where
+    F1: AsFunction<'js, A1, R1>,
+    F2: AsFunction<'js, A2, R2>,
+{
+    const LEN: u32 = F1::LEN.min(F2::LEN);
+
+    fn call(&self, ctx: Ctx<'js>, this: Value<'js>, args: ArgsIter<'js>) -> Result<Value<'js>> {
+        self.0.call(ctx, this, args).or_else(|error| {
+            if error.is_from_js() {
+                self.1.call(ctx, this, args)
+            } else {
+                Err(error)
+            }
+        })
+    }
+
+    fn post<'js_>(ctx: Ctx<'js_>, func: &Function<'js_>) -> Result<()> {
+        F1::post(ctx, func)?;
+        F2::post(ctx, func)?;
+        Ok(())
+    }
+}*/
+
 /// The trait to wrap rust function to JS directly
 pub trait AsFunctionMut<'js, A, R> {
     /// Minimum number of arguments

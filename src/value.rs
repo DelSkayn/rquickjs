@@ -9,7 +9,7 @@ mod symbol;
 
 use crate::{qjs, Ctx, Error, Result};
 
-pub use module::{AfterInit, BeforeInit, Module, ModuleDef};
+pub use module::{Created, Evaluated, Loaded, Module, ModuleDef, ModuleLoadFn, Native, Script};
 #[cfg(feature = "exports")]
 pub use module::{ExportEntriesIter, ExportNamesIter};
 
@@ -23,7 +23,7 @@ pub use object::{Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
 
-use std::{fmt, mem, ops::Deref};
+use std::{fmt, marker::PhantomData, mem, ops::Deref};
 
 /// Any javascript value
 pub struct Value<'js> {
@@ -235,9 +235,23 @@ impl<'js> Value<'js> {
         Self { ctx, value }
     }
 
+    #[allow(unused)]
+    #[inline]
+    pub(crate) fn new_ptr_const(ctx: Ctx<'js>, tag: qjs::c_int, ptr: *mut qjs::c_void) -> Self {
+        let value = unsafe { qjs::JS_DupValue(qjs::JS_MKPTR(tag, ptr)) };
+        Self { ctx, value }
+    }
+
     #[inline]
     pub(crate) unsafe fn get_ptr(&self) -> *mut qjs::c_void {
         qjs::JS_VALUE_GET_PTR(self.value)
+    }
+
+    #[inline]
+    pub(crate) unsafe fn into_ptr(self) -> *mut qjs::c_void {
+        let ptr = self.get_ptr();
+        mem::forget(self);
+        ptr
     }
 
     /// Check if the value is a bool
@@ -281,6 +295,12 @@ impl<'js> Value<'js> {
     #[inline]
     pub fn is_object(&self) -> bool {
         qjs::JS_TAG_OBJECT == unsafe { qjs::JS_VALUE_GET_TAG(self.value) }
+    }
+
+    /// Check if the value is a module
+    #[inline]
+    pub fn is_module(&self) -> bool {
+        qjs::JS_TAG_MODULE == unsafe { qjs::JS_VALUE_GET_TAG(self.value) }
     }
 
     /// Check if the value is an array
@@ -391,20 +411,18 @@ type_impls! {
     Array: array => JS_TAG_OBJECT,
     Function: function => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
-    //Module: module => JS_TAG_MODULE,
+    Module: module => JS_TAG_MODULE,
 }
 
 macro_rules! sub_types {
     ($($type:ident $as:ident $ref:ident $into:ident $from:ident,)*) => {
         $(
-            impl<'js> $type<'js> {
-                /*
+            impl<'js> sub_types!(@type $type) {
                 /// Reference to value
                 #[inline]
                 pub fn as_value(&self) -> &Value<'js> {
                     &self.0
                 }
-                */
 
                 /// Convert into value
                 #[inline]
@@ -416,7 +434,7 @@ macro_rules! sub_types {
                 pub fn from_value(value: Value<'js>) -> Result<Self> {
                     let type_ = value.type_of();
                     if type_.interpretable_as(Type::$type) {
-                        Ok($type(value))
+                        Ok(sub_types!(@wrap $type value))
                     } else {
                         Err(Error::new_from_js(type_.as_str(), Type::$type.as_str()))
                     }
@@ -424,16 +442,16 @@ macro_rules! sub_types {
 
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
-                    $type(Value::from_js_value_const(ctx, value))
+                    sub_types!(@wrap $type Value::from_js_value_const(ctx, value))
                 }
 
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
-                    $type(Value::from_js_value(ctx, value))
+                    sub_types!(@wrap $type Value::from_js_value(ctx, value))
                 }
             }
 
-            impl<'js> Deref for $type<'js> {
+            impl<'js> Deref for sub_types!(@type $type) {
                 type Target = Value<'js>;
 
                 fn deref(&self) -> &Self::Target {
@@ -441,7 +459,7 @@ macro_rules! sub_types {
                 }
             }
 
-            impl<'js> AsRef<Value<'js>> for $type<'js> {
+            impl<'js> AsRef<Value<'js>> for sub_types!(@type $type) {
                 fn as_ref(&self) -> &Value<'js> {
                     &self.0
                 }
@@ -453,12 +471,12 @@ macro_rules! sub_types {
                 /// # Safety
                 /// You should be sure that the value already is of required type before to do it.
                 #[inline]
-                pub unsafe fn $ref(&self) -> &$type<'js> {
+                pub unsafe fn $ref(&self) -> &sub_types!(@type $type) {
                     &*(self as *const _ as *const $type)
                 }
 
                 /// Try reinterprete as
-                pub fn $as(&self) -> Option<&$type<'js>> {
+                pub fn $as(&self) -> Option<&sub_types!(@type $type)> {
                     if self.type_of().interpretable_as(Type::$type) {
                         Some(unsafe { self.$ref() })
                     } else {
@@ -467,46 +485,54 @@ macro_rules! sub_types {
                 }
 
                 /// Try convert into
-                pub fn $into(self) -> Option<$type<'js>> {
+                pub fn $into(self) -> Option<sub_types!(@type $type)> {
                     if self.type_of().interpretable_as(Type::$type) {
-                        Some($type(self))
+                        Some(sub_types!(@wrap $type self))
                     } else {
                         None
                     }
                 }
 
                 /// Convert from
-                pub fn $from(value: $type<'js>) -> Self {
+                pub fn $from(value: sub_types!(@type $type)) -> Self {
                     value.0
                 }
             }
 
-            impl<'js> From<$type<'js>> for Value<'js> {
-                fn from(value: $type<'js>) -> Self {
+            impl<'js> From<sub_types!(@type $type)> for Value<'js> {
+                fn from(value: sub_types!(@type $type)) -> Self {
                     value.0
                 }
             }
 
-            impl<'js> FromJs<'js> for $type<'js> {
+            impl<'js> FromJs<'js> for sub_types!(@type $type) {
                 fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     Self::from_value(value)
                 }
             }
 
-            impl<'js> IntoJs<'js> for $type<'js> {
+            impl<'js> IntoJs<'js> for sub_types!(@type $type) {
                 fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
                     Ok(self.0)
                 }
             }
 
-            impl<'js> IntoAtom<'js> for $type<'js> {
+            impl<'js> IntoAtom<'js> for sub_types!(@type $type) {
                 fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
                     Atom::from_value(ctx, &self.0)
                 }
             }
         )*
     };
+
+    (@type Module) => { EvaluatedModule<'js> };
+    (@type $type:ident) => { $type<'js> };
+
+    (@wrap Module $val:expr) => { Module($val, PhantomData) };
+    (@wrap $type:ident $val:expr) => { $type($val) };
 }
+
+type EvaluatedModule<'js> = Module<'js, Evaluated>;
 
 sub_types! {
     String as_string ref_string into_string from_string,
@@ -514,6 +540,7 @@ sub_types! {
     Object as_object ref_object into_object from_object,
     Array as_array ref_array into_array from_array,
     Function as_function ref_function into_function from_function,
+    Module as_module ref_module into_module from_module,
 }
 
 macro_rules! void_types {

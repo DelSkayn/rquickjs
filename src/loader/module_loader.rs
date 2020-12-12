@@ -1,10 +1,10 @@
-use crate::{BeforeInit, Ctx, Error, Loader, Module, ModuleDef, Result};
+use crate::{Ctx, Error, Loaded, Loader, Module, ModuleDef, Native, Result};
 use std::{
     collections::HashMap,
     fmt::{Debug, Formatter, Result as FmtResult},
 };
 
-type ModuleInitFn = dyn for<'js> FnOnce(Ctx<'js>, &str) -> Result<Module<'js, BeforeInit>>;
+type ModuleInitFn = dyn for<'js> FnOnce(Ctx<'js>, &str) -> Result<Module<'js, Loaded<Native>>>;
 
 struct ModuleInit(Box<ModuleInitFn>);
 
@@ -29,7 +29,7 @@ impl ModuleLoader {
         self.modules.insert(
             name.into(),
             #[allow(clippy::redundant_closure)]
-            ModuleInit(Box::new(|ctx, name| Module::new::<M, _>(ctx, name))),
+            ModuleInit(Box::new(|ctx, name| Module::new_def::<M, _>(ctx, name))),
         );
         self
     }
@@ -50,9 +50,12 @@ impl Default for ModuleLoader {
 }
 
 impl Loader for ModuleLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, BeforeInit>> {
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded>> {
         match self.modules.remove(path) {
-            Some(module_init) => module_init.0(ctx, path),
+            Some(module_init) => {
+                let module = module_init.0(ctx, path)?;
+                Ok(module.into_loaded())
+            }
             _ => Err(Error::new_loading(path)),
         }
     }

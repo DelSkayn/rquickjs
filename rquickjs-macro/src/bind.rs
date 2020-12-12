@@ -288,12 +288,12 @@ impl Binder {
 
                 bindings.push(quote! {
                     impl #lib_crate::ModuleDef for #ident {
-                        fn before_init<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &#lib_crate::Module<'js, #lib_crate::BeforeInit>) -> #lib_crate::Result<()> {
+                        fn load<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &#lib_crate::Module<'js, #lib_crate::Created>) -> #lib_crate::Result<()> {
                             #mod_decl
                             Ok(())
                         }
 
-                        fn after_init<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &#lib_crate::Module<'js, #lib_crate::AfterInit>) -> #lib_crate::Result<()> {
+                        fn eval<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &#lib_crate::Module<'js, #lib_crate::Loaded<#lib_crate::Native>>) -> #lib_crate::Result<()> {
                             #mod_impl
                             Ok(())
                         }

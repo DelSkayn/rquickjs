@@ -1,4 +1,4 @@
-use crate::{qjs, BeforeInit, Ctx, Error, Module, Result};
+use crate::{qjs, Ctx, Error, Loaded, Module, Result};
 use relative_path::RelativePath;
 use std::{ffi::CStr, ptr};
 
@@ -51,23 +51,7 @@ pub trait Resolver {
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Loader {
     /// Load module by name
-    ///
-    /// The example loading may looks like:
-    ///
-    /// ```no_run
-    /// # use rquickjs::{Ctx, Module, Result};
-    /// # fn default_load<'js>(ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
-    /// let path = std::path::Path::new(name);
-    /// let path = if path.extension().is_none() {
-    ///     path.with_extension("js")
-    /// } else {
-    ///     path.into()
-    /// };
-    /// let source: Vec<_> = std::fs::read(path)?;
-    /// ctx.compile(name, source)
-    /// # }
-    /// ```
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, BeforeInit>>;
+    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded>>;
 }
 
 struct LoaderOpaque {
@@ -148,7 +132,7 @@ impl LoaderHolder {
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
 
-        Ok(opaque.loader.load(ctx, name)?.as_module_def())
+        Ok(opaque.loader.load(ctx, name)?.into_module_def())
     }
 
     unsafe extern "C" fn load_raw(
@@ -212,7 +196,7 @@ macro_rules! loader_impls {
                 $($t: Loader,)*
             {
                 #[allow(non_snake_case)]
-                fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, BeforeInit>> {
+                fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded>> {
                     let mut messages = Vec::new();
                     let ($($t,)*) = self;
                     $(
@@ -270,15 +254,17 @@ mod test {
     struct TestLoader;
 
     impl Loader for TestLoader {
-        fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, BeforeInit>> {
+        fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded>> {
             if name == "test" {
-                ctx.compile_only(
+                Ok(Module::new(
+                    ctx,
                     "test",
                     r#"
                       export const n = 123;
                       export const s = "abc";
                     "#,
-                )
+                )?
+                .into_loaded())
             } else {
                 Err(Error::new_loading_message(name, "unable to load"))
             }
