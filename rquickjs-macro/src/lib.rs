@@ -19,11 +19,85 @@ use derive::*;
 use shim::*;
 
 /**
-# An attribute to generate bindings easy
+An attribute to generate bindings easy
 
-This macro allows register Rust functions, modules and objects to use it from JavaScript.
+This macro allows register Rust constants, functions, data types and modules to use it from JavaScript.
 
-## Examples
+*NOTE: To export any nested items it should be public.*
+
+# Supported attributes
+
+Any attributes which is enclosed by a `#[quickjs(...)]` will be interpreted by this macro to control bindings.
+
+## Macro attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`ident = "MyModule"`__          | The name of target unit struct to export
+__`public`__, __`public = "self/super/crate"`__ | Makes the target unit struct visible
+__`module`__                      | Adds the [`ModuleDef`](rquickjs::ModuleDef) impl to use bindings as ES6 module
+__`object`__                      | Adds the [`ObjectDef`](rquickjs::ModuleDef) impl for attaching bindings to an object
+__`init`__, __`init = "js_module_init"`__     | Adds the `js_module_init` function (in particular for creating dynamically loadable modules or static libraries to use from `C`)
+__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
+
+## Module attributes
+
+Attribute                 | Description
+------------------------- | ---------------------------
+__`rename = "new_name"`__ | Renames module to export
+__`bare`__                | Exports contents of the module to the parent module instead of creating submodule (this is off by default)
+__`skip`__                | Skips exporting this module
+
+## Constant attributes
+
+Attribute                 | Description
+------------------------- | ---------------------------
+__`rename = "new_name"`__ | Renames constant to export
+__`property`__            | Creates property
+__`skip`__                | Skips exporting this contant
+
+## Function attributes
+
+Attribute                 | Description
+------------------------- | ---------------------------
+__`rename = "new_name"`__ | Renames function to export
+__`getter = "property"`__ | Uses function as a getter for the property
+__`setter = "property"`__ | Uses function as a setter for the property
+__`constructor`__, __`constructor = true`__  | Forces creating contructor
+__`constructor = false`__ | Disables creating contructor
+__`skip`__                | Skips exporting this contant
+
+## Data type attributes
+
+This attributes applies to structs and enums to use it as JS classes.
+
+Attribute                 | Description
+------------------------- | ---------------------------
+__`rename = "new_name"`__ | Renames data type to export
+__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs::HasRefs) to be implemented)
+__`skip`__                | Skips exporting this data type
+
+## Data field attributes
+
+This attributes applies to data fields to use it as a properties.
+
+Attribute                 | Description
+------------------------- | ---------------------------
+__`rename = "new_name"`__ | Renames field to export
+__`readonly`__            | Makes this field to be readonly
+__`skip`__                | Skips exporting this field
+
+## `impl` block attributes
+
+This attributes applies to `impl` blocks to bind class methods and properties and also adding static constants and functions.
+
+Attribute                 | Description
+------------------------- | ---------------------------
+__`rename = "new_name"`__ | Renames data type to export
+__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs::HasRefs) to be implemented)
+__`skip`__                | Skips exporting this data type
+
+# Examples
 
 ### Single function binding
 
@@ -155,9 +229,41 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 }
 
 /**
-# A macro to derive `FromJs` for an arbitrary structured types
+A macro to derive `FromJs` for an arbitrary structured types
 
-## Examples
+# Supported attributes
+
+## Macro attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename_all = "<rule>"`__       | Renames variants and fields by applying renaming rule ("lowercase", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case")
+__`bound = "T: Bound"`__          | Overrides type paremters bounds
+__`tag`__, __`tag = "type"`__     | Turns `enum` representation to **internally tagged**
+__`content`__, __`content = "data"`__ | With `tag` turns `enum` representation to **adjacently tagged**
+__`untagged`__                    | Turns `enum` representation to **untagged**
+__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
+
+The default `enum` representation is **externally tagged**.
+
+## Variant attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename = "new_name"`__         | Renames a variant
+__`skip`__                        | Skips this variant
+
+If a `enum` representation is `untagged` the variants with `discriminant` will be represented as a numbers.
+
+## Field attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename = "new_name"`__         | Renames a field
+__`default`__, __`default = "path"`__ | Sets the default for a field
+__`skip`__                        | Skips this field
+
+# Examples
 
 ### Unit struct
 
@@ -325,9 +431,41 @@ pub fn from_js(input: TokenStream1) -> TokenStream1 {
 }
 
 /**
-# A macro to derive `IntoJs` for an arbitrary structured types
+A macro to derive `IntoJs` for an arbitrary structured types
 
-## Examples
+# Supported attributes
+
+## Macro attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename_all = "<rule>"`__       | Renames variants and fields by applying renaming rule ("lowercase", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case")
+__`bound = "T: Bound"`__          | Overrides type paremters bounds
+__`tag`__, __`tag = "type"`__     | Turns `enum` representation to **internally tagged**
+__`content`__, __`content = "data"`__ | With `tag` turns `enum` representation to **adjacently tagged**
+__`untagged`__                    | Turns `enum` representation to **untagged**
+__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
+
+The default `enum` representation is **externally tagged**.
+
+## Variant attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename = "new_name"`__         | Renames a variant
+__`skip`__                        | Skips this variant
+
+If a `enum` representation is `untagged` the variants with `discriminant` will be represented as a numbers.
+
+## Field attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename = "new_name"`__         | Renames a field
+__`default`__, __`default = "path"`__ | Sets the default for a field
+__`skip`__                        | Skips this field
+
+# Examples
 
 ### Unit struct
 

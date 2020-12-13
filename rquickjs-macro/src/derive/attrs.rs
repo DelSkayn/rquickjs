@@ -408,7 +408,7 @@ pub struct DataField {
     #[darling(default, rename = "rename")]
     pub name: Option<String>,
 
-    /// Skip this field
+    /// The default value of field
     #[darling(default)]
     pub default: Option<Override<Path>>,
 
