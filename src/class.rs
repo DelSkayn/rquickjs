@@ -1,6 +1,8 @@
+mod refs;
+
 use crate::{
-    handle_exception, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Persistent,
-    Result, Type, Value,
+    handle_exception, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Type,
+    Value,
 };
 use std::{
     ffi::CString,
@@ -9,6 +11,8 @@ use std::{
     ops::{Deref, DerefMut},
     ptr,
 };
+
+pub use refs::{HasRefs, RefsMarker};
 
 /// The type of identifier of class
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
@@ -367,29 +371,6 @@ impl<'js> Object<'js> {
     }
 }
 
-/// The helper for QuickJS garbage collector which helps it find internal JS object references.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
-#[derive(Clone, Copy)]
-pub struct RefsMarker {
-    rt: *mut qjs::JSRuntime,
-    mark_func: qjs::JS_MarkFunc,
-}
-
-impl RefsMarker {
-    /// The function to mark stored JS value references.
-    ///
-    /// You usually should mark all persistent JS objects explicitly in [`ClassDef::mark_refs`] by using this function to make GC working as expected.
-    pub fn mark<T>(&self, value: &Persistent<T>) {
-        let val = value.value.get();
-        if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(val) } {
-            unsafe { qjs::JS_MarkValue(self.rt, val, self.mark_func) };
-            if 0 == unsafe { qjs::JS_ValueRefCount(val) } {
-                value.value.set(qjs::JS_UNDEFINED);
-            }
-        }
-    }
-}
-
 impl<'js, C> IntoJs<'js> for Class<'js, C>
 where
     C: ClassDef,
@@ -531,6 +512,11 @@ macro_rules! class_def {
 
     (@parse ~($self:ident, $marker:ident) { $($body:tt)* } $($rest:tt)*) => {
         $crate::class_def!{@mark $self $marker $($body)*}
+        $crate::class_def!{@parse $($rest)*}
+    };
+
+    (@parse ~ $($rest:tt)*) => {
+        $crate::class_def!{@mark this marker $crate::HasRefs::mark_refs(this, marker);}
         $crate::class_def!{@parse $($rest)*}
     };
 
@@ -715,6 +701,13 @@ mod test {
             refs: HashSet<Persistent<Class<'static, A>>>,
         }
 
+        impl HasRefs for A {
+            fn mark_refs(&self, marker: &RefsMarker) {
+                println!("A::mark {}", self.name);
+                self.refs.mark_refs(marker);
+            }
+        }
+
         impl Drop for A {
             fn drop(&mut self) {
                 println!("A::drop {}", self.name);
@@ -742,16 +735,10 @@ mod test {
         }
 
         class_def!(
-            A (proto) {
+            A~ (proto) {
                 println!("A::register");
                 proto.set("add", JsFn::new("add", Method(Class::<A>::add)))?;
                 proto.set("rm", JsFn::new("rm", Method(Class::<A>::rm)))?;
-            }
-            ~(this, marker) {
-                println!("A::mark {}", this.name);
-                for obj in &this.refs {
-                    marker.mark(obj);
-                }
             }
         );
 

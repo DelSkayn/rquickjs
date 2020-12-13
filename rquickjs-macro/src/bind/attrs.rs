@@ -169,6 +169,8 @@ pub struct AttrData {
     /// Data name for export
     #[darling(rename = "rename")]
     pub name: Option<String>,
+    /// Data has internal refs
+    pub has_refs: bool,
     /// Skip export
     pub skip: bool,
 }
@@ -177,6 +179,9 @@ impl Merge for AttrData {
     fn merge(&mut self, over: Self) {
         if over.name.is_some() {
             self.name = over.name;
+        }
+        if over.has_refs {
+            self.has_refs = true;
         }
         if over.skip {
             self.skip = true;
@@ -218,6 +223,8 @@ pub struct AttrImpl {
     /// Related class name
     #[darling(rename = "rename")]
     pub name: Option<String>,
+    /// Data has internal refs
+    pub has_refs: bool,
     /// Skip export
     pub skip: bool,
 }
@@ -226,6 +233,9 @@ impl Merge for AttrImpl {
     fn merge(&mut self, over: Self) {
         if over.name.is_some() {
             self.name = over.name;
+        }
+        if over.has_refs {
+            self.has_refs = true;
         }
         if over.skip {
             self.skip = true;

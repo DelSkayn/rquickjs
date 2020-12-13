@@ -149,8 +149,16 @@ impl Binder {
         }
     }
 
-    fn top_is_impl(&self) -> bool {
+    fn top_is_class(&self) -> bool {
         matches!(self.top, Top::Class(_))
+    }
+
+    fn top_class(&mut self) -> Option<&mut BindClass> {
+        use Top::*;
+        match &mut self.top {
+            Class(class) => Some(class),
+            _ => None,
+        }
     }
 
     fn top_consts(&mut self) -> &mut BindConsts {

@@ -9,6 +9,7 @@ pub struct BindClass {
     pub consts: BindConsts,
     pub props: BindProps,
     pub fns: BindFns,
+    pub has_refs: bool,
 }
 
 impl BindClass {
@@ -49,7 +50,7 @@ impl BindClass {
             .chain(
                 self.fns
                     .iter()
-                    .filter(|(_, func)| func.method)
+                    .filter(|(_, bind)| bind.method)
                     .map(|(name, bind)| bind.expand(name, cfg)),
             )
             .collect::<Vec<_>>();
@@ -104,6 +105,16 @@ impl BindClass {
             });
         }
 
+        if self.has_refs {
+            extras.push(quote! {
+                const HAS_REFS: bool = true;
+
+                fn mark_refs(&self, marker: &RefsMarker) {
+                    #lib_crate::HasRefs::mark_refs(self, marker);
+                }
+            })
+        }
+
         quote! {
             impl #lib_crate::ClassDef for #src {
                 const CLASS_NAME: &'static str = #name;
@@ -134,7 +145,11 @@ impl Binder {
             ..
         }: &mut ItemStruct,
     ) {
-        let AttrData { name, skip } = self.get_attrs(attrs);
+        let AttrData {
+            name,
+            has_refs,
+            skip,
+        } = self.get_attrs(attrs);
 
         if !self.visible(vis) || skip {
             return;
@@ -145,6 +160,10 @@ impl Binder {
         let name = name.unwrap_or_else(|| ident.to_string());
 
         self.with_class(&name, &ident, |this| {
+            if has_refs {
+                this.top_class().unwrap().has_refs = true;
+            }
+
             use Fields::*;
             match fields {
                 Named(fields) => {
@@ -172,7 +191,11 @@ impl Binder {
             ..
         }: &mut ItemEnum,
     ) {
-        let AttrData { name, skip } = self.get_attrs(attrs);
+        let AttrData {
+            name,
+            has_refs,
+            skip,
+        } = self.get_attrs(attrs);
 
         if !self.visible(vis) || skip {
             return;
@@ -182,7 +205,10 @@ impl Binder {
 
         let name = name.unwrap_or_else(|| ident.to_string());
 
-        self.with_class(&name, &ident, |_this| {
+        self.with_class(&name, &ident, |this| {
+            if has_refs {
+                this.top_class().unwrap().has_refs = true;
+            }
             // TODO support for variant fields
         });
     }
@@ -259,7 +285,11 @@ impl Binder {
             ..
         }: &mut ItemImpl,
     ) {
-        let AttrImpl { name, skip } = self.get_attrs(attrs);
+        let AttrImpl {
+            name,
+            has_refs,
+            skip,
+        } = self.get_attrs(attrs);
 
         if let Some(unsafety) = unsafety {
             error!(
@@ -288,6 +318,9 @@ impl Binder {
         let name = name.unwrap_or_else(|| ident.to_string());
 
         self.with_class(&name, &ident, |this| {
+            if has_refs {
+                this.top_class().unwrap().has_refs = true;
+            }
             for item in items {
                 this.bind_impl_item(item);
             }
@@ -472,6 +505,32 @@ mod test {
             }
             rquickjs::Class::<test::Node>::register(_ctx)?;
             exports.set("Node", rquickjs::JsFn::new("new", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
+        };
+
+        class_with_internal_refs { test } {
+            #[quickjs(bare)]
+            mod test {
+                pub struct Node;
+                impl Node {
+                    pub fn mark_refs(&self, marker: &RefsMarker);
+                }
+            }
+        } {
+            impl rquickjs::ClassDef for test::Node {
+                const CLASS_NAME: &'static str = "Node";
+
+                fn class_id() -> &'static mut rquickjs::ClassId {
+                    static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
+                    unsafe { &mut CLASS_ID }
+                }
+
+                const HAS_REFS: bool = true;
+
+                fn mark_refs(&self, marker: &rquickjs::RefsMarker) {
+                    Node::mark_refs(self, marker)
+                }
+            }
+            rquickjs::Class::<test::Node>::register(_ctx)?;
         };
     }
 }

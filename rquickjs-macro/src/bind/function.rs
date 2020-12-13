@@ -145,12 +145,12 @@ impl Binder {
 
         let name = name.unwrap_or_else(|| ident.to_string());
         let ctor = ctor.unwrap_or_else(|| name == "new");
-        if ctor && !self.top_is_impl() {
+        if ctor && !self.top_is_class() {
             error!(ident, "Constructor can be defined in impl block only");
         }
 
         let has_self = inputs.iter().any(|arg| matches!(arg, FnArg::Receiver(_)));
-        let method = self.top_is_impl() && !ctor && has_self;
+        let method = self.top_is_class() && !ctor && has_self;
 
         self.identify(ident);
 

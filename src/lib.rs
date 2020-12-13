@@ -50,7 +50,7 @@ pub use registery_key::RegisteryKey;
 #[cfg(feature = "classes")]
 mod class;
 #[cfg(feature = "classes")]
-pub use class::{Class, ClassDef, ClassId, Constructor, RefsMarker, WithProto};
+pub use class::{Class, ClassDef, ClassId, Constructor, HasRefs, RefsMarker, WithProto};
 
 #[cfg(feature = "properties")]
 mod property;
