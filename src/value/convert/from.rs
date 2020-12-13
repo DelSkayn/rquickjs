@@ -4,8 +4,14 @@ use crate::{
 };
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
-    hash::Hash,
+    hash::{BuildHasher, Hash},
 };
+
+#[cfg(feature = "either")]
+use either::{Either, Left, Right};
+
+#[cfg(feature = "indexmap")]
+use indexmap::{IndexMap, IndexSet};
 
 impl<'js> FromJs<'js> for Value<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
@@ -16,6 +22,63 @@ impl<'js> FromJs<'js> for Value<'js> {
 impl<'js> FromJs<'js> for StdString {
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         String::from_value(value).and_then(|string| string.to_string())
+    }
+}
+
+/// Convert from JS as any
+impl<'js> FromJs<'js> for () {
+    fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
+        Ok(())
+    }
+}
+
+/// Convert from JS as optional
+impl<'js, T> FromJs<'js> for Option<T>
+where
+    T: FromJs<'js>,
+{
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        if value.type_of().is_void() {
+            Ok(None)
+        } else {
+            T::from_js(ctx, value).map(Some)
+        }
+    }
+}
+
+/// Convert from JS as result
+impl<'js, T> FromJs<'js> for Result<T>
+where
+    T: FromJs<'js>,
+{
+    //TODO this function seems a bit hacky.
+    //Expections are generally handled when returned from a function
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        unsafe {
+            match handle_exception(ctx, value.into_js_value()) {
+                Ok(val) => T::from_js(ctx, Value::from_js_value(ctx, val)).map(Ok),
+                Err(error) => Ok(Err(error)),
+            }
+        }
+    }
+}
+
+/// Convert from JS to either
+#[cfg(feature = "either")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "either")))]
+impl<'js, L, R> FromJs<'js> for Either<L, R>
+where
+    L: FromJs<'js>,
+    R: FromJs<'js>,
+{
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        L::from_js(ctx, value.clone()).map(Left).or_else(|error| {
+            if error.is_from_js() {
+                R::from_js(ctx, value).map(Right)
+            } else {
+                Err(error)
+            }
+        })
     }
 }
 
@@ -75,31 +138,35 @@ macro_rules! from_js_impls {
     };
 
     // for list-like Rust types
-    (list: $($type:ident $(($($guard:tt)*))* ,)*) => {
+    (list: $($(#[$meta:meta])* $type:ident $({$param:ident: $($pguard:tt)*})* $(($($guard:tt)*))*,)*) => {
         $(
-            impl<'js, T> FromJs<'js> for $type<T>
+            $(#[$meta])*
+            impl<'js, T $(,$param)*> FromJs<'js> for $type<T $(,$param)*>
             where
                 T: FromJs<'js> $(+ $($guard)*)*,
+                $($param: $($pguard)*,)*
             {
                 fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let array = Array::from_value(value)?;
-                    array.iter().collect::<Result<$type<_>>>()
+                    array.iter().collect::<Result<_>>()
                 }
             }
         )*
     };
 
     // for map-like Rust types
-    (map: $($type:ident $(($($guard:tt)*))* ,)*) => {
+    (map: $($(#[$meta:meta])* $type:ident $({$param:ident: $($pguard:tt)*})* $(($($guard:tt)*))*,)*) => {
         $(
-            impl<'js, K, V> FromJs<'js> for $type<K, V>
+            $(#[$meta])*
+            impl<'js, K, V $(,$param)*> FromJs<'js> for $type<K, V $(,$param)*>
             where
                 K: FromAtom<'js> $(+ $($guard)*)*,
                 V: FromJs<'js>,
+                $($param: $($pguard)*,)*
             {
                 fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let object = Object::from_value(value)?;
-                    object.own_props(true).collect::<Result<$type<_, _>>>()
+                    object.own_props(true).collect::<Result<_>>()
                 }
             }
         )*
@@ -159,7 +226,7 @@ macro_rules! from_js_impls {
 from_js_impls! {
     val:
     i32: i8 u8 i16 u16,
-    f64: u32 u64 i64,
+    f64: u32 u64 i64 usize isize,
 }
 
 from_js_impls! {
@@ -191,59 +258,36 @@ from_js_impls! {
 
 from_js_impls! {
     list:
+    /// Convert from JS array to Rust vector
     Vec,
+    /// Convert from JS array to Rust vector deque
     VecDeque,
+    /// Convert from JS array to Rust linked list
     LinkedList,
-    HashSet (Eq + Hash),
+    /// Convert from JS array to Rust hash set
+    HashSet {S: Default + BuildHasher} (Eq + Hash),
+    /// Convert from JS array to Rust btree set
     BTreeSet (Eq + Ord),
+    /// Convert from JS array to Rust index set
+    #[cfg(feature = "indexmap")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "indexmap")))]
+    IndexSet {S: Default + BuildHasher} (Eq + Hash),
 }
 
 from_js_impls! {
     map:
-    HashMap (Eq + Hash),
+    /// Convert from JS object to Rust hash map
+    HashMap {S: Default + BuildHasher} (Eq + Hash),
+    /// Convert from JS object to Rust btree map
     BTreeMap (Eq + Ord),
+    /// Convert from JS object to Rust index map
+    #[cfg(feature = "indexmap")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "indexmap")))]
+    IndexMap {S: Default + BuildHasher} (Eq + Hash),
 }
 
 impl<'js> FromJs<'js> for f32 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         f64::from_js(ctx, value).map(|value| value as _)
-    }
-}
-
-/// Convert from JS as any
-impl<'js> FromJs<'js> for () {
-    fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
-        Ok(())
-    }
-}
-
-/// Convert from JS as optional
-impl<'js, T> FromJs<'js> for Option<T>
-where
-    T: FromJs<'js>,
-{
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        if value.type_of().is_void() {
-            Ok(None)
-        } else {
-            T::from_js(ctx, value).map(Some)
-        }
-    }
-}
-
-/// Convert from JS as result
-impl<'js, T> FromJs<'js> for Result<T>
-where
-    T: FromJs<'js>,
-{
-    //TODO this function seems a bit hacky.
-    //Expections are generally handled when returned from a function
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        unsafe {
-            match handle_exception(ctx, value.into_js_value()) {
-                Ok(val) => T::from_js(ctx, Value::from_js_value(ctx, val)).map(Ok),
-                Err(error) => Ok(Err(error)),
-            }
-        }
     }
 }

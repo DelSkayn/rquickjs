@@ -14,6 +14,14 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 version = "0.2.1"
 optional = true
 
+[dependencies.indexmap]
+version = "^1"
+optional = true
+
+[dependencies.either]
+version = "^1"
+optional = true
+
 [dependencies.rquickjs-sys]
 version = "0.0.4"
 path = "./rquickjs-sys"
@@ -57,7 +65,7 @@ members = [
 default = ["exports"]
 
 # Features which is used for documentation
-rustdoc = ["exports", "loader", "allocator", "dyn-load", "registery", "classes", "properties", "async-std", "macro"]
+rustdoc = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "async-std", "macro"]
 
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used

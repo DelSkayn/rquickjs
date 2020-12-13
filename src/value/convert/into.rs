@@ -4,6 +4,12 @@ use crate::{
 };
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque};
 
+#[cfg(feature = "either")]
+use either::{Either, Left, Right};
+
+#[cfg(feature = "indexmap")]
+use indexmap::{IndexMap, IndexSet};
+
 impl<'js> IntoJs<'js> for Value<'js> {
     fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
         Ok(self)
@@ -96,6 +102,38 @@ where
     }
 }
 
+/// Convert the either into JS
+#[cfg(feature = "either")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "either")))]
+impl<'js, L, R> IntoJs<'js> for Either<L, R>
+where
+    L: IntoJs<'js>,
+    R: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        match self {
+            Left(value) => value.into_js(ctx),
+            Right(value) => value.into_js(ctx),
+        }
+    }
+}
+
+/// Convert the either into JS
+#[cfg(feature = "either")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "either")))]
+impl<'js, L, R> IntoJs<'js> for &Either<L, R>
+where
+    for<'a> &'a L: IntoJs<'js>,
+    for<'a> &'a R: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        match self {
+            Left(value) => value.into_js(ctx),
+            Right(value) => value.into_js(ctx),
+        }
+    }
+}
+
 macro_rules! into_js_impls {
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
@@ -116,9 +154,10 @@ macro_rules! into_js_impls {
     };
 
     // for list-like Rust types
-    (list: $($type:ident,)*) => {
+    (list: $($(#[$meta:meta])* $type:ident $({$param:ident})*,)*) => {
         $(
-            impl<'js, T> IntoJs<'js> for $type<T>
+            $(#[$meta])*
+            impl<'js, T $(,$param)*> IntoJs<'js> for $type<T $(,$param)*>
             where
                 T: IntoJs<'js>,
             {
@@ -129,7 +168,8 @@ macro_rules! into_js_impls {
                 }
             }
 
-            impl<'js, T> IntoJs<'js> for &$type<T>
+            $(#[$meta])*
+            impl<'js, T $(,$param)*> IntoJs<'js> for &$type<T $(,$param)*>
             where
                 for<'a> &'a T: IntoJs<'js>,
             {
@@ -143,9 +183,10 @@ macro_rules! into_js_impls {
     };
 
     // for map-like Rust types
-    (map: $($type:ident,)*) => {
+    (map: $($(#[$meta:meta])* $type:ident $({$param:ident})*,)*) => {
         $(
-            impl<'js, K, V> IntoJs<'js> for $type<K, V>
+            $(#[$meta])*
+            impl<'js, K, V $(,$param)*> IntoJs<'js> for $type<K, V $(,$param)*>
             where
                 K: IntoAtom<'js>,
                 V: IntoJs<'js>,
@@ -157,7 +198,8 @@ macro_rules! into_js_impls {
                 }
             }
 
-            impl<'js, K, V> IntoJs<'js> for &$type<K, V>
+            $(#[$meta])*
+            impl<'js, K, V $(,$param)*> IntoJs<'js> for &$type<K, V $(,$param)*>
             where
                 for<'a> &'a K: IntoAtom<'js>,
                 for<'a> &'a V: IntoJs<'js>,
@@ -255,17 +297,32 @@ into_js_impls! {
 
 into_js_impls! {
     list:
+    /// Convert from Rust vector to JS array
     Vec,
+    /// Convert from Rust vector deque to JS array
     VecDeque,
+    /// Convert from Rust linked list to JS array
     LinkedList,
-    HashSet,
+    /// Convert from Rust hash set to JS array
+    HashSet {S},
+    /// Convert from Rust btree set to JS array
     BTreeSet,
+    /// Convert from Rust index set to JS array
+    #[cfg(feature = "indexmap")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "indexmap")))]
+    IndexSet {S},
 }
 
 into_js_impls! {
     map:
-    HashMap,
+    /// Convert from Rust hash map to JS object
+    HashMap {S},
+    /// Convert from Rust btree map to JS object
     BTreeMap,
+    /// Convert from Rust index map to JS object
+    #[cfg(feature = "indexmap")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "indexmap")))]
+    IndexMap {S},
 }
 
 into_js_impls! {
@@ -277,5 +334,5 @@ into_js_impls! {
 
 into_js_impls! {
     val:
-    i32 f64 => i64 u32 u64,
+    i32 f64 => i64 u32 u64 usize isize,
 }
