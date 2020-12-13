@@ -229,6 +229,77 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 }
 
 /**
+A macro to derive `HasRefs`
+
+# Supported attributes
+
+## Macro attributes
+
+Attribute                | Description
+------------------------ | --------------------------
+__`crate = "rquickjs"`__ | Allows rename `rquickjs` crate
+
+## Field attributes
+
+Attribute                | Description
+------------------------ | --------------------------
+__`has_refs`__           | Mark a field which has referenses
+
+# Examples
+
+## Struct
+
+```
+# use std::collections::HashMap;
+# use rquickjs::{HasRefs, Persistent, Function, Array};
+
+#[derive(HasRefs)]
+struct Data {
+    #[quickjs(has_refs)]
+    lists: HashMap<String, Persistent<Array<'static>>>,
+    #[quickjs(has_refs)]
+    func: Persistent<Function<'static>>,
+    flag: bool,
+    text: String,
+}
+```
+
+## Enum
+
+```
+# use std::collections::HashMap;
+# use rquickjs::{HasRefs, Persistent, Function, Array};
+
+#[derive(HasRefs)]
+enum Data {
+    Lists(
+        #[quickjs(has_refs)]
+        HashMap<String, Persistent<Array<'static>>>
+    ),
+    Func {
+        name: String,
+        #[quickjs(has_refs)]
+        func: Persistent<Function<'static>>,
+    },
+    Flag(bool),
+    Text(String),
+}
+```
+*/
+#[proc_macro_error]
+#[proc_macro_derive(HasRefs, attributes(quickjs))]
+pub fn has_refs(input: TokenStream1) -> TokenStream1 {
+    let input = parse_macro_input!(input);
+    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
+        abort!(input.ident.span(), "HasRefs deriving error: {}", error);
+    });
+    let config = input.config();
+    let binder = HasRefs::new(config);
+    let output = binder.expand(&input);
+    output.into()
+}
+
+/**
 A macro to derive `FromJs` for an arbitrary structured types
 
 # Supported attributes

@@ -133,7 +133,7 @@ impl DataType {
 
     /// List of parameters with bounds for implimentation
     /// `impl<...>`
-    pub fn impl_params(&self) -> TokenStream {
+    pub fn impl_params(&self, need_js_lt: bool) -> TokenStream {
         let params = &self.generics.params;
 
         let has_js_lt = params.iter().any(|param| {
@@ -150,10 +150,10 @@ impl DataType {
             GenericParam::Const(cp) => quote!(#cp),
         });
 
-        if has_js_lt {
+        if need_js_lt && !has_js_lt {
+            let params = std::iter::once(quote!('js)).chain(params);
             quote! { #(#params),* }
         } else {
-            let params = std::iter::once(quote!('js)).chain(params);
             quote! { #(#params),* }
         }
     }
@@ -411,6 +411,10 @@ pub struct DataField {
     /// The default value of field
     #[darling(default)]
     pub default: Option<Override<Path>>,
+
+    /// The field has references
+    #[darling(default)]
+    pub has_refs: bool,
 
     /// Skip this field
     #[darling(default)]
@@ -676,25 +680,25 @@ mod test {
         impl_params_without_params {
             struct Data;
         } (out) {
-            assert_eq!(out.impl_params().to_string(), quote!('js).to_string());
+            assert_eq!(out.impl_params(true).to_string(), quote!('js).to_string());
         };
 
         impl_params_with_lifetimes {
             struct Data<'a: 'b, 'b>;
         } (out) {
-            assert_eq!(out.impl_params().to_string(), quote!('js, 'a: 'b, 'b).to_string());
+            assert_eq!(out.impl_params(true).to_string(), quote!('js, 'a: 'b, 'b).to_string());
         };
 
         impl_params_with_params {
             struct Data<A, B: From<f32> + From<i32>>;
         } (out) {
-            assert_eq!(out.impl_params().to_string(), quote!('js, A, B: From<f32> + From<i32>).to_string());
+            assert_eq!(out.impl_params(true).to_string(), quote!('js, A, B: From<f32> + From<i32>).to_string());
         };
 
         impl_params_with_js_lifetime {
             struct Data<'js>;
         } (out) {
-            assert_eq!(out.impl_params().to_string(), quote!('js).to_string());
+            assert_eq!(out.impl_params(true).to_string(), quote!('js).to_string());
         };
 
         type_name_without_params {

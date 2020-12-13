@@ -25,7 +25,7 @@ features = ["full"]
 
 [dev-dependencies.rquickjs]
 path = "../"
-features = ["async-std", "macro"]
+features = ["async-std", "macro", "classes"]
 
 [dev-dependencies.async-std]
 version = "^1"

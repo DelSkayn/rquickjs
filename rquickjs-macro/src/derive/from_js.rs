@@ -68,7 +68,7 @@ impl FromJs {
     pub fn expand(&self, input: &DataType) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
         let ident = &input.ident;
-        let impl_params = input.impl_params();
+        let impl_params = input.impl_params(true);
         let type_name = input.type_name();
         let where_clause = input.where_clause(
             Some(parse_quote!(T: #lib_crate::FromJs<'js>)),

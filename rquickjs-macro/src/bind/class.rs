@@ -109,7 +109,7 @@ impl BindClass {
             extras.push(quote! {
                 const HAS_REFS: bool = true;
 
-                fn mark_refs(&self, marker: &RefsMarker) {
+                fn mark_refs(&self, marker: &#lib_crate::RefsMarker) {
                     #lib_crate::HasRefs::mark_refs(self, marker);
                 }
             })
@@ -510,10 +510,8 @@ mod test {
         class_with_internal_refs { test } {
             #[quickjs(bare)]
             mod test {
+                #[quickjs(has_refs)]
                 pub struct Node;
-                impl Node {
-                    pub fn mark_refs(&self, marker: &RefsMarker);
-                }
             }
         } {
             impl rquickjs::ClassDef for test::Node {
@@ -527,7 +525,7 @@ mod test {
                 const HAS_REFS: bool = true;
 
                 fn mark_refs(&self, marker: &rquickjs::RefsMarker) {
-                    Node::mark_refs(self, marker)
+                    rquickjs::HasRefs::mark_refs(self, marker);
                 }
             }
             rquickjs::Class::<test::Node>::register(_ctx)?;

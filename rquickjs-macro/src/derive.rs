@@ -17,8 +17,10 @@ macro_rules! test_cases {
 
 mod attrs;
 mod from_js;
+mod has_refs;
 mod into_js;
 
 pub use attrs::*;
 pub use from_js::*;
+pub use has_refs::*;
 pub use into_js::*;
