@@ -3,7 +3,7 @@ use crate::{
     Result, Value,
 };
 use std::{
-    iter::{IntoIterator, Iterator},
+    iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
 };
 
@@ -122,7 +122,31 @@ where
             None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = (self.count - self.index) as _;
+        (len, Some(len))
+    }
 }
+
+impl<'js, T> DoubleEndedIterator for ArrayIter<'js, T>
+where
+    T: FromJs<'js>,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.index < self.count {
+            self.count -= 1;
+            let res = self.array.get(self.count as _);
+            Some(res)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'js, T> ExactSizeIterator for ArrayIter<'js, T> where T: FromJs<'js> {}
+
+impl<'js, T> FusedIterator for ArrayIter<'js, T> where T: FromJs<'js> {}
 
 impl<'js> IntoIterator for Array<'js> {
     type Item = Result<Value<'js>>;

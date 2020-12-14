@@ -3,7 +3,7 @@ use crate::{
     FromJs, Function, IntoAtom, IntoJs, Result, Value,
 };
 use std::{
-    iter::{IntoIterator, Iterator},
+    iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
     mem,
 };
@@ -136,7 +136,7 @@ impl<'js> Object<'js> {
                 self.0.ctx.ctx,
                 self.0.as_js_value(),
                 atom.atom,
-                qjs::JS_PROP_THROW as i32,
+                qjs::JS_PROP_THROW as _,
             ) < 0
             {
                 return Err(get_exception(self.0.ctx));
@@ -157,9 +157,9 @@ impl<'js> Object<'js> {
 
     /// Get own property names of an object
     pub fn own_keys<K: FromAtom<'js>>(&self, enumerable_only: bool) -> ObjectKeysIter<'js, K> {
-        let mut flags = qjs::JS_GPN_STRING_MASK as i32;
+        let mut flags = qjs::JS_GPN_STRING_MASK as _;
         if enumerable_only {
-            flags |= qjs::JS_GPN_ENUM_ONLY as i32;
+            flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
         }
 
         ObjectKeysIter {
@@ -173,12 +173,26 @@ impl<'js> Object<'js> {
         &self,
         enumerable_only: bool,
     ) -> ObjectIter<'js, K, V> {
-        let mut flags = qjs::JS_GPN_STRING_MASK as i32;
+        let mut flags = qjs::JS_GPN_STRING_MASK as _;
         if enumerable_only {
-            flags |= qjs::JS_GPN_ENUM_ONLY as i32;
+            flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
         }
 
         ObjectIter {
+            state: Some(IterState::new(&self.0, flags)),
+            object: self.clone(),
+            marker: PhantomData,
+        }
+    }
+
+    /// Get own property values of an object
+    pub fn own_values<K: FromAtom<'js>>(&self, enumerable_only: bool) -> ObjectValuesIter<'js, K> {
+        let mut flags = qjs::JS_GPN_STRING_MASK as _;
+        if enumerable_only {
+            flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
+        }
+
+        ObjectValuesIter {
             state: Some(IterState::new(&self.0, flags)),
             object: self.clone(),
             marker: PhantomData,
@@ -239,7 +253,7 @@ struct IterState<'js> {
 }
 
 impl<'js> IterState<'js> {
-    fn new(obj: &Value<'js>, flags: i32) -> Result<Self> {
+    fn new(obj: &Value<'js>, flags: qjs::c_int) -> Result<Self> {
         let ctx = obj.ctx;
 
         let mut enums = mem::MaybeUninit::uninit();
@@ -288,7 +302,7 @@ impl<'js> Iterator for IterState<'js> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
-            let elem = unsafe { &*self.enums.offset(self.index as isize) };
+            let elem = unsafe { &*self.enums.offset(self.index as _) };
             self.index += 1;
             let atom = unsafe { Atom::from_atom_val(self.ctx, elem.atom) };
             Some(atom)
@@ -296,7 +310,29 @@ impl<'js> Iterator for IterState<'js> {
             None
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = (self.count - self.index) as _;
+        (len, Some(len))
+    }
 }
+
+impl<'js> DoubleEndedIterator for IterState<'js> {
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.index < self.count {
+            self.count -= 1;
+            let elem = unsafe { &*self.enums.offset(self.count as _) };
+            let atom = unsafe { Atom::from_atom_val(self.ctx, elem.atom) };
+            Some(atom)
+        } else {
+            None
+        }
+    }
+}
+
+impl<'js> ExactSizeIterator for IterState<'js> {}
+
+impl<'js> FusedIterator for IterState<'js> {}
 
 /// The iterator for an object own keys
 pub struct ObjectKeysIter<'js, K> {
@@ -327,7 +363,42 @@ where
             unreachable!();
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if let Some(Ok(state)) = &self.state {
+            state.size_hint()
+        } else {
+            (0, Some(0))
+        }
+    }
 }
+
+impl<'js, K> DoubleEndedIterator for ObjectKeysIter<'js, K>
+where
+    K: FromAtom<'js>,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if let Some(Ok(state)) = &mut self.state {
+            match state.next_back() {
+                Some(atom) => Some(K::from_atom(atom)),
+                None => {
+                    self.state = None;
+                    None
+                }
+            }
+        } else if self.state.is_none() {
+            None
+        } else if let Some(Err(error)) = self.state.take() {
+            Some(Err(error))
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+impl<'js, K> ExactSizeIterator for ObjectKeysIter<'js, K> where K: FromAtom<'js> {}
+
+impl<'js, K> FusedIterator for ObjectKeysIter<'js, K> where K: FromAtom<'js> {}
 
 /// The iterator for an object own properties
 pub struct ObjectIter<'js, K, V> {
@@ -363,14 +434,130 @@ where
             unreachable!();
         }
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if let Some(Ok(state)) = &self.state {
+            state.size_hint()
+        } else {
+            (0, Some(0))
+        }
+    }
 }
+
+impl<'js, K, V> DoubleEndedIterator for ObjectIter<'js, K, V>
+where
+    K: FromAtom<'js>,
+    V: FromJs<'js>,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if let Some(Ok(state)) = &mut self.state {
+            match state.next_back() {
+                Some(atom) => Some(
+                    K::from_atom(atom.clone())
+                        .and_then(|key| self.object.get(atom).map(|val| (key, val))),
+                ),
+                None => {
+                    self.state = None;
+                    None
+                }
+            }
+        } else if self.state.is_none() {
+            None
+        } else if let Some(Err(error)) = self.state.take() {
+            Some(Err(error))
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+impl<'js, K, V> ExactSizeIterator for ObjectIter<'js, K, V>
+where
+    K: FromAtom<'js>,
+    V: FromJs<'js>,
+{
+}
+
+impl<'js, K, V> FusedIterator for ObjectIter<'js, K, V>
+where
+    K: FromAtom<'js>,
+    V: FromJs<'js>,
+{
+}
+
+/// The iterator for an object own property values
+pub struct ObjectValuesIter<'js, V> {
+    state: Option<Result<IterState<'js>>>,
+    object: Object<'js>,
+    marker: PhantomData<V>,
+}
+
+impl<'js, V> Iterator for ObjectValuesIter<'js, V>
+where
+    V: FromJs<'js>,
+{
+    type Item = Result<V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(Ok(state)) = &mut self.state {
+            match state.next() {
+                Some(atom) => Some(self.object.get(atom)),
+                None => {
+                    self.state = None;
+                    None
+                }
+            }
+        } else if self.state.is_none() {
+            None
+        } else if let Some(Err(error)) = self.state.take() {
+            Some(Err(error))
+        } else {
+            unreachable!();
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if let Some(Ok(state)) = &self.state {
+            state.size_hint()
+        } else {
+            (0, Some(0))
+        }
+    }
+}
+
+impl<'js, V> DoubleEndedIterator for ObjectValuesIter<'js, V>
+where
+    V: FromJs<'js>,
+{
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if let Some(Ok(state)) = &mut self.state {
+            match state.next_back() {
+                Some(atom) => Some(self.object.get(atom)),
+                None => {
+                    self.state = None;
+                    None
+                }
+            }
+        } else if self.state.is_none() {
+            None
+        } else if let Some(Err(error)) = self.state.take() {
+            Some(Err(error))
+        } else {
+            unreachable!();
+        }
+    }
+}
+
+impl<'js, V> ExactSizeIterator for ObjectValuesIter<'js, V> where V: FromJs<'js> {}
+
+impl<'js, V> FusedIterator for ObjectValuesIter<'js, V> where V: FromJs<'js> {}
 
 impl<'js> IntoIterator for Object<'js> {
     type Item = Result<(Atom<'js>, Value<'js>)>;
     type IntoIter = ObjectIter<'js, Atom<'js>, Value<'js>>;
 
     fn into_iter(self) -> Self::IntoIter {
-        let flags = qjs::JS_GPN_STRING_MASK as i32;
+        let flags = qjs::JS_GPN_STRING_MASK as _;
         ObjectIter {
             state: Some(IterState::new(&self.0, flags)),
             object: self,
