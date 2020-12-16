@@ -166,7 +166,7 @@ macro_rules! from_js_impls {
             {
                 fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let object = Object::from_value(value)?;
-                    object.own_props(true).collect::<Result<_>>()
+                    object.props().collect::<Result<_>>()
                 }
             }
         )*

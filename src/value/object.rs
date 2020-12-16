@@ -147,53 +147,53 @@ impl<'js> Object<'js> {
 
     /// Check the object for empty
     pub fn is_empty(&self) -> bool {
-        self.own_keys::<Atom>(false).next().is_none()
+        self.keys::<Atom>().next().is_none()
     }
 
     /// Get the number of properties
     pub fn len(&self) -> usize {
-        self.own_keys::<Atom>(false).count()
+        self.keys::<Atom>().count()
+    }
+
+    /// Get own string enumerable property names of an object
+    pub fn keys<K: FromAtom<'js>>(&self) -> ObjectKeysIter<'js, K> {
+        self.own_keys(Filter::default())
     }
 
     /// Get own property names of an object
-    pub fn own_keys<K: FromAtom<'js>>(&self, enumerable_only: bool) -> ObjectKeysIter<'js, K> {
-        let mut flags = qjs::JS_GPN_STRING_MASK as _;
-        if enumerable_only {
-            flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
-        }
-
+    pub fn own_keys<K: FromAtom<'js>>(&self, filter: Filter) -> ObjectKeysIter<'js, K> {
         ObjectKeysIter {
-            state: Some(IterState::new(&self.0, flags)),
+            state: Some(IterState::new(&self.0, filter.flags)),
             marker: PhantomData,
         }
+    }
+
+    /// Get own string enumerable properties of an object
+    pub fn props<K: FromAtom<'js>, V: FromJs<'js>>(&self) -> ObjectIter<'js, K, V> {
+        self.own_props(Filter::default())
     }
 
     /// Get own properties of an object
     pub fn own_props<K: FromAtom<'js>, V: FromJs<'js>>(
         &self,
-        enumerable_only: bool,
+        filter: Filter,
     ) -> ObjectIter<'js, K, V> {
-        let mut flags = qjs::JS_GPN_STRING_MASK as _;
-        if enumerable_only {
-            flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
-        }
-
         ObjectIter {
-            state: Some(IterState::new(&self.0, flags)),
+            state: Some(IterState::new(&self.0, filter.flags)),
             object: self.clone(),
             marker: PhantomData,
         }
     }
 
-    /// Get own property values of an object
-    pub fn own_values<K: FromAtom<'js>>(&self, enumerable_only: bool) -> ObjectValuesIter<'js, K> {
-        let mut flags = qjs::JS_GPN_STRING_MASK as _;
-        if enumerable_only {
-            flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
-        }
+    /// Get own string enumerable property values of an object
+    pub fn values<K: FromAtom<'js>>(&self) -> ObjectValuesIter<'js, K> {
+        self.own_values(Filter::default())
+    }
 
+    /// Get own property values of an object
+    pub fn own_values<K: FromAtom<'js>>(&self, filter: Filter) -> ObjectValuesIter<'js, K> {
         ObjectValuesIter {
-            state: Some(IterState::new(&self.0, flags)),
+            state: Some(IterState::new(&self.0, filter.flags)),
             object: self.clone(),
             marker: PhantomData,
         }
@@ -242,6 +242,51 @@ impl<'js> Object<'js> {
         } else {
             None
         }
+    }
+}
+
+/// The property filter
+#[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
+pub struct Filter {
+    flags: qjs::c_int,
+}
+
+/// Include only enumerable string properties by default
+impl Default for Filter {
+    fn default() -> Self {
+        Self::new().string().enum_only()
+    }
+}
+
+impl Filter {
+    /// Create filter which includes nothing
+    pub fn new() -> Self {
+        Self { flags: 0 }
+    }
+
+    /// Include string properties
+    pub fn string(mut self) -> Self {
+        self.flags |= qjs::JS_GPN_STRING_MASK as qjs::c_int;
+        self
+    }
+
+    /// Include symbol properties
+    pub fn symbol(mut self) -> Self {
+        self.flags |= qjs::JS_GPN_SYMBOL_MASK as qjs::c_int;
+        self
+    }
+
+    /// Include private properties
+    pub fn private(mut self) -> Self {
+        self.flags |= qjs::JS_GPN_PRIVATE_MASK as qjs::c_int;
+        self
+    }
+
+    /// Include only enumerable properties
+    pub fn enum_only(mut self) -> Self {
+        self.flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
+        self
     }
 }
 
@@ -668,10 +713,7 @@ mod test {
                 "#,
                 )
                 .unwrap();
-            let keys = val
-                .own_keys(true)
-                .collect::<Result<Vec<StdString>>>()
-                .unwrap();
+            let keys = val.keys().collect::<Result<Vec<StdString>>>().unwrap();
             assert_eq!(keys.len(), 4);
             assert_eq!(keys[0], "123");
             assert_eq!(keys[1], "str");
@@ -695,7 +737,7 @@ mod test {
                 )
                 .unwrap();
             let pairs = val
-                .own_props(true)
+                .props()
                 .collect::<Result<Vec<(StdString, StdString)>>>()
                 .unwrap();
             assert_eq!(pairs.len(), 3);
@@ -755,7 +797,7 @@ mod test {
                 )
                 .unwrap();
             let keys = val
-                .own_keys(true)
+                .keys()
                 .take(1)
                 .collect::<Result<Vec<StdString>>>()
                 .unwrap();

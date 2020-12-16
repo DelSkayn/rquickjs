@@ -19,7 +19,7 @@ pub use convert::*;
 pub use function::{
     AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
 };
-pub use object::{Object, ObjectDef};
+pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
 
