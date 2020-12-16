@@ -55,7 +55,7 @@ pub use class::{Class, ClassDef, ClassId, Constructor, HasRefs, RefsMarker, With
 #[cfg(feature = "properties")]
 mod property;
 #[cfg(feature = "properties")]
-pub use property::{AsProperty, NoConfigurable, NoEnumerable, NoWritable};
+pub use property::{Accessor, AsProperty, Property};
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
@@ -71,7 +71,7 @@ pub use crate::async_shim::JoinHandle;
 mod promise;
 
 #[cfg(feature = "macro")]
-pub use rquickjs_macro::{bind, HasRefs, FromJs, IntoJs};
+pub use rquickjs_macro::{bind, FromJs, HasRefs, IntoJs};
 
 #[cfg(feature = "futures")]
 pub use promise::{Promise, PromiseJs};
