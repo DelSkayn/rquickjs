@@ -1,8 +1,7 @@
 use crate::{
-    handle_exception, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result, SendWhenParallel,
-    Value,
+    get_exception, handle_exception, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result,
+    SendWhenParallel, Value,
 };
-use std::cell::RefCell;
 
 mod args;
 mod as_args;
@@ -10,74 +9,73 @@ mod as_func;
 mod ffi;
 mod types;
 
-use args::ArgsIter;
-pub use as_args::AsArguments;
-pub use as_func::{AsFunction, AsFunctionMut};
-use ffi::FuncOpaque;
-pub use types::{Args, JsFn, JsFnMut, Method, This};
+use args::{FromInput, Input};
+pub use as_args::{AsArguments, CallInput, IntoInput};
+pub use as_func::AsFunction;
+use ffi::JsFunction;
+pub use types::{Func, Method, MutFn, OnceFn, Opt, Rest, This};
 
 /// Rust representation of a javascript function.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function<'js>(pub(crate) Value<'js>);
 
 impl<'js> Function<'js> {
-    pub fn new<'js_, F, A, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
+    pub fn new<F, A, R>(ctx: Ctx<'js>, func: F) -> Result<Self>
     where
-        N: AsRef<str>,
-        F: AsFunction<'js_, A, R> + SendWhenParallel + 'static,
+        F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
     {
-        let func = FuncOpaque::new(move |ctx, this, args| func.call(ctx, this, args));
-        let func = Self::new_raw(ctx, name, F::LEN, func)?;
+        let func = JsFunction::new(move |input: &Input<'js>| func.call(input));
+        let func = unsafe {
+            let func = func.into_js_value(ctx);
+            Self::from_js_value(ctx, func)
+        };
         F::post(ctx, &func)?;
+        func.set_length(F::len())?;
         Ok(func)
     }
 
-    pub fn new_mut<'js_, F, A, R, N>(ctx: Ctx<'js>, name: N, func: F) -> Result<Self>
-    where
-        N: AsRef<str>,
-        F: AsFunctionMut<'js_, A, R> + SendWhenParallel + 'static,
-    {
-        let func = RefCell::new(func);
-        let func = FuncOpaque::new(move |ctx, this, args| {
-            let mut func = func.try_borrow_mut()
-                .expect("Mutable function callback is already in use! Could it have been called recursively?");
-            func.call(ctx, this, args)
-        });
-        let func = Self::new_raw(ctx, name, F::LEN, func)?;
-        F::post(ctx, &func)?;
-        Ok(func)
+    /// Set the `length` property
+    pub fn set_length(&self, len: usize) -> Result<()> {
+        let ctx = self.0.ctx;
+        let func = self.0.as_js_value();
+        let len = len.into_js(ctx)?;
+
+        unsafe {
+            let res = qjs::JS_DefinePropertyValue(
+                ctx.ctx,
+                func,
+                "length".into_atom(ctx).atom,
+                len.into_js_value(),
+                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
+            );
+            if res < 0 {
+                return Err(get_exception(ctx));
+            }
+        };
+
+        Ok(())
     }
 
-    pub fn new_raw<N>(ctx: Ctx<'js>, name: N, len: u32, func: FuncOpaque) -> Result<Self>
-    where
-        N: AsRef<str>,
-    {
-        let len_field = "length".into_atom(ctx);
-        let len_value = len.into_js(ctx)?;
+    /// Set the `name` property
+    pub fn set_name<S: AsRef<str>>(&self, name: S) -> Result<()> {
+        let ctx = self.0.ctx;
+        let func = self.0.as_js_value();
+        let name = name.as_ref().into_js(ctx)?;
 
-        let name_field = "name".into_atom(ctx);
-        let name_value = name.as_ref().into_js(ctx)?;
+        unsafe {
+            let res = qjs::JS_DefinePropertyValue(
+                ctx.ctx,
+                func,
+                "name".into_atom(ctx).atom,
+                name.into_js_value(),
+                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
+            );
+            if res < 0 {
+                return Err(get_exception(ctx));
+            }
+        };
 
-        Ok(unsafe {
-            let func_obj = func.into_js_value(ctx);
-            // Set the `.length` property
-            qjs::JS_DefinePropertyValue(
-                ctx.ctx,
-                func_obj,
-                len_field.atom,
-                len_value.into_js_value(),
-                qjs::JS_PROP_CONFIGURABLE as _,
-            );
-            // Set the `.name` property
-            qjs::JS_DefinePropertyValue(
-                ctx.ctx,
-                func_obj,
-                name_field.atom,
-                name_value.into_js_value(),
-                qjs::JS_PROP_CONFIGURABLE as _,
-            );
-            Self::from_js_value(ctx, func_obj)
-        })
+        Ok(())
     }
 
     /// Call a function with given arguments
@@ -94,29 +92,19 @@ impl<'js> Function<'js> {
         args.apply(self)
     }
 
-    pub(crate) fn call_raw<I, R>(&self, this: Option<Result<Value<'js>>>, args: I) -> Result<R>
-    where
-        I: Iterator<Item = Result<Value<'js>>>,
-        R: FromJs<'js>,
-    {
+    pub(crate) fn call_raw(&self, input: &CallInput) -> Result<Value<'js>> {
         let ctx = self.0.ctx;
-        let func = self.0.as_js_value();
-        let this = this
-            .unwrap_or_else(|| Ok(Value::from(ctx.globals())))?
-            .into_js_value();
-        let args = args
-            .map(|res| res.map(|arg| arg.into_js_value()))
-            .collect::<Result<Vec<_>>>()?;
-        let res = unsafe {
-            let val = qjs::JS_Call(ctx.ctx, func, this, args.len() as _, args.as_ptr() as _);
-            for arg in args {
-                qjs::JS_FreeValue(ctx.ctx, arg);
-            }
-            qjs::JS_FreeValue(ctx.ctx, this);
+        Ok(unsafe {
+            let val = qjs::JS_Call(
+                ctx.ctx,
+                self.0.as_js_value(),
+                input.this,
+                input.args.len() as _,
+                input.args.as_ptr() as _,
+            );
             let val = handle_exception(ctx, val)?;
             Value::from_js_value(ctx, val)
-        };
-        R::from_js(ctx, res)
+        })
     }
 
     /// Check that function is a constructor
@@ -189,7 +177,7 @@ impl<'js> Function<'js> {
     }
 
     pub(crate) unsafe fn init_raw_rt(rt: *mut qjs::JSRuntime) {
-        FuncOpaque::register(rt);
+        JsFunction::register(rt);
     }
 
     /// Initialize from module init function
@@ -266,7 +254,7 @@ mod test {
                 "#,
                 )
                 .unwrap();
-            func.call((Args(vec![1, 2, 3]),)).unwrap()
+            func.call((Rest(vec![1, 2, 3]),)).unwrap()
         });
         assert_eq!(res.len(), 4);
         assert_eq!(res[0], 3);
@@ -285,7 +273,7 @@ mod test {
                 "#,
                 )
                 .unwrap();
-            func.call((-2, -1, Args(vec![1, 2]))).unwrap()
+            func.call((-2, -1, Rest(vec![1, 2]))).unwrap()
         });
         assert_eq!(res.len(), 5);
         assert_eq!(res[0], -2);
@@ -347,7 +335,8 @@ mod test {
     #[test]
     fn static_callback() {
         test_with(|ctx| {
-            let f = Function::new(ctx, "test", test).unwrap();
+            let f = Function::new(ctx, test).unwrap();
+            f.set_name("test").unwrap();
             let eval: Function = ctx.eval("a => { a() }").unwrap();
             (f.clone(),).apply::<()>(&eval).unwrap();
             f.call::<_, ()>(()).unwrap();
@@ -367,10 +356,11 @@ mod test {
         test_with(|ctx| {
             let called = Arc::new(Mutex::new(false));
             let called_clone = called.clone();
-            let f = Function::new(ctx, "test", move || {
+            let f = Function::new(ctx, move || {
                 (*called_clone.lock().unwrap()) = true;
             })
             .unwrap();
+            f.set_name("test").unwrap();
 
             let eval: Function = ctx.eval("a => { a() }").unwrap();
             eval.call::<_, ()>((f.clone(),)).unwrap();
@@ -390,11 +380,15 @@ mod test {
     fn mutable_callback() {
         test_with(|ctx| {
             let mut v = 0;
-            let f = Function::new_mut(ctx, "test", move || {
-                v += 1;
-                v
-            })
+            let f = Function::new(
+                ctx,
+                MutFn::from(move || {
+                    v += 1;
+                    v
+                }),
+            )
             .unwrap();
+            f.set_name("test").unwrap();
 
             let eval: Function = ctx.eval("a => a()").unwrap();
             assert_eq!(eval.call::<_, i32>((f.clone(),)).unwrap(), 1);
@@ -414,20 +408,44 @@ mod test {
     #[should_panic(
         expected = "Mutable function callback is already in use! Could it have been called recursively?"
     )]
-    fn recursive_mutable_callback() {
+    fn recursively_called_mutable_callback() {
         test_with(|ctx| {
             let mut v = 0;
-            let f = Function::new_mut(ctx, "test", move |ctx: Ctx| {
-                v += 1;
-                ctx.globals()
-                    .get::<_, Function>("foo")
-                    .unwrap()
-                    .call::<_, ()>(())
-                    .unwrap();
-                v
-            })
+            let f = Function::new(
+                ctx,
+                MutFn::from(move |ctx: Ctx| {
+                    v += 1;
+                    ctx.globals()
+                        .get::<_, Function>("foo")
+                        .unwrap()
+                        .call::<_, ()>(())
+                        .unwrap();
+                    v
+                }),
+            )
             .unwrap();
             ctx.globals().set("foo", f.clone()).unwrap();
+            f.call::<_, ()>(()).unwrap();
+        })
+    }
+
+    #[test]
+    #[should_panic(
+        expected = "Once function callback is already was used! Could it have been called twice?"
+    )]
+    fn repeatedly_called_once_callback() {
+        test_with(|ctx| {
+            let mut v = 0;
+            let f = Function::new(
+                ctx,
+                OnceFn::from(move || {
+                    v += 1;
+                    v
+                }),
+            )
+            .unwrap();
+            ctx.globals().set("foo", f.clone()).unwrap();
+            f.call::<_, ()>(()).unwrap();
             f.call::<_, ()>(()).unwrap();
         })
     }
@@ -436,17 +454,10 @@ mod test {
     fn multiple_const_callbacks() {
         test_with(|ctx| {
             let globals = ctx.globals();
+            globals.set("one", Func::new("one", || 1f64)).unwrap();
+            globals.set("neg", Func::new("neg", |a: f64| -a)).unwrap();
             globals
-                .set("one", Function::new(ctx, "id", || 1f64).unwrap())
-                .unwrap();
-            globals
-                .set("neg", Function::new(ctx, "neg", |a: f64| -a).unwrap())
-                .unwrap();
-            globals
-                .set(
-                    "add",
-                    Function::new(ctx, "add", |a: f64, b: f64| a + b).unwrap(),
-                )
+                .set("add", Func::new("add", |a: f64, b: f64| a + b))
                 .unwrap();
 
             let r: f64 = ctx.eval("neg(add(one(), 2))").unwrap();
@@ -462,15 +473,14 @@ mod test {
             globals
                 .set(
                     "new_id",
-                    Function::new_mut(ctx, "id", move || {
+                    Func::from(MutFn::from(move || {
                         id_alloc += 1;
                         if id_alloc < 4 {
                             Ok(id_alloc)
                         } else {
                             Err(Error::Unknown)
                         }
-                    })
-                    .unwrap(),
+                    })),
                 )
                 .unwrap();
 
@@ -492,7 +502,7 @@ mod test {
             globals
                 .set(
                     "new_id",
-                    Function::new_mut(ctx, "id", move |ctx: Ctx| {
+                    Func::from(MutFn::from(move |ctx: Ctx| {
                         let initial: Option<u32> = ctx.globals().get("initial_id")?;
                         if let Some(initial) = initial {
                             id_alloc += 1;
@@ -500,8 +510,7 @@ mod test {
                         } else {
                             Err(Error::Unknown)
                         }
-                    })
-                    .unwrap(),
+                    })),
                 )
                 .unwrap();
 
@@ -518,9 +527,49 @@ mod test {
     }
 
     #[test]
+    fn call_rust_fn_with_ctx_and_value() {
+        test_with(|ctx| {
+            let func = Func::from(|ctx, val| {
+                struct Args<'js>(Ctx<'js>, Value<'js>);
+                let Args(ctx, val) = Args(ctx, val);
+                ctx.globals().set("test_str", val).unwrap();
+            });
+            ctx.globals().set("test_fn", func).unwrap();
+            ctx.eval::<(), _>(
+                r#"
+                  test_fn("test_str")
+                "#,
+            )
+            .unwrap();
+            let val: StdString = ctx.globals().get("test_str").unwrap();
+            assert_eq!(val, "test_str");
+        });
+    }
+
+    #[test]
+    fn call_overloaded_callback() {
+        test_with(|ctx| {
+            let globals = ctx.globals();
+            globals
+                .set(
+                    "calc",
+                    Func::from((|a: f64, b: f64| (a + 1f64) * b, |a: f64| a + 1f64, || 1f64)),
+                )
+                .unwrap();
+
+            let r: f64 = ctx.eval("calc()").unwrap();
+            assert_eq!(r, 1.0);
+            let r: f64 = ctx.eval("calc(2)").unwrap();
+            assert_eq!(r, 3.0);
+            let r: f64 = ctx.eval("calc(2, 3)").unwrap();
+            assert_eq!(r, 9.0);
+        })
+    }
+
+    #[test]
     fn call_rust_fn_with_var_args() {
         let res: Vec<i8> = test_with(|ctx| {
-            let func = Function::new(ctx, "test_fn", |args: Args<i8>| {
+            let func = Function::new(ctx, |args: Rest<i8>| {
                 use std::iter::once;
                 once(args.len() as i8)
                     .chain(args.iter().cloned())
@@ -545,7 +594,7 @@ mod test {
     #[test]
     fn call_rust_fn_with_rest_args() {
         let res: Vec<i8> = test_with(|ctx| {
-            let func = Function::new(ctx, "test_fn", |arg1: i8, arg2: i8, args: Args<i8>| {
+            let func = Function::new(ctx, |arg1: i8, arg2: i8, args: Rest<i8>| {
                 use std::iter::once;
                 once(arg1)
                     .chain(once(arg2))
@@ -577,7 +626,7 @@ mod test {
             global
                 .set(
                     "cat",
-                    JsFn::new("name", |a: StdString, b: StdString| format!("{}{}", a, b)),
+                    Func::from(|a: StdString, b: StdString| format!("{}{}", a, b)),
                 )
                 .unwrap();
             let res: StdString = ctx.eval("cat(\"foo\", \"bar\")").unwrap();
@@ -587,10 +636,10 @@ mod test {
             global
                 .set(
                     "log",
-                    JsFnMut::new_unnamed(move |msg: StdString| {
+                    Func::from(MutFn::from(move |msg: StdString| {
                         log.push(msg);
                         log.len() as u32
-                    }),
+                    })),
                 )
                 .unwrap();
             let n: u32 = ctx.eval("log(\"foo\") + log(\"bar\")").unwrap();

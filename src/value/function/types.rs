@@ -1,5 +1,6 @@
-use crate::{AsFunction, AsFunctionMut, Ctx, Function, IntoJs, Result, SendWhenParallel, Value};
+use crate::{AsFunction, Ctx, Function, IntoJs, Result, SendWhenParallel, Value};
 use std::{
+    cell::RefCell,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -8,209 +9,177 @@ use std::{
 #[repr(transparent)]
 pub struct Method<F>(pub F);
 
-impl<F> AsRef<F> for Method<F> {
-    fn as_ref(&self) -> &F {
-        &self.0
+/// The wrapper for function to convert into JS
+#[repr(transparent)]
+pub struct Func<F>(pub F);
+
+/// The wrapper for mutable functions
+#[repr(transparent)]
+pub struct MutFn<F>(RefCell<F>);
+
+impl<F> From<F> for MutFn<F> {
+    fn from(func: F) -> Self {
+        Self(RefCell::new(func))
     }
 }
 
-impl<F> Deref for Method<F> {
-    type Target = F;
+/// The wrapper for once functions
+#[repr(transparent)]
+pub struct OnceFn<F>(RefCell<Option<F>>);
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl<F> From<F> for OnceFn<F> {
+    fn from(func: F) -> Self {
+        Self(RefCell::new(Some(func)))
     }
 }
 
-/// The wrapper to specify `this` argument
+/// The wrapper to get `this` from input
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(transparent)]
 pub struct This<T>(pub T);
 
-impl<T> This<T> {
-    pub fn into(self) -> T {
-        self.0
-    }
-}
+/// The wrapper to get optional argument from input
+///
+/// Which is needed because the `Option` implements `FromJs` so requires the argument which may be `undefined`.
+#[derive(Clone, Copy, Debug, Default)]
+#[repr(transparent)]
+pub struct Opt<T>(pub Option<T>);
 
-impl<T> From<T> for This<T> {
-    fn from(value: T) -> Self {
-        Self(value)
-    }
-}
-
-impl<T> AsRef<T> for This<T> {
-    fn as_ref(&self) -> &T {
-        &self.0
-    }
-}
-
-impl<T> AsMut<T> for This<T> {
-    fn as_mut(&mut self) -> &mut T {
-        &mut self.0
-    }
-}
-
-impl<T> Deref for This<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for This<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// The wrapper for variable number of arguments
+/// The wrapper the rest arguments from input
 #[derive(Clone, Default)]
-pub struct Args<T>(pub Vec<T>);
+pub struct Rest<T>(pub Vec<T>);
 
-impl<T> Args<T> {
+macro_rules! type_impls {
+	  ($($type:ident <$($params:ident),*>($($fields:tt)*): $($impls:ident)*;)*) => {
+        $(type_impls!{@impls $type [$($params)*]($($fields)*) $($impls)*})*
+	  };
+
+    (@impls $type:ident[$($params:ident)*]($($fields:tt)*) $impl:ident $($impls:ident)*) => {
+        type_impls!{@impl $impl($($fields)*) $type $($params)*}
+        type_impls!{@impls $type[$($params)*]($($fields)*) $($impls)*}
+    };
+
+    (@impls $type:ident[$($params:ident)*]($($fields:tt)*)) => {};
+
+    (@impl into($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> $type<$param $(, $params)*> {
+            pub fn into(self) -> $field {
+                self.0
+            }
+        }
+    };
+
+    (@impl Into($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> Into<$field> for $type<$param $(, $params)*> {
+            fn into(self) -> $field {
+                self.0
+            }
+        }
+    };
+
+    (@impl From($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> From<$field> for $type<$param $(, $params)*> {
+            fn from(value: $field) -> Self {
+                Self(value $(, type_impls!(@def $fields))*)
+            }
+        }
+    };
+
+    (@impl AsRef($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> AsRef<$field> for $type<$param $(, $params)*> {
+            fn as_ref(&self) -> &$field {
+                &self.0
+            }
+        }
+    };
+
+    (@impl AsMut($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> AsMut<$field> for $type<$param $(, $params)*> {
+            fn as_mut(&mut self) -> &mut $field {
+                &mut self.0
+            }
+        }
+    };
+
+    (@impl Deref($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> Deref for $type<$param $(, $params)*> {
+            type Target = $field;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
+
+    (@impl DerefMut($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> DerefMut for $type<$param $(, $params)*> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+    };
+
+    (@impl IntoJs($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<'js, $param $(, $params)*, A, R> IntoJs<'js> for $type<$param $(, $params)*>
+        where
+            $param: AsFunction<A, R>,
+        {
+            fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                Function::new(ctx, self)?.into_js(ctx)
+            }
+        }
+    };
+
+    (@def $($t:tt)*) => { Default::default() };
+}
+
+impl<F, A, R> From<F> for Func<(F, PhantomData<(A, R)>)> {
+    fn from(func: F) -> Self {
+        Self((func, PhantomData))
+    }
+}
+
+impl<'js, F, A, R> IntoJs<'js> for Func<(F, PhantomData<(A, R)>)>
+where
+    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let data = self.0;
+        Function::new(ctx, data.0)?.into_js(ctx)
+    }
+}
+
+impl<N, F, A, R> Func<(N, F, PhantomData<(A, R)>)> {
+    pub fn new(name: N, func: F) -> Self {
+        Self((name, func, PhantomData))
+    }
+}
+
+impl<'js, N, F, A, R> IntoJs<'js> for Func<(N, F, PhantomData<(A, R)>)>
+where
+    N: AsRef<str>,
+    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let data = self.0;
+        let func = Function::new(ctx, data.1)?;
+        func.set_name(data.0)?;
+        func.into_js(ctx)
+    }
+}
+
+type_impls! {
+    Func<F>(F): AsRef Deref;
+    MutFn<F>(RefCell<F>): AsRef Deref;
+    OnceFn<F>(RefCell<Option<F>>): AsRef Deref;
+    Method<F>(F): AsRef Deref;
+    This<T>(T): into From AsRef AsMut Deref DerefMut;
+    Opt<T>(Option<T>): into From AsRef AsMut Deref DerefMut;
+    Rest<T>(Vec<T>): Into From AsRef AsMut Deref DerefMut;
+}
+
+impl<T> Rest<T> {
     pub fn new() -> Self {
         Self(Vec::new())
-    }
-}
-
-impl<T> From<Vec<T>> for Args<T> {
-    fn from(vec: Vec<T>) -> Self {
-        Self(vec)
-    }
-}
-
-impl<T> Into<Vec<T>> for Args<T> {
-    fn into(self) -> Vec<T> {
-        self.0
-    }
-}
-
-impl<T> AsRef<Vec<T>> for Args<T> {
-    fn as_ref(&self) -> &Vec<T> {
-        &self.0
-    }
-}
-
-impl<T> AsMut<Vec<T>> for Args<T> {
-    fn as_mut(&mut self) -> &mut Vec<T> {
-        &mut self.0
-    }
-}
-
-impl<T> Deref for Args<T> {
-    type Target = Vec<T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for Args<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-/// The wrapper for functions which implements `Fn` trait
-///
-/// ```
-/// # use rquickjs::JsFn;
-/// let my_func = JsFn::new("my_func", || 42);
-/// let print = JsFn::new_unnamed(|m: String| println!("{}", m));
-/// ```
-pub struct JsFn<F>(pub F);
-
-impl<'js, F, A, R> JsFn<(F, PhantomData<(A, R)>)>
-where
-    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
-{
-    /// Wrap anonymous function
-    pub fn new_unnamed(func: F) -> Self {
-        Self((func, PhantomData))
-    }
-}
-
-impl<'js, S, F, A, R> JsFn<(S, F, PhantomData<(A, R)>)>
-where
-    S: AsRef<str>,
-    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
-{
-    /// Wrap named function
-    pub fn new(name: S, func: F) -> Self {
-        Self((name, func, PhantomData))
-    }
-}
-
-impl<'js, F, A, R> IntoJs<'js> for JsFn<(F, PhantomData<(A, R)>)>
-where
-    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
-{
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let (func, _) = self.0;
-        Function::new(ctx, "", func).map(Value::from)
-    }
-}
-
-impl<'js, S, F, A, R> IntoJs<'js> for JsFn<(S, F, PhantomData<(A, R)>)>
-where
-    S: AsRef<str>,
-    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
-{
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let (name, func, _) = self.0;
-        Function::new(ctx, name, func).map(Value::from)
-    }
-}
-
-/// The wrapper for functions which implements `Fn` trait
-///
-/// ```
-/// # use rquickjs::JsFn;
-/// let my_func = JsFn::new("my_func", || 42);
-/// let print = JsFn::new_unnamed(|m: String| println!("{}", m));
-/// ```
-pub struct JsFnMut<F>(pub F);
-
-impl<'js, F, A, R> JsFnMut<(F, PhantomData<(A, R)>)>
-where
-    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
-{
-    /// Wrap anonymous function
-    pub fn new_unnamed(func: F) -> Self {
-        Self((func, PhantomData))
-    }
-}
-
-impl<'js, S, F, A, R> JsFnMut<(S, F, PhantomData<(A, R)>)>
-where
-    S: AsRef<str>,
-    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
-{
-    /// Wrap named function
-    pub fn new(name: S, func: F) -> Self {
-        Self((name, func, PhantomData))
-    }
-}
-
-impl<'js, F, A, R> IntoJs<'js> for JsFnMut<(F, PhantomData<(A, R)>)>
-where
-    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
-{
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let (func, _) = self.0;
-        Function::new_mut(ctx, "", func).map(Value::from)
-    }
-}
-
-impl<'js, S, F, A, R> IntoJs<'js> for JsFnMut<(S, F, PhantomData<(A, R)>)>
-where
-    S: AsRef<str>,
-    F: AsFunctionMut<'js, A, R> + SendWhenParallel + 'static,
-{
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let (name, func, _) = self.0;
-        Function::new_mut(ctx, name, func).map(Value::from)
     }
 }

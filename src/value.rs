@@ -17,7 +17,7 @@ pub use array::Array;
 pub use atom::*;
 pub use convert::*;
 pub use function::{
-    Args, AsArguments, AsFunction, AsFunctionMut, Function, JsFn, JsFnMut, Method, This,
+    AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
 };
 pub use object::{Object, ObjectDef};
 pub use string::String;

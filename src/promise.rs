@@ -1,7 +1,7 @@
 #[cfg(feature = "deferred-resolution")]
 use crate::qjs;
 use crate::{
-    Ctx, Error, FromJs, Function, IntoJs, JsFn, Object, Persistent, Result, SafeRef,
+    Ctx, Error, FromJs, Func, Function, IntoJs, Object, Persistent, Result, SafeRef,
     SendWhenParallel, This, Value,
 };
 use std::{
@@ -48,14 +48,14 @@ where
         let obj = Object::from_js(ctx, value)?;
         let then: Function = obj.get("then")?;
         let state = SafeRef::new(State::default());
-        let on_ok = JsFn::new("onSuccess", {
+        let on_ok = Func::new("onSuccess", {
             let state = state.clone();
             move |ctx: Ctx<'js>, value: Value<'js>| {
                 let mut state = state.lock();
                 state.resolve(T::from_js(ctx, value));
             }
         });
-        let on_err = JsFn::new("onError", {
+        let on_err = Func::new("onError", {
             let state = state.clone();
             move |error: Error| {
                 let mut state = state.lock();
@@ -193,7 +193,7 @@ mod test {
             let res: Promise<i32> = ctx.with(|ctx| {
                 let global = ctx.globals();
                 global
-                    .set("mul2", JsFn::new("mul2", |a, b| PromiseJs(mul2(a, b))))
+                    .set("mul2", Func::from(|a, b| PromiseJs(mul2(a, b))))
                     .unwrap();
                 ctx.eval("mul2(2, 3)").unwrap()
             });
@@ -217,7 +217,7 @@ mod test {
             ctx.with(|ctx| {
                 let global = ctx.globals();
                 global
-                    .set("doit", JsFn::new("doit", || PromiseJs(doit())))
+                    .set("doit", Func::from(|| PromiseJs(doit())))
                     .unwrap();
                 let _ = ctx.eval::<Value, _>("doit()").unwrap();
             });
@@ -238,7 +238,7 @@ mod test {
             let _res: Promise<()> = ctx.with(|ctx| {
                 let global = ctx.globals();
                 global
-                    .set("doit", JsFn::new("doit", || PromiseJs(doit())))
+                    .set("doit", Func::from(|| PromiseJs(doit())))
                     .unwrap();
                 ctx.eval("doit()").unwrap()
             });

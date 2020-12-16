@@ -422,7 +422,7 @@ where
 /// The wrapper for constructor function
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 #[repr(transparent)]
-pub struct Constructor<C, F>(F, PhantomData<C>);
+pub struct Constructor<C, F>(pub(crate) F, PhantomData<C>);
 
 impl<C, F> AsRef<F> for Constructor<C, F> {
     fn as_ref(&self) -> &F {
@@ -457,7 +457,7 @@ where
 /// The macro to simplify class definition.
 ///
 /// ```
-/// # use rquickjs::{class_def, JsFn, Method};
+/// # use rquickjs::{class_def, Method, Func};
 /// #
 /// struct TestClass;
 ///
@@ -470,11 +470,11 @@ where
 ///     TestClass
 ///     // optional prototype initializer
 ///     (proto) {
-///         proto.set("method", JsFn::new("method", Method(TestClass::method)))?;
+///         proto.set("method", Func::from(Method(TestClass::method)))?;
 ///     }
 ///     // optional static initializer
 ///     @(ctor) {
-///         ctor.set("static_func", JsFn::new("static_func", TestClass::static_func))?;
+///         ctor.set("static_func", Func::from(TestClass::static_func))?;
 ///     }
 ///     // optional internal refs marker (for gc)
 ///     ~(_self, _marker) {
@@ -636,10 +636,10 @@ mod test {
 
         class_def! {
             Point (proto) {
-                proto.set("get_x", JsFn::new("get_x", Method(Point::get_x)))?;
-                proto.set("get_y", JsFn::new("get_y", Method(|Point { y, .. }: &Point| *y)))?;
+                proto.set("get_x", Func::from(Method(Point::get_x)))?;
+                proto.set("get_y", Func::from(Method(|Point { y, .. }: &Point| *y)))?;
             } @(ctor) {
-                ctor.set("zero", JsFn::new("zero", Point::zero))?;
+                ctor.set("zero", Func::from(Point::zero))?;
             }
         }
 
@@ -648,8 +648,7 @@ mod test {
 
             let global = ctx.globals();
 
-            let ctor =
-                Function::new(ctx, "Point", Class::<Point>::constructor(Point::new)).unwrap();
+            let ctor = Function::new(ctx, Class::<Point>::constructor(Point::new)).unwrap();
 
             {
                 let ctor = ctor.as_object();
@@ -737,8 +736,8 @@ mod test {
         class_def!(
             A~ (proto) {
                 println!("A::register");
-                proto.set("add", JsFn::new("add", Method(Class::<A>::add)))?;
-                proto.set("rm", JsFn::new("rm", Method(Class::<A>::rm)))?;
+                proto.set("add", Func::from(Method(Class::<A>::add)))?;
+                proto.set("rm", Func::from(Method(Class::<A>::rm)))?;
             }
         );
 
@@ -749,7 +748,7 @@ mod test {
 
                 let global = ctx.globals();
                 global
-                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
+                    .set("A", Func::from(Class::<A>::constructor(A::new)))
                     .unwrap();
 
                 // a -> b
@@ -773,7 +772,7 @@ mod test {
 
                 let global = ctx.globals();
                 global
-                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
+                    .set("A", Func::from(Class::<A>::constructor(A::new)))
                     .unwrap();
 
                 // a -> b
@@ -798,7 +797,7 @@ mod test {
 
                 let global = ctx.globals();
                 global
-                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
+                    .set("A", Func::from(Class::<A>::constructor(A::new)))
                     .unwrap();
 
                 // a -> b
@@ -826,7 +825,7 @@ mod test {
 
                 let global = ctx.globals();
                 global
-                    .set("A", JsFn::new("A", Class::<A>::constructor(A::new)))
+                    .set("A", Func::from(Class::<A>::constructor(A::new)))
                     .unwrap();
 
                 let _: () = ctx

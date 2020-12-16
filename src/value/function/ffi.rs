@@ -1,16 +1,26 @@
-use super::ArgsIter;
+use super::Input;
 use crate::{handle_panic, qjs, Ctx, Result, Value};
-use std::{panic, panic::AssertUnwindSafe, ptr};
+use std::{ops::Deref, panic, panic::AssertUnwindSafe, ptr};
 
 static mut FUNC_CLASS: qjs::JSClassID = 0;
 
-#[repr(transparent)]
-pub struct FuncOpaque<'js>(Box<dyn Fn(Ctx<'js>, Value<'js>, ArgsIter<'js>) -> Result<Value<'js>>>);
+type BoxedFunc<'js> = Box<dyn Fn(&Input<'js>) -> Result<Value<'js>>>;
 
-impl<'js> FuncOpaque<'js> {
+#[repr(transparent)]
+pub struct JsFunction<'js>(BoxedFunc<'js>);
+
+impl<'js> Deref for JsFunction<'js> {
+    type Target = BoxedFunc<'js>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl<'js> JsFunction<'js> {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(Ctx<'js>, Value<'js>, ArgsIter<'js>) -> Result<Value<'js>> + 'static,
+        F: Fn(&Input<'js>) -> Result<Value<'js>> + 'static,
     {
         Self(Box::new(func))
     }
@@ -28,12 +38,9 @@ impl<'js> FuncOpaque<'js> {
         argc: qjs::c_int,
         argv: *mut qjs::JSValue,
     ) -> Result<qjs::JSValue> {
-        let ctx = Ctx::from_ptr(ctx);
+        let input = Input::new_raw(ctx, this, argc, argv);
 
-        let this = Value::from_js_value_const(ctx, this);
-        let args = ArgsIter::from_value_count_const(ctx, argc as usize, argv);
-
-        let res = (self.0)(ctx, this, args)?;
+        let res = self.0(&input)?;
 
         Ok(res.into_js_value())
     }
@@ -62,6 +69,7 @@ impl<'js> FuncOpaque<'js> {
     ) -> qjs::JSValue {
         let ctx = Ctx::from_ptr(ctx);
         let opaque = &*(qjs::JS_GetOpaque2(ctx.ctx, func, FUNC_CLASS) as *mut Self);
+
         handle_panic(
             ctx.ctx,
             AssertUnwindSafe(|| {
