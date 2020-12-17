@@ -1,4 +1,4 @@
-use crate::{warning, AttributeArgs, Config, Ident, Parenthesized, TokenStream};
+use crate::{AttributeArgs, Config, Ident, Parenthesized, TokenStream};
 use darling::{util::Override, FromMeta};
 use quote::{quote, ToTokens};
 use syn::{parse2, AttrStyle, Attribute, Path};
@@ -104,9 +104,17 @@ pub struct AttrVar {
     /// Variable name for export
     #[darling(rename = "rename")]
     pub name: Option<String>,
-    /// Set as property
-    #[darling(rename = "property")]
+    /// Defines a property
+    #[darling(rename = "value")]
     pub prop: bool,
+    /// Create writable property
+    pub writable: bool,
+    /// Create configurable property
+    pub configurable: bool,
+    /// Create enumerable property
+    pub enumerable: bool,
+    /// Set to prototype
+    pub proto: bool,
     /// Skip export
     pub skip: bool,
 }
@@ -118,6 +126,18 @@ impl Merge for AttrVar {
         }
         if over.prop {
             self.prop = true;
+        }
+        if over.writable {
+            self.writable = true;
+        }
+        if over.configurable {
+            self.configurable = true;
+        }
+        if over.enumerable {
+            self.enumerable = true;
+        }
+        if over.proto {
+            self.proto = true;
         }
         if over.skip {
             self.skip = true;
@@ -133,11 +153,13 @@ pub struct AttrFn {
     #[darling(rename = "rename")]
     pub name: Option<String>,
     /// Use as getter for specified property
-    #[darling(rename = "getter")]
-    pub get: Option<String>,
+    pub get: bool,
     /// Use as setter for specified property
-    #[darling(rename = "setter")]
-    pub set: Option<String>,
+    pub set: bool,
+    /// Create configurable property
+    pub configurable: bool,
+    /// Create enumerable property
+    pub enumerable: bool,
     /// Use as constructor
     #[darling(rename = "constructor")]
     pub ctor: Override<bool>,
@@ -150,11 +172,17 @@ impl Merge for AttrFn {
         if over.name.is_some() {
             self.name = over.name;
         }
-        if over.get.is_some() {
-            self.get = over.get;
+        if over.get {
+            self.get = true;
         }
-        if over.set.is_some() {
-            self.set = over.set;
+        if over.set {
+            self.set = true;
+        }
+        if over.configurable {
+            self.configurable = true;
+        }
+        if over.enumerable {
+            self.enumerable = true;
         }
         if over.skip {
             self.skip = true;
@@ -453,7 +481,7 @@ mod test {
 
         #[test]
         fn property() {
-            let attr: AttrVar = parse! { property };
+            let attr: AttrVar = parse! { value };
             assert_eq!(
                 attr,
                 AttrVar {
@@ -477,13 +505,14 @@ mod test {
 
         #[test]
         fn all() {
-            let attr: AttrVar = parse! { rename = "new", property, skip };
+            let attr: AttrVar = parse! { rename = "new", value, skip };
             assert_eq!(
                 attr,
                 AttrVar {
                     name: Some("new".into()),
                     prop: true,
                     skip: true,
+                    ..Default::default()
                 }
             );
         }
@@ -495,9 +524,9 @@ mod test {
         }
 
         #[test]
-        #[should_panic(expected = "Unknown literal value `some` at property")]
+        #[should_panic(expected = "Unknown literal value `some` at value")]
         fn unexpected_value() {
-            let _attr: AttrVar = parse! { property = "some" };
+            let _attr: AttrVar = parse! { value = "some" };
         }
     }
 
@@ -524,11 +553,11 @@ mod test {
 
         #[test]
         fn getter() {
-            let attr: AttrFn = parse! { getter = "prop" };
+            let attr: AttrFn = parse! { get };
             assert_eq!(
                 attr,
                 AttrFn {
-                    get: Some("prop".into()),
+                    get: true,
                     ..Default::default()
                 }
             );
@@ -536,11 +565,11 @@ mod test {
 
         #[test]
         fn setter() {
-            let attr: AttrFn = parse! { setter = "prop" };
+            let attr: AttrFn = parse! { set };
             assert_eq!(
                 attr,
                 AttrFn {
-                    set: Some("prop".into()),
+                    set: true,
                     ..Default::default()
                 }
             );
@@ -560,13 +589,13 @@ mod test {
 
         #[test]
         fn all() {
-            let attr: AttrFn = parse! { rename = "new", getter = "prop", setter = "prop", skip };
+            let attr: AttrFn = parse! { rename = "new", get, set, skip };
             assert_eq!(
                 attr,
                 AttrFn {
                     name: Some("new".into()),
-                    get: Some("prop".into()),
-                    set: Some("prop".into()),
+                    get: true,
+                    set: true,
                     skip: true,
                     ..Default::default()
                 }

@@ -22,12 +22,23 @@ impl Source {
         path.pop();
         Self(path)
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
 }
 
 impl Display for Source {
     fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        let src = self;
-        quote!(#src).to_string().fmt(f)
+        let mut iter = self.0.iter();
+        if let Some(segment) = iter.next() {
+            quote!(#segment).to_string().fmt(f)?;
+            for segment in iter {
+                ".".fmt(f)?;
+                quote!(#segment).to_string().fmt(f)?;
+            }
+        }
+        Ok(())
     }
 }
 

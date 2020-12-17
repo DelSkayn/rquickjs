@@ -1,3 +1,39 @@
+#[cfg(test)]
+macro_rules! abort {
+    ($err:expr) => { panic!($err); };
+    ($fmt:literal $($tts:tt)*) => { panic!("{}", format!($fmt $($tts)*)); };
+    ($span:expr, $($tts:tt)*) => { { let _ = $span; panic!("{}", format!($($tts)*)); } };
+}
+
+#[cfg(test)]
+macro_rules! error {
+    ($err:expr) => { panic!($err); };
+    ($fmt:literal $($tts:tt)*) => { eprintln!("{}", format!($fmt $($tts)*)); };
+    ($span:expr, $($tts:tt)*) => { { let _ = $span; eprintln!("{}", format!($($tts)*)); } };
+}
+
+#[cfg(test)]
+macro_rules! warning {
+    ($err:expr) => { panic!($err); };
+    ($fmt:literal $($tts:tt)*) => { eprintln!("{}", format!($fmt $($tts)*)); };
+    ($span:expr, $($tts:tt)*) => { { let _ = $span; eprintln!("{}", format!($($tts)*)); } };
+}
+
+#[cfg(not(test))]
+macro_rules! abort {
+    ($($tokens:tt)*) => { proc_macro_error::abort!($($tokens)*); };
+}
+
+#[cfg(not(test))]
+macro_rules! error {
+    ($($tokens:tt)*) => { proc_macro_error::emit_error!($($tokens)*); };
+}
+
+#[cfg(not(test))]
+macro_rules! warning {
+    ($($tokens:tt)*) => { proc_macro_error::emit_warning!($($tokens)*); };
+}
+
 mod bind;
 mod config;
 mod context;
@@ -10,7 +46,6 @@ use proc_macro_error::proc_macro_error;
 use syn::parse_macro_input;
 
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::{abort, emit_error as error, emit_warning as warning};
 
 use bind::*;
 use config::*;
@@ -53,7 +88,11 @@ __`skip`__                | Skips exporting this module
 Attribute                 | Description
 ------------------------- | ---------------------------
 __`rename = "new_name"`__ | Renames constant to export
-__`property`__            | Creates property
+__`value`__               | Defines a property
+__`writable`__            | Makes property to be writable
+__`configurable`__        | Makes property to be configurable
+__`enumerable`__          | Makes property to be enumerable
+__`proto`__               | Sets constant or property to prototype
 __`skip`__                | Skips exporting this contant
 
 ## Function attributes
@@ -61,11 +100,16 @@ __`skip`__                | Skips exporting this contant
 Attribute                 | Description
 ------------------------- | ---------------------------
 __`rename = "new_name"`__ | Renames function to export
-__`getter = "property"`__ | Uses function as a getter for the property
-__`setter = "property"`__ | Uses function as a setter for the property
+__`get`__                 | Uses function as a getter for a property
+__`set`__                 | Uses function as a setter for a property
+__`configurable`__        | Makes property to be configurable
+__`enumerable`__          | Makes property to be enumerable
 __`constructor`__, __`constructor = true`__  | Forces creating contructor
 __`constructor = false`__ | Disables creating contructor
 __`skip`__                | Skips exporting this contant
+
+When multiple functions is declared with same name (i.e. same `rename` attribute value) it will be overloaded. The overloading rules is dead simple, so currently you should be care to get it works.
+Overloading is not supported for property getters/setters.
 
 ## Data type attributes
 
@@ -202,14 +246,21 @@ let ctx = Context::full(&rt).unwrap();
 
 rt.spawn_pending_jobs(None);
 
-let promise: Promise<()> = ctx.with(|ctx| {
+let promise: Promise<String> = ctx.with(|ctx| {
     let glob = ctx.globals();
     glob.init_def::<Sleep>().unwrap();
 
-    ctx.eval(r#"sleep(100)"#).unwrap()
+    ctx.eval(r#"
+        async function mysleep() {
+            await sleep(50);
+            return "ok";
+        }
+        mysleep()
+    "#).unwrap()
 });
 
-promise.await;
+let res = promise.await.unwrap();
+assert_eq!(res, "ok");
 # }
 ```
 

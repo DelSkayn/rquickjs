@@ -1,117 +1,45 @@
-use super::{AttrMod, BindClasses, BindConsts, BindFns, BindMods, BindProps, Binder};
-use crate::{error, Config, Ident, Source, TokenStream};
+use super::{AttrMod, BindItems, Binder};
+use crate::{Config, TokenStream};
 use quote::quote;
 use syn::ItemMod;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BindMod {
-    pub src: Source,
-    pub bare: bool,
-    pub consts: BindConsts,
-    pub props: BindProps,
-    pub fns: BindFns,
-    pub mods: BindMods,
-    pub classes: BindClasses,
+    pub items: BindItems,
 }
 
 impl BindMod {
-    pub fn new(src: &Source, ident: &Ident) -> Self {
-        Self {
-            src: src.with_ident(ident.clone()),
-            ..Default::default()
-        }
-    }
-
-    pub fn root() -> Self {
-        Self {
-            bare: true,
-            ..Default::default()
-        }
-    }
-
-    pub fn bare(mut self, flag: bool) -> Self {
-        self.bare = flag;
-        self
-    }
-
-    pub fn module_decl(&self, name: &str, cfg: &Config) -> TokenStream {
+    pub fn module_decl(&self, cfg: &Config) -> TokenStream {
         let exports_var = &cfg.exports_var;
+        let exports_list = self
+            .items
+            .keys()
+            .map(|name| quote! { #exports_var.add(#name)?; });
 
-        if self.bare {
-            let exports_list = self
-                .consts
-                .keys()
-                .chain(self.props.keys())
-                .chain(self.fns.keys())
-                .chain(self.classes.keys())
-                .map(|name| quote! { #exports_var.add(#name)?; })
-                .chain(
-                    self.mods
-                        .iter()
-                        .map(|(name, bind)| bind.module_decl(name, cfg)),
-                );
-
-            quote! { #(#exports_list)* }
-        } else {
-            quote! { #exports_var.add(#name)?; }
-        }
+        quote! { #(#exports_list)* }
     }
 
-    pub fn module_impl(&self, name: &str, cfg: &Config) -> TokenStream {
-        if self.bare {
-            let exports_list = self
-                .consts
-                .iter()
-                .map(|(name, bind)| bind.expand(name, cfg))
-                .chain(self.fns.iter().map(|(name, bind)| bind.expand(name, cfg)))
-                .chain(
-                    self.classes
-                        .iter()
-                        .map(|(name, bind)| bind.expand(name, cfg)),
-                )
-                .chain(
-                    self.mods
-                        .iter()
-                        .map(|(name, bind)| bind.module_impl(name, cfg)),
-                );
+    pub fn module_impl(&self, cfg: &Config) -> TokenStream {
+        let exports_list = self.items.iter().map(|(name, bind)| bind.expand(name, cfg));
 
-            quote! { #(#exports_list)* }
-        } else {
-            self.object_init(name, cfg)
-        }
+        quote! { #(#exports_list)* }
     }
 
-    pub fn object_init(&self, name: &str, cfg: &Config) -> TokenStream {
+    pub fn object_init(&self, _name: &str, cfg: &Config) -> TokenStream {
+        let exports_list = self.items.iter().map(|(name, bind)| bind.expand(name, cfg));
+        quote! { #(#exports_list)* }
+    }
+
+    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
         let exports_var = &cfg.exports_var;
-
-        let exports_list = self
-            .consts
-            .iter()
-            .map(|(name, bind)| bind.expand(name, cfg))
-            .chain(self.props.iter().map(|(name, bind)| bind.expand(name, cfg)))
-            .chain(self.fns.iter().map(|(name, bind)| bind.expand(name, cfg)))
-            .chain(
-                self.classes
-                    .iter()
-                    .map(|(name, bind)| bind.expand(name, cfg)),
-            )
-            .chain(
-                self.mods
-                    .iter()
-                    .map(|(name, bind)| bind.object_init(name, cfg)),
-            );
-
-        if self.bare {
-            quote! { #(#exports_list)* }
-        } else {
-            quote! {
-                #exports_var.set(#name, {
-                    let #exports_var = #lib_crate::Object::new(_ctx)?;
-                    #(#exports_list)*
-                    #exports_var
-                })?;
-            }
+        let bindings = self.object_init(name, cfg);
+        quote! {
+            #exports_var.set(#name, {
+                let #exports_var = #lib_crate::Object::new(_ctx)?;
+                #bindings
+                #exports_var
+            })?;
         }
     }
 }
@@ -138,32 +66,22 @@ impl Binder {
         let items = &mut content.as_mut().unwrap().1;
         let name = name.unwrap_or_else(|| ident.to_string());
 
-        let src = self.top_src();
-        let decl = BindMod::new(src, ident).bare(bare);
-
-        let decl = self.with(decl, |this| {
-            for item in items {
-                this.bind_item(item);
+        self.with_dir(ident, |this| {
+            if bare {
+                this.bind_items(items);
+            } else {
+                this.with_item::<BindMod, _>(ident, &name, |this| {
+                    this.bind_items(items);
+                });
             }
         });
-
-        self.top_mods()
-            .entry(name.clone())
-            .and_modify(|def| {
-                error!(
-                    ident.span(),
-                    "Module `{}` already defined with `{}`", name, def.src
-                );
-            })
-            .or_insert(decl);
     }
 }
 
 #[cfg(test)]
 mod test {
     test_cases! {
-        module_without_init { module } {
-            #[quickjs(bare)]
+        no_bare_module_without_init { module } {
             mod lib {
                 pub const N: i8 = 3;
                 pub fn doit() {}
@@ -178,20 +96,72 @@ mod test {
 
             impl rquickjs::ModuleDef for Lib {
                 fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
-                    exports.add("N")?;
-                    exports.add("doit")?;
+                    exports.add("lib")?;
                     Ok(())
                 }
 
                 fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
-                    exports.set("N", lib::N)?;
-                    exports.set("doit", rquickjs::JsFn::new("doit", lib::doit))?;
+                    exports.set("lib", {
+                        let exports = rquickjs::Object::new(_ctx)?;
+                        exports.set("N", lib::N)?;
+                        exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                        exports
+                    })?;
                     Ok(())
                 }
             }
         };
 
-        module_with_default_init { module, init } {
+        no_bare_object_public_crate { object, public = "crate" } {
+            mod lib {
+                pub const N: i8 = 3;
+                pub fn doit() {}
+            }
+        } {
+            mod lib {
+                pub const N: i8 = 3;
+                pub fn doit() {}
+            }
+
+            pub(crate) struct Lib;
+
+            impl rquickjs::ObjectDef for Lib {
+                fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{
+                    exports.set("lib", {
+                        let exports = rquickjs::Object::new(_ctx)?;
+                        exports.set("N", lib::N)?;
+                        exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                        exports
+                    })?;
+                    Ok(())
+                }
+            }
+        };
+
+        bare_object_public { object, public } {
+            #[quickjs(bare)]
+            mod lib {
+                pub const N: i8 = 3;
+                pub fn doit() {}
+            }
+        } {
+            mod lib {
+                pub const N: i8 = 3;
+                pub fn doit() {}
+            }
+
+            pub struct Lib;
+
+            impl rquickjs::ObjectDef for Lib {
+                fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{
+                    exports.set("N", lib::N)?;
+                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                    Ok(())
+                }
+            }
+        };
+
+        bare_module_without_init { module } {
             #[quickjs(bare)]
             mod lib {
                 pub const N: i8 = 3;
@@ -214,7 +184,36 @@ mod test {
 
                 fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
                     exports.set("N", lib::N)?;
-                    exports.set("doit", rquickjs::JsFn::new("doit", lib::doit))?;
+                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                    Ok(())
+                }
+            }
+        };
+
+        bare_module_with_default_init { module, init } {
+            #[quickjs(bare)]
+            mod lib {
+                pub const N: i8 = 3;
+                pub fn doit() {}
+            }
+        } {
+            mod lib {
+                pub const N: i8 = 3;
+                pub fn doit() {}
+            }
+
+            struct Lib;
+
+            impl rquickjs::ModuleDef for Lib {
+                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
+                    exports.add("N")?;
+                    exports.add("doit")?;
+                    Ok(())
+                }
+
+                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
+                    exports.set("N", lib::N)?;
+                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
                     Ok(())
                 }
             }

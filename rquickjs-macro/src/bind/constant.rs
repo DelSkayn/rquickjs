@@ -1,5 +1,5 @@
-use super::{AttrVar, Binder};
-use crate::{error, Config, Ident, Source, TokenStream};
+use super::{AttrVar, BindProp, Binder};
+use crate::{Config, Ident, Source, TokenStream};
 use quote::quote;
 use syn::{Attribute, ImplItemConst, ItemConst, Visibility};
 
@@ -9,9 +9,17 @@ pub struct BindConst {
 }
 
 impl BindConst {
-    pub fn new(src: &Source, ident: &Ident) -> Self {
-        Self {
-            src: src.with_ident(ident.clone()),
+    pub fn set_src(&mut self, ident: &Ident, name: &str, new_src: Source) {
+        if self.src == Default::default() {
+            self.src = new_src;
+        } else if self.src != new_src {
+            error!(
+                ident,
+                "Attempt to redefine constant '{}' for `{}` which is already defined for `{}`",
+                name,
+                new_src,
+                self.src
+            );
         }
     }
 
@@ -49,7 +57,15 @@ impl Binder {
     }
 
     fn _bind_constant(&mut self, attrs: &mut Vec<Attribute>, vis: &Visibility, ident: &Ident) {
-        let AttrVar { name, prop, skip } = self.get_attrs(attrs);
+        let AttrVar {
+            name,
+            prop,
+            writable,
+            configurable,
+            enumerable,
+            proto,
+            skip,
+        } = self.get_attrs(attrs);
         if !self.visible(vis) || skip {
             return;
         }
@@ -57,21 +73,25 @@ impl Binder {
         self.identify(ident);
 
         let name = name.unwrap_or_else(|| ident.to_string());
-        let src = self.top_src();
-        let decl = BindConst::new(src, ident);
+        let src = self.sub_src(ident);
+
+        if proto && !self.top_is_class() {
+            error!(
+                ident,
+                "Unable to set module constant '{}' to prototype", name
+            );
+            return;
+        }
 
         if prop {
-            self.top_prop(&name).set_const(&ident, &name, decl);
-        } else {
-            self.top_consts()
-                .entry(name.clone())
-                .and_modify(|def| {
-                    error!(
-                        ident,
-                        "Constant `{}` already defined with `{}`", name, def.src
-                    );
-                })
-                .or_insert(decl);
+            if let Some(prop) = self.top_item::<BindProp, _>(ident, &name, proto) {
+                prop.set_const(&ident, &name, BindConst { src });
+                prop.set_writable(&name, writable);
+                prop.set_configurable(configurable);
+                prop.set_enumerable(enumerable);
+            }
+        } else if let Some(decl) = self.top_item::<BindConst, _>(ident, &name, proto) {
+            decl.set_src(ident, &name, src);
         }
     }
 }
@@ -122,7 +142,7 @@ mod test {
         };
         private_const {} {
             mod math {
-                #[quickjs(property)]
+                #[quickjs(value)]
                 const PI: f32 = core::math::f32::PI;
             }
         } {

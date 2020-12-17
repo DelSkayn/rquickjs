@@ -1,4 +1,4 @@
-use crate::{warning, Config, Ident, TokenStream};
+use crate::{Config, Ident, TokenStream};
 use darling::{
     ast::{Data, Fields, GenericParam, GenericParamExt, Generics},
     usage::{CollectTypeParams, GenericsExt, Purpose},

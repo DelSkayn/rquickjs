@@ -1,85 +1,61 @@
-use super::{AttrData, AttrField, AttrImpl, BindConsts, BindFn, BindFns, BindProps, Binder};
-use crate::{error, Config, Ident, Source, TokenStream};
+use super::{AttrData, AttrField, AttrImpl, BindFn, BindFn1, BindItems, BindProp, Binder};
+use crate::{Config, Ident, Source, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_quote, spanned::Spanned, Field, Fields, ItemEnum, ItemImpl, ItemStruct, Type};
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BindClass {
-    pub srcs: Vec<Source>,
-    pub consts: BindConsts,
-    pub props: BindProps,
-    pub fns: BindFns,
+    pub src: Source,
+    /// Static items
+    pub items: BindItems,
+    /// Prototype items
+    pub proto_items: BindItems,
+    /// Constructor
+    pub ctor: Option<BindFn>,
+    /// Has internal refs
     pub has_refs: bool,
 }
 
 impl BindClass {
-    pub fn new(src: &Source, ident: &Ident) -> Self {
-        Self {
-            srcs: vec![src.with_ident(ident.clone())],
-            ..Default::default()
+    pub fn set_src(&mut self, ident: &Ident, name: &str, new_src: Source) {
+        if self.src == Default::default() {
+            self.src = new_src;
+        } else if self.src != new_src {
+            error!(
+                ident,
+                "Attempt to redefine class '{}' for `{}` which is already defined for `{}`",
+                name,
+                new_src,
+                self.src
+            );
         }
     }
 
-    pub fn with_src(mut self, src: Source) -> Self {
-        self.srcs.push(src);
-        self
-    }
-
-    pub fn last_src(&self) -> &Source {
-        let len = self.srcs.len();
-        debug_assert!(len > 0);
-        &self.srcs[len - 1]
-    }
-
-    pub fn first_src(&self) -> &Source {
-        let len = self.srcs.len();
-        debug_assert!(len > 0);
-        &self.srcs[0]
+    pub fn ctor(&mut self) -> &mut BindFn {
+        if self.ctor.is_none() {
+            self.ctor = Some(BindFn::default());
+        }
+        self.ctor.as_mut().unwrap()
     }
 
     pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
         let exports_var = &cfg.exports_var;
-        let src = self.first_src();
+        let src = &self.src;
 
         let proto_list = self
-            .props
+            .proto_items
             .iter()
-            .filter(|(_, bind)| !bind.is_static())
             .map(|(name, bind)| bind.expand(name, cfg))
-            .chain(
-                self.fns
-                    .iter()
-                    .filter(|(_, bind)| bind.method)
-                    .map(|(name, bind)| bind.expand(name, cfg)),
-            )
             .collect::<Vec<_>>();
 
         let static_list = self
-            .consts
+            .items
             .iter()
             .map(|(name, bind)| bind.expand(name, cfg))
-            .chain(
-                self.props
-                    .iter()
-                    .filter(|(_, bind)| bind.is_static())
-                    .map(|(name, bind)| bind.expand(name, cfg)),
-            )
-            .chain(
-                self.fns
-                    .iter()
-                    .filter(|(name, func)| !func.method && (!func.constr || name.as_str() != "new"))
-                    .map(|(name, bind)| bind.expand(name, cfg)),
-            )
             .collect::<Vec<_>>();
 
-        let ctor_func = self.fns.get("new").and_then(|func| {
-            if func.constr {
-                Some(func.expand(name, cfg))
-            } else {
-                None
-            }
-        });
+        let ctor_func = self.ctor.as_ref().map(|func| func.expand(name, cfg));
 
         let mut extras = Vec::new();
 
@@ -135,6 +111,15 @@ impl BindClass {
 }
 
 impl Binder {
+    fn update_class(&mut self, ident: &Ident, name: &str, has_refs: bool) {
+        let src = self.top_src().clone();
+        let class = self.top_class().unwrap();
+        class.set_src(ident, name, src);
+        if has_refs {
+            class.has_refs = true;
+        }
+    }
+
     pub(super) fn bind_struct(
         &mut self,
         ItemStruct {
@@ -159,25 +144,25 @@ impl Binder {
 
         let name = name.unwrap_or_else(|| ident.to_string());
 
-        self.with_class(&name, &ident, |this| {
-            if has_refs {
-                this.top_class().unwrap().has_refs = true;
-            }
+        self.with_dir(ident, |this| {
+            this.with_item::<BindClass, _>(&ident, &name, |this| {
+                this.update_class(ident, &name, has_refs);
 
-            use Fields::*;
-            match fields {
-                Named(fields) => {
-                    for field in fields.named.iter_mut() {
-                        this.bind_field(None, field);
+                use Fields::*;
+                match fields {
+                    Named(fields) => {
+                        for field in fields.named.iter_mut() {
+                            this.bind_field(None, field);
+                        }
                     }
-                }
-                Unnamed(fields) => {
-                    for (index, field) in fields.unnamed.iter_mut().enumerate() {
-                        this.bind_field(Some(index), field)
+                    Unnamed(fields) => {
+                        for (index, field) in fields.unnamed.iter_mut().enumerate() {
+                            this.bind_field(Some(index), field)
+                        }
                     }
+                    _ => (),
                 }
-                _ => (),
-            }
+            });
         });
     }
 
@@ -205,11 +190,12 @@ impl Binder {
 
         let name = name.unwrap_or_else(|| ident.to_string());
 
-        self.with_class(&name, &ident, |this| {
-            if has_refs {
-                this.top_class().unwrap().has_refs = true;
-            }
-            // TODO support for variant fields
+        self.with_dir(ident, |this| {
+            this.with_item::<BindClass, _>(&ident, &name, |this| {
+                this.update_class(ident, &name, has_refs);
+
+                // TODO support for variant fields
+            });
         });
     }
 
@@ -245,32 +231,45 @@ impl Binder {
             .unwrap_or_else(|| ty.span());
 
         let class = self.top_src().clone();
-        let prop = self.top_prop(&name);
-        let src = Source::default();
+        if let Some(prop) = self.top_item::<BindProp, _>(span, &name, true) {
+            let src = Source::default();
 
-        prop.set_getter(span, &name, {
-            let fn_ = format_ident!("get_{}", name);
-            let self_ = format_ident!("self_");
-            let def = parse_quote! {
-                fn #fn_(#self_: #class) -> #ty {
-                    #self_.#ident
-                }
-            };
-            BindFn::new(&src, &fn_, &name, &[self_]).define(def)
-        });
-
-        if !readonly {
-            prop.set_setter(span, &name, {
-                let fn_ = format_ident!("set_{}", name);
+            prop.set_getter(span, &name, {
+                let fn_ = format_ident!("get_{}", name);
                 let self_ = format_ident!("self_");
-                let val = format_ident!("val");
                 let def = parse_quote! {
-                    fn #fn_(#self_: #class, #val: #ty) {
-                        #self_.#ident = #val;
+                    fn #fn_(#self_: #class) -> #ty {
+                        #self_.#ident
                     }
                 };
-                BindFn::new(&src, &fn_, &name, &[self_, val]).define(def)
+                let src = src.with_ident(fn_);
+                BindFn1 {
+                    src,
+                    args: vec![self_],
+                    define: Some(def),
+                    ..Default::default()
+                }
             });
+
+            if !readonly {
+                prop.set_setter(span, &name, {
+                    let fn_ = format_ident!("set_{}", name);
+                    let self_ = format_ident!("self_");
+                    let val = format_ident!("val");
+                    let def = parse_quote! {
+                        fn #fn_(#self_: #class, #val: #ty) {
+                            #self_.#ident = #val;
+                        }
+                    };
+                    let src = src.with_ident(fn_);
+                    BindFn1 {
+                        src,
+                        args: vec![self_, val],
+                        define: Some(def),
+                        ..Default::default()
+                    }
+                });
+            }
         }
     }
 
@@ -317,31 +316,13 @@ impl Binder {
 
         let name = name.unwrap_or_else(|| ident.to_string());
 
-        self.with_class(&name, &ident, |this| {
-            if has_refs {
-                this.top_class().unwrap().has_refs = true;
-            }
-            for item in items {
-                this.bind_impl_item(item);
-            }
+        self.with_dir(ident, |this| {
+            this.with_item::<BindClass, _>(&ident, &name, |this| {
+                this.update_class(ident, &name, has_refs);
+
+                this.bind_impl_items(items);
+            });
         });
-    }
-
-    fn with_class<F>(&mut self, name: &str, ident: &Ident, func: F)
-    where
-        F: FnOnce(&mut Self),
-    {
-        let src = self.top_src();
-        let decl = BindClass::new(src, ident);
-
-        let decl = self
-            .take_class(name)
-            .map(|class| class.with_src(decl.last_src().clone()))
-            .unwrap_or(decl);
-
-        let decl = self.with(decl, func);
-
-        self.top_classes().insert(name.into(), decl);
     }
 
     fn class_ident(ty: &Type) -> Option<&Ident> {
@@ -399,8 +380,8 @@ mod test {
                 const HAS_PROTO: bool = true;
 
                 fn init_proto<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.set("len", rquickjs::JsFn::new("len", rquickjs::Method(test::Node::len)))?;
-                    exports.set("add", rquickjs::JsFn::new("add", rquickjs::Method(test::Node::add)))?;
+                    exports.set("len", rquickjs::Func::new("len", rquickjs::Method(test::Node::len)))?;
+                    exports.set("add", rquickjs::Func::new("add", rquickjs::Method(test::Node::add)))?;
                     Ok(())
                 }
             }
@@ -413,15 +394,18 @@ mod test {
                 pub struct Node;
                 impl Node {
                     // static const prop
-                    #[quickjs(property, rename = "max_children")]
+                    #[quickjs(value, rename = "children", proto)]
+                    pub const HAS_CHILDREN: bool = true;
+                    // const prop
+                    #[quickjs(value, rename = "children", configurable)]
                     pub const MAX_CHILDREN: usize = 5;
                     // static prop
-                    #[quickjs(getter = "root")]
+                    #[quickjs(rename = "root", get)]
                     pub fn get_root() -> &Node;
-                    // class prop
-                    #[quickjs(getter = "parent")]
-                    pub fn get_parent(&self) -> Option<&Node>;
-                    #[quickjs(setter = "parent")]
+                    // instance prop
+                    #[quickjs(get, enumerable)]
+                    pub fn parent(&self) -> Option<&Node>;
+                    #[quickjs(rename = "parent", set)]
                     pub fn set_parent(&self, parent: &Node);
                 }
             }
@@ -437,18 +421,19 @@ mod test {
                 const HAS_PROTO: bool = true;
 
                 fn init_proto<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.prop("parent", (
-                        rquickjs::JsFn::new("get_parent", rquickjs::Method(test::Node::get_parent)),
-                        rquickjs::JsFn::new("set_parent", rquickjs::Method(test::Node::set_parent))
-                    ))?;
+                    exports.prop("children", rquickjs::Property::from(test::Node::HAS_CHILDREN))?;
+                    exports.prop("parent", rquickjs::Accessor::new(
+                        rquickjs::Method(test::Node::parent),
+                        rquickjs::Method(test::Node::set_parent)
+                    ).enumerable())?;
                     Ok(())
                 }
 
                 const HAS_STATIC: bool = true;
 
                 fn init_static<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.prop("max_children", (test::Node::MAX_CHILDREN,))?;
-                    exports.prop("root", (rquickjs::JsFn::new("get_root", test::Node::get_root),))?;
+                    exports.prop("children", rquickjs::Property::from(test::Node::MAX_CHILDREN).configurable())?;
+                    exports.prop("root", rquickjs::Accessor::new_get(test::Node::get_root))?;
                     Ok(())
                 }
             }
@@ -473,7 +458,7 @@ mod test {
                 }
             }
             rquickjs::Class::<test::Node>::register(_ctx)?;
-            exports.set("Node", rquickjs::JsFn::new("new", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
+            exports.set("Node", rquickjs::Func::new("Node", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
         };
 
         class_with_static { test } {
@@ -499,12 +484,12 @@ mod test {
 
                 fn init_static<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
                     exports.set("TAG", test::Node::TAG)?;
-                    exports.set("mix", rquickjs::JsFn::new("mix", test::Node::mix))?;
+                    exports.set("mix", rquickjs::Func::new("mix", test::Node::mix))?;
                     Ok(())
                 }
             }
             rquickjs::Class::<test::Node>::register(_ctx)?;
-            exports.set("Node", rquickjs::JsFn::new("new", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
+            exports.set("Node", rquickjs::Func::new("Node", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
         };
 
         class_with_internal_refs { test } {

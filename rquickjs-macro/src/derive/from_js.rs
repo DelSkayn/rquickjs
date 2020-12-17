@@ -92,7 +92,7 @@ impl FromJs {
 
                 match input.enum_repr() {
                     ExternallyTagged => quote! {
-                        let (_tag, _val): (String, #lib_crate::Value) = _val.get::<#lib_crate::Object>()?.own_props(true).next().ok_or_else(|| #lib_crate::Error::new_from_js_message("value", "enum", "Missing property"))??;
+                        let (_tag, _val): (String, #lib_crate::Value) = _val.get::<#lib_crate::Object>()?.props().next().ok_or_else(|| #lib_crate::Error::new_from_js_message("value", "enum", "Missing property"))??;
                         #body
                     },
                     InternallyTagged { tag } => quote! {
@@ -365,7 +365,7 @@ mod test {
                 fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
                     let (_tag, _val): (String, rquickjs::Value) = _val
                         .get::<rquickjs::Object>()?
-                        .own_props(true)
+                        .props()
                         .next()
                         .ok_or_else(|| rquickjs::Error::new_from_js_message("value", "enum", "Missing property"))??;
                     match _tag.as_str() {

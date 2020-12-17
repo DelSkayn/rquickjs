@@ -24,14 +24,14 @@ mod function;
 mod module;
 mod property;
 
-use crate::{abort, error, Config, Ident, Source, TokenStream};
+use crate::{Config, Ident, Source, TokenStream};
 use darling::{util::Override, FromMeta};
 use fnv::FnvBuildHasher;
 use ident_case::RenameRule;
 use indexmap::IndexMap;
 use quote::{format_ident, quote};
-use std::mem::replace;
-use syn::{Attribute, ImplItem, Item, Visibility};
+use std::{convert::TryFrom, mem::replace};
+use syn::{spanned::Spanned, Attribute, ImplItem, Item, Visibility};
 
 use attrs::*;
 use class::*;
@@ -78,16 +78,114 @@ top_impls! {
     Class: BindClass;
 }
 
-type BindConsts = Map<String, BindConst>;
-type BindProps = Map<String, BindProp>;
-type BindFns = Map<String, BindFn>;
-type BindMods = Map<String, BindMod>;
-type BindClasses = Map<String, BindClass>;
+macro_rules! item_impl {
+	  ($($name:ident $type:ident,)*) => {
+        #[allow(clippy::large_enum_variant)]
+        #[derive(Debug, Clone, PartialEq, Eq)]
+        pub enum BindItem {
+		        $(
+                $name($type),
+            )*
+        }
+
+        $(
+            impl From<$type> for BindItem {
+                fn from(value: $type) -> Self {
+                    Self::$name(value)
+                }
+            }
+
+            impl TryFrom<BindItem> for $type {
+                type Error = BindItem;
+                fn try_from(item: BindItem) -> Result<Self, Self::Error> {
+                    if let BindItem::$name(value) = item {
+                        Ok(value)
+                    } else {
+                        Err(item)
+                    }
+                }
+            }
+
+            impl<'a> TryFrom<&'a BindItem> for &'a $type {
+                type Error = &'a BindItem;
+                fn try_from(item: &'a BindItem) -> Result<Self, Self::Error> {
+                    if let BindItem::$name(value) = item {
+                        Ok(value)
+                    } else {
+                        Err(item)
+                    }
+                }
+            }
+
+            impl<'a> TryFrom<&'a mut BindItem> for &'a mut $type {
+                type Error = &'a mut BindItem;
+                fn try_from(item: &'a mut BindItem) -> Result<Self, Self::Error> {
+                    if let BindItem::$name(value) = item {
+                        Ok(value)
+                    } else {
+                        Err(item)
+                    }
+                }
+            }
+        )*
+
+        impl BindItem {
+            /*
+            pub fn as_ref<'a, T>(&'a self) -> Option<&'a T>
+            where
+                &'a T: TryFrom<&'a Self>,
+            {
+                TryFrom::try_from(self).ok()
+            }
+
+            pub fn as_mut<'a, T>(&'a mut self) -> Option<&'a mut T>
+            where
+                &'a mut T: TryFrom<&'a mut Self>,
+            {
+                TryFrom::try_from(self).ok()
+            }
+
+            pub fn into_item<T>(self) -> Option<T>
+            where
+                T: TryFrom<Self>
+            {
+                TryFrom::try_from(self).ok()
+            }
+            */
+
+            pub fn kind(&self) -> &'static str {
+                match self {
+                    $(
+                        Self::$name(_) => stringify!($name),
+                    )*
+                }
+            }
+            pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+                match self {
+                    $(
+                        Self::$name(value) => value.expand(name, cfg),
+                    )*
+                }
+            }
+        }
+	  };
+}
+
+item_impl! {
+    Const BindConst,
+    Prop BindProp,
+    Fn BindFn,
+    Mod BindMod,
+    Class BindClass,
+}
+
+type BindItems = Map<String, BindItem>;
 
 #[derive(Debug)]
 pub struct Binder {
     config: Config,
     ident: Option<Ident>,
+    src: Source,
     top: Top,
     stack: Vec<BindMod>,
 }
@@ -97,7 +195,8 @@ impl Binder {
         Self {
             config,
             ident: None,
-            top: Top::Mod(BindMod::root()),
+            top: Top::Mod(BindMod::default()),
+            src: Source::default(),
             stack: Vec::new(),
         }
     }
@@ -110,6 +209,12 @@ impl Binder {
 
     pub fn get_attrs<R: FromMeta + Default + Merge>(&self, attrs: &mut Vec<Attribute>) -> R {
         get_attrs(&self.config.bind_attr, attrs)
+    }
+
+    pub fn bind_items(&mut self, items: &mut [Item]) {
+        for item in items {
+            self.bind_item(item);
+        }
     }
 
     pub fn bind_item(&mut self, item: &mut Item) {
@@ -126,6 +231,12 @@ impl Binder {
         }
     }
 
+    pub fn bind_impl_items(&mut self, items: &mut [ImplItem]) {
+        for item in items {
+            self.bind_impl_item(item);
+        }
+    }
+
     pub fn bind_impl_item(&mut self, item: &mut ImplItem) {
         use ImplItem::*;
         match item {
@@ -138,15 +249,15 @@ impl Binder {
 
     fn visible(&self, vis: &Visibility) -> bool {
         use Visibility::*;
-        self.stack.is_empty() || matches!(vis, Public(_) | Crate(_))
+        self.src.is_empty() || matches!(vis, Public(_) | Crate(_))
     }
 
     fn top_src(&self) -> &Source {
-        use Top::*;
-        match &self.top {
-            Mod(module) => &module.src,
-            Class(class) => class.last_src(),
-        }
+        &self.src
+    }
+
+    fn sub_src(&self, ident: &Ident) -> Source {
+        self.src.with_ident(ident.clone())
     }
 
     fn top_is_class(&self) -> bool {
@@ -154,61 +265,48 @@ impl Binder {
     }
 
     fn top_class(&mut self) -> Option<&mut BindClass> {
-        use Top::*;
-        match &mut self.top {
-            Class(class) => Some(class),
-            _ => None,
+        if let Top::Class(class) = &mut self.top {
+            Some(class)
+        } else {
+            None
         }
     }
 
-    fn top_consts(&mut self) -> &mut BindConsts {
-        use Top::*;
-        match &mut self.top {
-            Mod(module) => &mut module.consts,
-            Class(class) => &mut class.consts,
+    fn top_items(&mut self, proto: bool) -> &mut BindItems {
+        if proto {
+            match &mut self.top {
+                Top::Class(class) => &mut class.proto_items,
+                _ => unreachable!(),
+            }
+        } else {
+            match &mut self.top {
+                Top::Mod(module) => &mut module.items,
+                Top::Class(class) => &mut class.items,
+            }
         }
     }
 
-    fn top_props(&mut self) -> &mut BindProps {
-        use Top::*;
-        match &mut self.top {
-            Mod(module) => &mut module.props,
-            Class(datatype) => &mut datatype.props,
-        }
-    }
-
-    fn top_prop(&mut self, name: &str) -> &mut BindProp {
-        self.top_props()
+    fn top_item<T, S>(&mut self, span: S, name: &str, proto: bool) -> Option<&mut T>
+    where
+        T: Default,
+        for<'a> &'a mut T: TryFrom<&'a mut BindItem, Error = &'a mut BindItem>,
+        BindItem: From<T>,
+        S: Spanned,
+    {
+        let item = self
+            .top_items(proto)
             .entry(name.into())
-            .or_insert_with(BindProp::default)
-    }
-
-    fn top_fns(&mut self) -> &mut BindFns {
-        use Top::*;
-        match &mut self.top {
-            Mod(module) => &mut module.fns,
-            Class(class) => &mut class.fns,
-        }
-    }
-
-    fn top_mods(&mut self) -> &mut BindMods {
-        use Top::*;
-        match &mut self.top {
-            Mod(module) => &mut module.mods,
-            _ => unreachable!(),
-        }
-    }
-
-    fn top_classes(&mut self) -> &mut BindClasses {
-        use Top::*;
-        match &mut self.top {
-            Mod(module) => &mut module.classes,
-            _ => unreachable!(),
-        }
-    }
-
-    fn take_class(&mut self, name: &str) -> Option<BindClass> {
-        self.top_classes().remove(name)
+            .or_insert_with(|| T::default().into());
+        <&mut T>::try_from(item)
+            .map_err(|item| {
+                error!(
+                    span.span(),
+                    "The {} item is already defined with same name `{}`",
+                    item.kind(),
+                    name,
+                );
+            })
+            .ok()
     }
 
     pub fn expand(
@@ -275,8 +373,8 @@ impl Binder {
             });
 
             if module {
-                let mod_decl = def.module_decl(&name, &self.config);
-                let mod_impl = def.module_impl(&name, &self.config);
+                let mod_decl = def.module_decl(&self.config);
+                let mod_impl = def.module_impl(&self.config);
 
                 let mod_init = if let Some(init) = init {
                     let init_ident = init.unwrap_or_else(|| format_ident!("js_init_module"));
@@ -328,7 +426,17 @@ impl Binder {
         quote! { #item #(#bindings)* }
     }
 
-    fn with<T, F>(&mut self, top: T, func: F) -> T
+    fn with_dir<F>(&mut self, ident: &Ident, func: F)
+    where
+        F: FnOnce(&mut Self),
+    {
+        let src = self.sub_src(ident);
+        let src = replace(&mut self.src, src);
+        func(self);
+        self.src = src;
+    }
+
+    fn with_top<T, F>(&mut self, top: T, func: F) -> T
     where
         T: From<Top>,
         Top: From<T>,
@@ -339,5 +447,34 @@ impl Binder {
         func(self);
         let top = self.stack.pop().unwrap().into();
         replace(&mut self.top, top).into()
+    }
+
+    fn with_item<T, F>(&mut self, ident: &Ident, name: &str, func: F)
+    where
+        T: From<Top> + Default + TryFrom<BindItem, Error = BindItem>,
+        Top: From<T>,
+        BindItem: From<T>,
+        F: FnOnce(&mut Self),
+    {
+        let item = self.top_items(false).remove(name);
+        let item = if let Some(item) = item {
+            match T::try_from(item) {
+                Ok(item) => item,
+                Err(item) => {
+                    error!(
+                        ident,
+                        "The {} item is already defined with same name `{}`",
+                        item.kind(),
+                        name,
+                    );
+                    self.top_items(false).insert(name.into(), item);
+                    return;
+                }
+            }
+        } else {
+            T::default()
+        };
+        let item = self.with_top(item, func);
+        self.top_items(false).insert(name.into(), item.into());
     }
 }
