@@ -94,6 +94,17 @@ impl<T> Persistent<T> {
         }
     }
 
+    #[cfg(feature = "classes")]
+    pub(crate) fn mark_raw(&self, mark_func: qjs::JS_MarkFunc) {
+        let value = self.value.get();
+        if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(value) } {
+            unsafe { qjs::JS_MarkValue(self.rt, value, mark_func) };
+            if 0 == unsafe { qjs::JS_ValueRefCount(value) } {
+                self.value.set(qjs::JS_UNDEFINED);
+            }
+        }
+    }
+
     /// Save the value of an arbitrary type
     pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target>
     where

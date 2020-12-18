@@ -15,7 +15,9 @@ pub trait HasRefs {
 
 impl<T> HasRefs for Persistent<T> {
     fn mark_refs(&self, marker: &RefsMarker) {
-        marker.mark(self);
+        if marker.rt == self.rt {
+            self.mark_raw(marker.mark_func);
+        }
     }
 }
 
@@ -145,19 +147,4 @@ has_refs_impls! {
 pub struct RefsMarker {
     pub(crate) rt: *mut qjs::JSRuntime,
     pub(crate) mark_func: qjs::JS_MarkFunc,
-}
-
-impl RefsMarker {
-    /// The function to mark stored JS value references.
-    ///
-    /// You usually should mark all persistent JS objects explicitly in [`ClassDef::mark_refs`](crate::ClassDef::mark_refs) by using this function to make GC working as expected.
-    pub fn mark<T>(&self, value: &Persistent<T>) {
-        let val = value.value.get();
-        if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(val) } {
-            unsafe { qjs::JS_MarkValue(self.rt, val, self.mark_func) };
-            if 0 == unsafe { qjs::JS_ValueRefCount(val) } {
-                value.value.set(qjs::JS_UNDEFINED);
-            }
-        }
-    }
 }
