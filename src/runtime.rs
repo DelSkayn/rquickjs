@@ -111,6 +111,10 @@ impl Runtime {
         )
     }
 
+    pub(crate) unsafe fn init_raw(rt: *mut qjs::JSRuntime) {
+        Function::init_raw(rt);
+    }
+
     #[inline]
     fn new_raw(
         rt: *mut qjs::JSRuntime,
@@ -119,7 +123,9 @@ impl Runtime {
         if rt.is_null() {
             return Err(Error::Allocation);
         }
-        unsafe { Function::init_raw_rt(rt) };
+
+        unsafe { Self::init_raw(rt) };
+
         let runtime = Runtime {
             inner: SafeRef::new(Inner {
                 rt,

@@ -134,6 +134,10 @@ impl Context {
         mem::drop(guard);
         res
     }
+
+    pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
+        Runtime::init_raw(qjs::JS_GetRuntime(ctx));
+    }
 }
 
 impl Drop for Context {

@@ -223,8 +223,7 @@ mod test {
                 ctx: *mut rquickjs::qjs::JSContext,
                 name: *const rquickjs::qjs::c_char,
             ) -> *mut rquickjs::qjs::JSModuleDef {
-                rquickjs::Function::init_raw(ctx);
-                rquickjs::Module::init::<Lib>(ctx, name)
+                rquickjs::Module::init_raw::<Lib>(ctx, name)
             }
         };
     }

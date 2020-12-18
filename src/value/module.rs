@@ -1,5 +1,6 @@
 use crate::{
-    get_exception, handle_exception, qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value,
+    get_exception, handle_exception, qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs,
+    Result, Value,
 };
 use std::{
     ffi::{CStr, CString},
@@ -163,8 +164,7 @@ macro_rules! module_init {
             ctx: *mut $crate::qjs::JSContext,
             module_name: *const $crate::qjs::c_char,
         ) -> *mut $crate::qjs::JSModuleDef {
-            $crate::Function::init_raw(ctx);
-            $crate::Module::init::<$type>(ctx, module_name)
+            $crate::Module::init_raw::<$type>(ctx, module_name)
         }
     };
 }
@@ -247,13 +247,14 @@ impl<'js> Module<'js> {
     ///
     /// # Safety
     /// This function should only be called from `js_module_init` function.
-    pub unsafe extern "C" fn init<D>(
+    pub unsafe extern "C" fn init_raw<D>(
         ctx: *mut qjs::JSContext,
         name: *const qjs::c_char,
     ) -> *mut qjs::JSModuleDef
     where
         D: ModuleDef,
     {
+        Context::init_raw(ctx);
         let ctx = Ctx::from_ptr(ctx);
         let name = CStr::from_ptr(name);
         match Self::_init::<D>(ctx, name) {

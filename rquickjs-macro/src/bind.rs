@@ -384,8 +384,7 @@ impl Binder {
                             ctx: *mut #lib_crate::qjs::JSContext,
                             name: *const #lib_crate::qjs::c_char,
                         ) -> *mut #lib_crate::qjs::JSModuleDef {
-                            #lib_crate::Function::init_raw(ctx);
-                            #lib_crate::Module::init::<#ident>(ctx, name)
+                            #lib_crate::Module::init_raw::<#ident>(ctx, name)
                         }
                     }
                 } else {

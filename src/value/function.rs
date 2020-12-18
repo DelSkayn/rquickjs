@@ -176,18 +176,8 @@ impl<'js> Function<'js> {
         }
     }
 
-    pub(crate) unsafe fn init_raw_rt(rt: *mut qjs::JSRuntime) {
+    pub(crate) unsafe fn init_raw(rt: *mut qjs::JSRuntime) {
         JsFunction::register(rt);
-    }
-
-    /// Initialize from module init function
-    ///
-    /// NOTE: Do not call it directly. You usually should use [module_init] instead.
-    ///
-    /// # Safety
-    /// Should be called right after initializing the context to register Rust function class.
-    pub unsafe fn init_raw(ctx: *mut qjs::JSContext) {
-        Self::init_raw_rt(qjs::JS_GetRuntime(ctx));
     }
 }
 
