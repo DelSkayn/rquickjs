@@ -2,7 +2,7 @@ use crate::{qjs, Error, Result, Runtime};
 use std::mem;
 
 mod builder;
-pub use builder::ContextBuilder;
+pub use builder::{intrinsic, ContextBuilder, Intrinsic};
 mod ctx;
 pub use ctx::Ctx;
 mod multi_with_impl;
@@ -29,39 +29,48 @@ pub struct Context {
 
 impl Context {
     /// Creates a base context with only the required functions registered.
-    /// If additional functions are required use [`Context::build`](#method.build)
-    /// or [`Contex::full`](#method.full).
+    /// If additional functions are required use [`Context::custom`],
+    /// [`Context::builder`] or [`Contex::full`].
     pub fn base(runtime: &Runtime) -> Result<Self> {
+        Self::custom::<intrinsic::Base>(runtime)
+    }
+
+    /// Creates a context with only the required intrinsics registered.
+    /// If additional functions are required use [`Context::custom`],
+    /// [`Context::builder`] or [`Contex::full`].
+    pub fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
-        unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx) };
-        let res = Ok(Context {
+        unsafe { I::add_intrinsic(ctx) };
+        let res = Context {
             ctx,
             rt: runtime.clone(),
-        });
+        };
         mem::drop(guard);
-        res
+
+        Ok(res)
     }
 
-    /// Creates a context with all standart available functions registered.
-    /// If precise controll is required of wich functions are available use
-    /// [`Context::build`](#method.context)
+    /// Creates a context with all standart available intrinsics registered.
+    /// If precise controll is required of which functions are available use
+    /// [`Context::custom`] or [`Context::builder`].
     pub fn full(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
         if ctx.is_null() {
             return Err(Error::Allocation);
         }
-        let res = Ok(Context {
+        let res = Context {
             ctx,
             rt: runtime.clone(),
-        });
+        };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
-        res
+
+        Ok(res)
     }
 
     #[cfg(feature = "parallel")]
@@ -75,8 +84,8 @@ impl Context {
     fn reset_stack(&self) {}
 
     /// Create a context builder for creating a context with a specific set of intrinsics
-    pub fn build(rt: &Runtime) -> ContextBuilder {
-        ContextBuilder::new(rt)
+    pub fn builder() -> ContextBuilder<()> {
+        ContextBuilder::new()
     }
 
     /// Set the maximum stack size for the local context stack
@@ -112,7 +121,7 @@ impl Context {
     /// context which would otherwise be undefined behaviour.
     ///
     ///
-    /// This is the only way to get a [`Ctx`](struct.Ctx.html) object.
+    /// This is the only way to get a [`Ctx`] object.
     pub fn with<F, R>(&self, f: F) -> R
     where
         F: FnOnce(Ctx) -> R,
@@ -177,7 +186,10 @@ mod test {
     #[test]
     fn minimal() {
         let rt = Runtime::new().unwrap();
-        let ctx = Context::build(&rt).none().eval(true).build().unwrap();
+        let ctx = Context::builder()
+            .with::<intrinsic::Eval>()
+            .build(&rt)
+            .unwrap();
         ctx.with(|ctx| {
             let val: i32 = ctx.eval(r#"1+1"#).unwrap();
 

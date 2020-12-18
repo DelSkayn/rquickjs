@@ -36,7 +36,7 @@ pub(crate) use safe_ref::{SafeRef, SafeWeakRef};
 mod runtime;
 pub use runtime::Runtime;
 mod context;
-pub use context::{Context, ContextBuilder, Ctx, MultiWith};
+pub use context::{intrinsic, Context, ContextBuilder, Ctx, Intrinsic, MultiWith};
 mod value;
 pub use value::*;
 mod persistent;

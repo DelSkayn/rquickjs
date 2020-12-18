@@ -164,14 +164,10 @@ mod test {
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
-        use crate::{Context, Function, Runtime};
+        use crate::{intrinsic, Context, Function, Runtime};
 
         let runtime = Runtime::new().unwrap();
-        let ctx = Context::build(&runtime)
-            .promises(true)
-            .eval(true)
-            .build()
-            .unwrap();
+        let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
         ctx.with(|ctx| {
             let module = ctx
                 .compile("test", "export default async () => 1;")
