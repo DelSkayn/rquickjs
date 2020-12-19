@@ -63,7 +63,7 @@ fn main() {
         "libbf.c",
     ];
 
-    let patch_files = ["rquickjs.patch"];
+    let patch_files = ["rquickjs.patch", "check_stack_overflow.patch"];
 
     let mut defines = vec![
         ("_GNU_SOURCE".into(), None),
