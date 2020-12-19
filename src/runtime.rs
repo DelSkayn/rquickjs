@@ -166,7 +166,7 @@ impl Runtime {
     pub fn set_info<S: Into<Vec<u8>>>(&self, info: S) -> Result<()> {
         let mut guard = self.inner.lock();
         let string = CString::new(info)?;
-        unsafe { qjs::JS_SetRuntimeInfo(guard.rt, string.as_ptr()) }
+        unsafe { qjs::JS_SetRuntimeInfo(guard.rt, string.as_ptr()) };
         guard.info = Some(string);
         Ok(())
     }
@@ -176,16 +176,24 @@ impl Runtime {
     /// Setting the limit to 0 is equivalent to unlimited memory.
     pub fn set_memory_limit(&self, limit: usize) {
         let guard = self.inner.lock();
-        let limit = limit as qjs::size_t;
-        unsafe { qjs::JS_SetMemoryLimit(guard.rt, limit) }
+        unsafe { qjs::JS_SetMemoryLimit(guard.rt, limit as _) };
+        mem::drop(guard);
+    }
+
+    /// Set a limit on the max size of stack the runtime will use.
+    ///
+    /// The default values is 256x1024 bytes.
+    pub fn set_max_stack_size(&self, limit: usize) {
+        let guard = self.inner.lock();
+        unsafe { qjs::JS_SetMaxStackSize(guard.rt, limit as _) };
+        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
     }
 
     /// Set a memory threshold for garbage collection.
     pub fn set_gc_threshold(&self, threshold: usize) {
         let guard = self.inner.lock();
-        let threshold = threshold as qjs::size_t;
-        unsafe { qjs::JS_SetGCThreshold(guard.rt, threshold) }
+        unsafe { qjs::JS_SetGCThreshold(guard.rt, threshold as _) };
         mem::drop(guard);
     }
 
@@ -197,7 +205,7 @@ impl Runtime {
     /// cyclic references.
     pub fn run_gc(&self) {
         let guard = self.inner.lock();
-        unsafe { qjs::JS_RunGC(guard.rt) }
+        unsafe { qjs::JS_RunGC(guard.rt) };
         mem::drop(guard);
     }
 
@@ -205,9 +213,7 @@ impl Runtime {
     pub fn memory_usage(&self) -> MemoryUsage {
         let guard = self.inner.lock();
         let mut stats = mem::MaybeUninit::uninit();
-        unsafe {
-            qjs::JS_ComputeMemoryUsage(guard.rt, stats.as_mut_ptr());
-        }
+        unsafe { qjs::JS_ComputeMemoryUsage(guard.rt, stats.as_mut_ptr()) };
         mem::drop(guard);
         unsafe { stats.assume_init() }
     }

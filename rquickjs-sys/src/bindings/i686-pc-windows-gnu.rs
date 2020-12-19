@@ -360,7 +360,7 @@ extern "C" {
     pub fn JS_GetClassProto(ctx: *mut JSContext, class_id: JSClassID) -> JSValue;
 }
 extern "C" {
-    pub fn JS_ResetCtxStack(ctx: *mut JSContext);
+    pub fn JS_ResetStackPointer(ctx: *mut JSContext);
 }
 extern "C" {
     pub fn JS_NewContextRaw(rt: *mut JSRuntime) -> *mut JSContext;

@@ -75,9 +75,7 @@ impl Context {
 
     #[cfg(feature = "parallel")]
     fn reset_stack(&self) {
-        unsafe {
-            qjs::JS_ResetCtxStack(self.ctx);
-        }
+        unsafe { qjs::JS_ResetStackPointer(self.ctx) };
     }
 
     #[cfg(not(feature = "parallel"))]
@@ -86,15 +84,6 @@ impl Context {
     /// Create a context builder for creating a context with a specific set of intrinsics
     pub fn builder() -> ContextBuilder<()> {
         ContextBuilder::new()
-    }
-
-    /// Set the maximum stack size for the local context stack
-    pub fn set_max_stack_size(&self, size: usize) {
-        let guard = self.rt.inner.lock();
-        self.reset_stack();
-        unsafe { qjs::JS_SetMaxStackSize(guard.rt, size as _) };
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard)
     }
 
     pub fn enable_big_num_ext(&self, enable: bool) {

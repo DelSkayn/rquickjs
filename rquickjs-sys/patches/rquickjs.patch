@@ -21,7 +21,7 @@ index a39ff8f..477de31 100644
  }
 
 +#ifdef CONFIG_PARALLEL
-+void JS_ResetCtxStack(JSContext *ctx)
++void JS_ResetStackPointer(JSContext *ctx)
 +{
 +     ctx->rt->stack_top = js_get_stack_pointer();
 +}
@@ -109,7 +109,7 @@ index 92457a2..b55d4c5 100644
  JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
 
 +#ifdef CONFIG_PARALLEL
-+void JS_ResetCtxStack(JSContext *ctx);
++void JS_ResetStackPointer(JSContext *ctx);
 +#endif
 +
 +
