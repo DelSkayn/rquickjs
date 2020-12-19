@@ -2,10 +2,24 @@ diff --git a/quickjs.c b/quickjs.c
 index a39ff8f..477de31 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -2108,6 +2108,14 @@ void JS_FreeRuntime(JSRuntime *rt)
+@@ -1252,7 +1252,12 @@ static const JSClassExoticMethods js_arguments_exotic_methods;
+ static const JSClassExoticMethods js_string_exotic_methods;
+ static const JSClassExoticMethods js_proxy_exotic_methods;
+ static const JSClassExoticMethods js_module_ns_exotic_methods;
+-static JSClassID js_class_id_alloc = JS_CLASS_INIT_COUNT;
++#ifdef CONFIG_ATOMICS
++#define JS_CLASS_ID_ALLOC_ATTRS _Atomic
++#else
++#define JS_CLASS_ID_ALLOC_ATTRS
++#endif
++static JS_CLASS_ID_ALLOC_ATTRS JSClassID js_class_id_alloc = JS_CLASS_INIT_COUNT;
+
+ static void js_trigger_gc(JSRuntime *rt, size_t size)
+ {
+@@ -2108,6 +2113,13 @@ void JS_FreeRuntime(JSRuntime *rt)
      }
  }
- 
+
 +#ifdef CONFIG_PARALLEL
 +void JS_ResetCtxStack(JSContext *ctx)
 +{
@@ -13,14 +27,42 @@ index a39ff8f..477de31 100644
 +}
 +#endif
 +
-+
  JSContext *JS_NewContextRaw(JSRuntime *rt)
  {
      JSContext *ctx;
-@@ -27155,6 +27163,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
+@@ -3349,16 +3361,26 @@ static inline BOOL JS_IsEmptyString(JSValueConst v)
+
+ /* JSClass support */
+
+-/* a new class ID is allocated if *pclass_id != 0 */
++/* a new class ID is allocated if *pclass_id == 0 */
+ JSClassID JS_NewClassID(JSClassID *pclass_id)
+ {
+     JSClassID class_id;
+-    /* XXX: make it thread safe */
++#ifdef CONFIG_ATOMICS
++    JSClassID new_class_id;
++    new_class_id = atomic_load_explicit(&js_class_id_alloc, memory_order_acquire);
++    class_id = *pclass_id;
++    if (class_id == 0) {
++        class_id = new_class_id++;
++        *pclass_id = class_id;
++    }
++    atomic_store_explicit(&js_class_id_alloc, new_class_id, memory_order_release);
++#else
+     class_id = *pclass_id;
+     if (class_id == 0) {
+         class_id = js_class_id_alloc++;
+         *pclass_id = class_id;
+     }
++#endif
+     return class_id;
+ }
+
+@@ -27155,6 +27177,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
      rt->module_loader_opaque = opaque;
  }
- 
+
 +#ifdef CONFIG_MODULE_EXPORTS
 +/* Hooks into module loading functions */
 +JSValueConst JS_GetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name) {
@@ -65,7 +107,7 @@ index 92457a2..b55d4c5 100644
 @@ -352,6 +352,11 @@ JSRuntime *JS_GetRuntime(JSContext *ctx);
  void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
  JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
- 
+
 +#ifdef CONFIG_PARALLEL
 +void JS_ResetCtxStack(JSContext *ctx);
 +#endif
@@ -86,6 +128,6 @@ index 92457a2..b55d4c5 100644
 +JSAtom JS_GetModuleExportEntryName(JSContext *ctx, JSModuleDef *m, int idx);
 +#endif
 +
- 
+
  #undef js_unlikely
  #undef js_force_inline
