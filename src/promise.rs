@@ -1,14 +1,14 @@
 #[cfg(feature = "deferred-resolution")]
 use crate::qjs;
 use crate::{
-    Ctx, Error, FromJs, Func, Function, IntoJs, Object, Persistent, Result, SafeRef,
+    Context, Ctx, Error, FromJs, Func, Function, IntoJs, Object, Persistent, Result, SafeRef,
     SendWhenParallel, This, Value,
 };
 use std::{
     future::Future,
     mem,
     pin::Pin,
-    task::{Context, Poll, Waker},
+    task::{Context as TaskContext, Poll, Waker},
 };
 
 /// Future-aware promise
@@ -26,7 +26,7 @@ impl<T> State<T> {
     fn resolve(&mut self, result: Result<T>) {
         self.result = Some(result);
         if let Some(waker) = self.waker.take() {
-            waker.wake()
+            waker.wake();
         }
     }
 }
@@ -44,8 +44,8 @@ impl<'js, T> FromJs<'js> for Promise<T>
 where
     T: FromJs<'js> + SendWhenParallel + 'static,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let obj = Object::from_js(ctx, value)?;
+    fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let obj = Object::from_value(value)?;
         let then: Function = obj.get("then")?;
         let state = SafeRef::new(State::default());
         let on_ok = Func::new("onSuccess", {
@@ -70,13 +70,14 @@ where
 impl<T> Future for Promise<T> {
     type Output = Result<T>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
         let mut state = self.state.lock();
         if let Some(result) = state.result.take() {
-            return Poll::Ready(result);
+            Poll::Ready(result)
+        } else {
+            state.waker = Some(cx.waker().clone());
+            Poll::Pending
         }
-        state.waker = cx.waker().clone().into();
-        Poll::Pending
     }
 }
 
@@ -95,7 +96,7 @@ impl<T> From<T> for PromiseJs<T> {
 impl<'js, T> IntoJs<'js> for PromiseJs<T>
 where
     T: Future + 'static,
-    T::Output: IntoJs<'js> + 'static,
+    for<'js_> T::Output: IntoJs<'js_> + 'static,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let (promise, then, catch) = ctx.promise()?;
@@ -103,35 +104,28 @@ where
         let then = Persistent::save(ctx, then);
         let catch = Persistent::save(ctx, catch);
 
-        let runtime = unsafe { &ctx.get_opaque().runtime }
-            .try_ref()
-            .ok_or(Error::Unknown)?;
-
-        let ctx = ctx.ctx;
+        let ctx = Context::from_ctx(ctx)?;
         let future = self.0;
 
         crate::async_shim::spawn_local(async move {
             let result = future.await;
 
-            let rt_lock = runtime.inner.lock();
-            let ctx = Ctx::from_ptr(ctx);
-
-            match result.into_js(ctx) {
-                Ok(value) => {
-                    mem::drop(catch);
-                    resolve(ctx, then.restore(ctx).unwrap(), value)
-                }
-                Err(error) => {
-                    mem::drop(then);
-                    resolve(
-                        ctx,
-                        catch.restore(ctx).unwrap(),
-                        error.into_js(ctx).unwrap(),
-                    )
-                }
-            };
-
-            mem::drop(rt_lock);
+            ctx.with(|ctx: Ctx| {
+                match result.into_js(ctx) {
+                    Ok(value) => {
+                        mem::drop(catch);
+                        resolve(ctx, then.restore(ctx).unwrap(), value)
+                    }
+                    Err(error) => {
+                        mem::drop(then);
+                        resolve(
+                            ctx,
+                            catch.restore(ctx).unwrap(),
+                            error.into_js(ctx).unwrap(),
+                        )
+                    }
+                };
+            });
         });
 
         Ok(promise.into_value())
@@ -177,6 +171,47 @@ unsafe extern "C" fn resolution_job(
 #[cfg(all(test, any(feature = "async-std", feature = "tokio")))]
 mod test {
     use crate::{async_shim::block_on, *};
+    use futures_rs::prelude::*;
+
+    async fn delayed<T>(msec: u32, value: T) -> T {
+        let dur = std::time::Duration::from_millis(msec as _);
+
+        #[cfg(feature = "async-std")]
+        async_std_rs::task::sleep(dur).await;
+
+        #[cfg(feature = "tokio")]
+        tokio_rs::time::sleep(dur).await;
+
+        value
+    }
+
+    #[test]
+    fn delayed_fn() {
+        block_on(async {
+            let rt = Runtime::new().unwrap();
+            let ctx = Context::full(&rt).unwrap();
+
+            rt.spawn_pending_jobs(None);
+
+            let res: Promise<i32> = ctx.with(|ctx| {
+                let global = ctx.globals();
+                global
+                    .set(
+                        "delayed",
+                        Func::from(|msec, data: i32| PromiseJs(delayed(msec, data))),
+                    )
+                    .unwrap();
+                ctx.eval("delayed(50, 2)").unwrap()
+            });
+
+            let res2 = async { res.await.unwrap() }.into_stream();
+            let res1 = delayed(25, 1).into_stream();
+            let res3 = delayed(75, 3).into_stream();
+
+            let res = res1.chain(res2).chain(res3).collect::<Vec<_>>().await;
+            assert_eq!(res, &[1, 2, 3]);
+        });
+    }
 
     #[test]
     fn async_fn_no_throw() {
@@ -204,8 +239,7 @@ mod test {
     }
 
     #[test]
-    #[ignore] // TODO:
-    fn async_fn_unhandled_promise() {
+    fn unhandled_promise_js() {
         block_on(async {
             async fn doit() {}
 
@@ -221,12 +255,13 @@ mod test {
                     .unwrap();
                 let _ = ctx.eval::<Value, _>("doit()").unwrap();
             });
+
+            delayed(1, 0).await;
         });
     }
 
     #[test]
-    #[ignore] // TODO:
-    fn async_fn_unhandled_promise_future() {
+    fn unhandled_promise_future() {
         block_on(async {
             async fn doit() {}
 
@@ -242,6 +277,8 @@ mod test {
                     .unwrap();
                 ctx.eval("doit()").unwrap()
             });
+
+            delayed(1, 0).await;
         });
     }
 }

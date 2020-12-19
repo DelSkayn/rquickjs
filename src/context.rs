@@ -27,7 +27,23 @@ pub struct Context {
     rt: Runtime,
 }
 
+impl Clone for Context {
+    fn clone(&self) -> Context {
+        let ctx = unsafe { qjs::JS_DupContext(self.ctx) };
+        let rt = self.rt.clone();
+        Self { ctx, rt }
+    }
+}
+
 impl Context {
+    pub(crate) fn from_ctx<'js>(ctx: Ctx<'js>) -> Result<Self> {
+        let rt = unsafe { &ctx.get_opaque().runtime }
+            .try_ref()
+            .ok_or(Error::Unknown)?;
+        let ctx = unsafe { qjs::JS_DupContext(ctx.ctx) };
+        Ok(Self { ctx, rt })
+    }
+
     /// Creates a base context with only the required functions registered.
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Contex::full`].

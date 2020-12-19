@@ -147,6 +147,16 @@ compile-tests = []
 # Enable unstable doc-cfg feature (for docs.rs)
 doc-cfg = []
 
+[dev-dependencies.futures-rs]
+package = "futures"
+version = "^0.3"
+
+[dev-dependencies.tokio-rs]
+package = "tokio"
+version = "^0.3"
+default-features = false
+features = ["rt", "time"]
+
 [dev-dependencies]
 trybuild = "1.0.23"
 
