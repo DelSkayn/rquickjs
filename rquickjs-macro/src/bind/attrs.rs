@@ -293,298 +293,156 @@ pub fn get_attrs<R: FromMeta + Default + Merge>(ident: &Ident, attrs: &mut Vec<A
 mod test {
     use super::*;
 
-    macro_rules! parse {
-        ($($x:tt)*) => {{
-            let attr: crate::AttributeArgs = syn::parse_quote! { $($x)* };
-            darling::FromMeta::from_list(&attr).map_err(|error| panic!("{}", error)).unwrap()
-        }};
+    fn force_type_infer<T>(_a: &T, _b: &T) {}
+
+    macro_rules! tests {
+        ($($attr:ident { $($(#[$meta:meta])* $test:ident [$($input:tt)*] $expected:expr;)* })*) => {
+            $(
+                mod $attr {
+                    use super::*;
+
+                    $(
+                        #[test]
+                        $(#[$meta])*
+                        fn $test() {
+                            let attr: crate::AttributeArgs = syn::parse_quote! { $($input)* };
+                            let actual = darling::FromMeta::from_list(&attr).map_err(|error| panic!("{}", error)).unwrap();
+                            let expected = $expected;
+                            force_type_infer(&expected, &actual);
+                            assert_eq!(actual, expected);
+                        }
+                    )*
+                }
+            )*
+        };
     }
 
-    mod item_attrs {
-        use super::*;
+    tests! {
+        attr_item {
+            empty [] AttrItem::default();
 
-        #[test]
-        fn empty() {
-            let attr: AttrItem = parse! {};
-            assert_eq!(attr, AttrItem::default());
+            init_default [init] AttrItem {
+                init: Some(Override::Inherit),
+                ..Default::default()
+            };
+
+            init_named [init = "js_init_awesome_module"] AttrItem {
+                init: Some(Override::Explicit(quote::format_ident!(
+                    "js_init_awesome_module"
+                ))),
+                ..Default::default()
+            };
+
+            public_default [public] AttrItem {
+                public: Some(Override::Inherit),
+                ..Default::default()
+            };
+
+            public_restricted [public = "crate"] AttrItem {
+                public: Some(Override::Explicit(PubVis::Crate)),
+                ..Default::default()
+            };
         }
 
-        #[test]
-        fn init_default() {
-            let attr: AttrItem = parse! { init };
-            assert_eq!(
-                attr,
-                AttrItem {
-                    init: Some(Override::Inherit),
-                    ..Default::default()
-                }
-            );
+        attr_mod {
+            empty [] AttrMod::default();
+
+            rename [rename = "new"] AttrMod {
+                name: Some("new".into()),
+                ..Default::default()
+            };
+
+            bare [bare] AttrMod {
+                bare: true,
+                ..Default::default()
+            };
+
+            skip [skip] AttrMod {
+                skip: true,
+                ..Default::default()
+            };
+
+            all [rename = "new", bare, skip] AttrMod {
+                name: Some("new".into()),
+                bare: true,
+                skip: true,
+            };
+
+            #[should_panic(expected = "Unknown field: `some`")]
+            unknown_field [some = "other"] AttrMod::default();
+
+            #[should_panic(expected = "Unknown literal value `some` at bare")]
+            unexpected_value [bare = "some"] AttrMod::default();
         }
 
-        #[test]
-        fn init_named() {
-            let attr: AttrItem = parse! { init = "js_init_awesome_module" };
-            assert_eq!(
-                attr,
-                AttrItem {
-                    init: Some(Override::Explicit(quote::format_ident!(
-                        "js_init_awesome_module"
-                    ))),
-                    ..Default::default()
-                }
-            );
+        attr_var {
+            empty [] AttrVar::default();
+
+            rename [rename = "new"] AttrVar {
+                name: Some("new".into()),
+                ..Default::default()
+            };
+
+            property [value] AttrVar {
+                prop: true,
+                ..Default::default()
+            };
+
+            skip [skip] AttrVar {
+                skip: true,
+                ..Default::default()
+            };
+
+            all [rename = "new", value, skip] AttrVar {
+                name: Some("new".into()),
+                prop: true,
+                skip: true,
+                ..Default::default()
+            };
+
+            #[should_panic(expected = "Unknown field: `some`")]
+            unknown_field [some = "other"] AttrVar::default();
+
+            #[should_panic(expected = "Unknown literal value `some` at value")]
+            unexpected_value [value = "some"] AttrVar::default();
         }
 
-        #[test]
-        fn public_default() {
-            let attr: AttrItem = parse! { public };
-            assert_eq!(
-                attr,
-                AttrItem {
-                    public: Some(Override::Inherit),
-                    ..Default::default()
-                }
-            );
-        }
+        attr_fn {
+            empty [] AttrFn::default();
 
-        #[test]
-        fn public_restricted() {
-            let attr: AttrItem = parse! { public = "crate" };
-            assert_eq!(
-                attr,
-                AttrItem {
-                    public: Some(Override::Explicit(PubVis::Crate)),
-                    ..Default::default()
-                }
-            );
-        }
-    }
+            rename [rename = "new"] AttrFn {
+                name: Some("new".into()),
+                ..Default::default()
+            };
 
-    mod mod_attrs {
-        use super::*;
+            getter [get] AttrFn {
+                get: true,
+                ..Default::default()
+            };
 
-        #[test]
-        fn empty() {
-            let attr: AttrMod = parse! {};
-            assert_eq!(attr, AttrMod::default());
-        }
+            setter [set] AttrFn {
+                set: true,
+                ..Default::default()
+            };
 
-        #[test]
-        fn rename() {
-            let attr: AttrMod = parse! { rename = "new" };
-            assert_eq!(
-                attr,
-                AttrMod {
-                    name: Some("new".into()),
-                    ..Default::default()
-                }
-            );
-        }
+            skip [skip] AttrFn {
+                skip: true,
+                ..Default::default()
+            };
 
-        #[test]
-        fn bare() {
-            let attr: AttrMod = parse! { bare };
-            assert_eq!(
-                attr,
-                AttrMod {
-                    bare: true,
-                    ..Default::default()
-                }
-            );
-        }
+            all [rename = "new", get, set, skip] AttrFn {
+                name: Some("new".into()),
+                get: true,
+                set: true,
+                skip: true,
+                ..Default::default()
+            };
 
-        #[test]
-        fn skip() {
-            let attr: AttrMod = parse! { skip };
-            assert_eq!(
-                attr,
-                AttrMod {
-                    skip: true,
-                    ..Default::default()
-                }
-            );
-        }
+            #[should_panic(expected = "Unknown field: `some`")]
+            unknown_field [some = "other"] AttrFn::default();
 
-        #[test]
-        fn all() {
-            let attr: AttrMod = parse! { rename = "new", bare, skip };
-            assert_eq!(
-                attr,
-                AttrMod {
-                    name: Some("new".into()),
-                    bare: true,
-                    skip: true,
-                }
-            );
-        }
-
-        #[test]
-        #[should_panic(expected = "Unknown field: `some`")]
-        fn unknown_field() {
-            let _attr: AttrMod = parse! { some = "other" };
-        }
-
-        #[test]
-        #[should_panic(expected = "Unknown literal value `some` at bare")]
-        fn unexpected_value() {
-            let _attr: AttrMod = parse! { bare = "some" };
-        }
-    }
-
-    mod var_attrs {
-        use super::*;
-
-        #[test]
-        fn empty() {
-            let attr: AttrVar = parse! {};
-            assert_eq!(attr, AttrVar::default());
-        }
-
-        #[test]
-        fn rename() {
-            let attr: AttrVar = parse! { rename = "new" };
-            assert_eq!(
-                attr,
-                AttrVar {
-                    name: Some("new".into()),
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        fn property() {
-            let attr: AttrVar = parse! { value };
-            assert_eq!(
-                attr,
-                AttrVar {
-                    prop: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        fn skip() {
-            let attr: AttrVar = parse! { skip };
-            assert_eq!(
-                attr,
-                AttrVar {
-                    skip: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        fn all() {
-            let attr: AttrVar = parse! { rename = "new", value, skip };
-            assert_eq!(
-                attr,
-                AttrVar {
-                    name: Some("new".into()),
-                    prop: true,
-                    skip: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        #[should_panic(expected = "Unknown field: `some`")]
-        fn unknown_field() {
-            let _attr: AttrVar = parse! { some = "other" };
-        }
-
-        #[test]
-        #[should_panic(expected = "Unknown literal value `some` at value")]
-        fn unexpected_value() {
-            let _attr: AttrVar = parse! { value = "some" };
-        }
-    }
-
-    mod fn_attrs {
-        use super::*;
-
-        #[test]
-        fn empty() {
-            let attr: AttrFn = parse! {};
-            assert_eq!(attr, AttrFn::default());
-        }
-
-        #[test]
-        fn rename() {
-            let attr: AttrFn = parse! { rename = "new" };
-            assert_eq!(
-                attr,
-                AttrFn {
-                    name: Some("new".into()),
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        fn getter() {
-            let attr: AttrFn = parse! { get };
-            assert_eq!(
-                attr,
-                AttrFn {
-                    get: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        fn setter() {
-            let attr: AttrFn = parse! { set };
-            assert_eq!(
-                attr,
-                AttrFn {
-                    set: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        fn skip() {
-            let attr: AttrFn = parse! { skip };
-            assert_eq!(
-                attr,
-                AttrFn {
-                    skip: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        fn all() {
-            let attr: AttrFn = parse! { rename = "new", get, set, skip };
-            assert_eq!(
-                attr,
-                AttrFn {
-                    name: Some("new".into()),
-                    get: true,
-                    set: true,
-                    skip: true,
-                    ..Default::default()
-                }
-            );
-        }
-
-        #[test]
-        #[should_panic(expected = "Unknown field: `some`")]
-        fn unknown_field() {
-            let _attr: AttrFn = parse! { some = "other" };
-        }
-
-        #[test]
-        #[should_panic(expected = "Unexpected literal type `bool` at rename")]
-        fn unexpected_value() {
-            let _attr: AttrFn = parse! { rename = true };
+            #[should_panic(expected = "Unexpected literal type `bool` at rename")]
+            unexpected_value [rename = true] AttrFn::default();
         }
     }
 }
