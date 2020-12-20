@@ -1,6 +1,6 @@
 use super::Input;
 use crate::{handle_panic, qjs, Ctx, Result, Value};
-use std::{ops::Deref, panic, panic::AssertUnwindSafe, ptr};
+use std::{ops::Deref, panic::AssertUnwindSafe, ptr};
 
 static mut FUNC_CLASS: qjs::JSClassID = 0;
 

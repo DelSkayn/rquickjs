@@ -74,6 +74,7 @@ macro_rules! wrapper_impls {
 	  ($($(#[$type_meta:meta])* $type:ident<$($param:ident),*>($($field:ident)*; $($flag:ident)*))*) => {
         $(
             $(#[$type_meta])*
+            #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
             #[derive(Debug, Clone, Copy)]
             pub struct $type<$($param),*> {
                 flags: PropertyFlags,

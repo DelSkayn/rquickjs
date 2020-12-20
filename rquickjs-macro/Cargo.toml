@@ -3,6 +3,10 @@ name = "rquickjs-macro"
 version = "0.0.1"
 authors = ["K. <kayo@illumium.org>"]
 edition = "2018"
+license = "MIT"
+readme = "README.md"
+description = "High level bindings to the quickjs javascript engine"
+repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [lib]
 proc-macro = true
@@ -22,6 +26,10 @@ version = "^0.11"
 [dependencies.syn]
 version = "^1"
 features = ["full"]
+
+[dependencies.rquickjs-core]
+path = "../rquickjs-core"
+version = "0.0.5"
 
 [dev-dependencies.rquickjs]
 path = "../"

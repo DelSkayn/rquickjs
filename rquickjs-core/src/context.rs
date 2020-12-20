@@ -36,6 +36,7 @@ impl Clone for Context {
 }
 
 impl Context {
+    #[allow(dead_code)]
     pub(crate) fn from_ctx<'js>(ctx: Ctx<'js>) -> Result<Self> {
         let rt = unsafe { &ctx.get_opaque().runtime }
             .try_ref()
@@ -46,14 +47,14 @@ impl Context {
 
     /// Creates a base context with only the required functions registered.
     /// If additional functions are required use [`Context::custom`],
-    /// [`Context::builder`] or [`Contex::full`].
+    /// [`Context::builder`] or [`Context::full`].
     pub fn base(runtime: &Runtime) -> Result<Self> {
         Self::custom::<intrinsic::Base>(runtime)
     }
 
     /// Creates a context with only the required intrinsics registered.
     /// If additional functions are required use [`Context::custom`],
-    /// [`Context::builder`] or [`Contex::full`].
+    /// [`Context::builder`] or [`Context::full`].
     pub fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };

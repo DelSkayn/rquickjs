@@ -72,8 +72,8 @@ Attribute                         | Description
 --------------------------------- | ---------------------------
 __`ident = "MyModule"`__          | The name of target unit struct to export
 __`public`__, __`public = "self/super/crate"`__ | Makes the target unit struct visible
-__`module`__                      | Adds the [`ModuleDef`](rquickjs::ModuleDef) impl to use bindings as ES6 module
-__`object`__                      | Adds the [`ObjectDef`](rquickjs::ModuleDef) impl for attaching bindings to an object
+__`module`__                      | Adds the [`ModuleDef`](rquickjs_core::ModuleDef) impl to use bindings as ES6 module
+__`object`__                      | Adds the [`ObjectDef`](rquickjs_core::ModuleDef) impl for attaching bindings to an object
 __`init`__, __`init = "js_module_init"`__     | Adds the `js_module_init` function (in particular for creating dynamically loadable modules or static libraries to use from `C`)
 __`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
 
@@ -120,7 +120,7 @@ This attributes applies to structs and enums to use it as JS classes.
 Attribute                 | Description
 ------------------------- | ---------------------------
 __`rename = "new_name"`__ | Renames data type to export
-__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs::HasRefs) to be implemented)
+__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::HasRefs) to be implemented)
 __`skip`__                | Skips exporting this data type
 
 ## Data field attributes
@@ -140,7 +140,7 @@ This attributes applies to `impl` blocks to bind class methods and properties an
 Attribute                 | Description
 ------------------------- | ---------------------------
 __`rename = "new_name"`__ | Renames data type to export
-__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs::HasRefs) to be implemented)
+__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::HasRefs) to be implemented)
 __`skip`__                | Skips exporting this data type
 
 # Examples
@@ -282,7 +282,7 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 }
 
 /**
-A macro to derive `HasRefs`
+A macro to derive [`HasRefs`](rquickjs_core::HasRefs)
 
 # Supported attributes
 
@@ -353,7 +353,7 @@ pub fn has_refs(input: TokenStream1) -> TokenStream1 {
 }
 
 /**
-A macro to derive `FromJs` for an arbitrary structured types
+A macro to derive [`FromJs`](rquickjs_core::FromJs) for an arbitrary structured types
 
 # Supported attributes
 
@@ -555,7 +555,7 @@ pub fn from_js(input: TokenStream1) -> TokenStream1 {
 }
 
 /**
-A macro to derive `IntoJs` for an arbitrary structured types
+A macro to derive [`IntoJs`](rquickjs_core::IntoJs) for an arbitrary structured types
 
 # Supported attributes
 
