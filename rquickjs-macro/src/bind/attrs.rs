@@ -1,33 +1,6 @@
-use crate::{AttributeArgs, Config, Ident, Parenthesized, TokenStream};
+use crate::{AttributeArgs, Config, Ident, Merge, Parenthesized, PubVis};
 use darling::{util::Override, FromMeta};
-use quote::{quote, ToTokens};
 use syn::{parse2, AttrStyle, Attribute, Path};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromMeta)]
-pub enum PubVis {
-    #[darling(rename = "self")]
-    Self_,
-    #[darling(rename = "super")]
-    Super,
-    #[darling(rename = "crate")]
-    Crate,
-}
-
-impl ToTokens for PubVis {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        use PubVis::*;
-        match self {
-            Self_ => quote!(self),
-            Super => quote!(super),
-            Crate => quote!(crate),
-        }
-        .to_tokens(tokens)
-    }
-}
-
-pub trait Merge {
-    fn merge(&mut self, over: Self);
-}
 
 /// Root binding item attrs
 #[derive(Default, FromMeta, Debug, PartialEq, Eq)]

@@ -39,6 +39,7 @@ mod config;
 mod context;
 mod derive;
 mod shim;
+mod utils;
 
 use darling::{FromDeriveInput, FromMeta};
 use proc_macro::TokenStream as TokenStream1;
@@ -52,6 +53,7 @@ use config::*;
 use context::*;
 use derive::*;
 use shim::*;
+use utils::*;
 
 /**
 An attribute to generate bindings easy

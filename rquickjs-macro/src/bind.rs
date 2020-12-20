@@ -24,8 +24,8 @@ mod function;
 mod module;
 mod property;
 
-use crate::{Config, Ident, Source, TokenStream};
-use darling::{util::Override, FromMeta};
+use crate::{Config, Ident, Merge, PubVis, Source, TokenStream};
+use darling::FromMeta;
 use fnv::FnvBuildHasher;
 use ident_case::RenameRule;
 use indexmap::IndexMap;
@@ -327,11 +327,7 @@ impl Binder {
         let lib_crate = &self.config.lib_crate;
         let exports = &self.config.exports_var;
 
-        let bind_vis = match public {
-            Some(Override::Inherit) => quote!(pub),
-            Some(Override::Explicit(vis)) => quote!(pub(#vis)),
-            _ => quote!(),
-        };
+        let bind_vis = public.as_ref().map(PubVis::override_tokens);
 
         let def = if let Top::Mod(module) = &mut self.top {
             module
