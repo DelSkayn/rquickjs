@@ -87,7 +87,8 @@ mod loader;
 
 #[cfg(feature = "loader")]
 pub use loader::{
-    BuiltinLoader, BuiltinResolver, FileResolver, Loader, ModuleLoader, Resolver, ScriptLoader,
+    BuiltinLoader, BuiltinResolver, CompileLoader, FileResolver, Loader, ModuleLoader, Resolver,
+    ScriptLoader,
 };
 
 #[cfg(feature = "dyn-load")]

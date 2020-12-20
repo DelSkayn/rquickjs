@@ -5,7 +5,9 @@ use crate::{
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
-    ptr,
+    mem::MaybeUninit,
+    ptr::null_mut,
+    slice::from_raw_parts,
 };
 
 /// The marker for the module which is created from text source
@@ -261,7 +263,7 @@ impl<'js> Module<'js> {
             Ok(module) => module.into_module_def(),
             Err(error) => {
                 error.throw(ctx);
-                ptr::null_mut() as _
+                null_mut() as _
             }
         }
     }
@@ -272,6 +274,45 @@ impl<'js> Module<'js> {
     {
         let name = name.to_str()?;
         Ok(Module::new_def::<D, _>(ctx, name)?.into_loaded())
+    }
+}
+
+impl<'js> Module<'js, Loaded<Script>> {
+    /// Load module from bytecode
+    pub fn read_object<B: AsRef<[u8]>>(ctx: Ctx<'js>, buf: B) -> Result<Self> {
+        let buf = buf.as_ref();
+        let flags = qjs::JS_READ_OBJ_BYTECODE;
+        let value = unsafe {
+            Value::from_js_value(
+                ctx,
+                handle_exception(
+                    ctx,
+                    qjs::JS_ReadObject(ctx.ctx, buf.as_ptr(), buf.len() as _, flags as _),
+                )?,
+            )
+        };
+        Ok(Self(value, PhantomData))
+    }
+
+    /// Write bytecode of loaded module
+    pub fn write_object(&self, byte_swap: bool) -> Result<Vec<u8>> {
+        let ctx = self.0.ctx;
+        let mut len = MaybeUninit::uninit();
+        let mut flags = qjs::JS_WRITE_OBJ_BYTECODE;
+        if byte_swap {
+            flags |= qjs::JS_WRITE_OBJ_BSWAP;
+        }
+        let buf = unsafe {
+            qjs::JS_WriteObject(ctx.ctx, len.as_mut_ptr(), self.0.as_js_value(), flags as _)
+        };
+        if buf.is_null() {
+            return Err(unsafe { get_exception(ctx) });
+        }
+        let len = unsafe { len.assume_init() };
+        let obj = unsafe { from_raw_parts(buf, len as _) };
+        let obj = Vec::from(obj);
+        unsafe { qjs::js_free(ctx.ctx, buf as _) };
+        Ok(obj)
     }
 }
 

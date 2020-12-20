@@ -22,6 +22,9 @@ pub use builtin_loader::BuiltinLoader;
 mod module_loader;
 pub use module_loader::ModuleLoader;
 
+mod compile_loader;
+pub use compile_loader::CompileLoader;
+
 /// Module resolver interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Resolver {
