@@ -7,9 +7,9 @@ use std::{
 };
 
 #[cfg(not(feature = "parallel"))]
-pub use std::cell::RefMut as RefGuard;
+pub use std::cell::RefMut as SafeRefGuard;
 #[cfg(feature = "parallel")]
-pub use std::sync::MutexGuard as RefGuard;
+pub use std::sync::MutexGuard as SafeRefGuard;
 
 #[repr(transparent)]
 pub struct SafeRef<T>(
@@ -23,17 +23,23 @@ impl<T> Clone for SafeRef<T> {
     }
 }
 
+impl<T: Default> Default for SafeRef<T> {
+    fn default() -> Self {
+        Self::new(T::default())
+    }
+}
+
 #[cfg(not(feature = "parallel"))]
 impl<T> SafeRef<T> {
     pub fn new(inner: T) -> Self {
         Self(Rc::new(RefCell::new(inner)))
     }
 
-    pub fn lock(&self) -> RefGuard<T> {
+    pub fn lock(&self) -> SafeRefGuard<T> {
         self.0.borrow_mut()
     }
 
-    pub fn try_lock(&self) -> Result<RefGuard<T>, RefGuard<T>> {
+    pub fn try_lock(&self) -> Result<SafeRefGuard<T>, SafeRefGuard<T>> {
         Ok(self.0.borrow_mut())
     }
 
@@ -48,11 +54,11 @@ impl<T> SafeRef<T> {
         Self(Arc::new(Mutex::new(inner)))
     }
 
-    pub fn lock(&self) -> RefGuard<T> {
+    pub fn lock(&self) -> SafeRefGuard<T> {
         self.0.lock().unwrap()
     }
 
-    pub fn try_lock(&self) -> Result<RefGuard<T>, RefGuard<T>> {
+    pub fn try_lock(&self) -> Result<SafeRefGuard<T>, SafeRefGuard<T>> {
         match self.0.lock() {
             Ok(x) => Ok(x),
             Err(x) => Err(x.into_inner()),

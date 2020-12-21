@@ -47,6 +47,7 @@ mod bind;
 mod config;
 mod context;
 mod derive;
+mod embed;
 mod shim;
 mod utils;
 
@@ -61,6 +62,7 @@ use bind::*;
 use config::*;
 use context::*;
 use derive::*;
+use embed::*;
 use shim::*;
 use utils::*;
 
@@ -287,6 +289,55 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     });
     let mut binder = Binder::new(attr.config());
     let output = binder.expand(attr, item);
+    output.into()
+}
+
+/**
+An attribute to convert scripts modules into builtins
+
+# Supported attributes
+
+Attribute                  | Description
+-------------------------- | --------------------------
+__`ident = "MyModule"`__   | The name of target unit struct to export
+__`public`__, __`public = "self/super/crate"`__ | Makes the target unit struct visible
+__`path = "search-path"`__ | Add a paths where modules can be found
+__`name = "module-name"`__ | The name of module to embed
+__`perfect`__              | Use perfect hash map for embedded modules (`feature = "phf"`)
+__`crate = "rquickjs"`__   | Allows rename `rquickjs` crate
+
+# Examples
+
+```
+# use rquickjs::{embed, Runtime, Context, Module};
+
+#[embed(path = "../examples/module-loader")]
+mod script_module {}
+
+let rt = Runtime::new().unwrap();
+let ctx = Context::full(&rt).unwrap();
+
+rt.set_loader(SCRIPT_MODULE, SCRIPT_MODULE);
+
+ctx.with(|ctx| {
+    ctx.compile("script", r#"
+        import { n, s, f } from "script_module";
+    "#).unwrap();
+});
+```
+
+ */
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn embed(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let attr: AttributeArgs = parse_macro_input!(attr);
+    let item = parse_macro_input!(item);
+
+    let attr = AttrEmbed::from_list(&*attr).unwrap_or_else(|error| {
+        abort!("{}", error);
+    });
+    let embedder = Embedder::new(attr.config());
+    let output = embedder.expand(attr, item);
     output.into()
 }
 

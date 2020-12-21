@@ -49,13 +49,10 @@ impl Default for ModuleLoader {
     }
 }
 
-impl Loader for ModuleLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded>> {
+impl Loader<Native> for ModuleLoader {
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Native>>> {
         match self.modules.remove(path) {
-            Some(module_init) => {
-                let module = module_init.0(ctx, path)?;
-                Ok(module.into_loaded())
-            }
+            Some(module_init) => module_init.0(ctx, path),
             _ => Err(Error::new_loading(path)),
         }
     }

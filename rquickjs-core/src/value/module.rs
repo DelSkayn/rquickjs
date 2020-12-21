@@ -280,14 +280,26 @@ impl<'js> Module<'js> {
 impl<'js> Module<'js, Loaded<Script>> {
     /// Load module from bytecode
     pub fn read_object<B: AsRef<[u8]>>(ctx: Ctx<'js>, buf: B) -> Result<Self> {
+        Self::read_object_raw(ctx, buf.as_ref(), qjs::JS_READ_OBJ_BYTECODE as _)
+    }
+
+    /// Load module from bytecode (static const)
+    pub fn read_object_const(ctx: Ctx<'js>, buf: &'static [u8]) -> Result<Self> {
+        Self::read_object_raw(
+            ctx,
+            buf,
+            (qjs::JS_READ_OBJ_BYTECODE | qjs::JS_READ_OBJ_ROM_DATA) as _,
+        )
+    }
+
+    fn read_object_raw(ctx: Ctx<'js>, buf: &[u8], flags: qjs::c_int) -> Result<Self> {
         let buf = buf.as_ref();
-        let flags = qjs::JS_READ_OBJ_BYTECODE;
         let value = unsafe {
             Value::from_js_value(
                 ctx,
                 handle_exception(
                     ctx,
-                    qjs::JS_ReadObject(ctx.ctx, buf.as_ptr(), buf.len() as _, flags as _),
+                    qjs::JS_ReadObject(ctx.ctx, buf.as_ptr(), buf.len() as _, flags),
                 )?,
             )
         };

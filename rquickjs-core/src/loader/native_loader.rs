@@ -1,5 +1,5 @@
 use super::check_extensions;
-use crate::{Ctx, Error, Loaded, Loader, Module, ModuleLoadFn, Result};
+use crate::{Ctx, Error, Loaded, Loader, Module, ModuleLoadFn, Native, Result};
 
 /// The native module loader
 ///
@@ -45,8 +45,8 @@ impl Default for NativeLoader {
     }
 }
 
-impl Loader for NativeLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded>> {
+impl Loader<Native> for NativeLoader {
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Native>>> {
         use dlopen::raw::Library;
 
         if !check_extensions(&path, &self.extensions) {
@@ -64,6 +64,6 @@ impl Loader for NativeLoader {
 
         self.libs.push(lib);
 
-        Ok(module.into_loaded())
+        Ok(module)
     }
 }

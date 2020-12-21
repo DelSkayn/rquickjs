@@ -26,13 +26,17 @@
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
+#[cfg(feature = "phf")]
+#[doc(hidden)]
+pub use phf;
+
 mod markers;
 pub use markers::SendWhenParallel;
 mod result;
 use result::{get_exception, handle_exception, handle_panic};
 pub use result::{Error, Result};
 mod safe_ref;
-pub(crate) use safe_ref::{SafeRef, SafeWeakRef};
+pub(crate) use safe_ref::{SafeRef, SafeRefGuard, SafeWeakRef};
 mod runtime;
 pub use runtime::Runtime;
 mod context;
@@ -84,8 +88,8 @@ mod loader;
 
 #[cfg(feature = "loader")]
 pub use loader::{
-    BuiltinLoader, BuiltinResolver, CompileLoader, FileResolver, Loader, ModuleLoader, Resolver,
-    ScriptLoader,
+    BuiltinLoader, BuiltinResolver, Bundle, Compile, FileResolver, HasByteCode, Loader,
+    ModuleLoader, Resolver, ScriptLoader,
 };
 
 #[cfg(feature = "dyn-load")]

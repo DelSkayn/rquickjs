@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, Loaded, Module, Result};
+use crate::{qjs, Ctx, Error, Loaded, Module, Result, Script};
 use relative_path::RelativePath;
 use std::{ffi::CStr, ptr};
 
@@ -22,8 +22,13 @@ pub use builtin_loader::BuiltinLoader;
 mod module_loader;
 pub use module_loader::ModuleLoader;
 
-mod compile_loader;
-pub use compile_loader::CompileLoader;
+mod compile;
+pub use compile::Compile;
+
+mod bundle;
+#[cfg(feature = "phf")]
+pub use bundle::PhfBundleData;
+pub use bundle::{Bundle, HasByteCode, ScaBundleData};
 
 /// Module resolver interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -52,9 +57,9 @@ pub trait Resolver {
 
 /// Module loader interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-pub trait Loader {
+pub trait Loader<S = ()> {
     /// Load module by name
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded>>;
+    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded<S>>>;
 }
 
 struct LoaderOpaque {
@@ -154,6 +159,16 @@ impl LoaderHolder {
     }
 }
 
+fn resolve_simple(base: &str, name: &str) -> String {
+    if name.starts_with('.') {
+        let path = RelativePath::new(base);
+        if let Some(dir) = path.parent() {
+            return dir.join_normalized(name).to_string();
+        }
+    }
+    name.into()
+}
+
 fn check_extensions(name: &str, extensions: &[String]) -> bool {
     let path = RelativePath::new(name);
     path.extension()
@@ -194,12 +209,12 @@ macro_rules! loader_impls {
                 }
             }
 
-            impl<$($t,)*> Loader for ($($t,)*)
+            impl<S, $($t,)*> Loader<S> for ($($t,)*)
             where
-                $($t: Loader,)*
+                $($t: Loader<S>,)*
             {
                 #[allow(non_snake_case)]
-                fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded>> {
+                fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded<S>>> {
                     let mut messages = Vec::new();
                     let ($($t,)*) = self;
                     $(
@@ -232,6 +247,40 @@ loader_impls! {
     A B C D E F,
     A B C D E F G,
     A B C D E F G H,
+}
+
+#[macro_export]
+macro_rules! generic_loader {
+    ($($(#[$meta:meta])* $type:ident $(<$($param:ident),*>)*: $kind:ident $({ $($bound:tt)* })*,)*) => {
+        $(
+            $(#[$meta])*
+            impl $(<$($param),*>)* $crate::Loader for $type $(<$($param),*>)*
+            $(where $($bound)*)*
+            {
+                fn load<'js>(
+                    &mut self,
+                    ctx: $crate::Ctx<'js>,
+                    name: &str,
+                ) -> $crate::Result<$crate::Module<'js, $crate::Loaded>> {
+                    $crate::Loader::<$crate::$kind>::load(self, ctx, name).map(|module| module.into_loaded())
+                }
+            }
+        )*
+    };
+}
+
+generic_loader! {
+    ScriptLoader: Script,
+    #[cfg(feature = "dyn-load")]
+    NativeLoader: Native,
+    BuiltinLoader: Script,
+    ModuleLoader: Native,
+    Bundle<L>: Script {
+        Self: Loader<Script>,
+    },
+    Compile<L>: Script {
+        L: Loader<Script>,
+    },
 }
 
 #[cfg(test)]

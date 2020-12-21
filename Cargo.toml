@@ -40,6 +40,9 @@ either = ["rquickjs-core/either"]
 # Enable support for IndexMap and IndexSet types type
 indexmap = ["rquickjs-core/indexmap"]
 
+# Enable support for perfect hash maps
+phf = ["rquickjs-core/phf", "rquickjs-macro/phf"]
+
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
 bindgen = ["rquickjs-core/bindgen"]
