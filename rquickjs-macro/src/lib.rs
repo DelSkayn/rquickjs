@@ -34,6 +34,15 @@ macro_rules! warning {
     ($($tokens:tt)*) => { proc_macro_error::emit_warning!($($tokens)*); };
 }
 
+#[cfg(test)]
+macro_rules! assert_eq_tokens {
+    ($actual:expr, $expected:expr) => {
+        let actual = $actual.to_string();
+        let expected = $expected.to_string();
+        difference::assert_diff!(&actual, &expected, " ", 0);
+    };
+}
+
 mod bind;
 mod config;
 mod context;

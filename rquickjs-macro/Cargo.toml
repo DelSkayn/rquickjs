@@ -31,6 +31,9 @@ features = ["full"]
 path = "../rquickjs-core"
 version = "0.0.5"
 
+[dev-dependencies.difference]
+version = "^2"
+
 [dev-dependencies.rquickjs]
 path = "../"
 features = ["async-std", "macro", "classes"]

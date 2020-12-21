@@ -9,7 +9,7 @@ macro_rules! test_cases {
                 let binder = crate::$k::new(attrs.config());
                 let output = binder.expand(&attrs);
                 let expected = quote::quote! { $($d)* };
-                assert_eq!(output.to_string(), expected.to_string());
+                assert_eq_tokens!(output, expected);
             }
         )*
     };

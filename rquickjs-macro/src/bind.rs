@@ -11,7 +11,7 @@ macro_rules! test_cases {
                 let output = binder.expand(attrs, input);
                 let actual = quote::quote! { #output };
                 let expected = quote::quote! { $($d)* };
-                assert_eq!(actual.to_string(), expected.to_string());
+                assert_eq_tokens!(actual, expected);
             }
         )*
     };
