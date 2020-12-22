@@ -8,6 +8,7 @@ use std::{
     panic,
     panic::UnwindSafe,
     str::Utf8Error,
+    string::FromUtf8Error,
 };
 
 /// Result type used throught the library.
@@ -343,6 +344,12 @@ from_impls! {
     NulError => InvalidString,
     Utf8Error => Utf8,
     IoError => IO,
+}
+
+impl From<FromUtf8Error> for Error {
+    fn from(error: FromUtf8Error) -> Self {
+        Error::Utf8(error.utf8_error())
+    }
 }
 
 impl<'js> FromJs<'js> for Error {
