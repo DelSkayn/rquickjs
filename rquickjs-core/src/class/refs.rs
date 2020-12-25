@@ -1,5 +1,9 @@
 use crate::{qjs, Persistent};
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
+    rc::Rc,
+    sync::Arc,
+};
 
 #[cfg(feature = "indexmap")]
 use indexmap::{IndexMap, IndexSet};
@@ -51,6 +55,20 @@ where
 }
 
 macro_rules! has_refs_impls {
+    (ref: $($type:ident,)*) => {
+        $(
+            impl<T> HasRefs for $type<T>
+            where
+                T: HasRefs,
+            {
+                fn mark_refs(&self, marker: &RefsMarker) {
+                    let this: &T = &self;
+                    this.mark_refs(marker);
+                }
+            }
+        )*
+    };
+
     (tup: $($($type:ident)*,)*) => {
         $(
             impl<$($type),*> HasRefs for ($($type,)*)
@@ -97,6 +115,13 @@ macro_rules! has_refs_impls {
             }
         )*
 	  };
+}
+
+has_refs_impls! {
+    ref:
+    Box,
+    Rc,
+    Arc,
 }
 
 has_refs_impls! {
