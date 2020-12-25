@@ -36,8 +36,7 @@ impl Clone for Context {
 }
 
 impl Context {
-    #[allow(dead_code)]
-    pub(crate) fn from_ctx<'js>(ctx: Ctx<'js>) -> Result<Self> {
+    pub fn from_ctx<'js>(ctx: Ctx<'js>) -> Result<Self> {
         let rt = unsafe { &ctx.get_opaque().runtime }
             .try_ref()
             .ok_or(Error::Unknown)?;
