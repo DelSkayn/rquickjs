@@ -54,7 +54,7 @@ impl<'i, 'js> InputAccessor<'i, 'js> {
     /// Get count of rest arguments
     #[inline]
     pub fn len(&self) -> usize {
-        self.input.args.len()
+        self.input.args.len() - self.arg
     }
 
     /// Get next argument
