@@ -134,7 +134,10 @@ impl Binder {
             name,
             has_refs,
             skip,
+            hide,
         } = self.get_attrs(attrs);
+
+        self.hide_item(attrs, hide);
 
         if !self.visible(vis) || skip {
             return;
@@ -180,7 +183,10 @@ impl Binder {
             name,
             has_refs,
             skip,
+            hide,
         } = self.get_attrs(attrs);
+
+        self.hide_item(attrs, hide);
 
         if !self.visible(vis) || skip {
             return;
@@ -288,7 +294,10 @@ impl Binder {
             name,
             has_refs,
             skip,
+            hide,
         } = self.get_attrs(attrs);
+
+        self.hide_item(attrs, hide);
 
         if let Some(unsafety) = unsafety {
             error!(

@@ -95,6 +95,7 @@ Attribute                 | Description
 __`rename = "new_name"`__ | Renames module to export
 __`bare`__                | Exports contents of the module to the parent module instead of creating submodule (this is off by default)
 __`skip`__                | Skips exporting this module
+__`hide`__                | Do not output this module (bindings only)
 
 ## Constant attributes
 
@@ -107,6 +108,7 @@ __`configurable`__        | Makes property to be configurable
 __`enumerable`__          | Makes property to be enumerable
 __`proto`__               | Sets constant or property to prototype
 __`skip`__                | Skips exporting this contant
+__`hide`__                | Do not output this constant (bindings only)
 
 ## Function attributes
 
@@ -119,7 +121,8 @@ __`configurable`__        | Makes property to be configurable
 __`enumerable`__          | Makes property to be enumerable
 __`constructor`__, __`constructor = true`__  | Forces creating contructor
 __`constructor = false`__ | Disables creating contructor
-__`skip`__                | Skips exporting this contant
+__`skip`__                | Skips exporting this function
+__`hide`__                | Do not output this function (bindings only)
 
 When multiple functions is declared with same name (i.e. same `rename` attribute value) it will be overloaded. The overloading rules is dead simple, so currently you should be care to get it works.
 Overloading is not supported for property getters/setters.
@@ -133,6 +136,7 @@ Attribute                 | Description
 __`rename = "new_name"`__ | Renames data type to export
 __`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::HasRefs) to be implemented)
 __`skip`__                | Skips exporting this data type
+__`hide`__                | Do not output this data type (bindings only)
 
 ## Data field attributes
 
@@ -152,7 +156,8 @@ Attribute                 | Description
 ------------------------- | ---------------------------
 __`rename = "new_name"`__ | Renames data type to export
 __`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::HasRefs) to be implemented)
-__`skip`__                | Skips exporting this data type
+__`skip`__                | Skips exporting this impl block
+__`hide`__                | Do not output this impl block (bindings only)
 
 # Examples
 
@@ -206,6 +211,51 @@ ctx.with(|ctx| {
     let res: f32 = ctx.eval(r#"math.mul2(3, math.add2(1, 2))"#).unwrap();
     assert_eq!(res, 9.0);
 });
+```
+
+### Module with two functions which reused from another module
+
+```
+use rquickjs::{Runtime, Context, Object, bind};
+
+mod my_math {
+    pub const PI: f32 = core::f32::consts::PI;
+
+    pub fn add2(a: f32, b: f32) -> f32 {
+        a + b
+    }
+
+    pub fn mul2(a: f32, b: f32) -> f32 {
+        a * b
+    }
+}
+
+#[bind(object)]
+mod math {
+    pub use super::my_math::*;
+
+    #[quickjs(hide)]
+    pub const PI: f32 = ();
+
+    #[quickjs(hide)]
+    pub fn add2(a: f32, b: f32) -> f32 {}
+
+    #[quickjs(hide)]
+    pub fn mul2(a: f32, b: f32) -> f32 {}
+}
+
+# fn main() {
+let rt = Runtime::new().unwrap();
+let ctx = Context::full(&rt).unwrap();
+
+ctx.with(|ctx| {
+    let glob = ctx.globals();
+    glob.init_def::<Math>().unwrap();
+
+    let res: f32 = ctx.eval(r#"math.mul2(3, math.add2(1, 2))"#).unwrap();
+    assert_eq!(res, 9.0);
+});
+# }
 ```
 
 ### Bare module definition

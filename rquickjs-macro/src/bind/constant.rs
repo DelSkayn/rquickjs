@@ -65,7 +65,11 @@ impl Binder {
             enumerable,
             proto,
             skip,
+            hide,
         } = self.get_attrs(attrs);
+
+        self.hide_item(attrs, hide);
+
         if !self.visible(vis) || skip {
             return;
         }

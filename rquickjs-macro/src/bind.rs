@@ -211,7 +211,13 @@ impl Binder {
         get_attrs(&self.config.bind_attr, attrs)
     }
 
-    pub fn bind_items(&mut self, items: &mut [Item]) {
+    pub(super) fn hide_item(&self, attrs: &mut Vec<Attribute>, hide: bool) {
+        if hide {
+            attrs.push(syn::parse_quote! { #[cfg(all)] });
+        }
+    }
+
+    pub fn bind_items(&mut self, items: &mut Vec<Item>) {
         for item in items {
             self.bind_item(item);
         }
@@ -231,7 +237,7 @@ impl Binder {
         }
     }
 
-    pub fn bind_impl_items(&mut self, items: &mut [ImplItem]) {
+    pub fn bind_impl_items(&mut self, items: &mut Vec<ImplItem>) {
         for item in items {
             self.bind_impl_item(item);
         }

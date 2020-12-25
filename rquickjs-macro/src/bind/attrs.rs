@@ -54,6 +54,8 @@ pub struct AttrMod {
     pub bare: bool,
     /// Skip export
     pub skip: bool,
+    /// Do not output
+    pub hide: bool,
 }
 
 impl Merge for AttrMod {
@@ -66,6 +68,9 @@ impl Merge for AttrMod {
         }
         if over.skip {
             self.skip = true;
+        }
+        if over.hide {
+            self.hide = true;
         }
     }
 }
@@ -90,6 +95,8 @@ pub struct AttrVar {
     pub proto: bool,
     /// Skip export
     pub skip: bool,
+    /// Do not output
+    pub hide: bool,
 }
 
 impl Merge for AttrVar {
@@ -115,6 +122,9 @@ impl Merge for AttrVar {
         if over.skip {
             self.skip = true;
         }
+        if over.hide {
+            self.hide = true;
+        }
     }
 }
 
@@ -138,6 +148,8 @@ pub struct AttrFn {
     pub ctor: Override<bool>,
     /// Skip export
     pub skip: bool,
+    /// Do not output
+    pub hide: bool,
 }
 
 impl Merge for AttrFn {
@@ -160,6 +172,9 @@ impl Merge for AttrFn {
         if over.skip {
             self.skip = true;
         }
+        if over.hide {
+            self.hide = true;
+        }
     }
 }
 
@@ -174,6 +189,8 @@ pub struct AttrData {
     pub has_refs: bool,
     /// Skip export
     pub skip: bool,
+    /// Do not output
+    pub hide: bool,
 }
 
 impl Merge for AttrData {
@@ -186,6 +203,9 @@ impl Merge for AttrData {
         }
         if over.skip {
             self.skip = true;
+        }
+        if over.hide {
+            self.hide = true;
         }
     }
 }
@@ -228,6 +248,8 @@ pub struct AttrImpl {
     pub has_refs: bool,
     /// Skip export
     pub skip: bool,
+    /// Do not output
+    pub hide: bool,
 }
 
 impl Merge for AttrImpl {
@@ -240,6 +262,9 @@ impl Merge for AttrImpl {
         }
         if over.skip {
             self.skip = true;
+        }
+        if over.hide {
+            self.hide = true;
         }
     }
 }
@@ -366,6 +391,7 @@ mod test {
                 name: Some("new".into()),
                 bare: true,
                 skip: true,
+                hide: false,
             };
 
             #[should_panic(expected = "Unknown field: `some`")]

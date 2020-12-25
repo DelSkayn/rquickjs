@@ -55,7 +55,14 @@ impl Binder {
             ..
         }: &mut ItemMod,
     ) {
-        let AttrMod { name, bare, skip } = self.get_attrs(attrs);
+        let AttrMod {
+            name,
+            bare,
+            skip,
+            hide,
+        } = self.get_attrs(attrs);
+
+        self.hide_item(attrs, hide);
 
         if content.is_none() || !self.visible(vis) || skip {
             return;
