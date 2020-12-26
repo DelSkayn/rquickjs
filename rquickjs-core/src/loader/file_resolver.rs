@@ -24,6 +24,24 @@ impl FileResolver {
         self
     }
 
+    /// Add search paths for modules
+    pub fn add_paths<I: IntoIterator<Item = P>, P: Into<RelativePathBuf>>(
+        &mut self,
+        paths: I,
+    ) -> &mut Self {
+        self.paths.extend(paths.into_iter().map(|path| path.into()));
+        self
+    }
+
+    /// Add search paths for modules
+    pub fn with_paths<I: IntoIterator<Item = P>, P: Into<RelativePathBuf>>(
+        mut self,
+        paths: I,
+    ) -> Self {
+        self.add_paths(paths);
+        self
+    }
+
     /// Add module file pattern
     pub fn add_pattern<P: Into<String>>(&mut self, pattern: P) -> &mut Self {
         self.patterns.push(pattern.into());
