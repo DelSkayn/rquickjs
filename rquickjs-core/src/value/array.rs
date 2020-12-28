@@ -124,7 +124,7 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = (self.count - self.index) as _;
+        let len = self.len();
         (len, Some(len))
     }
 }
@@ -144,7 +144,14 @@ where
     }
 }
 
-impl<'js, T> ExactSizeIterator for ArrayIter<'js, T> where T: FromJs<'js> {}
+impl<'js, T> ExactSizeIterator for ArrayIter<'js, T>
+where
+    T: FromJs<'js>,
+{
+    fn len(&self) -> usize {
+        (self.count - self.index) as _
+    }
+}
 
 impl<'js, T> FusedIterator for ArrayIter<'js, T> where T: FromJs<'js> {}
 

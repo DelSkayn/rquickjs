@@ -357,7 +357,7 @@ impl<'js> Iterator for IterState<'js> {
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let len = (self.count - self.index) as _;
+        let len = self.len();
         (len, Some(len))
     }
 }
@@ -375,7 +375,11 @@ impl<'js> DoubleEndedIterator for IterState<'js> {
     }
 }
 
-impl<'js> ExactSizeIterator for IterState<'js> {}
+impl<'js> ExactSizeIterator for IterState<'js> {
+    fn len(&self) -> usize {
+        (self.count - self.index) as _
+    }
+}
 
 impl<'js> FusedIterator for IterState<'js> {}
 
@@ -410,11 +414,8 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        if let Some(Ok(state)) = &self.state {
-            state.size_hint()
-        } else {
-            (0, Some(0))
-        }
+        let len = self.len();
+        (len, Some(len))
     }
 }
 
@@ -441,7 +442,18 @@ where
     }
 }
 
-impl<'js, K> ExactSizeIterator for ObjectKeysIter<'js, K> where K: FromAtom<'js> {}
+impl<'js, K> ExactSizeIterator for ObjectKeysIter<'js, K>
+where
+    K: FromAtom<'js>,
+{
+    fn len(&self) -> usize {
+        if let Some(Ok(state)) = &self.state {
+            state.len()
+        } else {
+            0
+        }
+    }
+}
 
 impl<'js, K> FusedIterator for ObjectKeysIter<'js, K> where K: FromAtom<'js> {}
 
@@ -481,11 +493,8 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        if let Some(Ok(state)) = &self.state {
-            state.size_hint()
-        } else {
-            (0, Some(0))
-        }
+        let len = self.len();
+        (len, Some(len))
     }
 }
 
@@ -521,6 +530,13 @@ where
     K: FromAtom<'js>,
     V: FromJs<'js>,
 {
+    fn len(&self) -> usize {
+        if let Some(Ok(state)) = &self.state {
+            state.len()
+        } else {
+            0
+        }
+    }
 }
 
 impl<'js, K, V> FusedIterator for ObjectIter<'js, K, V>
@@ -562,11 +578,8 @@ where
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
-        if let Some(Ok(state)) = &self.state {
-            state.size_hint()
-        } else {
-            (0, Some(0))
-        }
+        let len = self.len();
+        (len, Some(len))
     }
 }
 
@@ -593,7 +606,18 @@ where
     }
 }
 
-impl<'js, V> ExactSizeIterator for ObjectValuesIter<'js, V> where V: FromJs<'js> {}
+impl<'js, V> ExactSizeIterator for ObjectValuesIter<'js, V>
+where
+    V: FromJs<'js>,
+{
+    fn len(&self) -> usize {
+        if let Some(Ok(state)) = &self.state {
+            state.len()
+        } else {
+            0
+        }
+    }
+}
 
 impl<'js, V> FusedIterator for ObjectValuesIter<'js, V> where V: FromJs<'js> {}
 
