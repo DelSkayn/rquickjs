@@ -126,7 +126,7 @@ impl Embedder {
         }
 
         let entries = compile
-            .modules()
+            .bytecodes()
             .into_iter()
             .map(|(name, data)| {
                 let name = name.to_string();
