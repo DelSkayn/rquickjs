@@ -293,6 +293,11 @@ ctx.with(|ctx| {
 ### Async function binding
 
 ```
+# #[cfg(feature = "async-std")]
+# extern crate async_std_rs as async_std;
+# #[cfg(not(feature = "async-std"))]
+# fn main() {}
+# #[cfg(feature = "async-std")]
 # #[async_std::main]
 # async fn main() {
 use rquickjs::{Runtime, Context, Promise, bind};

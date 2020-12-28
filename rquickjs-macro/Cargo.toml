@@ -45,11 +45,14 @@ version = "^2"
 
 [dev-dependencies.rquickjs]
 path = "../"
-features = ["async-std", "macro", "classes"]
+features = ["macro", "classes", "properties"]
 
-[dev-dependencies.async-std]
+[dev-dependencies.async-std-rs]
+package = "async-std"
 version = "^1"
 features = ["attributes"]
 
 [features]
 phf = ["phf_shared", "phf_generator"]
+async-std = ["rquickjs-core/async-std"]
+tokio = ["rquickjs-core/tokio"]

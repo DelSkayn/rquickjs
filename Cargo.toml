@@ -85,10 +85,10 @@ futures = ["rquickjs-core/futures"]
 deferred-resolution = ["rquickjs-core/deferred-resolution"]
 
 # Enable Tokio async runtime support
-tokio = ["rquickjs-core/tokio"]
+tokio = ["rquickjs-core/tokio", "rquickjs-macro/tokio"]
 
 # Enable Async-std runtime support
-async-std = ["rquickjs-core/async-std"]
+async-std = ["rquickjs-core/async-std", "rquickjs-macro/async-std"]
 
 # Max number of function args
 max-args-7 = ["rquickjs-core/max-args-7"]
