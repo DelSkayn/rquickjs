@@ -1,12 +1,14 @@
 #[cfg(feature = "deferred-resolution")]
 use crate::qjs;
+#[cfg(any(feature = "tokio", feature = "async-std"))]
+use crate::{Context, IntoJs, Persistent};
 use crate::{
-    Context, Ctx, Error, FromJs, Func, Function, IntoJs, Object, Persistent, Result, SafeRef,
-    SendWhenParallel, This, Value,
+    Ctx, Error, FromJs, Func, Function, Object, Result, SafeRef, SendWhenParallel, This, Value,
 };
+#[cfg(any(feature = "tokio", feature = "async-std"))]
+use std::mem;
 use std::{
     future::Future,
-    mem,
     pin::Pin,
     task::{Context as TaskContext, Poll, Waker},
 };
@@ -95,7 +97,7 @@ impl<T> From<T> for PromiseJs<T> {
 #[cfg(any(feature = "async-std", feature = "tokio"))]
 impl<'js, T> IntoJs<'js> for PromiseJs<T>
 where
-    T: Future + 'static,
+    T: Future + SendWhenParallel + 'static,
     for<'js_> T::Output: IntoJs<'js_> + 'static,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
@@ -104,13 +106,13 @@ where
         let then = Persistent::save(ctx, then);
         let catch = Persistent::save(ctx, catch);
 
-        let ctx = Context::from_ctx(ctx)?;
+        let context = Context::from_ctx(ctx)?;
         let future = self.0;
 
-        crate::async_shim::spawn_local(async move {
+        ctx.spawn_async(async move {
             let result = future.await;
 
-            ctx.with(|ctx: Ctx| {
+            context.with(|ctx: Ctx| {
                 match result.into_js(ctx) {
                     Ok(value) => {
                         mem::drop(catch);
@@ -132,6 +134,7 @@ where
     }
 }
 
+#[cfg(any(feature = "tokio", feature = "async-std"))]
 #[cfg(not(feature = "deferred-resolution"))]
 fn resolve<'js>(_ctx: Ctx<'js>, func: Function<'js>, value: Value<'js>) {
     if let Err(error) = func.call::<_, Value>((value,)) {
@@ -170,29 +173,74 @@ unsafe extern "C" fn resolution_job(
 
 #[cfg(all(test, any(feature = "async-std", feature = "tokio")))]
 mod test {
-    use crate::{async_shim::block_on, *};
+    use crate::*;
     use futures_rs::prelude::*;
 
-    async fn delayed<T>(msec: u32, value: T) -> T {
-        let dur = std::time::Duration::from_millis(msec as _);
+    macro_rules! test_cases {
+	      ($($name:ident ($ctx:ident) { $($content:tt)* })*) => {
+            #[cfg(feature = "tokio")]
+            mod tokio_tests {
+                use super::*;
 
-        #[cfg(feature = "async-std")]
-        async_std_rs::task::sleep(dur).await;
+                async fn delayed<T>(msec: u32, value: T) -> T {
+                    let dur = std::time::Duration::from_millis(msec as _);
+                    tokio_rs::time::sleep(dur).await;
+                    value
+                }
 
-        #[cfg(feature = "tokio")]
-        tokio_rs::time::sleep(dur).await;
+                $(
+                    #[tokio::test]
+                    async fn $name() {
+                        #[cfg(not(feature = "parallel"))]
+                        {
+                            tokio::task::LocalSet::new().run_until(async {
+                                let rt = Runtime::new().unwrap().into_async(Tokio);
+                                let $ctx = Context::full(&rt).unwrap();
 
-        value
+                                rt.spawn_pending_jobs(None);
+
+                                $($content)*
+                            }).await;
+                        }
+                        #[cfg(feature = "parallel")]
+                        {
+                            let rt = Runtime::new().unwrap().into_async(Tokio);
+                            let $ctx = Context::full(&rt).unwrap();
+
+                            rt.spawn_pending_jobs(None);
+
+                            $($content)*
+                        }
+                    }
+                )*
+            }
+
+            #[cfg(feature = "async-std")]
+            mod async_std_tests {
+                use super::*;
+
+                async fn delayed<T>(msec: u32, value: T) -> T {
+                    let dur = std::time::Duration::from_millis(msec as _);
+                    async_std_rs::task::sleep(dur).await;
+                    value
+                }
+                $(
+                    #[async_std::test]
+                    async fn $name() {
+                        let rt = Runtime::new().unwrap().into_async(AsyncStd);
+                        let $ctx = Context::full(&rt).unwrap();
+
+                        rt.spawn_pending_jobs(None);
+
+                        $($content)*
+                    }
+                )*
+            }
+	      };
     }
 
-    #[test]
-    fn delayed_fn() {
-        block_on(async {
-            let rt = Runtime::new().unwrap();
-            let ctx = Context::full(&rt).unwrap();
-
-            rt.spawn_pending_jobs(None);
-
+    test_cases! {
+        delayed_fn (ctx) {
             let res: Promise<i32> = ctx.with(|ctx| {
                 let global = ctx.globals();
                 global
@@ -210,20 +258,12 @@ mod test {
 
             let res = res1.chain(res2).chain(res3).collect::<Vec<_>>().await;
             assert_eq!(res, &[1, 2, 3]);
-        });
-    }
+        }
 
-    #[test]
-    fn async_fn_no_throw() {
-        block_on(async {
+        async_fn_no_throw (ctx) {
             async fn mul2(a: i32, b: i32) -> i32 {
                 a * b
             }
-
-            let rt = Runtime::new().unwrap();
-            let ctx = Context::full(&rt).unwrap();
-
-            rt.spawn_pending_jobs(None);
 
             let res: Promise<i32> = ctx.with(|ctx| {
                 let global = ctx.globals();
@@ -235,18 +275,10 @@ mod test {
 
             let res = res.await.unwrap();
             assert_eq!(res, 6);
-        });
-    }
+        }
 
-    #[test]
-    fn unhandled_promise_js() {
-        block_on(async {
+        unhandled_promise_js (ctx) {
             async fn doit() {}
-
-            let rt = Runtime::new().unwrap();
-            let ctx = Context::full(&rt).unwrap();
-
-            rt.spawn_pending_jobs(None);
 
             ctx.with(|ctx| {
                 let global = ctx.globals();
@@ -257,18 +289,10 @@ mod test {
             });
 
             delayed(1, 0).await;
-        });
-    }
+        }
 
-    #[test]
-    fn unhandled_promise_future() {
-        block_on(async {
+        unhandled_promise_future (ctx) {
             async fn doit() {}
-
-            let rt = Runtime::new().unwrap();
-            let ctx = Context::full(&rt).unwrap();
-
-            rt.spawn_pending_jobs(None);
 
             let _res: Promise<()> = ctx.with(|ctx| {
                 let global = ctx.globals();
@@ -279,6 +303,6 @@ mod test {
             });
 
             delayed(1, 0).await;
-        });
+        }
     }
 }

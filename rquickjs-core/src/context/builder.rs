@@ -139,6 +139,6 @@ impl<I: Intrinsic> ContextBuilder<I> {
     }
 
     pub fn build(self, runtime: &Runtime) -> Result<Context> {
-        Context::custom::<I>(runtime)
+        Context::custom::<I, _>(runtime)
     }
 }

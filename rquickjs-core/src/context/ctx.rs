@@ -3,6 +3,12 @@ use crate::{
     Object, Result, Value,
 };
 
+#[cfg(feature = "futures")]
+use std::future::Future;
+
+#[cfg(feature = "futures")]
+use crate::SendWhenParallel;
+
 #[cfg(feature = "registery")]
 use crate::RegisteryKey;
 
@@ -113,8 +119,22 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
-        let ptr = qjs::JS_GetRuntimeOpaque(qjs::JS_GetRuntime(self.ctx));
-        &mut *(ptr as *mut _)
+        let rt = qjs::JS_GetRuntime(self.ctx);
+        &mut *(qjs::JS_GetRuntimeOpaque(rt) as *mut _)
+    }
+
+    /// Spawn future using configured async runtime
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub fn spawn_async<F, T>(&self, future: F)
+    where
+        F: Future<Output = T> + SendWhenParallel + 'static,
+        T: SendWhenParallel + 'static,
+    {
+        let opaque = unsafe { self.get_opaque() };
+        opaque.spawner.spawn_async(Box::pin(async move {
+            future.await;
+        }));
     }
 }
 
@@ -167,7 +187,7 @@ mod test {
         use crate::{intrinsic, Context, Function, Runtime};
 
         let runtime = Runtime::new().unwrap();
-        let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
+        let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval), _>(&runtime).unwrap();
         ctx.with(|ctx| {
             let module = ctx
                 .compile("test", "export default async () => 1;")

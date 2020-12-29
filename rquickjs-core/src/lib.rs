@@ -26,6 +26,12 @@
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
+#[cfg(feature = "async-std")]
+extern crate async_std_rs as async_std;
+
+#[cfg(feature = "tokio")]
+extern crate tokio_rs as tokio;
+
 #[cfg(feature = "phf")]
 #[doc(hidden)]
 pub use phf;
@@ -39,6 +45,8 @@ mod safe_ref;
 pub(crate) use safe_ref::{SafeRef, SafeRefGuard, SafeWeakRef};
 mod runtime;
 pub use runtime::Runtime;
+#[cfg(feature = "futures")]
+pub use runtime::{AsyncSpawner, PendingJobsSpawner};
 mod context;
 pub use context::{intrinsic, Context, ContextBuilder, Ctx, Intrinsic, MultiWith};
 mod value;
@@ -66,11 +74,6 @@ pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 #[doc(hidden)]
 pub use rquickjs_sys as qjs;
 
-pub(crate) mod async_shim;
-
-#[cfg(any(feature = "tokio", feature = "async-std"))]
-pub use crate::async_shim::JoinHandle;
-
 #[cfg(feature = "futures")]
 mod promise;
 
@@ -94,6 +97,16 @@ pub use loader::{
 
 #[cfg(feature = "dyn-load")]
 pub use loader::NativeLoader;
+
+/// A marker type to support the __tokio__ async runtime
+#[cfg(feature = "tokio")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "tokio")))]
+pub struct Tokio;
+
+/// A marker type to support the __async-std__ runtime
+#[cfg(feature = "async-std")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "async-std")))]
+pub struct AsyncStd;
 
 #[cfg(test)]
 pub(crate) fn test_with<'js, F, R>(func: F) -> R

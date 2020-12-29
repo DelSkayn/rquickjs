@@ -66,7 +66,7 @@ jobs:
           DOCS_RS: 1
         with:
           command: doc
-          args: --features rustdoc,doc-cfg
+          args: --features full-async,doc-cfg
       - name: Upload docs
         uses: actions/upload-artifact@v2
         with:

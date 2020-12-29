@@ -47,14 +47,14 @@ impl Context {
     /// Creates a base context with only the required functions registered.
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Context::full`].
-    pub fn base(runtime: &Runtime) -> Result<Self> {
-        Self::custom::<intrinsic::Base>(runtime)
+    pub fn base<A>(runtime: &Runtime<A>) -> Result<Self> {
+        Self::custom::<intrinsic::Base, A>(runtime)
     }
 
     /// Creates a context with only the required intrinsics registered.
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Context::full`].
-    pub fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
+    pub fn custom<I: Intrinsic, A>(runtime: &Runtime<A>) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
         if ctx.is_null() {
@@ -63,7 +63,7 @@ impl Context {
         unsafe { I::add_intrinsic(ctx) };
         let res = Context {
             ctx,
-            rt: runtime.clone(),
+            rt: runtime.as_generic().clone(),
         };
         mem::drop(guard);
 
@@ -73,7 +73,7 @@ impl Context {
     /// Creates a context with all standart available intrinsics registered.
     /// If precise controll is required of which functions are available use
     /// [`Context::custom`] or [`Context::builder`].
-    pub fn full(runtime: &Runtime) -> Result<Self> {
+    pub fn full<A>(runtime: &Runtime<A>) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
         if ctx.is_null() {
@@ -81,7 +81,7 @@ impl Context {
         }
         let res = Context {
             ctx,
-            rt: runtime.clone(),
+            rt: runtime.as_generic().clone(),
         };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);

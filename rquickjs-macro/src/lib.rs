@@ -293,14 +293,9 @@ ctx.with(|ctx| {
 ### Async function binding
 
 ```
-# #[cfg(feature = "async-std")]
-# extern crate async_std_rs as async_std;
-# #[cfg(not(feature = "async-std"))]
-# fn main() {}
-# #[cfg(feature = "async-std")]
 # #[async_std::main]
 # async fn main() {
-use rquickjs::{Runtime, Context, Promise, bind};
+use rquickjs::{Runtime, Context, Promise, bind, AsyncStd};
 
 #[bind(object)]
 pub async fn sleep(msecs: u64) {
@@ -309,7 +304,7 @@ pub async fn sleep(msecs: u64) {
     ).await;
 }
 
-let rt = Runtime::new().unwrap();
+let rt = Runtime::new().unwrap().into_async(AsyncStd);
 let ctx = Context::full(&rt).unwrap();
 
 rt.spawn_pending_jobs(None);

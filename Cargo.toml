@@ -31,8 +31,11 @@ members = [
 [features]
 default = ["exports"]
 
-# Features which is used for documentation
-rustdoc = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "async-std", "macro"]
+# Almost all features excluding "parallel" and support for async runtimes
+full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "macro"]
+
+# Almost all features excluding "parallel"
+full-async = ["full", "async-std", "tokio"]
 
 # Enable support for Either type
 either = ["rquickjs-core/either"]
@@ -85,10 +88,10 @@ futures = ["rquickjs-core/futures"]
 deferred-resolution = ["rquickjs-core/deferred-resolution"]
 
 # Enable Tokio async runtime support
-tokio = ["rquickjs-core/tokio", "rquickjs-macro/tokio"]
+tokio = ["rquickjs-core/tokio"]
 
 # Enable Async-std runtime support
-async-std = ["rquickjs-core/async-std", "rquickjs-macro/async-std"]
+async-std = ["rquickjs-core/async-std"]
 
 # Max number of function args
 max-args-7 = ["rquickjs-core/max-args-7"]
@@ -124,4 +127,4 @@ compile-tests = ["rquickjs-core/compile-tests"]
 doc-cfg = ["rquickjs-core/doc-cfg"]
 
 [package.metadata.docs.rs]
-features = ["rustdoc", "doc-cfg"]
+features = ["full-async", "doc-cfg"]
