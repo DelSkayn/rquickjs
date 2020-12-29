@@ -118,7 +118,7 @@ jobs:
       - doc
       - check
     strategy:
-      fail-fast: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/') }}
+      fail-fast: ${{ startsWith(github.ref, 'refs/tags/') }}
       matrix:
         include:
           # Generate bindings
@@ -139,12 +139,12 @@ jobs:
             features: full-async,parallel
           - task: bindings
             os: windows-latest
-            rust: stable
+            rust: stable-gnu
             target: i686-pc-windows-gnu
             features: full-async,parallel
           - task: bindings
             os: windows-latest
-            rust: stable
+            rust: stable-gnu
             target: x86_64-pc-windows-gnu
             features: full-async,parallel
           # Test features
@@ -283,6 +283,8 @@ jobs:
           args: --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: full
         with:
           command: test
           args: --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
