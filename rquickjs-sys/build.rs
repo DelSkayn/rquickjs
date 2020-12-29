@@ -102,8 +102,9 @@ fn main() {
     let mut builder = cc::Build::new();
     builder
         .extra_warnings(false)
-        .flag("-Wno-array-bounds")
-        .flag("-Wno-format-truncation");
+        //.flag("-Wno-array-bounds")
+        //.flag("-Wno-format-truncation")
+        ;
 
     for (name, value) in &defines {
         builder.define(name, *value);

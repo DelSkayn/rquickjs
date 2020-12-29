@@ -15,7 +15,7 @@ pub unsafe fn JS_VALUE_GET_BOOL(v: JSValue) -> bool {
 
 #[inline]
 pub unsafe fn JS_VALUE_GET_PTR(v: JSValue) -> *mut c_void {
-    v as libc::intptr_t as *mut c_void
+    v as isize as *mut c_void
 }
 
 #[inline]
@@ -25,7 +25,7 @@ pub const fn JS_MKVAL(tag: i32, val: i32) -> JSValue {
 
 #[inline]
 pub fn JS_MKPTR(tag: i32, ptr: *mut c_void) -> JSValue {
-    ((tag as u64) << 32) | (ptr as libc::uintptr_t as u64)
+    ((tag as u64) << 32) | (ptr as usize as u64)
 }
 
 /* quiet NaN encoding */
