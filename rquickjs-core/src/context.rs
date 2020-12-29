@@ -151,18 +151,21 @@ impl Drop for Context {
         let guard = match self.rt.inner.try_lock() {
             Ok(x) => x,
             Err(x) => {
-                // Lock was poisened, this should only happen on a panic.
-                // We should still free the context.
-                // TODO see if there is a way to recover from a panic which could cause the
-                // following assertion to trigger
-                assert!(std::thread::panicking());
+                let p = unsafe { &mut *(self.ctx as *const _ as *mut qjs::JSRefCountHeader) };
+                if p.ref_count <= 1 {
+                    // Lock was poisened, this should only happen on a panic.
+                    // We should still free the context.
+                    // TODO see if there is a way to recover from a panic which could cause the
+                    // following assertion to trigger
+                    assert!(std::thread::panicking());
+                }
                 x
             }
         };
         self.reset_stack();
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard)
+        mem::drop(guard);
     }
 }
 
