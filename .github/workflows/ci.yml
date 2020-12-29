@@ -126,38 +126,33 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: i686-unknown-linux-gnu
-            features: exports,parallel
+            features: exports
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: exports,parallel
+            features: exports
           - task: bindings
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
-            features: full-async,parallel
+            features: full-async
           - task: bindings
             os: windows-latest
             rust: stable-gnu
             target: i686-pc-windows-gnu
-            features: full-async,parallel
+            features: full-async
           - task: bindings
             os: windows-latest
             rust: stable-gnu
             target: x86_64-pc-windows-gnu
-            features: full-async,parallel
+            features: full-async
           # Test features
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: default
-          - task: features
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: parallel
           - task: features
             os: ubuntu-latest
             rust: stable
