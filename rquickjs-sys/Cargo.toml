@@ -34,3 +34,17 @@ bindgen = ["bindgen-rs"]
 logging = ["pretty_env_logger"]
 # Special case for updating bundled bindings
 update-bindings = ["bindgen"]
+
+# Enable QuickJS dumps
+dump-bytecode = []
+dump-gc = []
+dump-gc-free = []
+dump-free = []
+dump-leaks = []
+dump-mem = []
+dump-objects = []
+dump-atoms = []
+dump-shapes = []
+dump-module-resolve = []
+dump-promise = []
+dump-read-object = []

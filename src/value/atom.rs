@@ -1,8 +1,4 @@
-use crate::{
-    value::{self, rf::JsStringRef, String, Value},
-    Ctx, Error, Result,
-};
-use rquickjs_sys as qjs;
+use crate::{qjs, value, Ctx, Error, JsRef, Result, String, Value};
 use std::{ffi::CStr, mem, string::String as StdString};
 
 /// An atom is value representing the name of a variable of an objects and can be created
@@ -85,7 +81,7 @@ impl<'js> Atom<'js> {
         unsafe {
             let v = qjs::JS_AtomToString(self.ctx.ctx, self.atom);
             value::handle_exception(self.ctx, v)?;
-            Ok(String(JsStringRef::from_js_value(self.ctx, v)))
+            Ok(String(JsRef::from_js_value(self.ctx, v)))
         }
     }
 

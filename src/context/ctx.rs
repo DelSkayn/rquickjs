@@ -1,17 +1,11 @@
 use crate::{
-    markers::Invariant,
-    runtime::Opaque,
-    value::{
-        self,
-        rf::{JsObjectRef, JsStringRef},
-        String,
-    },
-    Context, FromJs, Function, Object, RegisteryKey, Result, Value,
+    markers::Invariant, qjs, runtime::Opaque, value, BeforeInit, Context, FromJs, Function, JsRef,
+    Module, Object, Result, String, Value,
 };
 
-use crate::Module;
+#[cfg(feature = "registery")]
+use crate::RegisteryKey;
 
-use rquickjs_sys as qjs;
 use std::{
     ffi::{CStr, CString},
     fs,
@@ -86,10 +80,10 @@ impl<'js> Ctx<'js> {
     }
 
     /// Compile a module for later use.
-    pub fn compile<Sa, Sb>(self, name: Sa, source: Sb) -> Result<Module<'js>>
+    pub fn compile<N, S>(self, name: N, source: S) -> Result<Module<'js>>
     where
-        Sa: Into<Vec<u8>>,
-        Sb: Into<Vec<u8>>,
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
     {
         let name = CString::new(name)?;
         let flag =
@@ -103,6 +97,21 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    pub fn compile_only<N, S>(self, name: N, source: S) -> Result<Module<'js, BeforeInit>>
+    where
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
+    {
+        let name = CString::new(name)?;
+        let flag =
+            qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
+        unsafe {
+            let js_val = self._eval(source, name.as_c_str(), flag as i32)?;
+            value::handle_exception(self, js_val)?;
+            Ok(Module::<BeforeInit>::from_js_value(self, js_val))
+        }
+    }
+
     /// Coerce a value to a string in the same way javascript would coerce values.
     pub fn coerce_string(self, v: Value<'js>) -> Result<String<'js>> {
         unsafe {
@@ -111,7 +120,7 @@ impl<'js> Ctx<'js> {
             // js_val should be a string now
             // String itself will check for the tag when debug_assertions are enabled
             // but is should always be string
-            Ok(String(JsStringRef::from_js_value(self, js_val)))
+            Ok(String(JsRef::from_js_value(self, js_val)))
         }
     }
 
@@ -170,7 +179,7 @@ impl<'js> Ctx<'js> {
     pub fn globals(self) -> Object<'js> {
         unsafe {
             let v = qjs::JS_GetGlobalObject(self.ctx);
-            Object(JsObjectRef::from_js_value(self, v))
+            Object(JsRef::from_js_value(self, v))
         }
     }
 
@@ -179,25 +188,33 @@ impl<'js> Ctx<'js> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
 
         Ok(unsafe {
-            let promise = Object(JsObjectRef::from_js_value(
+            let promise = value::handle_exception(
                 self,
-                value::handle_exception(
-                    self,
-                    qjs::JS_NewPromiseCapability(self.ctx, funcs.as_mut_ptr() as *mut qjs::JSValue),
-                )?,
-            ));
+                qjs::JS_NewPromiseCapability(self.ctx, funcs.as_mut_ptr() as _),
+            )?;
             let (then, catch) = funcs.assume_init();
             (
-                promise,
-                Function(JsObjectRef::from_js_value(self, then)),
-                Function(JsObjectRef::from_js_value(self, catch)),
+                Object(JsRef::from_js_value(self, promise)),
+                Function(JsRef::from_js_value(self, then)),
+                Function(JsRef::from_js_value(self, catch)),
             )
         })
     }
 
+    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
+        let ptr = qjs::JS_GetRuntimeOpaque(qjs::JS_GetRuntime(self.ctx));
+        &mut *(ptr as *mut _)
+    }
+}
+
+#[cfg(feature = "registery")]
+impl<'js> Ctx<'js> {
     /// Store a value in the registery so references to it can be kept outside the scope of context use.
     ///
     /// A registered value can be retrieved from any context belonging to the same runtime.
+    ///
+    /// # Features
+    /// This method is only available if a `registery` feature is enabled.
     pub fn register(self, v: Value<'js>) -> RegisteryKey {
         unsafe {
             let register = self.get_opaque();
@@ -208,6 +225,9 @@ impl<'js> Ctx<'js> {
     }
 
     /// Remove a value from the registery.
+    ///
+    /// # Features
+    /// This method is only available if a `registery` feature is enabled.
     pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
             let register = self.get_opaque();
@@ -220,10 +240,13 @@ impl<'js> Ctx<'js> {
     }
 
     /// Get a value from the registery.
+    ///
+    /// # Features
+    /// This method is only available if a `registery` feature is enabled.
     pub fn get_register(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
-            let register = self.get_opaque();
-            if register.registery.contains(&k) {
+            let opaque = self.get_opaque();
+            if opaque.registery.contains(&k) {
                 let value = Value::from_js_value_const(self, k.0).unwrap();
                 Some(value)
             } else {
@@ -231,19 +254,13 @@ impl<'js> Ctx<'js> {
             }
         }
     }
-
-    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
-        let ptr = qjs::JS_GetRuntimeOpaque(qjs::JS_GetRuntime(self.ctx));
-        &mut *(ptr as *mut _)
-    }
 }
 
 mod test {
-
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
-        use crate::{Context, FromJs, Function, Runtime};
+        use crate::{Context, Function, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::build(&runtime)
@@ -255,12 +272,8 @@ mod test {
             let module = ctx
                 .compile("test", "export default async () => 1;")
                 .unwrap();
-            for (key, value) in module.export_list() {
-                if key.to_string().unwrap() == "default" {
-                    let func = Function::from_js(ctx, value).unwrap();
-                    func.call::<(), ()>(()).unwrap();
-                }
-            }
+            let func: Function = module.get("default").unwrap();
+            func.call::<(), ()>(()).unwrap();
         });
     }
 }

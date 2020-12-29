@@ -1,138 +1,78 @@
-use super::StaticFn;
-use crate::{
-    context::Ctx, runtime::Opaque, value::handle_panic, ArgsValue, FromJs, FromJsArgs, IntoJs,
-    Result, Value,
-};
-use rquickjs_sys as qjs;
-use std::{cell::RefCell, ffi::CString, mem, panic::AssertUnwindSafe};
+use super::ArgsIter;
+use crate::{qjs, value::handle_panic, Ctx, Result, Value};
+use std::{panic, panic::AssertUnwindSafe, ptr};
 
-pub struct FuncOpaque {
-    func: Box<
-        dyn Fn(
-            *mut qjs::JSContext,
-            qjs::JSValue,
-            std::os::raw::c_int,
-            *mut qjs::JSValue,
-        ) -> qjs::JSValue,
-    >,
-}
+static mut FUNC_CLASS: qjs::JSClassID = 0;
 
-macro_rules! try_ffi {
-    ($ctx:expr,$e:expr) => {
-        match $e {
-            Ok(x) => x,
-            Err(e) => {
-                let error = format!("{}", e);
-                let error_str = CString::new(error).unwrap();
-                return qjs::JS_ThrowInternalError($ctx, error_str.as_ptr());
-            }
+#[repr(transparent)]
+pub struct FuncOpaque<'js>(Box<dyn Fn(Ctx<'js>, Value<'js>, ArgsIter<'js>) -> Result<Value<'js>>>);
+
+impl<'js> FuncOpaque<'js> {
+    pub fn new<F>(func: F) -> Self
+    where
+        F: Fn(Ctx<'js>, Value<'js>, ArgsIter<'js>) -> Result<Value<'js>> + 'static,
+    {
+        Self(Box::new(func))
+    }
+
+    pub unsafe fn to_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
+        let obj = qjs::JS_NewObjectClass(ctx.ctx, FUNC_CLASS as _);
+        qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(self)) as _);
+        obj
+    }
+
+    unsafe fn _call(
+        &self,
+        ctx: *mut qjs::JSContext,
+        this: qjs::JSValue,
+        argc: qjs::c_int,
+        argv: *mut qjs::JSValue,
+    ) -> Result<qjs::JSValue> {
+        let ctx = Ctx::from_ptr(ctx);
+
+        let this = Value::from_js_value_const(ctx, this)?;
+        let args = ArgsIter::from_value_count_const(ctx, argc as usize, argv);
+
+        let res = (self.0)(ctx, this, args)?;
+
+        Ok(res.into_js_value())
+    }
+
+    pub unsafe fn register(rt: *mut qjs::JSRuntime) {
+        qjs::JS_NewClassID(&mut FUNC_CLASS);
+        if 0 == qjs::JS_IsRegisteredClass(rt, FUNC_CLASS) {
+            let class_def = qjs::JSClassDef {
+                class_name: b"RustFunction\0".as_ptr() as *const _,
+                finalizer: Some(Self::finalizer),
+                gc_mark: None,
+                call: Some(Self::call),
+                exotic: ptr::null_mut(),
+            };
+            assert!(qjs::JS_NewClass(rt, FUNC_CLASS, &class_def) == 0);
         }
-    };
-}
-
-pub unsafe extern "C" fn call_fn_static<'js, F>(
-    ctx: *mut qjs::JSContext,
-    this: qjs::JSValue,
-    argc: std::os::raw::c_int,
-    argv: *mut qjs::JSValue,
-) -> qjs::JSValue
-where
-    F: StaticFn<'js>,
-{
-    //TODO implement some form of poisoning to harden against broken invariants.
-    handle_panic(
-        ctx,
-        AssertUnwindSafe(|| {
-            //TODO catch unwind
-            let ctx = Ctx::from_ptr(ctx);
-            let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
-            let this = try_ffi!(ctx.ctx, F::This::from_js(ctx, this));
-            let multi = ArgsValue::from_value_count_const(ctx, argc as usize, argv);
-            let args = try_ffi!(ctx.ctx, F::Args::from_js_args(ctx, multi));
-            let value = try_ffi!(ctx.ctx, F::call(ctx, this, args));
-            let value = try_ffi!(ctx.ctx, value.into_js(ctx));
-            value.into_js_value()
-        }),
-    )
-}
-
-pub unsafe extern "C" fn cb_call(
-    ctx: *mut qjs::JSContext,
-    func_obj: qjs::JSValue,
-    this_val: qjs::JSValue,
-    argc: ::std::os::raw::c_int,
-    argv: *mut qjs::JSValue,
-    _flags: ::std::os::raw::c_int,
-) -> qjs::JSValue {
-    let c = Ctx::from_ptr(ctx);
-    let fn_opaque = qjs::JS_GetOpaque2(ctx, func_obj, c.get_opaque().func_class) as *mut FuncOpaque;
-    (&mut (*fn_opaque).func)(ctx, this_val, argc, argv)
-}
-
-pub fn wrap_cb_mut<'js, A, T, R, F>(func: F) -> FuncOpaque
-where
-    A: FromJsArgs<'js>,
-    T: FromJs<'js>,
-    R: IntoJs<'js>,
-    F: FnMut(Ctx<'js>, T, A) -> Result<R> + 'static,
-{
-    let func = RefCell::new(func);
-
-    FuncOpaque {
-        func: Box::new(move |ctx, this, argc, argv| {
-            let func = &func;
-            handle_panic(
-                ctx,
-                AssertUnwindSafe(move || unsafe {
-                    let ctx = Ctx::from_ptr(ctx);
-                    let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
-                    let this = try_ffi!(ctx.ctx, T::from_js(ctx, this));
-                    let multi = ArgsValue::from_value_count_const(ctx, argc as usize, argv);
-                    let args = try_ffi!(ctx.ctx, A::from_js_args(ctx, multi));
-                    let value = {
-                        let mut func = func.try_borrow_mut()
-                        .expect("Mutable function callback is already in use! Could it have been called recursively?");
-                        try_ffi!(ctx.ctx, func(ctx, this, args))
-                    };
-                    let value = try_ffi!(ctx.ctx, value.into_js(ctx));
-                    value.into_js_value()
-                }),
-            )
-        }),
     }
-}
 
-pub fn wrap_cb<'js, A, T, R, F>(func: F) -> FuncOpaque
-where
-    A: FromJsArgs<'js>,
-    T: FromJs<'js>,
-    R: IntoJs<'js>,
-    F: Fn(Ctx<'js>, T, A) -> Result<R> + 'static,
-{
-    FuncOpaque {
-        func: Box::new(move |ctx, this, argc, argv| {
-            let func = &func;
-            handle_panic(
-                ctx,
-                AssertUnwindSafe(move || unsafe {
-                    let ctx = Ctx::from_ptr(ctx);
-                    let this = try_ffi!(ctx.ctx, Value::from_js_value_const(ctx, this));
-                    let this = try_ffi!(ctx.ctx, T::from_js(ctx, this));
-                    let multi = ArgsValue::from_value_count_const(ctx, argc as usize, argv);
-                    let args = try_ffi!(ctx.ctx, A::from_js_args(ctx, multi));
-                    let value = try_ffi!(ctx.ctx, func(ctx, this, args));
-                    let value = try_ffi!(ctx.ctx, value.into_js(ctx));
-                    value.into_js_value()
-                }),
-            )
-        }),
+    unsafe extern "C" fn call(
+        ctx: *mut qjs::JSContext,
+        func: qjs::JSValue,
+        this: qjs::JSValue,
+        argc: qjs::c_int,
+        argv: *mut qjs::JSValue,
+        _flags: qjs::c_int,
+    ) -> qjs::JSValue {
+        let ctx = Ctx::from_ptr(ctx);
+        let opaque = &*(qjs::JS_GetOpaque2(ctx.ctx, func, FUNC_CLASS) as *mut Self);
+        handle_panic(
+            ctx.ctx,
+            AssertUnwindSafe(|| {
+                opaque
+                    ._call(ctx.ctx, this, argc, argv)
+                    .unwrap_or_else(|error| error.throw(ctx))
+            }),
+        )
     }
-}
 
-pub unsafe extern "C" fn cb_finalizer(rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
-    let rt_opaque: *mut Opaque = qjs::JS_GetRuntimeOpaque(rt) as *mut _;
-    let class_id = (*rt_opaque).func_class;
-    let fn_opaque = qjs::JS_GetOpaque(val, class_id) as *mut FuncOpaque;
-    let fn_opaque: Box<FuncOpaque> = Box::from_raw(fn_opaque);
-    mem::drop(fn_opaque);
+    unsafe extern "C" fn finalizer(_rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
+        let _opaque = Box::from_raw(qjs::JS_GetOpaque(val, FUNC_CLASS) as *mut Self);
+    }
 }
