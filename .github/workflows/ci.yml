@@ -126,27 +126,27 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: i686-unknown-linux-gnu
-            features: default,parallel
+            features: exports,parallel
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: default,parallel
+            features: exports,parallel
           - task: bindings
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
-            features: default,parallel,classes,properties,async-std
+            features: full-async,parallel
           - task: bindings
             os: windows-latest
             rust: stable
             target: i686-pc-windows-gnu
-            features: default,parallel,classes,properties,async-std
+            features: full-async,parallel
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-gnu
-            features: default,parallel,classes,properties,async-std
+            features: full-async,parallel
           # Test features
           - task: features
             os: ubuntu-latest
@@ -198,17 +198,17 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,allocator,loader,classes,properties,async-std
+            features: full-async
           - task: channels
             os: ubuntu-latest
             rust: beta
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,allocator,loader,classes,properties,async-std
+            features: full-async
           - task: channels
             os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,allocator,loader,classes,properties,async-std
+            features: full-async
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
