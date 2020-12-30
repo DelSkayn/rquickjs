@@ -78,12 +78,6 @@ jobs:
 
   check:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        features:
-          - default
-          - async-std
-          - tokio
     steps:
       - uses: actions/checkout@v1
         with:
@@ -110,7 +104,7 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --no-default-features --features ${{ matrix.features }}
+          args: --all --all-features
 
   test:
     needs:
