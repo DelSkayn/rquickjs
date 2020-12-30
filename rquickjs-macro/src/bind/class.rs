@@ -95,9 +95,9 @@ impl BindClass {
             impl #lib_crate::ClassDef for #src {
                 const CLASS_NAME: &'static str = #name;
 
-                fn class_id() -> &'static mut #lib_crate::ClassId {
+                unsafe fn class_id() -> &'static mut #lib_crate::ClassId {
                     static mut CLASS_ID: #lib_crate::ClassId = #lib_crate::ClassId::new();
-                    unsafe { &mut CLASS_ID }
+                    &mut CLASS_ID
                 }
 
                 #(#extras)*
@@ -360,9 +360,9 @@ mod test {
             impl rquickjs::ClassDef for test::Test {
                 const CLASS_NAME: &'static str = "Test";
 
-                fn class_id() -> &'static mut rquickjs::ClassId {
+                unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
-                    unsafe { &mut CLASS_ID }
+                    &mut CLASS_ID
                 }
             }
             rquickjs::Class::<test::Test>::register(_ctx)?;
@@ -381,9 +381,9 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
-                fn class_id() -> &'static mut rquickjs::ClassId {
+                unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
-                    unsafe { &mut CLASS_ID }
+                    &mut CLASS_ID
                 }
 
                 const HAS_PROTO: bool = true;
@@ -422,9 +422,9 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
-                fn class_id() -> &'static mut rquickjs::ClassId {
+                unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
-                    unsafe { &mut CLASS_ID }
+                    &mut CLASS_ID
                 }
 
                 const HAS_PROTO: bool = true;
@@ -461,9 +461,9 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
-                fn class_id() -> &'static mut rquickjs::ClassId {
+                unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
-                    unsafe { &mut CLASS_ID }
+                    &mut CLASS_ID
                 }
             }
             rquickjs::Class::<test::Node>::register(_ctx)?;
@@ -484,9 +484,9 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
-                fn class_id() -> &'static mut rquickjs::ClassId {
+                unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
-                    unsafe { &mut CLASS_ID }
+                    &mut CLASS_ID
                 }
 
                 const HAS_STATIC: bool = true;
@@ -511,9 +511,9 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
-                fn class_id() -> &'static mut rquickjs::ClassId {
+                unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
-                    unsafe { &mut CLASS_ID }
+                    &mut CLASS_ID
                 }
 
                 const HAS_REFS: bool = true;

@@ -56,15 +56,18 @@ impl DerefMut for ClassId {
 ///
 /// This trait helps export rust data types to QuickJS so JS code can operate with it as a ES6 classes.
 ///
+/// Do not need implements this trait manually. Instead you can use [`class_def`](crate::class_def) macros or [`bind`](attr.bind.html) attribute to bind classes with methods in easy way.
+///
 /// ```
 /// # use rquickjs::{ClassId, ClassDef, Ctx, Object, Result, RefsMarker};
 /// struct MyClass;
 ///
 /// impl ClassDef for MyClass {
 ///     const CLASS_NAME: &'static str = "MyClass";
-///     fn class_id() -> &'static mut ClassId {
+///
+///     unsafe fn class_id() -> &'static mut ClassId {
 ///         static mut CLASS_ID: ClassId = ClassId::new();
-///         unsafe { &mut CLASS_ID }
+///         &mut CLASS_ID
 ///     }
 ///
 ///     // With prototype
@@ -92,7 +95,10 @@ pub trait ClassDef {
     const CLASS_NAME: &'static str;
 
     /// The reference to class identifier
-    fn class_id() -> &'static mut ClassId;
+    ///
+    /// # Safety
+    /// This method should return reference to mutable static class id which should be initialized to zero.
+    unsafe fn class_id() -> &'static mut ClassId;
 
     /// The class has prototype
     const HAS_PROTO: bool = false;
@@ -175,7 +181,14 @@ impl<'js, C> Class<'js, C>
 where
     C: ClassDef,
 {
+    /// Get an integer class identifier
+    #[inline(always)]
+    pub fn id() -> ClassId {
+        unsafe { *C::class_id() }
+    }
+
     /// Wrap constructor of class
+    #[inline(always)]
     pub fn constructor<F>(func: F) -> Constructor<C, F> {
         Constructor(func, PhantomData)
     }
@@ -190,8 +203,8 @@ where
 
     /// Instantiate the object of class
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
-        let class_id = *C::class_id().as_ref();
-        let val = unsafe { handle_exception(ctx, qjs::JS_NewObjectClass(ctx.ctx, class_id as _)) }?;
+        let val =
+            unsafe { handle_exception(ctx, qjs::JS_NewObjectClass(ctx.ctx, *Self::id() as _)) }?;
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
@@ -202,11 +215,10 @@ where
 
     /// Instantiate the object of class with given prototype
     pub fn instance_proto(ctx: Ctx<'js>, value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
-        let class_id = *C::class_id().as_ref();
         let val = unsafe {
             handle_exception(
                 ctx,
-                qjs::JS_NewObjectProtoClass(ctx.ctx, proto.0.as_js_value(), class_id as _),
+                qjs::JS_NewObjectProtoClass(ctx.ctx, proto.0.as_js_value(), *Self::id()),
             )
         }?;
         let ptr = Box::into_raw(Box::new(value));
@@ -229,8 +241,7 @@ where
 
     /// Get instance pointer from object
     unsafe fn try_ptr(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Result<*mut C> {
-        let class_id = *C::class_id().as_ref();
-        let ptr = qjs::JS_GetOpaque2(ctx, value, class_id) as *mut C;
+        let ptr = qjs::JS_GetOpaque2(ctx, value, *Self::id()) as *mut C;
         if ptr.is_null() {
             return Err(Error::FromJs {
                 from: "object",
@@ -244,9 +255,10 @@ where
     /// Register the class
     pub fn register(ctx: Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
-        let class_id = unsafe { qjs::JS_NewClassID(C::class_id().as_mut()) };
+        unsafe { qjs::JS_NewClassID(C::class_id().as_mut()) };
+        let class_id = Self::id();
         let class_name = CString::new(C::CLASS_NAME)?;
-        if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, class_id) } {
+        if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, *class_id) } {
             let class_def = qjs::JSClassDef {
                 class_name: class_name.as_ptr(),
                 finalizer: Some(Self::finalizer),
@@ -258,7 +270,7 @@ where
                 call: None, //Some(Self::call),
                 exotic: ptr::null_mut(),
             };
-            if 0 != unsafe { qjs::JS_NewClass(rt, class_id, &class_def) } {
+            if 0 != unsafe { qjs::JS_NewClass(rt, *class_id, &class_def) } {
                 return Err(Error::Unknown);
             }
 
@@ -266,7 +278,7 @@ where
                 let proto = Object::new(ctx)?;
                 C::init_proto(ctx, &proto)?;
 
-                unsafe { qjs::JS_SetClassProto(ctx.ctx, class_id, proto.0.into_js_value()) }
+                unsafe { qjs::JS_SetClassProto(ctx.ctx, *class_id, proto.0.into_js_value()) }
             }
         }
 
@@ -284,9 +296,8 @@ where
 
     /// Get the own prototype object of a class
     pub fn prototype(ctx: Ctx<'js>) -> Result<Object<'js>> {
-        let class_id = *C::class_id().as_ref();
         Ok(Object(unsafe {
-            let proto = qjs::JS_GetClassProto(ctx.ctx, class_id);
+            let proto = qjs::JS_GetClassProto(ctx.ctx, *Self::id());
             let proto = Value::from_js_value(ctx, proto);
             let type_ = proto.type_of();
             if type_ == Type::Object {
@@ -333,8 +344,7 @@ where
         val: qjs::JSValue,
         mark_func: qjs::JS_MarkFunc,
     ) {
-        let class_id = *C::class_id().as_ref();
-        let ptr = qjs::JS_GetOpaque(val, class_id) as *mut C;
+        let ptr = qjs::JS_GetOpaque(val, *Self::id()) as *mut C;
         debug_assert!(!ptr.is_null());
         let inst = &mut *ptr;
         let marker = RefsMarker { rt, mark_func };
@@ -342,8 +352,7 @@ where
     }
 
     unsafe extern "C" fn finalizer(rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
-        let class_id = *C::class_id().as_ref();
-        let ptr = qjs::JS_GetOpaque(val, class_id) as *mut C;
+        let ptr = qjs::JS_GetOpaque(val, *Self::id()) as *mut C;
         debug_assert!(!ptr.is_null());
         let inst = Box::from_raw(ptr);
         qjs::JS_FreeValueRT(rt, val);
@@ -355,8 +364,7 @@ impl<'js> Object<'js> {
     /// Check the object for instance of
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
     pub fn instance_of<C: ClassDef>(&self) -> bool {
-        let class_id = *C::class_id().as_ref();
-        let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.ctx, self.0.value, class_id) };
+        let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.ctx, self.0.value, *Class::<C>::id()) };
         !ptr.is_null()
     }
 
@@ -550,9 +558,9 @@ macro_rules! class_def {
         impl $crate::ClassDef for $name {
             const CLASS_NAME: &'static str = stringify!($name);
 
-            fn class_id() -> &'static mut $crate::ClassId {
+            unsafe fn class_id() -> &'static mut $crate::ClassId {
                 static mut CLASS_ID: $crate::ClassId = $crate::ClassId::new();
-                unsafe { &mut CLASS_ID }
+                &mut CLASS_ID
             }
 
             $($body)*

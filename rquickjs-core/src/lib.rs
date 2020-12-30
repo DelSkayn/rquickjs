@@ -42,7 +42,7 @@ mod result;
 use result::{get_exception, handle_exception, handle_panic};
 pub use result::{Error, Result};
 mod safe_ref;
-pub(crate) use safe_ref::{SafeRef, SafeRefGuard, SafeWeakRef};
+pub(crate) use safe_ref::*;
 mod runtime;
 pub use runtime::Runtime;
 #[cfg(feature = "futures")]
