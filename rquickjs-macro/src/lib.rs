@@ -293,9 +293,6 @@ ctx.with(|ctx| {
 ### Async function binding
 
 ```
-# #[cfg(not(feature = "async-std"))]
-# fn main() {}
-# #[cfg(feature = "async-std")]
 # #[async_std::main]
 # async fn main() {
 use rquickjs::{Runtime, Context, Promise, bind, AsyncStd};
@@ -310,12 +307,11 @@ pub async fn sleep(msecs: u64) {
 let rt = Runtime::new().unwrap().into_async(AsyncStd);
 let ctx = Context::full(&rt).unwrap();
 
-rt.spawn_pending_jobs(None);
+ctx.with(|ctx| {
+    ctx.globals().init_def::<Sleep>().unwrap();
+});
 
 let promise: Promise<String> = ctx.with(|ctx| {
-    let glob = ctx.globals();
-    glob.init_def::<Sleep>().unwrap();
-
     ctx.eval(r#"
         async function mysleep() {
             await sleep(50);
@@ -325,9 +321,112 @@ let promise: Promise<String> = ctx.with(|ctx| {
     "#).unwrap()
 });
 
+rt.spawn_pending_jobs(None);
+
 let res = promise.await.unwrap();
 assert_eq!(res, "ok");
 # }
+```
+
+### Class binding
+
+```
+use rquickjs::{bind, Runtime, Context, Error};
+
+#[bind(object)]
+#[quickjs(bare)]
+mod geom {
+    pub struct Point {
+        // field properties
+        pub x: f64,
+        pub y: f64,
+    }
+
+    impl Point {
+        // constructor
+        pub fn new(x: f64, y: f64) -> Self {
+            Self { x, y }
+        }
+
+        // instance method
+        pub fn norm(&self) -> f64 {
+            Self::dot(self, self).sqrt()
+        }
+
+        // instance property getter
+        #[quickjs(get, enumerable)]
+        pub fn xy(&self) -> (f64, f64) {
+            (self.x, self.y)
+        }
+
+        // instance property setter
+        #[quickjs(rename = "xy", set)]
+        pub fn set_xy(&mut self, xy: (f64, f64)) {
+            self.x = xy.0;
+            self.y = xy.1;
+        }
+
+        // static method
+        pub fn dot(a: &Point, b: &Point) -> f64 {
+            a.x * b.x + a.y * b.y
+        }
+
+        // static property with getter
+        #[quickjs(get)]
+        pub fn zero() -> Self {
+            Point { x: 0.0, y: 0.0 }
+        }
+    }
+}
+
+let rt = Runtime::new().unwrap();
+let ctx = Context::full(&rt).unwrap();
+
+ctx.with(|ctx| {
+    ctx.globals().init_def::<Geom>().unwrap();
+});
+
+ctx.with(|ctx| {
+    ctx.eval::<(), _>(r#"
+        function assert(res) {
+            if (!res) throw new Error("Assertion failed");
+        }
+
+        class ColorPoint extends Point {
+            constructor(x, y, color) {
+            super(x, y);
+                this.color = color;
+            }
+            get_color() {
+                return this.color;
+            }
+        }
+
+        let pt = new Point(2, 3);
+        assert(pt.x === 2);
+        assert(pt.y === 3);
+        pt.x = 4;
+        assert(pt.x === 4);
+        assert(pt.norm() == 5);
+        let xy = pt.xy;
+        assert(xy.length === 2);
+        assert(xy[0] === 4);
+        assert(xy[1] === 3);
+        pt.xy = [3, 4];
+        assert(pt.x === 3);
+        assert(pt.y === 4);
+        assert(Point.dot(pt, Point(2, 1)) == 10);
+
+        let ptz = Point.zero;
+        assert(ptz.x === 0);
+        assert(ptz.y === 0);
+
+        let ptc = new ColorPoint(2, 3, 0xffffff);
+        assert(ptc.x === 2);
+        assert(ptc.color === 0xffffff);
+        assert(ptc.get_color() === 0xffffff);
+    "#).unwrap();
+});
 ```
 
  */

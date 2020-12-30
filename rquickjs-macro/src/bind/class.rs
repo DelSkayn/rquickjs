@@ -244,7 +244,7 @@ impl Binder {
                 let fn_ = format_ident!("get_{}", name);
                 let self_ = format_ident!("self_");
                 let def = parse_quote! {
-                    fn #fn_(#self_: #class) -> #ty {
+                    fn #fn_(#self_: &#class) -> #ty {
                         #self_.#ident
                     }
                 };
@@ -252,6 +252,7 @@ impl Binder {
                 BindFn1 {
                     src,
                     args: vec![self_],
+                    method: true,
                     define: Some(def),
                     ..Default::default()
                 }
@@ -263,7 +264,7 @@ impl Binder {
                     let self_ = format_ident!("self_");
                     let val = format_ident!("val");
                     let def = parse_quote! {
-                        fn #fn_(#self_: #class, #val: #ty) {
+                        fn #fn_(#self_: &mut #class, #val: #ty) {
                             #self_.#ident = #val;
                         }
                     };
@@ -271,6 +272,7 @@ impl Binder {
                     BindFn1 {
                         src,
                         args: vec![self_, val],
+                        method: true,
                         define: Some(def),
                         ..Default::default()
                     }
@@ -363,6 +365,54 @@ mod test {
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
                     &mut CLASS_ID
+                }
+            }
+            rquickjs::Class::<test::Test>::register(_ctx)?;
+        };
+
+        class_with_fields { test } {
+            #[quickjs(bare)]
+            mod test {
+                pub struct Test {
+                    pub a: String,
+                    pub b: f64,
+                }
+            }
+        } {
+            impl rquickjs::ClassDef for test::Test {
+                const CLASS_NAME: &'static str = "Test";
+
+                unsafe fn class_id() -> &'static mut rquickjs::ClassId {
+                    static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
+                    &mut CLASS_ID
+                }
+
+                const HAS_PROTO: bool = true;
+
+                fn init_proto<'js >(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
+                    exports.prop("a", rquickjs::Accessor::new({
+                        fn get_a(self_: &test::Test) -> String {
+                            self_.a
+                        }
+                        rquickjs::Method(get_a)
+                    }, {
+                        fn set_a(self_: &mut test::Test, val: String) {
+                            self_.a = val;
+                        }
+                        rquickjs::Method(set_a)
+                    }))?;
+                    exports.prop("b", rquickjs::Accessor::new({
+                        fn get_b(self_: &test::Test) -> f64 {
+                            self_.b
+                        }
+                        rquickjs::Method(get_b)
+                    }, {
+                        fn set_b(self_: &mut test::Test, val: f64) {
+                            self_.b = val;
+                        }
+                        rquickjs::Method(set_b)
+                    }))?;
+                    Ok (())
                 }
             }
             rquickjs::Class::<test::Test>::register(_ctx)?;
