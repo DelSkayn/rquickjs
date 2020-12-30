@@ -1,5 +1,5 @@
 diff --git a/quickjs.c b/quickjs.c
-index a39ff8f..49604f4 100644
+index a39ff8f..4cef3ce 100644
 --- a/quickjs.c
 +++ b/quickjs.c
 @@ -1587,9 +1587,9 @@ static inline uint8_t *js_get_stack_pointer(void)

@@ -1,0 +1,35 @@
+patch = all 
+diff --git a/quickjs.c b/quickjs.c
+index 12e3cc9..bacbf9b 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -2113,6 +2113,13 @@ void JS_FreeRuntime(JSRuntime *rt)
+     }
+ }
+ 
++#ifdef CONFIG_PARALLEL
++void JS_ResetStackPointer(JSContext *ctx)
++{
++     ctx->rt->stack_top = js_get_stack_pointer();
++}
++#endif
++
+ JSContext *JS_NewContextRaw(JSRuntime *rt)
+ {
+     JSContext *ctx;
+diff --git a/quickjs.h b/quickjs.h
+index 4e06dfe..00001d1 100644
+--- a/quickjs.h
++++ b/quickjs.h
+@@ -352,6 +352,11 @@ JSRuntime *JS_GetRuntime(JSContext *ctx);
+ void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
+ JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
+ 
++#ifdef CONFIG_PARALLEL
++void JS_ResetStackPointer(JSContext *ctx);
++#endif
++
++
+ /* the following functions are used to select the intrinsic object to
+    save memory */
+ JSContext *JS_NewContextRaw(JSRuntime *rt);

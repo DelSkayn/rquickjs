@@ -48,7 +48,6 @@ fn main() {
         "libunicode.h",
         "list.h",
         "quickjs-atom.h",
-        "quickjs-libc.h",
         "quickjs-opcode.h",
         "quickjs.h",
         "cutils.h",
@@ -58,12 +57,15 @@ fn main() {
         "libregexp.c",
         "libunicode.c",
         "cutils.c",
-        "quickjs-libc.c",
         "quickjs.c",
         "libbf.c",
     ];
 
-    let patch_files = ["rquickjs.patch", "check_stack_overflow.patch"];
+    let mut patch_files = vec![
+        "check_stack_overflow.patch",
+        "infinity_handling.patch",
+        "atomic_new_class_id.patch",
+    ];
 
     let mut defines = vec![
         ("_GNU_SOURCE".into(), None),
@@ -71,19 +73,25 @@ fn main() {
         ("CONFIG_BIGNUM".into(), None),
     ];
 
+    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
+        && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
+    {
+        patch_files.push("basic_msvc_compat.patch");
+    }
+
     if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
+        patch_files.push("read_module_exports.patch");
         defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
     }
 
     if env::var("CARGO_FEATURE_PARALLEL").is_ok() {
+        patch_files.push("reset_stack_pointer.patch");
         defines.push(("CONFIG_PARALLEL".into(), None));
     }
 
     for feature in &features {
-        if feature.starts_with("dump-") {
-            if env::var(feature_to_cargo(feature)).is_ok() {
-                defines.push((feature_to_define(feature), None));
-            }
+        if feature.starts_with("dump-") && env::var(feature_to_cargo(feature)).is_ok() {
+            defines.push((feature_to_define(feature), None));
         }
     }
 
@@ -132,7 +140,7 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
         .current_dir(out_dir)
         .spawn()
         .unwrap();
-
+    println!("Appliyng patch {}", patch.as_ref().display());
     {
         let patch = fs::read(patch).expect("Unable to read patch");
 

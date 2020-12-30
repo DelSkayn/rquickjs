@@ -1,0 +1,48 @@
+patch = all 
+diff --git a/quickjs.c b/quickjs.c
+index 4e6a2c9..c7bbf40 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -1252,7 +1252,12 @@ static const JSClassExoticMethods js_arguments_exotic_methods;
+ static const JSClassExoticMethods js_string_exotic_methods;
+ static const JSClassExoticMethods js_proxy_exotic_methods;
+ static const JSClassExoticMethods js_module_ns_exotic_methods;
+-static JSClassID js_class_id_alloc = JS_CLASS_INIT_COUNT;
++#ifdef CONFIG_ATOMICS
++#define JS_CLASS_ID_ALLOC_ATTRS _Atomic
++#else
++#define JS_CLASS_ID_ALLOC_ATTRS
++#endif
++static JS_CLASS_ID_ALLOC_ATTRS JSClassID js_class_id_alloc = JS_CLASS_INIT_COUNT;
+ 
+ static void js_trigger_gc(JSRuntime *rt, size_t size)
+ {
+@@ -3349,16 +3354,26 @@ static inline BOOL JS_IsEmptyString(JSValueConst v)
+ 
+ /* JSClass support */
+ 
+-/* a new class ID is allocated if *pclass_id != 0 */
++/* a new class ID is allocated if *pclass_id == 0 */
+ JSClassID JS_NewClassID(JSClassID *pclass_id)
+ {
+     JSClassID class_id;
+-    /* XXX: make it thread safe */
++#ifdef CONFIG_ATOMICS
++    JSClassID new_class_id;
++    new_class_id = atomic_load_explicit(&js_class_id_alloc, memory_order_acquire);
++    class_id = *pclass_id;
++    if (class_id == 0) {
++        class_id = new_class_id++;
++        *pclass_id = class_id;
++    }
++    atomic_store_explicit(&js_class_id_alloc, new_class_id, memory_order_release);
++#else
+     class_id = *pclass_id;
+     if (class_id == 0) {
+         class_id = js_class_id_alloc++;
+         *pclass_id = class_id;
+     }
++#endif
+     return class_id;
+ }
+ 
