@@ -1,7 +1,10 @@
 use crate::{qjs, Context, Result, Runtime};
 use std::marker::PhantomData;
 
+/// The internal trait to add JS builting
 pub trait Intrinsic {
+    /// # Safety
+    /// Do not need implement it yourself instead you may use predefined intrinsics from [`intrinsic`] module.
     unsafe fn add_intrinsic(ctx: *mut qjs::JSContext);
 }
 
@@ -127,8 +130,8 @@ intrinsic_impls! {
     A B C D E F G H I J K L M N O P R,
 }
 
-impl ContextBuilder<()> {
-    pub fn new() -> Self {
+impl Default for ContextBuilder<()> {
+    fn default() -> Self {
         ContextBuilder(PhantomData)
     }
 }

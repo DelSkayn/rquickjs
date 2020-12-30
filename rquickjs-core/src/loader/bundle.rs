@@ -2,6 +2,9 @@ use super::resolve_simple;
 use crate::{Ctx, Error, Loaded, Loader, Module, Resolver, Result, Script};
 use std::ops::Deref;
 
+/// The module data which contains bytecode
+///
+/// This trait needed because the modules potentially can contain any kind of data like a typing (for TypeScript) or metadata.
 pub trait HasByteCode<'bc> {
     fn get_bytecode(&self) -> &'bc [u8];
 }
@@ -12,12 +15,18 @@ impl<'bc> HasByteCode<'bc> for &'bc [u8] {
     }
 }
 
+/// The alias for compiled modules represented as a static const arrays
+///
+/// The element is a tuple of `(module_name, module_data)`.
 pub type ScaBundleData<D> = &'static [(&'static str, D)];
 
 #[cfg(feature = "phf")]
+/// The alias for compiled modules represented as a perfect hash maps
+///
+/// The key is a module name and the value is a module data.
 pub type PhfBundleData<D> = &'static phf::Map<&'static str, D>;
 
-/// The resolver and loader for compiled bundle
+/// The resolver and loader for bundles of compiled modules
 #[derive(Debug, Clone, Copy)]
 pub struct Bundle<T>(pub T);
 

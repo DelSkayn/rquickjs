@@ -99,7 +99,7 @@ impl Context {
 
     /// Create a context builder for creating a context with a specific set of intrinsics
     pub fn builder() -> ContextBuilder<()> {
-        ContextBuilder::new()
+        ContextBuilder::default()
     }
 
     pub fn enable_big_num_ext(&self, enable: bool) {

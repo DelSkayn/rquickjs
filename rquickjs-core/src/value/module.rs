@@ -293,7 +293,6 @@ impl<'js> Module<'js, Loaded<Script>> {
     }
 
     fn read_object_raw(ctx: Ctx<'js>, buf: &[u8], flags: qjs::c_int) -> Result<Self> {
-        let buf = buf.as_ref();
         let value = unsafe {
             Value::from_js_value(
                 ctx,

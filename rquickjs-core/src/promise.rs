@@ -153,9 +153,6 @@ fn resolve<'js>(ctx: Ctx<'js>, func: Function<'js>, value: Value<'js>) {
             args.as_ptr() as _,
         );
     }
-    mem::drop(args);
-    mem::drop(func);
-    mem::drop(value);
 }
 
 #[cfg(feature = "deferred-resolution")]
