@@ -1885,7 +1885,7 @@ pub const JSCFunctionEnum_JS_CFUNC_setter: JSCFunctionEnum = 9;
 pub const JSCFunctionEnum_JS_CFUNC_getter_magic: JSCFunctionEnum = 10;
 pub const JSCFunctionEnum_JS_CFUNC_setter_magic: JSCFunctionEnum = 11;
 pub const JSCFunctionEnum_JS_CFUNC_iterator_next: JSCFunctionEnum = 12;
-pub type JSCFunctionEnum = ::std::os::raw::c_uint;
+pub type JSCFunctionEnum = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSCFunctionType {

@@ -57,7 +57,7 @@ pub const JS_DEF_PROP_DOUBLE: u32 = 6;
 pub const JS_DEF_PROP_UNDEFINED: u32 = 7;
 pub const JS_DEF_OBJECT: u32 = 8;
 pub const JS_DEF_ALIAS: u32 = 9;
-pub type size_t = ::std::os::raw::c_uint;
+pub type size_t = ::std::os::raw::c_ulonglong;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSRuntime {
@@ -126,7 +126,96 @@ fn bindgen_test_layout_JSRefCountHeader() {
         )
     );
 }
-pub type JSValue = u64;
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union JSValueUnion {
+    pub int32: i32,
+    pub float64: f64,
+    pub ptr: *mut ::std::os::raw::c_void,
+    _bindgen_union_align: u64,
+}
+#[test]
+fn bindgen_test_layout_JSValueUnion() {
+    assert_eq!(
+        ::std::mem::size_of::<JSValueUnion>(),
+        8usize,
+        concat!("Size of: ", stringify!(JSValueUnion))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<JSValueUnion>(),
+        8usize,
+        concat!("Alignment of ", stringify!(JSValueUnion))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<JSValueUnion>())).int32 as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSValueUnion),
+            "::",
+            stringify!(int32)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<JSValueUnion>())).float64 as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSValueUnion),
+            "::",
+            stringify!(float64)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<JSValueUnion>())).ptr as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSValueUnion),
+            "::",
+            stringify!(ptr)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct JSValue {
+    pub u: JSValueUnion,
+    pub tag: i64,
+}
+#[test]
+fn bindgen_test_layout_JSValue() {
+    assert_eq!(
+        ::std::mem::size_of::<JSValue>(),
+        16usize,
+        concat!("Size of: ", stringify!(JSValue))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<JSValue>(),
+        8usize,
+        concat!("Alignment of ", stringify!(JSValue))
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<JSValue>())).u as *const _ as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSValue),
+            "::",
+            stringify!(u)
+        )
+    );
+    assert_eq!(
+        unsafe { &(*(::std::ptr::null::<JSValue>())).tag as *const _ as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSValue),
+            "::",
+            stringify!(tag)
+        )
+    );
+}
 pub type JSCFunction = ::std::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,
@@ -166,12 +255,12 @@ pub struct JSMallocState {
 fn bindgen_test_layout_JSMallocState() {
     assert_eq!(
         ::std::mem::size_of::<JSMallocState>(),
-        16usize,
+        32usize,
         concat!("Size of: ", stringify!(JSMallocState))
     );
     assert_eq!(
         ::std::mem::align_of::<JSMallocState>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSMallocState))
     );
     assert_eq!(
@@ -186,7 +275,7 @@ fn bindgen_test_layout_JSMallocState() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSMallocState>())).malloc_size as *const _ as usize },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMallocState),
@@ -196,7 +285,7 @@ fn bindgen_test_layout_JSMallocState() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSMallocState>())).malloc_limit as *const _ as usize },
-        8usize,
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMallocState),
@@ -206,7 +295,7 @@ fn bindgen_test_layout_JSMallocState() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSMallocState>())).opaque as *const _ as usize },
-        12usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMallocState),
@@ -238,12 +327,12 @@ pub struct JSMallocFunctions {
 fn bindgen_test_layout_JSMallocFunctions() {
     assert_eq!(
         ::std::mem::size_of::<JSMallocFunctions>(),
-        16usize,
+        32usize,
         concat!("Size of: ", stringify!(JSMallocFunctions))
     );
     assert_eq!(
         ::std::mem::align_of::<JSMallocFunctions>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSMallocFunctions))
     );
     assert_eq!(
@@ -258,7 +347,7 @@ fn bindgen_test_layout_JSMallocFunctions() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSMallocFunctions>())).js_free as *const _ as usize },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMallocFunctions),
@@ -268,7 +357,7 @@ fn bindgen_test_layout_JSMallocFunctions() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSMallocFunctions>())).js_realloc as *const _ as usize },
-        8usize,
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMallocFunctions),
@@ -280,7 +369,7 @@ fn bindgen_test_layout_JSMallocFunctions() {
         unsafe {
             &(*(::std::ptr::null::<JSMallocFunctions>())).js_malloc_usable_size as *const _ as usize
         },
-        12usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMallocFunctions),
@@ -874,7 +963,7 @@ fn bindgen_test_layout_JSPropertyEnum() {
     );
 }
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Copy, Clone)]
 pub struct JSPropertyDescriptor {
     pub flags: ::std::os::raw::c_int,
     pub value: JSValue,
@@ -885,7 +974,7 @@ pub struct JSPropertyDescriptor {
 fn bindgen_test_layout_JSPropertyDescriptor() {
     assert_eq!(
         ::std::mem::size_of::<JSPropertyDescriptor>(),
-        32usize,
+        56usize,
         concat!("Size of: ", stringify!(JSPropertyDescriptor))
     );
     assert_eq!(
@@ -915,7 +1004,7 @@ fn bindgen_test_layout_JSPropertyDescriptor() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSPropertyDescriptor>())).getter as *const _ as usize },
-        16usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(JSPropertyDescriptor),
@@ -925,7 +1014,7 @@ fn bindgen_test_layout_JSPropertyDescriptor() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSPropertyDescriptor>())).setter as *const _ as usize },
-        24usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(JSPropertyDescriptor),
@@ -1001,12 +1090,12 @@ pub struct JSClassExoticMethods {
 fn bindgen_test_layout_JSClassExoticMethods() {
     assert_eq!(
         ::std::mem::size_of::<JSClassExoticMethods>(),
-        28usize,
+        56usize,
         concat!("Size of: ", stringify!(JSClassExoticMethods))
     );
     assert_eq!(
         ::std::mem::align_of::<JSClassExoticMethods>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSClassExoticMethods))
     );
     assert_eq!(
@@ -1026,7 +1115,7 @@ fn bindgen_test_layout_JSClassExoticMethods() {
             &(*(::std::ptr::null::<JSClassExoticMethods>())).get_own_property_names as *const _
                 as usize
         },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassExoticMethods),
@@ -1038,7 +1127,7 @@ fn bindgen_test_layout_JSClassExoticMethods() {
         unsafe {
             &(*(::std::ptr::null::<JSClassExoticMethods>())).delete_property as *const _ as usize
         },
-        8usize,
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassExoticMethods),
@@ -1051,7 +1140,7 @@ fn bindgen_test_layout_JSClassExoticMethods() {
             &(*(::std::ptr::null::<JSClassExoticMethods>())).define_own_property as *const _
                 as usize
         },
-        12usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassExoticMethods),
@@ -1063,7 +1152,7 @@ fn bindgen_test_layout_JSClassExoticMethods() {
         unsafe {
             &(*(::std::ptr::null::<JSClassExoticMethods>())).has_property as *const _ as usize
         },
-        16usize,
+        32usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassExoticMethods),
@@ -1075,7 +1164,7 @@ fn bindgen_test_layout_JSClassExoticMethods() {
         unsafe {
             &(*(::std::ptr::null::<JSClassExoticMethods>())).get_property as *const _ as usize
         },
-        20usize,
+        40usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassExoticMethods),
@@ -1087,7 +1176,7 @@ fn bindgen_test_layout_JSClassExoticMethods() {
         unsafe {
             &(*(::std::ptr::null::<JSClassExoticMethods>())).set_property as *const _ as usize
         },
-        24usize,
+        48usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassExoticMethods),
@@ -1124,12 +1213,12 @@ pub struct JSClassDef {
 fn bindgen_test_layout_JSClassDef() {
     assert_eq!(
         ::std::mem::size_of::<JSClassDef>(),
-        20usize,
+        40usize,
         concat!("Size of: ", stringify!(JSClassDef))
     );
     assert_eq!(
         ::std::mem::align_of::<JSClassDef>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSClassDef))
     );
     assert_eq!(
@@ -1144,7 +1233,7 @@ fn bindgen_test_layout_JSClassDef() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSClassDef>())).finalizer as *const _ as usize },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassDef),
@@ -1154,7 +1243,7 @@ fn bindgen_test_layout_JSClassDef() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSClassDef>())).gc_mark as *const _ as usize },
-        8usize,
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassDef),
@@ -1164,7 +1253,7 @@ fn bindgen_test_layout_JSClassDef() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSClassDef>())).call as *const _ as usize },
-        12usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassDef),
@@ -1174,7 +1263,7 @@ fn bindgen_test_layout_JSClassDef() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSClassDef>())).exotic as *const _ as usize },
-        16usize,
+        32usize,
         concat!(
             "Offset of field: ",
             stringify!(JSClassDef),
@@ -1668,12 +1757,12 @@ pub struct JSSharedArrayBufferFunctions {
 fn bindgen_test_layout_JSSharedArrayBufferFunctions() {
     assert_eq!(
         ::std::mem::size_of::<JSSharedArrayBufferFunctions>(),
-        16usize,
+        32usize,
         concat!("Size of: ", stringify!(JSSharedArrayBufferFunctions))
     );
     assert_eq!(
         ::std::mem::align_of::<JSSharedArrayBufferFunctions>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSSharedArrayBufferFunctions))
     );
     assert_eq!(
@@ -1692,7 +1781,7 @@ fn bindgen_test_layout_JSSharedArrayBufferFunctions() {
         unsafe {
             &(*(::std::ptr::null::<JSSharedArrayBufferFunctions>())).sab_free as *const _ as usize
         },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSSharedArrayBufferFunctions),
@@ -1704,7 +1793,7 @@ fn bindgen_test_layout_JSSharedArrayBufferFunctions() {
         unsafe {
             &(*(::std::ptr::null::<JSSharedArrayBufferFunctions>())).sab_dup as *const _ as usize
         },
-        8usize,
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(JSSharedArrayBufferFunctions),
@@ -1716,7 +1805,7 @@ fn bindgen_test_layout_JSSharedArrayBufferFunctions() {
         unsafe {
             &(*(::std::ptr::null::<JSSharedArrayBufferFunctions>())).sab_opaque as *const _ as usize
         },
-        12usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(JSSharedArrayBufferFunctions),
@@ -1885,7 +1974,7 @@ pub const JSCFunctionEnum_JS_CFUNC_setter: JSCFunctionEnum = 9;
 pub const JSCFunctionEnum_JS_CFUNC_getter_magic: JSCFunctionEnum = 10;
 pub const JSCFunctionEnum_JS_CFUNC_setter_magic: JSCFunctionEnum = 11;
 pub const JSCFunctionEnum_JS_CFUNC_iterator_next: JSCFunctionEnum = 12;
-pub type JSCFunctionEnum = ::std::os::raw::c_uint;
+pub type JSCFunctionEnum = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSCFunctionType {
@@ -1943,18 +2032,18 @@ pub union JSCFunctionType {
             magic: ::std::os::raw::c_int,
         ) -> JSValue,
     >,
-    _bindgen_union_align: u32,
+    _bindgen_union_align: u64,
 }
 #[test]
 fn bindgen_test_layout_JSCFunctionType() {
     assert_eq!(
         ::std::mem::size_of::<JSCFunctionType>(),
-        4usize,
+        8usize,
         concat!("Size of: ", stringify!(JSCFunctionType))
     );
     assert_eq!(
         ::std::mem::align_of::<JSCFunctionType>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSCFunctionType))
     );
     assert_eq!(
@@ -2125,7 +2214,7 @@ pub union JSCFunctionListEntry__bindgen_ty_1 {
     pub i32_: i32,
     pub i64_: i64,
     pub f64_: f64,
-    _bindgen_union_align: u64,
+    _bindgen_union_align: [u64; 2usize],
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -2138,7 +2227,7 @@ pub struct JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1 {
 fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1() {
     assert_eq!(
         ::std::mem::size_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1>(),
-        8usize,
+        16usize,
         concat!(
             "Size of: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1)
@@ -2146,7 +2235,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1() {
     );
     assert_eq!(
         ::std::mem::align_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1>(),
-        4usize,
+        8usize,
         concat!(
             "Alignment of ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1)
@@ -2183,7 +2272,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1() {
             &(*(::std::ptr::null::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1>())).cfunc
                 as *const _ as usize
         },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1),
@@ -2202,7 +2291,7 @@ pub struct JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2 {
 fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2() {
     assert_eq!(
         ::std::mem::size_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2>(),
-        8usize,
+        16usize,
         concat!(
             "Size of: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2)
@@ -2210,7 +2299,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2() {
     );
     assert_eq!(
         ::std::mem::align_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2>(),
-        4usize,
+        8usize,
         concat!(
             "Alignment of ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2)
@@ -2234,7 +2323,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2() {
             &(*(::std::ptr::null::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2>())).set
                 as *const _ as usize
         },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2),
@@ -2253,7 +2342,7 @@ pub struct JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3 {
 fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3() {
     assert_eq!(
         ::std::mem::size_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3>(),
-        8usize,
+        16usize,
         concat!(
             "Size of: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3)
@@ -2261,7 +2350,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3() {
     );
     assert_eq!(
         ::std::mem::align_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3>(),
-        4usize,
+        8usize,
         concat!(
             "Alignment of ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3)
@@ -2285,7 +2374,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3() {
             &(*(::std::ptr::null::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3>())).base
                 as *const _ as usize
         },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3),
@@ -2304,7 +2393,7 @@ pub struct JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4 {
 fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4() {
     assert_eq!(
         ::std::mem::size_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4>(),
-        8usize,
+        16usize,
         concat!(
             "Size of: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4)
@@ -2312,7 +2401,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4() {
     );
     assert_eq!(
         ::std::mem::align_of::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4>(),
-        4usize,
+        8usize,
         concat!(
             "Alignment of ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4)
@@ -2336,7 +2425,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4() {
             &(*(::std::ptr::null::<JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4>())).len
                 as *const _ as usize
         },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4),
@@ -2349,7 +2438,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4() {
 fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1() {
     assert_eq!(
         ::std::mem::size_of::<JSCFunctionListEntry__bindgen_ty_1>(),
-        8usize,
+        16usize,
         concat!("Size of: ", stringify!(JSCFunctionListEntry__bindgen_ty_1))
     );
     assert_eq!(
@@ -2464,7 +2553,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1() {
 fn bindgen_test_layout_JSCFunctionListEntry() {
     assert_eq!(
         ::std::mem::size_of::<JSCFunctionListEntry>(),
-        16usize,
+        32usize,
         concat!("Size of: ", stringify!(JSCFunctionListEntry))
     );
     assert_eq!(
@@ -2484,7 +2573,7 @@ fn bindgen_test_layout_JSCFunctionListEntry() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSCFunctionListEntry>())).prop_flags as *const _ as usize },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry),
@@ -2494,7 +2583,7 @@ fn bindgen_test_layout_JSCFunctionListEntry() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSCFunctionListEntry>())).def_type as *const _ as usize },
-        5usize,
+        9usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry),
@@ -2504,7 +2593,7 @@ fn bindgen_test_layout_JSCFunctionListEntry() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSCFunctionListEntry>())).magic as *const _ as usize },
-        6usize,
+        10usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry),
@@ -2514,7 +2603,7 @@ fn bindgen_test_layout_JSCFunctionListEntry() {
     );
     assert_eq!(
         unsafe { &(*(::std::ptr::null::<JSCFunctionListEntry>())).u as *const _ as usize },
-        8usize,
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(JSCFunctionListEntry),
