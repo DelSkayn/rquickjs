@@ -41,7 +41,7 @@ impl<D> Resolver for Bundle<ScaBundleData<D>> {
 }
 
 #[cfg(feature = "phf")]
-impl Resolver for Bundle<PhfBundleData<D>> {
+impl<D> Resolver for Bundle<PhfBundleData<D>> {
     fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
         let path = resolve_simple(base, name);
         if self.contains_key(path.as_str()) {
@@ -65,10 +65,13 @@ where
 }
 
 #[cfg(feature = "phf")]
-impl Loader<Script> for Bundle<PhfBundleData> {
+impl<D> Loader<Script> for Bundle<PhfBundleData<D>>
+where
+    D: HasByteCode<'static>,
+{
     fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded<Script>>> {
         self.get(name)
             .ok_or_else(|| Error::new_loading(name))
-            .and_then(|buf| Module::read_object_const(ctx, buf))
+            .and_then(|bytecode| Module::read_object_const(ctx, bytecode.get_bytecode()))
     }
 }
