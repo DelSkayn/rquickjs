@@ -267,7 +267,7 @@ jobs:
       - name: Build sys
         uses: actions-rs/cargo@v1
         env:
-          RUST_LOG: bindgen=debug
+          RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
         with:
           command: build
           args: --manifest-path rquickjs-sys/Cargo.toml --target ${{ matrix.target }} --features exports,parallel,bindgen,update-bindings,logging
