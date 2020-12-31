@@ -5,7 +5,9 @@ authors = ["K. <kayo@illumium.org>"]
 edition = "2018"
 license = "MIT"
 readme = "README.md"
-description = "High level bindings to the quickjs javascript engine"
+description = "Procedural macros for rquickjs"
+keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
+categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [lib]
@@ -53,4 +55,3 @@ features = ["attributes"]
 
 [features]
 phf = ["phf_shared", "phf_generator"]
-

@@ -5,10 +5,10 @@ authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2018"
 license = "MIT"
 readme = "README.md"
-description = "High level bindings to the quickjs javascript engine"
+description = "High level bindings to the QuickJS javascript engine"
+keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
+categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies.rquickjs-core]
 version = "0.0.5"
