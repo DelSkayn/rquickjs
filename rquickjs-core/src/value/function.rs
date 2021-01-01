@@ -83,7 +83,7 @@ impl<'js> Function<'js> {
     /// You can use tuples to pass arguments. The `()` treated as no arguments, the `(arg,)` as a single argument and so on.
     ///
     /// To call function on a given `this` you can pass `This(this)` as a first argument.
-    /// By default the global context object will be passed as `this`.
+    /// By default an `undefined` will be passed as `this`.
     pub fn call<A, R>(&self, args: A) -> Result<R>
     where
         A: AsArguments<'js>,
@@ -92,6 +92,7 @@ impl<'js> Function<'js> {
         args.apply(self)
     }
 
+    /// Immadiate call of function
     pub(crate) fn call_raw(&self, input: &CallInput) -> Result<Value<'js>> {
         let ctx = self.0.ctx;
         Ok(unsafe {
@@ -105,6 +106,48 @@ impl<'js> Function<'js> {
             let val = handle_exception(ctx, val)?;
             Value::from_js_value(ctx, val)
         })
+    }
+
+    /// Deferred call a function with given arguments
+    ///
+    /// You can use tuples to pass arguments. The `()` treated as no arguments, the `(arg,)` as a single argument and so on.
+    ///
+    /// To call function on a given `this` you can pass `This(this)` as a first argument.
+    /// By default an `undefined` will be passed as `this`.
+    pub fn defer_call<A>(&self, args: A) -> Result<()>
+    where
+        A: AsArguments<'js>,
+    {
+        args.defer_apply(self)
+    }
+
+    /// Deferred call of function
+    pub(crate) fn defer_call_raw(&self, input: &mut CallInput<'js>) -> Result<()> {
+        let ctx = self.0.ctx;
+        input.this_arg();
+        input.arg(self.clone())?;
+        Ok(unsafe {
+            if qjs::JS_EnqueueJob(
+                ctx.ctx,
+                Some(Self::defer_call_job),
+                input.args.len() as _,
+                input.args.as_ptr() as _,
+            ) < 0
+            {
+                return Err(get_exception(ctx));
+            }
+        })
+    }
+
+    unsafe extern "C" fn defer_call_job(
+        ctx: *mut qjs::JSContext,
+        argc: qjs::c_int,
+        argv: *mut qjs::JSValue,
+    ) -> qjs::JSValue {
+        let func = *argv.offset((argc - 1) as _);
+        let this = *argv.offset((argc - 2) as _);
+        let argc = argc - 2;
+        qjs::JS_Call(ctx, func, this, argc, argv)
     }
 
     /// Check that function is a constructor
@@ -316,6 +359,27 @@ mod test {
             let res: i32 = f.call((This(obj), 3)).unwrap();
             assert_eq!(res, 9);
         })
+    }
+
+    #[test]
+    fn call_js_fn_with_1_arg_deferred() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        assert!(!rt.is_job_pending());
+        ctx.with(|ctx| {
+            let g = ctx.globals();
+            let f: Function = ctx.eval("(obj) => { obj.called = true; }").unwrap();
+            f.defer_call((g.clone(),)).unwrap();
+            let c: Value = g.get("called").unwrap();
+            assert_eq!(c.type_of(), Type::Undefined);
+        });
+        assert!(rt.is_job_pending());
+        rt.execute_pending_job().unwrap();
+        ctx.with(|ctx| {
+            let g = ctx.globals();
+            let c: Value = g.get("called").unwrap();
+            assert_eq!(c.type_of(), Type::Bool);
+        });
     }
 
     fn test() {
