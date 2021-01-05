@@ -26,6 +26,22 @@ optional = true
 version = "^1"
 optional = true
 
+[dependencies.vec-arena]
+version = "^1"
+optional = true
+
+[dependencies.cooked-waker]
+version = "^5"
+optional = true
+
+[dependencies.pin-project-lite]
+version = "^0.2"
+optional = true
+
+[dependencies.futures-lite]
+version = "^1"
+optional = true
+
 [dependencies.rquickjs-sys]
 version = "0.1.0"
 path = "../rquickjs-sys"
@@ -94,10 +110,7 @@ classes = []
 properties = []
 
 # Enable interop between Rust futures and JS Promises
-futures = []
-
-# Enable deferred Promise resolution
-deferred-resolution = []
+futures = ["pin-project-lite", "futures-lite", "fxhash", "vec-arena", "cooked-waker"]
 
 # Enable Tokio async runtime support
 tokio = ["futures", "tokio-rs"]

@@ -84,9 +84,6 @@ macro = ["rquickjs-macro"]
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]
 
-# Enable deferred Promise resolution
-deferred-resolution = ["rquickjs-core/deferred-resolution"]
-
 # Enable Tokio async runtime support
 tokio = ["rquickjs-core/tokio"]
 

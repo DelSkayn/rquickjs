@@ -46,7 +46,7 @@ pub(crate) use safe_ref::*;
 mod runtime;
 pub use runtime::Runtime;
 #[cfg(feature = "futures")]
-pub use runtime::{AsyncSpawner, PendingJobsSpawner};
+pub use runtime::{Executor, ExecutorSpawner, Idle};
 mod context;
 pub use context::{intrinsic, Context, ContextBuilder, Ctx, Intrinsic, MultiWith};
 mod value;
@@ -84,7 +84,7 @@ pub use promise::{Promise, PromiseJs};
 mod allocator;
 
 #[cfg(feature = "allocator")]
-pub use allocator::{Allocator, RawMemPtr};
+pub use allocator::{Allocator, RawMemPtr, RustAllocator};
 
 #[cfg(feature = "loader")]
 mod loader;

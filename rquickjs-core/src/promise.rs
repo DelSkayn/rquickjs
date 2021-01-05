@@ -1,13 +1,8 @@
-#[cfg(feature = "deferred-resolution")]
-use crate::qjs;
-#[cfg(any(feature = "tokio", feature = "async-std"))]
-use crate::{Context, IntoJs, Persistent};
 use crate::{
     Context, Ctx, Error, FromJs, Func, Function, IntoJs, Mut, Object, Persistent, Ref, Result,
     SendWhenParallel, This, Value,
 };
-#[cfg(any(feature = "tokio", feature = "async-std"))]
-use std::mem;
+use pin_project_lite::pin_project;
 use std::{
     future::Future,
     pin::Pin,
@@ -73,7 +68,7 @@ where
 impl<T> Future for Promise<T> {
     type Output = Result<T>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext) -> Poll<Self::Output> {
         let mut state = self.state.lock();
         if let Some(result) = state.result.take() {
             Poll::Ready(result)
@@ -95,78 +90,80 @@ impl<T> From<T> for PromiseJs<T> {
     }
 }
 
-#[cfg(any(feature = "async-std", feature = "tokio"))]
 impl<'js, T> IntoJs<'js> for PromiseJs<T>
 where
     T: Future + SendWhenParallel + 'static,
     for<'js_> T::Output: IntoJs<'js_> + 'static,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let (future, promise) = PromiseTask::from_future(ctx, self.0)?;
+
+        ctx.spawn(future);
+
+        Ok(promise.into_value())
+    }
+}
+
+pin_project! {
+    struct PromiseTask<T> {
+        #[pin]
+        future: T,
+        context: Context,
+        then: Persistent<Function<'static>>,
+        catch: Persistent<Function<'static>>,
+    }
+}
+
+impl<T> PromiseTask<T> {
+    fn from_future<'js>(ctx: Ctx<'js>, future: T) -> Result<(Self, Object<'js>)> {
         let (promise, then, catch) = ctx.promise()?;
 
         let then = Persistent::save(ctx, then);
         let catch = Persistent::save(ctx, catch);
 
         let context = Context::from_ctx(ctx)?;
-        let future = self.0;
 
-        ctx.spawn_async(async move {
-            let result = future.await;
-
-            context.with(|ctx: Ctx| {
-                match result.into_js(ctx) {
-                    Ok(value) => {
-                        mem::drop(catch);
-                        resolve(ctx, then.restore(ctx).unwrap(), value)
-                    }
-                    Err(error) => {
-                        mem::drop(then);
-                        resolve(
-                            ctx,
-                            catch.restore(ctx).unwrap(),
-                            error.into_js(ctx).unwrap(),
-                        )
-                    }
-                };
-            });
-        });
-
-        Ok(promise.into_value())
+        Ok((
+            Self {
+                future,
+                context,
+                then,
+                catch,
+            },
+            promise,
+        ))
     }
 }
 
-#[cfg(any(feature = "tokio", feature = "async-std"))]
-#[cfg(not(feature = "deferred-resolution"))]
+impl<T> Future for PromiseTask<T>
+where
+    T: Future + SendWhenParallel + 'static,
+    for<'js_> T::Output: IntoJs<'js_> + 'static,
+{
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut TaskContext) -> Poll<Self::Output> {
+        match { self.as_mut().project().future.poll(cx) } {
+            Poll::Ready(value) => {
+                self.context.with(|ctx| match value.into_js(ctx) {
+                    Ok(value) => resolve(ctx, self.then.clone().restore(ctx).unwrap(), value),
+                    Err(error) => resolve(
+                        ctx,
+                        self.catch.clone().restore(ctx).unwrap(),
+                        error.into_js(ctx).unwrap(),
+                    ),
+                });
+                Poll::Ready(())
+            }
+            _ => Poll::Pending,
+        }
+    }
+}
+
 fn resolve<'js>(_ctx: Ctx<'js>, func: Function<'js>, value: Value<'js>) {
     if let Err(error) = func.call::<_, Value>((value,)) {
         eprintln!("Error when promise resolution: {}", error);
     }
-}
-
-#[cfg(feature = "deferred-resolution")]
-fn resolve<'js>(ctx: Ctx<'js>, func: Function<'js>, value: Value<'js>) {
-    let args = [func.0.as_js_value(), value.as_js_value()];
-    unsafe {
-        qjs::JS_EnqueueJob(
-            ctx.ctx,
-            Some(resolution_job),
-            args.len() as _,
-            args.as_ptr() as _,
-        );
-    }
-}
-
-#[cfg(feature = "deferred-resolution")]
-unsafe extern "C" fn resolution_job(
-    ctx: *mut qjs::JSContext,
-    argc: qjs::c_int,
-    argv: *mut qjs::JSValue,
-) -> qjs::JSValue {
-    let this = qjs::JS_GetGlobalObject(ctx);
-    let func = *argv;
-    let argv = argv.offset(1);
-    let argc = argc - 1;
-    qjs::JS_Call(ctx, func, this, argc, argv)
 }
 
 #[cfg(all(test, any(feature = "async-std", feature = "tokio")))]
@@ -192,22 +189,26 @@ mod test {
                         #[cfg(not(feature = "parallel"))]
                         {
                             tokio::task::LocalSet::new().run_until(async {
-                                let rt = Runtime::new().unwrap().into_async(Tokio);
+                                let rt = Runtime::new().unwrap();
                                 let $ctx = Context::full(&rt).unwrap();
 
-                                rt.spawn_pending_jobs(None);
+                                rt.spawn_executor::<Tokio>();
 
                                 $($content)*
+
+                                rt.idle().await;
                             }).await;
                         }
                         #[cfg(feature = "parallel")]
                         {
-                            let rt = Runtime::new().unwrap().into_async(Tokio);
+                            let rt = Runtime::new().unwrap();
                             let $ctx = Context::full(&rt).unwrap();
 
-                            rt.spawn_pending_jobs(None);
+                            rt.spawn_executor::<Tokio>();
 
                             $($content)*
+
+                            rt.idle().await;
                         }
                     }
                 )*
@@ -222,15 +223,18 @@ mod test {
                     async_std_rs::task::sleep(dur).await;
                     value
                 }
+
                 $(
                     #[async_std::test]
                     async fn $name() {
-                        let rt = Runtime::new().unwrap().into_async(AsyncStd);
+                        let rt = Runtime::new().unwrap();
                         let $ctx = Context::full(&rt).unwrap();
 
-                        rt.spawn_pending_jobs(None);
+                        rt.spawn_executor::<AsyncStd>();
 
                         $($content)*
+
+                        rt.idle().await;
                     }
                 )*
             }
@@ -238,6 +242,31 @@ mod test {
     }
 
     test_cases! {
+        delayed_fn_self (_ctx) {
+            let res1 = delayed(25, 1).into_stream();
+            let res2 = delayed(50, 2).into_stream();
+            let res3 = delayed(75, 3).into_stream();
+
+            let res = res1.chain(res2).chain(res3).collect::<Vec<_>>().await;
+            assert_eq!(res, &[1, 2, 3]);
+        }
+
+        delayed_fn_single (ctx) {
+            let res: Promise<i32> = ctx.with(|ctx| {
+                let global = ctx.globals();
+                global
+                    .set(
+                        "delayed",
+                        Func::from(|msec, data: i32| PromiseJs(delayed(msec, data))),
+                    )
+                    .unwrap();
+                ctx.eval("delayed(50, 5)").unwrap()
+            });
+
+            let res = res.await.unwrap();
+            assert_eq!(res, 5);
+        }
+
         delayed_fn (ctx) {
             let res: Promise<i32> = ctx.with(|ctx| {
                 let global = ctx.globals();
@@ -285,8 +314,6 @@ mod test {
                     .unwrap();
                 let _ = ctx.eval::<Value, _>("doit()").unwrap();
             });
-
-            delayed(1, 0).await;
         }
 
         unhandled_promise_future (ctx) {
@@ -299,8 +326,6 @@ mod test {
                     .unwrap();
                 ctx.eval("doit()").unwrap()
             });
-
-            delayed(1, 0).await;
         }
     }
 }

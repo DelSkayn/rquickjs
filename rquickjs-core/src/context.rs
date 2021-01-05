@@ -47,14 +47,14 @@ impl Context {
     /// Creates a base context with only the required functions registered.
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Context::full`].
-    pub fn base<A>(runtime: &Runtime<A>) -> Result<Self> {
-        Self::custom::<intrinsic::Base, A>(runtime)
+    pub fn base(runtime: &Runtime) -> Result<Self> {
+        Self::custom::<intrinsic::Base>(runtime)
     }
 
     /// Creates a context with only the required intrinsics registered.
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Context::full`].
-    pub fn custom<I: Intrinsic, A>(runtime: &Runtime<A>) -> Result<Self> {
+    pub fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
         if ctx.is_null() {
@@ -63,7 +63,7 @@ impl Context {
         unsafe { I::add_intrinsic(ctx) };
         let res = Context {
             ctx,
-            rt: runtime.as_generic().clone(),
+            rt: runtime.clone(),
         };
         mem::drop(guard);
 
@@ -73,7 +73,7 @@ impl Context {
     /// Creates a context with all standart available intrinsics registered.
     /// If precise controll is required of which functions are available use
     /// [`Context::custom`] or [`Context::builder`].
-    pub fn full<A>(runtime: &Runtime<A>) -> Result<Self> {
+    pub fn full(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
         if ctx.is_null() {
@@ -81,7 +81,7 @@ impl Context {
         }
         let res = Context {
             ctx,
-            rt: runtime.as_generic().clone(),
+            rt: runtime.clone(),
         };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
@@ -131,13 +131,31 @@ impl Context {
     where
         F: FnOnce(Ctx) -> R,
     {
-        let guard = self.rt.inner.lock();
-        self.reset_stack();
-        let ctx = Ctx::new(self);
-        let res = f(ctx);
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard);
-        res
+        #[cfg(not(feature = "futures"))]
+        {
+            let guard = self.rt.inner.lock();
+            self.reset_stack();
+            let ctx = Ctx::new(self);
+            let result = f(ctx);
+            mem::drop(guard);
+            result
+        }
+
+        #[cfg(feature = "futures")]
+        {
+            let (spawn_pending_jobs, result) = {
+                let guard = self.rt.inner.lock();
+                self.reset_stack();
+                let ctx = Ctx::new(self);
+                let result = f(ctx);
+                (guard.has_spawner() && guard.is_job_pending(), result)
+            };
+            #[cfg(feature = "futures")]
+            if spawn_pending_jobs {
+                self.rt.spawn_pending_jobs();
+            }
+            result
+        }
     }
 
     pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
@@ -149,8 +167,8 @@ impl Drop for Context {
     fn drop(&mut self) {
         //TODO
         let guard = match self.rt.inner.try_lock() {
-            Ok(x) => x,
-            Err(x) => {
+            Some(x) => x,
+            None => {
                 let p = unsafe { &mut *(self.ctx as *const _ as *mut qjs::JSRefCountHeader) };
                 if p.ref_count <= 1 {
                     // Lock was poisened, this should only happen on a panic.
@@ -159,7 +177,9 @@ impl Drop for Context {
                     // following assertion to trigger
                     assert!(std::thread::panicking());
                 }
-                x
+                self.reset_stack();
+                unsafe { qjs::JS_FreeContext(self.ctx) }
+                return;
             }
         };
         self.reset_stack();

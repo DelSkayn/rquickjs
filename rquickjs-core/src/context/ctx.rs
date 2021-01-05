@@ -126,15 +126,13 @@ impl<'js> Ctx<'js> {
     /// Spawn future using configured async runtime
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-    pub fn spawn_async<F, T>(&self, future: F)
+    pub fn spawn<F, T>(&self, future: F)
     where
         F: Future<Output = T> + SendWhenParallel + 'static,
         T: SendWhenParallel + 'static,
     {
         let opaque = unsafe { self.get_opaque() };
-        opaque.spawner.spawn_async(Box::pin(async move {
-            future.await;
-        }));
+        opaque.get_spawner().spawn(future);
     }
 }
 
@@ -187,7 +185,7 @@ mod test {
         use crate::{intrinsic, Context, Function, Runtime};
 
         let runtime = Runtime::new().unwrap();
-        let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval), _>(&runtime).unwrap();
+        let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
         ctx.with(|ctx| {
             let module = ctx
                 .compile("test", "export default async () => 1;")

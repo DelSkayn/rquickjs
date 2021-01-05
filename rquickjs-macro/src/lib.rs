@@ -304,8 +304,10 @@ pub async fn sleep(msecs: u64) {
     ).await;
 }
 
-let rt = Runtime::new().unwrap().into_async(AsyncStd);
+let rt = Runtime::new().unwrap();
 let ctx = Context::full(&rt).unwrap();
+
+rt.spawn_executor::<AsyncStd>();
 
 ctx.with(|ctx| {
     ctx.globals().init_def::<Sleep>().unwrap();
@@ -321,10 +323,10 @@ let promise: Promise<String> = ctx.with(|ctx| {
     "#).unwrap()
 });
 
-rt.spawn_pending_jobs(None);
-
 let res = promise.await.unwrap();
 assert_eq!(res, "ok");
+
+rt.idle().await;
 # }
 ```
 
