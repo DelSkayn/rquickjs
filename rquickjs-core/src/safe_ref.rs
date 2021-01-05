@@ -1,89 +1,55 @@
-#[cfg(feature = "parallel")]
-use std::sync::{Arc, Mutex, Weak};
 #[cfg(not(feature = "parallel"))]
-use std::{
-    cell::RefCell,
-    rc::{Rc, Weak},
+use std::cell::RefCell as Cell;
+
+#[cfg(feature = "parallel")]
+use std::sync::Mutex as Cell;
+
+#[cfg(not(feature = "parallel"))]
+pub use std::{
+    cell::RefMut as Lock,
+    rc::{Rc as Ref, Weak},
 };
 
-#[cfg(not(feature = "parallel"))]
-pub use std::cell::RefMut as SafeRefGuard;
 #[cfg(feature = "parallel")]
-pub use std::sync::MutexGuard as SafeRefGuard;
+pub use std::sync::{Arc as Ref, MutexGuard as Lock, Weak};
 
 #[repr(transparent)]
-pub struct SafeRef<T>(
-    #[cfg(not(feature = "parallel"))] Rc<RefCell<T>>,
-    #[cfg(feature = "parallel")] Arc<Mutex<T>>,
-);
+pub struct Mut<T: ?Sized>(Cell<T>);
 
-impl<T> Clone for SafeRef<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
+impl<T> Mut<T> {
+    pub fn new(inner: T) -> Self {
+        Self(Cell::new(inner))
     }
 }
 
-impl<T: Default> Default for SafeRef<T> {
+impl<T: Default> Default for Mut<T> {
     fn default() -> Self {
-        Self::new(T::default())
+        Mut::new(T::default())
     }
 }
 
-#[cfg(not(feature = "parallel"))]
-impl<T> SafeRef<T> {
-    pub fn new(inner: T) -> Self {
-        Self(Rc::new(RefCell::new(inner)))
-    }
+impl<T: ?Sized> Mut<T> {
+    pub fn lock(&self) -> Lock<T> {
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.0.borrow_mut()
+        }
 
-    pub fn lock(&self) -> SafeRefGuard<T> {
-        self.0.borrow_mut()
-    }
-
-    pub fn try_lock(&self) -> Result<SafeRefGuard<T>, SafeRefGuard<T>> {
-        Ok(self.0.borrow_mut())
-    }
-
-    pub fn weak(&self) -> SafeWeakRef<T> {
-        SafeWeakRef(Rc::downgrade(&self.0))
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl<T> SafeRef<T> {
-    pub fn new(inner: T) -> Self {
-        Self(Arc::new(Mutex::new(inner)))
-    }
-
-    pub fn lock(&self) -> SafeRefGuard<T> {
-        self.0.lock().unwrap()
-    }
-
-    pub fn try_lock(&self) -> Result<SafeRefGuard<T>, SafeRefGuard<T>> {
-        match self.0.lock() {
-            Ok(x) => Ok(x),
-            Err(x) => Err(x.into_inner()),
+        #[cfg(feature = "parallel")]
+        {
+            self.0.lock().unwrap()
         }
     }
 
-    pub fn weak(&self) -> SafeWeakRef<T> {
-        SafeWeakRef(Arc::downgrade(&self.0))
-    }
-}
+    pub fn try_lock(&self) -> Option<Lock<T>> {
+        #[cfg(not(feature = "parallel"))]
+        {
+            self.0.try_borrow_mut().ok()
+        }
 
-#[repr(transparent)]
-pub struct SafeWeakRef<T>(
-    #[cfg(not(feature = "parallel"))] Weak<RefCell<T>>,
-    #[cfg(feature = "parallel")] Weak<Mutex<T>>,
-);
-
-impl<T> Clone for SafeWeakRef<T> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone())
-    }
-}
-
-impl<T> SafeWeakRef<T> {
-    pub fn try_ref(&self) -> Option<SafeRef<T>> {
-        self.0.upgrade().map(SafeRef)
+        #[cfg(feature = "parallel")]
+        {
+            self.0.lock().ok()
+        }
     }
 }

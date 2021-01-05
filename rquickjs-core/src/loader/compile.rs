@@ -1,5 +1,5 @@
 use super::resolve_simple;
-use crate::{Ctx, Loaded, Loader, Module, Resolver, Result, SafeRef, SafeRefGuard, Script};
+use crate::{Ctx, Loaded, Loader, Lock, Module, Mut, Ref, Resolver, Result, Script};
 use std::{
     collections::{hash_map::Iter as HashMapIter, HashMap},
     iter::{ExactSizeIterator, FusedIterator},
@@ -10,7 +10,7 @@ use std::{
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Default, Clone)]
 pub struct Compile<T = ()> {
-    data: SafeRef<CompileData>,
+    data: Ref<Mut<CompileData>>,
     inner: T,
 }
 
@@ -68,7 +68,7 @@ impl Compile {
 /// A list of resolved modules
 ///
 /// It can be converted into iterator over resolved modules.
-pub struct ResolvedModules<'i>(SafeRefGuard<'i, CompileData>);
+pub struct ResolvedModules<'i>(Lock<'i, CompileData>);
 
 impl<'i, 'r: 'i> IntoIterator for &'r ResolvedModules<'i> {
     type IntoIter = ResolvedModulesIter<'i>;
@@ -108,7 +108,7 @@ impl<'i> FusedIterator for ResolvedModulesIter<'i> {}
 /// A list of compiled bytecodes of loaded modules
 ///
 /// It can be converted into iterator of loaded modules with bytecodes.
-pub struct CompiledBytecodes<'i>(SafeRefGuard<'i, CompileData>);
+pub struct CompiledBytecodes<'i>(Lock<'i, CompileData>);
 
 impl<'i, 'r: 'i> IntoIterator for &'r CompiledBytecodes<'i> {
     type IntoIter = CompiledBytecodesIter<'i>;

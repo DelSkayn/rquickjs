@@ -1,5 +1,4 @@
-use crate::{get_exception, qjs, Ctx, Error, Function, Result, SafeRef, SafeWeakRef};
-use std::{any::Any, ffi::CString, marker::PhantomData, mem};
+use crate::{get_exception, qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
 
 #[cfg(feature = "futures")]
 use crate::SendWhenParallel;

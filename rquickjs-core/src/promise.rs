@@ -3,7 +3,8 @@ use crate::qjs;
 #[cfg(any(feature = "tokio", feature = "async-std"))]
 use crate::{Context, IntoJs, Persistent};
 use crate::{
-    Ctx, Error, FromJs, Func, Function, Object, Result, SafeRef, SendWhenParallel, This, Value,
+    Context, Ctx, Error, FromJs, Func, Function, IntoJs, Mut, Object, Persistent, Ref, Result,
+    SendWhenParallel, This, Value,
 };
 #[cfg(any(feature = "tokio", feature = "async-std"))]
 use std::mem;
@@ -16,7 +17,7 @@ use std::{
 /// Future-aware promise
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub struct Promise<T> {
-    state: SafeRef<State<T>>,
+    state: Ref<Mut<State<T>>>,
 }
 
 struct State<T> {
@@ -49,7 +50,7 @@ where
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let obj = Object::from_value(value)?;
         let then: Function = obj.get("then")?;
-        let state = SafeRef::new(State::default());
+        let state = Ref::new(Mut::new(State::default()));
         let on_ok = Func::new("onSuccess", {
             let state = state.clone();
             move |ctx: Ctx<'js>, value: Value<'js>| {

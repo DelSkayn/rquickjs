@@ -394,7 +394,7 @@ mod test {
     #[test]
     fn property_with_getter_and_setter() {
         test_with(|ctx| {
-            let val = SafeRef::new(StdString::new());
+            let val = Ref::new(Mut::new(StdString::new()));
             let obj = Object::new(ctx).unwrap();
             obj.prop(
                 "key",
