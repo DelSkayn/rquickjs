@@ -1,30 +1,12 @@
 mod refs;
 
 use crate::{
-    handle_exception, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Type,
-    Value,
+    handle_exception, qjs, ClassId, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result,
+    Type, Value,
 };
-use std::{
-    ffi::CString,
-    marker::PhantomData,
-    mem,
-    ops::Deref,
-    ptr,
-    sync::atomic::{AtomicU32, Ordering},
-};
+use std::{ffi::CString, marker::PhantomData, mem, ops::Deref, ptr};
 
 pub use refs::{HasRefs, RefsMarker};
-
-/// The type of identifier of class
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
-#[repr(transparent)]
-pub struct ClassId(AtomicU32);
-
-impl ClassId {
-    pub const fn new() -> Self {
-        Self(AtomicU32::new(0))
-    }
-}
 
 /// The ES6 class definition trait
 ///
@@ -39,9 +21,9 @@ impl ClassId {
 /// impl ClassDef for MyClass {
 ///     const CLASS_NAME: &'static str = "MyClass";
 ///
-///     unsafe fn class_id() -> &'static ClassId {
-///         static CLASS_ID: ClassId = ClassId::new();
-///         &CLASS_ID
+///     unsafe fn class_id() -> &'static mut ClassId {
+///         static mut CLASS_ID: ClassId = ClassId::new();
+///         &mut CLASS_ID
 ///     }
 ///
 ///     // With prototype
@@ -72,7 +54,7 @@ pub trait ClassDef {
     ///
     /// # Safety
     /// This method should return reference to mutable static class id which should be initialized to zero.
-    unsafe fn class_id() -> &'static ClassId;
+    unsafe fn class_id() -> &'static mut ClassId;
 
     /// The class has prototype
     const HAS_PROTO: bool = false;
@@ -158,7 +140,7 @@ where
     /// Get an integer class identifier
     #[inline(always)]
     pub(crate) fn id() -> qjs::JSClassID {
-        unsafe { C::class_id() }.0.load(Ordering::Relaxed)
+        unsafe { C::class_id() }.get()
     }
 
     /// Wrap constructor of class
@@ -230,12 +212,8 @@ where
     pub fn register(ctx: Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
         let class_id = unsafe { C::class_id() };
-        let class_id = {
-            let mut class_id_value = class_id.0.load(Ordering::Acquire);
-            unsafe { qjs::JS_NewClassID(&mut class_id_value) };
-            class_id.0.store(class_id_value, Ordering::Release);
-            class_id_value
-        };
+        class_id.init();
+        let class_id = Self::id();
         let class_name = CString::new(C::CLASS_NAME)?;
         if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, class_id) } {
             let class_def = qjs::JSClassDef {
@@ -246,7 +224,7 @@ where
                 } else {
                     None
                 },
-                call: None, //Some(Self::call),
+                call: None,
                 exotic: ptr::null_mut(),
             };
             if 0 != unsafe { qjs::JS_NewClass(rt, class_id, &class_def) } {
@@ -256,11 +234,9 @@ where
             if C::HAS_PROTO {
                 let proto = Object::new(ctx)?;
                 C::init_proto(ctx, &proto)?;
-
                 unsafe { qjs::JS_SetClassProto(ctx.ctx, class_id, proto.0.into_js_value()) }
             }
         }
-
         Ok(())
     }
 
@@ -276,7 +252,8 @@ where
     /// Get the own prototype object of a class
     pub fn prototype(ctx: Ctx<'js>) -> Result<Object<'js>> {
         Ok(Object(unsafe {
-            let proto = qjs::JS_GetClassProto(ctx.ctx, Self::id());
+            let class_id = Self::id();
+            let proto = qjs::JS_GetClassProto(ctx.ctx, class_id);
             let proto = Value::from_js_value(ctx, proto);
             let type_ = proto.type_of();
             if type_ == Type::Object {
@@ -537,9 +514,9 @@ macro_rules! class_def {
         impl $crate::ClassDef for $name {
             const CLASS_NAME: &'static str = stringify!($name);
 
-            unsafe fn class_id() -> &'static $crate::ClassId {
-                static CLASS_ID: $crate::ClassId = $crate::ClassId::new();
-                &CLASS_ID
+            unsafe fn class_id() -> &'static mut $crate::ClassId {
+                static mut CLASS_ID: $crate::ClassId = $crate::ClassId::new();
+                &mut CLASS_ID
             }
 
             $($body)*
@@ -676,6 +653,40 @@ mod test {
                 .unwrap();
             assert_eq!(res, 17.0);
         });
+    }
+
+    #[test]
+    fn concurrent_register() {
+        struct X;
+
+        class_def!(
+            X (_proto) {
+                println!("X::register");
+            }
+        );
+
+        fn run() {
+            test_with(|ctx| {
+                Class::<X>::register(ctx).unwrap();
+
+                let global = ctx.globals();
+                global
+                    .set("X", Func::from(Class::<X>::constructor(|| X)))
+                    .unwrap();
+            });
+        }
+
+        let h1 = std::thread::spawn(run);
+        let h2 = std::thread::spawn(run);
+        let h3 = std::thread::spawn(run);
+        let h4 = std::thread::spawn(run);
+        let h5 = std::thread::spawn(run);
+
+        h1.join().unwrap();
+        h2.join().unwrap();
+        h3.join().unwrap();
+        h4.join().unwrap();
+        h5.join().unwrap();
     }
 
     mod internal_refs {

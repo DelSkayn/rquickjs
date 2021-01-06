@@ -89,10 +89,12 @@ impl Drop for Inner {
 }
 
 impl Inner {
+    #[cfg(feature = "futures")]
     pub(crate) unsafe fn get_opaque(&self) -> &Opaque {
         &*(qjs::JS_GetRuntimeOpaque(self.rt) as *const _)
     }
 
+    #[cfg(feature = "futures")]
     pub(crate) unsafe fn get_opaque_mut(&mut self) -> &mut Opaque {
         &mut *(qjs::JS_GetRuntimeOpaque(self.rt) as *mut _)
     }

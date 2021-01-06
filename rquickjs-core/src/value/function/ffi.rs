@@ -1,8 +1,8 @@
 use super::Input;
-use crate::{handle_panic, qjs, Ctx, Result, Value};
+use crate::{handle_panic, qjs, ClassId, Ctx, Result, Value};
 use std::{ops::Deref, panic::AssertUnwindSafe, ptr};
 
-static mut FUNC_CLASS: qjs::JSClassID = 0;
+static mut FUNC_CLASS_ID: ClassId = ClassId::new();
 
 type BoxedFunc<'js> = Box<dyn Fn(&Input<'js>) -> Result<Value<'js>>>;
 
@@ -25,8 +25,12 @@ impl<'js> JsFunction<'js> {
         Self(Box::new(func))
     }
 
+    pub fn class_id() -> qjs::JSClassID {
+        unsafe { &FUNC_CLASS_ID }.get() as _
+    }
+
     pub unsafe fn into_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
-        let obj = qjs::JS_NewObjectClass(ctx.ctx, FUNC_CLASS as _);
+        let obj = qjs::JS_NewObjectClass(ctx.ctx, Self::class_id() as _);
         qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(self)) as _);
         obj
     }
@@ -46,8 +50,9 @@ impl<'js> JsFunction<'js> {
     }
 
     pub unsafe fn register(rt: *mut qjs::JSRuntime) {
-        qjs::JS_NewClassID(&mut FUNC_CLASS);
-        if 0 == qjs::JS_IsRegisteredClass(rt, FUNC_CLASS) {
+        FUNC_CLASS_ID.init();
+        let class_id = Self::class_id();
+        if 0 == qjs::JS_IsRegisteredClass(rt, class_id) {
             let class_def = qjs::JSClassDef {
                 class_name: b"RustFunction\0".as_ptr() as *const _,
                 finalizer: Some(Self::finalizer),
@@ -55,7 +60,7 @@ impl<'js> JsFunction<'js> {
                 call: Some(Self::call),
                 exotic: ptr::null_mut(),
             };
-            assert!(qjs::JS_NewClass(rt, FUNC_CLASS, &class_def) == 0);
+            assert!(qjs::JS_NewClass(rt, class_id, &class_def) == 0);
         }
     }
 
@@ -68,7 +73,7 @@ impl<'js> JsFunction<'js> {
         _flags: qjs::c_int,
     ) -> qjs::JSValue {
         let ctx = Ctx::from_ptr(ctx);
-        let opaque = &*(qjs::JS_GetOpaque2(ctx.ctx, func, FUNC_CLASS) as *mut Self);
+        let opaque = &*(qjs::JS_GetOpaque2(ctx.ctx, func, Self::class_id()) as *mut Self);
 
         handle_panic(
             ctx.ctx,
@@ -81,6 +86,6 @@ impl<'js> JsFunction<'js> {
     }
 
     unsafe extern "C" fn finalizer(_rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
-        let _opaque = Box::from_raw(qjs::JS_GetOpaque(val, FUNC_CLASS) as *mut Self);
+        let _opaque = Box::from_raw(qjs::JS_GetOpaque(val, Self::class_id()) as *mut Self);
     }
 }

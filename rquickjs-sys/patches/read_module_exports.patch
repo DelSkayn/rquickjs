@@ -1,9 +1,9 @@
 patch = all 
 diff --git a/quickjs.c b/quickjs.c
-index c7bbf40..12e3cc9 100644
+index 9fe95cd..5ea8a12 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -27170,6 +27170,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
+@@ -27161,6 +27161,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
      rt->module_loader_opaque = opaque;
  }
  

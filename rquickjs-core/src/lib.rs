@@ -54,6 +54,12 @@ pub use value::*;
 mod persistent;
 pub use persistent::{Outlive, Persistent};
 
+mod class_id;
+#[cfg(not(feature = "classes"))]
+pub(crate) use class_id::ClassId;
+#[cfg(feature = "classes")]
+pub use class_id::ClassId;
+
 #[cfg(feature = "registery")]
 mod registery_key;
 #[cfg(feature = "registery")]
@@ -62,7 +68,7 @@ pub use registery_key::RegisteryKey;
 #[cfg(feature = "classes")]
 mod class;
 #[cfg(feature = "classes")]
-pub use class::{Class, ClassDef, ClassId, Constructor, HasRefs, RefsMarker, WithProto};
+pub use class::{Class, ClassDef, Constructor, HasRefs, RefsMarker, WithProto};
 
 #[cfg(feature = "properties")]
 mod property;

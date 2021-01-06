@@ -1,9 +1,9 @@
 patch = all 
 diff --git a/quickjs.c b/quickjs.c
-index 12e3cc9..bacbf9b 100644
+index 9fe95cd..d47c712 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -2113,6 +2113,13 @@ void JS_FreeRuntime(JSRuntime *rt)
+@@ -2108,6 +2108,13 @@ void JS_FreeRuntime(JSRuntime *rt)
      }
  }
  
@@ -18,7 +18,7 @@ index 12e3cc9..bacbf9b 100644
  {
      JSContext *ctx;
 diff --git a/quickjs.h b/quickjs.h
-index 4e06dfe..00001d1 100644
+index 92457a2..3fbcbad 100644
 --- a/quickjs.h
 +++ b/quickjs.h
 @@ -352,6 +352,11 @@ JSRuntime *JS_GetRuntime(JSContext *ctx);
