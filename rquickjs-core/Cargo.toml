@@ -34,6 +34,10 @@ optional = true
 version = "^5"
 optional = true
 
+[dependencies.async-executor]
+version = "^1"
+optional = true
+
 [dependencies.pin-project-lite]
 version = "^0.2"
 optional = true
@@ -110,7 +114,7 @@ classes = []
 properties = []
 
 # Enable interop between Rust futures and JS Promises
-futures = ["pin-project-lite", "futures-lite", "fxhash", "vec-arena", "cooked-waker"]
+futures = ["pin-project-lite", "futures-lite", "vec-arena", "cooked-waker", "async-executor"]
 
 # Enable Tokio async runtime support
 tokio = ["futures", "tokio-rs"]

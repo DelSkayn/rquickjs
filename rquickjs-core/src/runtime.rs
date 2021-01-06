@@ -8,7 +8,7 @@ pub use async_runtime::*;
 #[cfg(feature = "futures")]
 mod async_executor;
 #[cfg(feature = "futures")]
-pub use async_executor::*;
+pub use self::async_executor::*;
 
 #[cfg(feature = "registery")]
 use crate::RegisteryKey;
