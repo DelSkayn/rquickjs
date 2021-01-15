@@ -265,10 +265,16 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
+        if: |
+          runner.os != 'macOS'
         uses: actions/cache@v2
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Update deps
+        uses: actions-rs/cargo@v1
+        with:
+          command: update
       - name: Build sys
         uses: actions-rs/cargo@v1
         env:
