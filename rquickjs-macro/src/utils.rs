@@ -32,7 +32,3 @@ impl PubVis {
         }
     }
 }
-
-pub trait Merge {
-    fn merge(&mut self, over: Self);
-}

@@ -1,4 +1,4 @@
-use crate::{AttributeArgs, Config, Ident, Merge, Parenthesized, PubVis};
+use crate::{AttributeArgs, Config, Ident, Parenthesized, PubVis};
 use darling::{util::Override, FromMeta};
 use syn::{parse2, AttrStyle, Attribute, Path};
 
@@ -58,19 +58,21 @@ pub struct AttrMod {
     pub hide: bool,
 }
 
-impl Merge for AttrMod {
-    fn merge(&mut self, over: Self) {
-        if over.name.is_some() {
-            self.name = over.name;
-        }
-        if over.bare {
-            self.bare = true;
-        }
-        if over.skip {
-            self.skip = true;
-        }
-        if over.hide {
-            self.hide = true;
+impl Extend<Self> for AttrMod {
+    fn extend<T: IntoIterator<Item = Self>>(&mut self, iter: T) {
+        for over in iter {
+            if over.name.is_some() {
+                self.name = over.name;
+            }
+            if over.bare {
+                self.bare = true;
+            }
+            if over.skip {
+                self.skip = true;
+            }
+            if over.hide {
+                self.hide = true;
+            }
         }
     }
 }
@@ -99,31 +101,33 @@ pub struct AttrVar {
     pub hide: bool,
 }
 
-impl Merge for AttrVar {
-    fn merge(&mut self, over: Self) {
-        if over.name.is_some() {
-            self.name = over.name;
-        }
-        if over.prop {
-            self.prop = true;
-        }
-        if over.writable {
-            self.writable = true;
-        }
-        if over.configurable {
-            self.configurable = true;
-        }
-        if over.enumerable {
-            self.enumerable = true;
-        }
-        if over.proto {
-            self.proto = true;
-        }
-        if over.skip {
-            self.skip = true;
-        }
-        if over.hide {
-            self.hide = true;
+impl Extend<Self> for AttrVar {
+    fn extend<T: IntoIterator<Item = Self>>(&mut self, iter: T) {
+        for over in iter {
+            if over.name.is_some() {
+                self.name = over.name;
+            }
+            if over.prop {
+                self.prop = true;
+            }
+            if over.writable {
+                self.writable = true;
+            }
+            if over.configurable {
+                self.configurable = true;
+            }
+            if over.enumerable {
+                self.enumerable = true;
+            }
+            if over.proto {
+                self.proto = true;
+            }
+            if over.skip {
+                self.skip = true;
+            }
+            if over.hide {
+                self.hide = true;
+            }
         }
     }
 }
@@ -152,28 +156,30 @@ pub struct AttrFn {
     pub hide: bool,
 }
 
-impl Merge for AttrFn {
-    fn merge(&mut self, over: Self) {
-        if over.name.is_some() {
-            self.name = over.name;
-        }
-        if over.get {
-            self.get = true;
-        }
-        if over.set {
-            self.set = true;
-        }
-        if over.configurable {
-            self.configurable = true;
-        }
-        if over.enumerable {
-            self.enumerable = true;
-        }
-        if over.skip {
-            self.skip = true;
-        }
-        if over.hide {
-            self.hide = true;
+impl Extend<Self> for AttrFn {
+    fn extend<T: IntoIterator<Item = Self>>(&mut self, iter: T) {
+        for over in iter {
+            if over.name.is_some() {
+                self.name = over.name;
+            }
+            if over.get {
+                self.get = true;
+            }
+            if over.set {
+                self.set = true;
+            }
+            if over.configurable {
+                self.configurable = true;
+            }
+            if over.enumerable {
+                self.enumerable = true;
+            }
+            if over.skip {
+                self.skip = true;
+            }
+            if over.hide {
+                self.hide = true;
+            }
         }
     }
 }
@@ -195,22 +201,24 @@ pub struct AttrData {
     pub hide: bool,
 }
 
-impl Merge for AttrData {
-    fn merge(&mut self, over: Self) {
-        if over.name.is_some() {
-            self.name = over.name;
-        }
-        if over.has_refs {
-            self.has_refs = true;
-        }
-        if over.cloneable {
-            self.cloneable = true;
-        }
-        if over.skip {
-            self.skip = true;
-        }
-        if over.hide {
-            self.hide = true;
+impl Extend<Self> for AttrData {
+    fn extend<T: IntoIterator<Item = Self>>(&mut self, iter: T) {
+        for over in iter {
+            if over.name.is_some() {
+                self.name = over.name;
+            }
+            if over.has_refs {
+                self.has_refs = true;
+            }
+            if over.cloneable {
+                self.cloneable = true;
+            }
+            if over.skip {
+                self.skip = true;
+            }
+            if over.hide {
+                self.hide = true;
+            }
         }
     }
 }
@@ -228,16 +236,18 @@ pub struct AttrField {
     pub skip: bool,
 }
 
-impl Merge for AttrField {
-    fn merge(&mut self, over: Self) {
-        if over.name.is_some() {
-            self.name = over.name;
-        }
-        if over.readonly {
-            self.readonly = true;
-        }
-        if over.skip {
-            self.skip = true;
+impl Extend<Self> for AttrField {
+    fn extend<T: IntoIterator<Item = Self>>(&mut self, iter: T) {
+        for over in iter {
+            if over.name.is_some() {
+                self.name = over.name;
+            }
+            if over.readonly {
+                self.readonly = true;
+            }
+            if over.skip {
+                self.skip = true;
+            }
         }
     }
 }
@@ -259,22 +269,24 @@ pub struct AttrImpl {
     pub hide: bool,
 }
 
-impl Merge for AttrImpl {
-    fn merge(&mut self, over: Self) {
-        if over.name.is_some() {
-            self.name = over.name;
-        }
-        if over.has_refs {
-            self.has_refs = true;
-        }
-        if over.cloneable {
-            self.cloneable = true;
-        }
-        if over.skip {
-            self.skip = true;
-        }
-        if over.hide {
-            self.hide = true;
+impl Extend<Self> for AttrImpl {
+    fn extend<T: IntoIterator<Item = Self>>(&mut self, iter: T) {
+        for over in iter {
+            if over.name.is_some() {
+                self.name = over.name;
+            }
+            if over.has_refs {
+                self.has_refs = true;
+            }
+            if over.cloneable {
+                self.cloneable = true;
+            }
+            if over.skip {
+                self.skip = true;
+            }
+            if over.hide {
+                self.hide = true;
+            }
         }
     }
 }
@@ -293,7 +305,10 @@ fn is_attr(
         && &segments[0].ident == ident
 }
 
-pub fn get_attrs<R: FromMeta + Default + Merge>(ident: &Ident, attrs: &mut Vec<Attribute>) -> R {
+pub fn get_attrs<R: FromMeta + Default + Extend<R>>(
+    ident: &Ident,
+    attrs: &mut Vec<Attribute>,
+) -> R {
     let mut res = R::default();
 
     attrs.retain(
@@ -310,7 +325,7 @@ pub fn get_attrs<R: FromMeta + Default + Merge>(ident: &Ident, attrs: &mut Vec<A
                          ..
                      }| FromMeta::from_list(&attrs),
                 ) {
-                    Ok(Ok(val)) => res.merge(val),
+                    Ok(Ok(val)) => res.extend(Some(val).into_iter()),
                     Ok(Err(error)) => warning!("{}", error),
                     Err(error) => warning!("{}", error),
                 }

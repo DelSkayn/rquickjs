@@ -24,7 +24,7 @@ mod function;
 mod module;
 mod property;
 
-use crate::{Config, Ident, Merge, PubVis, Source, TokenStream};
+use crate::{Config, Ident, PubVis, Source, TokenStream};
 use darling::FromMeta;
 use fnv::FnvBuildHasher;
 use ident_case::RenameRule;
@@ -207,7 +207,7 @@ impl Binder {
         }
     }
 
-    pub fn get_attrs<R: FromMeta + Default + Merge>(&self, attrs: &mut Vec<Attribute>) -> R {
+    pub fn get_attrs<R: FromMeta + Default + Extend<R>>(&self, attrs: &mut Vec<Attribute>) -> R {
         get_attrs(&self.config.bind_attr, attrs)
     }
 
