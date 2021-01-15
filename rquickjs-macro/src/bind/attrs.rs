@@ -187,6 +187,8 @@ pub struct AttrData {
     pub name: Option<String>,
     /// Data has internal refs
     pub has_refs: bool,
+    /// Data implements [`Clone`] trait
+    pub cloneable: bool,
     /// Skip export
     pub skip: bool,
     /// Do not output
@@ -200,6 +202,9 @@ impl Merge for AttrData {
         }
         if over.has_refs {
             self.has_refs = true;
+        }
+        if over.cloneable {
+            self.cloneable = true;
         }
         if over.skip {
             self.skip = true;
@@ -246,6 +251,8 @@ pub struct AttrImpl {
     pub name: Option<String>,
     /// Data has internal refs
     pub has_refs: bool,
+    /// Data implements [`Clone`] trait
+    pub cloneable: bool,
     /// Skip export
     pub skip: bool,
     /// Do not output
@@ -259,6 +266,9 @@ impl Merge for AttrImpl {
         }
         if over.has_refs {
             self.has_refs = true;
+        }
+        if over.cloneable {
+            self.cloneable = true;
         }
         if over.skip {
             self.skip = true;

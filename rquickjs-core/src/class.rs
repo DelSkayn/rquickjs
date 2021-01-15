@@ -81,6 +81,48 @@ pub trait ClassDef {
     ///
     /// Should be implemented to work with garbage collector
     fn mark_refs(&self, _marker: &RefsMarker) {}
+
+    /// Convert an instance of class into JS object
+    ///
+    /// This method helps implement [`IntoJs`] trait for classes
+    fn into_js_obj<'js>(self, ctx: Ctx<'js>) -> Result<Value<'js>>
+    where
+        Self: Sized,
+    {
+        Class::<Self>::instance(ctx, self).map(|Class(Object(val), _)| val)
+    }
+
+    /// Get reference from JS object
+    ///
+    /// This method helps implement [`FromJs`] trait for classes
+    fn from_js_ref<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<&'js Self>
+    where
+        Self: Sized,
+    {
+        let value = Object::from_js(ctx, value)?;
+        Class::<Self>::try_ref(ctx, &value)
+    }
+
+    /// Get mutable reference from JS object
+    ///
+    /// This method helps implement [`FromJs`] trait for classes
+    fn from_js_mut<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<&'js mut Self>
+    where
+        Self: Sized,
+    {
+        let value = Object::from_js(ctx, value)?;
+        Class::<Self>::try_mut(ctx, &value)
+    }
+
+    /// Get an instance of class from JS object
+    fn from_js_obj<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self>
+    where
+        Self: Clone + Sized,
+    {
+        let value = Object::from_js(ctx, value)?;
+        let instance = Class::<Self>::try_ref(ctx, &value)?;
+        Ok(instance.clone())
+    }
 }
 
 /// The class object interface
@@ -354,35 +396,6 @@ where
     }
 }
 
-impl<'js, C> IntoJs<'js> for C
-where
-    C: ClassDef,
-{
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Class::<C>::instance(ctx, self).map(|Class(Object(val), _)| val)
-    }
-}
-
-impl<'js, C> FromJs<'js> for &C
-where
-    C: ClassDef,
-{
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let value = Object::from_js(ctx, value)?;
-        Class::<C>::try_ref(ctx, &value)
-    }
-}
-
-impl<'js, C> FromJs<'js> for &mut C
-where
-    C: ClassDef,
-{
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let value = Object::from_js(ctx, value)?;
-        Class::<C>::try_mut(ctx, &value)
-    }
-}
-
 /// The wrapper for constructor function
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 #[repr(transparent)]
@@ -411,7 +424,7 @@ pub struct WithProto<'js, C>(pub C, pub Object<'js>);
 
 impl<'js, C> IntoJs<'js> for WithProto<'js, C>
 where
-    C: ClassDef,
+    C: ClassDef + IntoJs<'js>,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Class::<C>::instance_proto(ctx, self.0, self.1).map(|Class(Object(val), _)| val)
@@ -520,6 +533,24 @@ macro_rules! class_def {
             }
 
             $($body)*
+        }
+
+        impl<'js> $crate::IntoJs<'js> for $name {
+            fn into_js(self, ctx: $crate::Ctx<'js>) -> $crate::Result<$crate::Value<'js>> {
+                <$name as $crate::ClassDef>::into_js_obj(self, ctx)
+            }
+        }
+
+        impl<'js> $crate::FromJs<'js> for &'js $name {
+            fn from_js(ctx: $crate::Ctx<'js>, value: $crate::Value<'js>) -> $crate::Result<Self> {
+                <$name as $crate::ClassDef>::from_js_ref(ctx, value)
+            }
+        }
+
+        impl<'js> $crate::FromJs<'js> for &'js mut $name {
+            fn from_js(ctx: $crate::Ctx<'js>, value: $crate::Value<'js>) -> $crate::Result<Self> {
+                <$name as $crate::ClassDef>::from_js_mut(ctx, value)
+            }
         }
     };
 }
