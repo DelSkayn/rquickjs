@@ -3,8 +3,11 @@ use crate::{
     Value,
 };
 use std::{
+    cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     hash::{BuildHasher, Hash},
+    rc::Rc,
+    sync::{Arc, Mutex, RwLock},
 };
 
 #[cfg(feature = "either")]
@@ -115,6 +118,21 @@ fn number_match_range<T: PartialOrd>(
 }
 
 macro_rules! from_js_impls {
+    // for reference types
+    (ref: $($(#[$meta:meta])* $type:ident,)*) => {
+        $(
+            $(#[$meta])*
+            impl<'js, T> FromJs<'js> for $type<T>
+            where
+                T: FromJs<'js>,
+            {
+                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    T::from_js(ctx, value).map($type::new)
+                }
+            }
+        )*
+    };
+
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
         $(
@@ -234,6 +252,17 @@ from_js_impls! {
     bool => Bool get_bool,
     i32 => Int get_int,
     f64 => Float get_float Int get_int,
+}
+
+from_js_impls! {
+    ref:
+    Box,
+    Rc,
+    Arc,
+    Cell,
+    RefCell,
+    Mutex,
+    RwLock,
 }
 
 from_js_impls! {

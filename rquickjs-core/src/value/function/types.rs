@@ -119,17 +119,6 @@ macro_rules! type_impls {
         }
     };
 
-    (@impl IntoJs($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
-        impl<'js, $param $(, $params)*, A, R> IntoJs<'js> for $type<$param $(, $params)*>
-        where
-            $param: AsFunction<A, R>,
-        {
-            fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                Function::new(ctx, self)?.into_js(ctx)
-            }
-        }
-    };
-
     (@def $($t:tt)*) => { Default::default() };
 }
 

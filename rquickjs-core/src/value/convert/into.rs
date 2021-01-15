@@ -2,7 +2,11 @@ use crate::{
     Array, Ctx, Error, IntoAtom, IntoJs, IteratorJs, Object, Result, StdResult, StdString, String,
     Value,
 };
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque};
+use std::{
+    cell::{Cell, RefCell},
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
+    sync::{Mutex, RwLock},
+};
 
 #[cfg(feature = "either")]
 use either::{Either, Left, Right};
@@ -134,7 +138,93 @@ where
     }
 }
 
+impl<'js, T> IntoJs<'js> for &Box<T>
+where
+    for<'r> &'r T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.as_ref().into_js(ctx)
+    }
+}
+
+impl<'js, T> IntoJs<'js> for Box<T>
+where
+    T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        (*self).into_js(ctx)
+    }
+}
+
+impl<'js, T> IntoJs<'js> for &Cell<T>
+where
+    T: IntoJs<'js> + Copy,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.get().into_js(ctx)
+    }
+}
+
+impl<'js, T> IntoJs<'js> for &RefCell<T>
+where
+    for<'r> &'r T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.borrow().into_js(ctx)
+    }
+}
+
+impl<'js, T> IntoJs<'js> for Mutex<T>
+where
+    T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.into_inner().unwrap().into_js(ctx)
+    }
+}
+
+impl<'js, T> IntoJs<'js> for &Mutex<T>
+where
+    for<'r> &'r T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.lock().unwrap().into_js(ctx)
+    }
+}
+
+impl<'js, T> IntoJs<'js> for RwLock<T>
+where
+    T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.into_inner().unwrap().into_js(ctx)
+    }
+}
+
+impl<'js, T> IntoJs<'js> for &RwLock<T>
+where
+    for<'r> &'r T: IntoJs<'js>,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        self.read().unwrap().into_js(ctx)
+    }
+}
+
 macro_rules! into_js_impls {
+    // for cells
+    (cell: $($type:ident,)*) => {
+        $(
+            impl<'js, T> IntoJs<'js> for $type<T>
+            where
+                T: IntoJs<'js>,
+            {
+                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    self.into_inner().into_js(ctx)
+                }
+            }
+        )*
+    };
+
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
         $(
@@ -273,6 +363,12 @@ macro_rules! into_js_impls {
     (@idx N) => { 13 };
     (@idx O) => { 14 };
     (@idx P) => { 15 };
+}
+
+into_js_impls! {
+    cell:
+    Cell,
+    RefCell,
 }
 
 into_js_impls! {
