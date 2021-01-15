@@ -99,7 +99,7 @@ pub unsafe fn JS_ValueRefCount(v: JSValue) -> c_int {
 }
 
 #[inline]
-pub unsafe fn JS_FreeValueRef(ctx: *mut JSContext, v: JSValue) {
+unsafe fn JS_FreeValueRef(ctx: *mut JSContext, v: JSValue) {
     let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
     p.ref_count -= 1;
     if p.ref_count <= 0 {
@@ -115,7 +115,7 @@ pub unsafe fn JS_FreeValue(ctx: *mut JSContext, v: JSValue) {
 }
 
 #[inline]
-pub unsafe fn JS_FreeValueRefRT(rt: *mut JSRuntime, v: JSValue) {
+unsafe fn JS_FreeValueRefRT(rt: *mut JSRuntime, v: JSValue) {
     let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
     p.ref_count -= 1;
     if p.ref_count <= 0 {
@@ -131,7 +131,7 @@ pub unsafe fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue) {
 }
 
 #[inline]
-pub unsafe fn JS_DupValueRef(v: JSValueConst) -> JSValue {
+unsafe fn JS_DupValueRef(v: JSValueConst) -> JSValue {
     let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
     p.ref_count += 1;
     v
@@ -179,7 +179,7 @@ pub fn JS_NewFloat64(d: f64) -> JSValue {
     union U {
         d: f64,
         u: u64,
-    };
+    }
 
     let u = U { d };
     let val = d as i32;

@@ -67,7 +67,7 @@ pub unsafe fn JS_VALUE_IS_NAN(v: JSValue) -> bool {
     union U {
         d: f64,
         u: u64,
-    };
+    }
     if v.tag != JS_TAG_FLOAT64 as _ {
         return false;
     }

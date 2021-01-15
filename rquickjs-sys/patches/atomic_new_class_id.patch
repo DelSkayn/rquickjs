@@ -1,0 +1,25 @@
+patch = all 
+diff --git a/quickjs.c b/quickjs.c
+index 4e6a2c9..f9615be 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -3353,12 +3353,18 @@ static inline BOOL JS_IsEmptyString(JSValueConst v)
+ JSClassID JS_NewClassID(JSClassID *pclass_id)
+ {
+     JSClassID class_id;
+-    /* XXX: make it thread safe */
++#ifdef CONFIG_ATOMICS
++    static atomic_flag lock = ATOMIC_FLAG_INIT;
++    while(atomic_flag_test_and_set_explicit(&lock, memory_order_acquire));
++#endif
+     class_id = *pclass_id;
+     if (class_id == 0) {
+         class_id = js_class_id_alloc++;
+         *pclass_id = class_id;
+     }
++#ifdef CONFIG_ATOMICS
++    atomic_flag_clear_explicit(&lock, memory_order_release);
++#endif
+     return class_id;
+ }
+ 

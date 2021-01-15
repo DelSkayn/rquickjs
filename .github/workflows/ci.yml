@@ -43,7 +43,7 @@ jobs:
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: stable
+          toolchain: nightly
           profile: minimal
           components: rust-docs
           default: true
@@ -54,28 +54,30 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: ${{ runner.os }}-cargo-rust_stable-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
         uses: actions/cache@v2
         with:
           path: target
-          key: ${{ runner.os }}-build-rust_stable-doc-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-build-rust_nightly-doc-${{ hashFiles('**/Cargo.lock') }}
       - name: Documentation
         uses: actions-rs/cargo@v1
         env:
           DOCS_RS: 1
         with:
           command: doc
-          args: --features async-std
+          args: --features full-async,doc-cfg
+      - name: Upload docs
+        uses: actions/upload-artifact@v2
+        with:
+          name: docs
+          path: |
+            target/doc/rquickjs
+            target/doc/rquickjs-sys
+            target/doc/rquickjs-macro
 
   check:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        features:
-          - default
-          - async-std
-          - tokio
     steps:
       - uses: actions/checkout@v1
         with:
@@ -102,7 +104,7 @@ jobs:
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          args: --no-default-features --features ${{ matrix.features }}
+          args: --all --all-features
 
   test:
     needs:
@@ -110,7 +112,7 @@ jobs:
       - doc
       - check
     strategy:
-      fail-fast: ${{ github.event_name == 'pull_request' || startsWith(github.ref, 'refs/tags/') }}
+      fail-fast: ${{ startsWith(github.ref, 'refs/tags/') }}
       matrix:
         include:
           # Generate bindings
@@ -118,38 +120,43 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: i686-unknown-linux-gnu
-            features: default,parallel
+            features: exports
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: default,parallel
+            features: exports
           - task: bindings
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
-            features: default,parallel,classes,properties,async-std
+            features: full-async
           - task: bindings
             os: windows-latest
             rust: stable
             target: i686-pc-windows-gnu
-            features: default,parallel,classes,properties,async-std
+            features: full-async
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-gnu
-            features: default,parallel,classes,properties,async-std
+            features: full-async
+          - task: bindings
+            os: windows-latest
+            rust: stable
+            target: i686-pc-windows-msvc
+            features: full-async
+          - task: bindings
+            os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+            features: full-async
           # Test features
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: default
-          - task: features
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: parallel
+            features: exports
           - task: features
             os: ubuntu-latest
             rust: stable
@@ -185,22 +192,27 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: tokio
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: parallel
           # Test channels
           - task: channels
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,allocator,loader,classes,properties,async-std
+            features: full-async
           - task: channels
             os: ubuntu-latest
             rust: beta
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,allocator,loader,classes,properties,async-std
+            features: full-async
           - task: channels
             os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
-            features: default,parallel,allocator,loader,classes,properties,async-std
+            features: full-async
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
@@ -219,7 +231,7 @@ jobs:
           sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET}
           echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
       - name: Setup clang on windows
-        if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
+        if: startsWith(matrix.os, 'windows')
         uses: KyleMayes/install-llvm-action@v1
         with:
           version: 11.0
@@ -227,13 +239,15 @@ jobs:
       - name: Prepare env for windows
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         run: |
-          # Add symlinks to C headers for Clang
-          if ( "${{ matrix.target }}" -like "x86_64-*" ) {
-            New-Item -Path "${{ runner.temp }}\llvm\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
-          } else {
-            New-Item -Path "${{ runner.temp }}\llvm\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw32\i686-w64-mingw32"
-            echo "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-          }
+          # Add symlinks to the GNU C headers for Clang
+          New-Item -Path "${{ runner.temp }}\llvm\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
+          New-Item -Path "${{ runner.temp }}\llvm\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw32\i686-w64-mingw32"
+          # Add mingw executable paths to PATH
+          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup Rust
         uses: actions-rs/toolchain@v1
         with:
@@ -251,14 +265,20 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
+        if: |
+          runner.os != 'macOS'
         uses: actions/cache@v2
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+      - name: Update deps
+        uses: actions-rs/cargo@v1
+        with:
+          command: update
       - name: Build sys
         uses: actions-rs/cargo@v1
         env:
-          RUST_LOG: bindgen=debug
+          RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
         with:
           command: build
           args: --manifest-path rquickjs-sys/Cargo.toml --target ${{ matrix.target }} --features exports,parallel,bindgen,update-bindings,logging
@@ -275,9 +295,11 @@ jobs:
           args: --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         uses: actions-rs/cargo@v1
+        env:
+          RUST_BACKTRACE: full
         with:
           command: test
-          args: --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+          args: --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
   update-bindings:
     if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
