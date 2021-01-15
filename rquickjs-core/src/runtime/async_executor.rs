@@ -167,6 +167,7 @@ impl WakeRef for TaskWaker {
     }
 }
 
+/// The idle awaiting future
 pub struct Idle(Option<IdleData>);
 
 struct IdleData {

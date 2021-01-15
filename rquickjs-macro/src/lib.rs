@@ -129,7 +129,7 @@ Overloading is not supported for property getters/setters.
 
 ## Data type attributes
 
-This attributes applies to structs and enums to use it as JS classes.
+This attributes applies to structs and enums to use it as ES6 classes.
 
 Attribute                 | Description
 ------------------------- | ---------------------------
@@ -138,6 +138,15 @@ __`has_refs`__            | Marks data which has internal refs to other JS value
 __`cloneable`__           | Marks data type which implements `Clone` trait
 __`skip`__                | Skips exporting this data type
 __`hide`__                | Do not output this data type (bindings only)
+
+The following traits will be implemented for data type:
+- [`ClassDef`](rquickjs_core::ClassDef)
+- [`IntoJs`](rquickjs_core::IntoJs)
+- [`FromJs`](rquickjs_core::FromJs) if `cloneable` attribute is present
+
+The following traits will be implemented for references to data type:
+- [`IntoJs`](rquickjs_core::IntoJs) if `cloneable` attribute is present
+- [`FromJs`](rquickjs_core::IntoJs)
 
 ## Data field attributes
 

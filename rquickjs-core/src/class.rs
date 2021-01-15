@@ -10,12 +10,16 @@ pub use refs::{HasRefs, RefsMarker};
 
 /// The ES6 class definition trait
 ///
-/// This trait helps export rust data types to QuickJS so JS code can operate with it as a ES6 classes.
+/// This trait helps export rust data types to QuickJS so JS code can interoperate with it as with usual ES6 classes.
+/// Usually implementing this trait only is not enough to introduce class.
+/// At least [`IntoJs`] trait should be implemented for transfering class instances to JS side.
+/// Get be able call methods or get access to class properties the [`FromJs`] trait should be implemented for class reference and for mutable reference when needed.
 ///
-/// Do not need implements this trait manually. Instead you can use [`class_def`](crate::class_def) macros or [`bind`](attr.bind.html) attribute to bind classes with methods in easy way.
+/// NOTE: Usually no need implements this trait manually. Instead you can use [`class_def`](crate::class_def) macro or [`bind`](attr.bind.html) attribute to export classes to JS in easy way.
 ///
 /// ```
-/// # use rquickjs::{ClassId, ClassDef, Ctx, Object, Result, RefsMarker};
+/// # use rquickjs::{ClassId, ClassDef, FromJs, IntoJs, Ctx, Object, Result, Value, RefsMarker};
+/// #[derive(Clone)]
 /// struct MyClass;
 ///
 /// impl ClassDef for MyClass {
@@ -42,6 +46,30 @@ pub use refs::{HasRefs, RefsMarker};
 ///     const HAS_REFS: bool = true;
 ///     fn mark_refs(&self, marker: &RefsMarker) {
 ///         // marker.mark(&self.some_persistent_value);
+///     }
+/// }
+///
+/// impl<'js> IntoJs<'js> for MyClass {
+///     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+///         self.into_js_obj(ctx)
+///     }
+/// }
+///
+/// impl<'js> FromJs<'js> for &'js MyClass {
+///     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+///         MyClass::from_js_ref(ctx, value)
+///     }
+/// }
+///
+/// impl<'js> FromJs<'js> for &'js mut MyClass {
+///     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+///         MyClass::from_js_mut(ctx, value)
+///     }
+/// }
+///
+/// impl<'js> FromJs<'js> for MyClass {
+///     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+///         MyClass::from_js_obj(ctx, value)
 ///     }
 /// }
 /// ```

@@ -179,7 +179,7 @@ pub fn JS_NewFloat64(d: f64) -> JSValue {
     union U {
         d: f64,
         u: u64,
-    };
+    }
 
     let u = U { d };
     let val = d as i32;
