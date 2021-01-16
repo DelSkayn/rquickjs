@@ -85,7 +85,7 @@ impl<'js> CallInput<'js> {
 
 /// A helper trait to prepare inputs for function calls
 pub trait IntoInput<'js> {
-    /// Get number of arguments
+    /// Get actual number of arguments
     fn num_args(&self) -> usize;
 
     /// Put the value into inputs

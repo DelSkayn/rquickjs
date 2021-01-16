@@ -1,15 +1,17 @@
 use super::{FromInput, Input};
 use crate::{
-    Ctx, FromJs, Function, IntoJs, Method, MutFn, OnceFn, Result, SendWhenParallel, This, Value,
+    Ctx, Error, FromJs, Function, IntoJs, Method, MutFn, OnceFn, Result, SendWhenParallel, This,
+    Value,
 };
+use std::ops::Range;
 
 #[cfg(feature = "classes")]
-use crate::{Class, ClassDef, Constructor, Error};
+use crate::{Class, ClassDef, Constructor};
 
 /// The trait to wrap rust function to JS directly
 pub trait AsFunction<'js, A, R> {
-    /// The length of function
-    fn len() -> usize;
+    /// The possible range of function arguments
+    fn num_args() -> Range<usize>;
 
     /// Call as JS function
     fn call(&self, input: &Input<'js>) -> Result<Value<'js>>;
@@ -17,6 +19,21 @@ pub trait AsFunction<'js, A, R> {
     /// Post-processing the function
     fn post<'js_>(_ctx: Ctx<'js_>, _func: &Function<'js_>) -> Result<()> {
         Ok(())
+    }
+}
+
+impl<'js> Input<'js> {
+    #[doc(hidden)]
+    #[inline]
+    pub fn check_num_args<F: AsFunction<'js, A, R>, A, R>(&self) -> Result<()> {
+        let expected = F::num_args();
+        let given = self.len();
+        // We can't simply use Range::contains() because actually we operates with Range as with RangeInclusive
+        if expected.start <= given && given <= expected.end {
+            Ok(())
+        } else {
+            Err(Error::new_num_args(expected, given))
+        }
     }
 }
 
@@ -31,12 +48,15 @@ macro_rules! as_function_impls {
                 R: IntoJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
-                fn len() -> usize {
-                    0 $(+ $arg::NUM_ARGS)*
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
                 }
 
                 #[allow(unused_mut)]
                 fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
                     let mut accessor = input.access();
                     self(
                         $($arg::from_input(&mut accessor)?,)*
@@ -52,12 +72,15 @@ macro_rules! as_function_impls {
                 R: IntoJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
-                fn len() -> usize {
-                    0 $(+ $arg::NUM_ARGS)*
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
                 }
 
                 #[allow(unused_mut)]
                 fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
                     let mut func = self.try_borrow_mut()
                         .expect("Mutable function callback is already in use! Could it have been called recursively?");
                     let mut accessor = input.access();
@@ -75,12 +98,15 @@ macro_rules! as_function_impls {
                 R: IntoJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
-                fn len() -> usize {
-                    0 $(+ $arg::NUM_ARGS)*
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
                 }
 
                 #[allow(unused_mut)]
                 fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
                     let mut func = self.try_borrow_mut()
                         .expect("Once function callback is already in use! Could it have been called recursively?");
                     let func = func.take()
@@ -101,12 +127,15 @@ macro_rules! as_function_impls {
                 T: FromJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
-                fn len() -> usize {
-                    0 $(+ $arg::NUM_ARGS)*
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
                 }
 
                 #[allow(unused_mut)]
                 fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
                     let mut accessor = input.access();
                     self(
                         This::<T>::from_input(&mut accessor)?.0,
@@ -155,12 +184,14 @@ where
     C: ClassDef + SendWhenParallel + 'static,
     F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
 {
-    fn len() -> usize {
-        F::len()
+    fn num_args() -> Range<usize> {
+        F::num_args()
     }
 
     #[allow(unused_mut)]
     fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+        input.check_num_args::<Self, _, _>()?;
+
         let mut accessor = input.access();
         let ctx = accessor.ctx();
         let this: Value = accessor.this()?;
@@ -189,42 +220,47 @@ where
 }
 
 macro_rules! overloaded_impls {
-      ($($(#[$meta:meta])* $func:ident<$func_args:ident, $func_res:ident> $($funcs:ident <$funcs_args:ident, $funcs_res:ident>)*,)*) => {
-          $(
-              $(#[$meta])*
-              impl<'js, $func, $func_args, $func_res $(, $funcs, $funcs_args, $funcs_res)*> AsFunction<'js, ($func_args $(, $funcs_args)*), ($func_res $(, $funcs_res)*)> for ($func $(, $funcs)*)
-              where
-                  $func: AsFunction<'js, $func_args, $func_res> + SendWhenParallel + 'static,
-                  $($funcs: AsFunction<'js, $funcs_args, $funcs_res> + SendWhenParallel + 'static,)*
-              {
-                  fn len() -> usize {
-                      $func::len()
-                          $(.min($funcs::len()))*
-                  }
+    ($($(#[$meta:meta])* $func:ident<$func_args:ident, $func_res:ident> $($funcs:ident <$funcs_args:ident, $funcs_res:ident>)*,)*) => {
+        $(
+            $(#[$meta])*
+            impl<'js, $func, $func_args, $func_res $(, $funcs, $funcs_args, $funcs_res)*> AsFunction<'js, ($func_args $(, $funcs_args)*), ($func_res $(, $funcs_res)*)> for ($func $(, $funcs)*)
+            where
+                $func: AsFunction<'js, $func_args, $func_res> + SendWhenParallel + 'static,
+            $($funcs: AsFunction<'js, $funcs_args, $funcs_res> + SendWhenParallel + 'static,)*
+            {
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    let $func = $func::num_args();
+                    $(let $funcs = $funcs::num_args();)*
+                    $func.start $(.min($funcs.start))* .. $func.end $(.max($funcs.end))*
+                }
 
-                  #[allow(non_snake_case)]
-                  fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
-                      let ($func $(, $funcs)*) = self;
-                      // try the first function
-                      $func.call(input)
-                          $(.or_else(|error| {
-                              if error.is_from_js() {
-                                  // in case of mismatch args try the second funcion and so on
-                                  $funcs.call(input)
-                              } else {
-                                  Err(error)
-                              }
-                          }))*
-                  }
+                #[allow(non_snake_case)]
+                fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
 
-                  fn post<'js_>(ctx: Ctx<'js_>, func: &Function<'js_>) -> Result<()> {
-                      $func::post(ctx, func)?;
-                      $($funcs::post(ctx, func)?;)*
-                      Ok(())
-                  }
-              }
-          )*
-      };
+                    let ($func $(, $funcs)*) = self;
+
+                    // try the first function
+                    $func.call(input)
+                        $(.or_else(|error| {
+                            if error.is_num_args() || error.is_from_js_to_js() {
+                                // in case of mismatch args try the second funcion and so on
+                                $funcs.call(input)
+                            } else {
+                                Err(error)
+                            }
+                        }))*
+                }
+
+                fn post<'js_>(ctx: Ctx<'js_>, func: &Function<'js_>) -> Result<()> {
+                    $func::post(ctx, func)?;
+                    $($funcs::post(ctx, func)?;)*
+                    Ok(())
+                }
+            }
+        )*
+    };
 }
 
 overloaded_impls! {

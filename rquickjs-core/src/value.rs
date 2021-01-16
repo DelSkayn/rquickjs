@@ -23,7 +23,7 @@ pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
 
-use std::{fmt, marker::PhantomData, mem, ops::Deref};
+use std::{fmt, marker::PhantomData, mem, ops::Deref, result::Result as StdResult, str};
 
 /// Any javascript value
 pub struct Value<'js> {
@@ -371,9 +371,26 @@ macro_rules! type_impls {
             }
         }
 
+        impl AsRef<str> for Type {
+            fn as_ref(&self) -> &str {
+                self.as_str()
+            }
+        }
+
         impl fmt::Display for Type {
             fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
                 self.as_str().fmt(f)
+            }
+        }
+
+        impl str::FromStr for Type {
+            type Err = ();
+
+            fn from_str(s: &str) -> StdResult<Self, Self::Err> {
+                Ok(match s {
+                    $(stringify!($name) => Type::$type,)*
+                    _ => return Err(()),
+                })
             }
         }
 

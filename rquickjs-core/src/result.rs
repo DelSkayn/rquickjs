@@ -1,13 +1,14 @@
-use crate::{qjs, Ctx, FromJs, IntoJs, Object, StdResult, StdString, Value};
+use crate::{qjs, Ctx, FromJs, IntoJs, Object, StdResult, StdString, Type, Value};
 
 use std::{
     error::Error as StdError,
     ffi::{CString, NulError},
     fmt::{Display, Formatter, Result as FmtResult},
     io::Error as IoError,
+    ops::Range,
     panic,
     panic::UnwindSafe,
-    str::Utf8Error,
+    str::{FromStr, Utf8Error},
     string::FromUtf8Error,
 };
 
@@ -45,6 +46,11 @@ pub enum Error {
         from: &'static str,
         to: &'static str,
         message: Option<StdString>,
+    },
+    /// Error matching of function arguments
+    NumArgs {
+        expected: Range<usize>,
+        given: usize,
     },
     #[cfg(feature = "loader")]
     /// Error when resolving js module
@@ -176,12 +182,30 @@ impl Error {
 
     /// Returns whether the error is a from JS conversion error
     pub fn is_from_js(&self) -> bool {
-        matches!(self, Error::FromJs { .. })
+        matches!(self, Self::FromJs { .. })
+    }
+
+    /// Returns whether the error is a from JS to JS type conversion error
+    pub fn is_from_js_to_js(&self) -> bool {
+        match self {
+            Self::FromJs { to, .. } if Type::from_str(*to).is_ok() => true,
+            _ => false,
+        }
     }
 
     /// Returns whether the error is an into JS conversion error
     pub fn is_into_js(&self) -> bool {
-        matches!(self, Error::IntoJs { .. })
+        matches!(self, Self::IntoJs { .. })
+    }
+
+    /// Create function args mismatch error
+    pub fn new_num_args(expected: Range<usize>, given: usize) -> Self {
+        Self::NumArgs { expected, given }
+    }
+
+    /// Return whether the error is an function args mismatch error
+    pub fn is_num_args(&self) -> bool {
+        matches!(self, Self::NumArgs { .. })
     }
 
     /// Optimized conversion to CString
@@ -200,7 +224,7 @@ impl Error {
         use Error::*;
         match self {
             Allocation => unsafe { qjs::JS_ThrowOutOfMemory(ctx.ctx) },
-            InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } => {
+            InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } | NumArgs { .. } => {
                 let message = self.to_cstring();
                 unsafe { qjs::JS_ThrowTypeError(ctx.ctx, message.as_ptr()) }
             }
@@ -288,6 +312,17 @@ impl Display for Error {
                         message.fmt(f)?;
                     }
                 }
+            }
+            NumArgs { expected, given } => {
+                "Error calling function with ".fmt(f)?;
+                given.fmt(f)?;
+                " argument(s) while ".fmt(f)?;
+                expected.start.fmt(f)?;
+                "..".fmt(f)?;
+                if expected.end < usize::MAX {
+                    expected.end.fmt(f)?;
+                }
+                " expected".fmt(f)?;
             }
             #[cfg(feature = "loader")]
             Resolving {

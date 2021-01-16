@@ -1,5 +1,5 @@
 use crate::{qjs, Ctx, Error, FromJs, Opt, Rest, Result, This, Value};
-use std::slice;
+use std::{ops::Range, slice};
 
 pub struct Input<'js> {
     ctx: Ctx<'js>,
@@ -26,6 +26,11 @@ impl<'js> Input<'js> {
             input: self,
             arg: 0,
         }
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.args.len()
     }
 }
 
@@ -103,8 +108,8 @@ impl<'i, 'js> InputAccessor<'i, 'js> {
 }
 
 pub trait FromInput<'js>: Sized {
-    /// Required arguments
-    const NUM_ARGS: usize;
+    /// Get possible number of arguments
+    fn num_args() -> Range<usize>;
 
     /// Get it from input
     fn from_input<'i>(accessor: &mut InputAccessor<'i, 'js>) -> Result<Self>;
@@ -112,7 +117,9 @@ pub trait FromInput<'js>: Sized {
 
 /// Get context from input
 impl<'js> FromInput<'js> for Ctx<'js> {
-    const NUM_ARGS: usize = 0;
+    fn num_args() -> Range<usize> {
+        0..0
+    }
 
     fn from_input<'i>(accessor: &mut InputAccessor<'i, 'js>) -> Result<Self> {
         Ok(accessor.ctx())
@@ -125,7 +132,9 @@ impl<'js, T> FromInput<'js> for This<T>
 where
     T: FromJs<'js>,
 {
-    const NUM_ARGS: usize = 0;
+    fn num_args() -> Range<usize> {
+        0..0
+    }
 
     fn from_input<'i>(accessor: &mut InputAccessor<'i, 'js>) -> Result<Self> {
         accessor.this().map(Self)
@@ -137,7 +146,9 @@ impl<'js, T> FromInput<'js> for Opt<T>
 where
     T: FromJs<'js>,
 {
-    const NUM_ARGS: usize = 0;
+    fn num_args() -> Range<usize> {
+        0..1
+    }
 
     fn from_input<'i>(accessor: &mut InputAccessor<'i, 'js>) -> Result<Self> {
         if accessor.len() > 0 {
@@ -153,7 +164,9 @@ impl<'js, T> FromInput<'js> for Rest<T>
 where
     T: FromJs<'js>,
 {
-    const NUM_ARGS: usize = 0;
+    fn num_args() -> Range<usize> {
+        0..usize::MAX
+    }
 
     fn from_input<'i>(accessor: &mut InputAccessor<'i, 'js>) -> Result<Self> {
         accessor.args().map(Self)
@@ -165,7 +178,9 @@ impl<'js, T> FromInput<'js> for T
 where
     T: FromJs<'js>,
 {
-    const NUM_ARGS: usize = 1;
+    fn num_args() -> Range<usize> {
+        1..1
+    }
 
     fn from_input<'i>(accessor: &mut InputAccessor<'i, 'js>) -> Result<Self> {
         accessor.arg()
