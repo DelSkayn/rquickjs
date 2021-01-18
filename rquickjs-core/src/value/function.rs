@@ -126,7 +126,7 @@ impl<'js> Function<'js> {
         let ctx = self.0.ctx;
         input.this_arg();
         input.arg(self.clone())?;
-        Ok(unsafe {
+        unsafe {
             if qjs::JS_EnqueueJob(
                 ctx.ctx,
                 Some(Self::defer_call_job),
@@ -136,7 +136,8 @@ impl<'js> Function<'js> {
             {
                 return Err(get_exception(ctx));
             }
-        })
+        }
+        Ok(())
     }
 
     unsafe extern "C" fn defer_call_job(

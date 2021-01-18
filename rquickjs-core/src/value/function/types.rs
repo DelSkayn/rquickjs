@@ -70,9 +70,9 @@ macro_rules! type_impls {
     };
 
     (@impl Into($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
-        impl<$param $(, $params)*> Into<$field> for $type<$param $(, $params)*> {
-            fn into(self) -> $field {
-                self.0
+        impl<$param $(, $params)*> From<$type<$param $(, $params)*>> for $field {
+            fn from(this: $type<$param $(, $params)*>) -> Self {
+                this.0
             }
         }
     };

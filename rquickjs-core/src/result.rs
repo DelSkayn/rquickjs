@@ -187,10 +187,7 @@ impl Error {
 
     /// Returns whether the error is a from JS to JS type conversion error
     pub fn is_from_js_to_js(&self) -> bool {
-        match self {
-            Self::FromJs { to, .. } if Type::from_str(*to).is_ok() => true,
-            _ => false,
-        }
+        matches!(self, Self::FromJs { to, .. } if Type::from_str(*to).is_ok())
     }
 
     /// Returns whether the error is an into JS conversion error
