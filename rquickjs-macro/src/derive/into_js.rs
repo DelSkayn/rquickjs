@@ -57,7 +57,7 @@ impl IntoJs {
                         _val.set(#content, _data)?;
                         Ok(_val.into_value())
                     },
-                    Untagged => quote! { Ok(#body) },
+                    Untagged { .. } => quote! { Ok(#body) },
                 }
             }
         };
@@ -144,14 +144,18 @@ impl IntoJs {
 
         let unit = {
             match enum_repr {
-                Untagged => {
-                    if let Some(expr) = &variant.discriminant {
-                        quote! { #expr.into_js(_ctx)? }
+                Untagged { constant } => {
+                    if constant {
+                        if let Some(expr) = &variant.discriminant {
+                            quote! { #expr.into_js(_ctx)? }
+                        } else {
+                            quote! { #name.into_js(_ctx)? }
+                        }
                     } else {
-                        quote! { #name.into_js(_ctx)? }
+                        quote! { #lib_crate::Undefined.into_js(_ctx)? }
                     }
                 }
-                InternallyTagged { .. } => quote! { #lib_crate::Object::new(_ctx)? },
+                InternallyTagged { .. } => quote! { #lib_crate::Object::new(_ctx)?.into_value() },
                 _ => quote! { #lib_crate::Value::new_undefined(_ctx) },
             }
         };
@@ -243,7 +247,7 @@ impl IntoJs {
             }
         };
 
-        if enum_repr == Untagged {
+        if matches!(enum_repr, Untagged {..}) {
             quote! { #pattern => #body, }
         } else {
             quote! { #pattern => (#name, #body), }
@@ -293,7 +297,32 @@ mod test {
             }
         };
 
-        untagged_unit_enum IntoJs {
+        enum_externally_tagged IntoJs {
+            enum Enum {
+                A(f32),
+                B { s: String },
+                C,
+            }
+        } {
+            impl<'js> rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let (_tag, _data) = match self {
+                        Enum::A(_0) => ("A", _0.into_js(_ctx)?),
+                        Enum::B { s: __s } => ("B", {
+                            let _val = rquickjs::Object::new(_ctx)?;
+                            _val.set("s", __s)?;
+                            _val.into_value()
+                        }),
+                        Enum::C => ("C", rquickjs::Value::new_undefined(_ctx)),
+                    };
+                    let _val = rquickjs::Object::new(_ctx)?;
+                    _val.set(_tag, _data)?;
+                    Ok(_val.into_value())
+                }
+            }
+        };
+
+        unit_enum_untagged IntoJs {
             #[quickjs(untagged)]
             enum Enum {
                 A,
@@ -310,7 +339,7 @@ mod test {
             }
         };
 
-        untagged_unit_enum_with_discriminant IntoJs {
+        unit_enum_with_discriminant_untagged IntoJs {
             #[quickjs(untagged)]
             enum Enum {
                 A = 1,
@@ -327,7 +356,7 @@ mod test {
             }
         };
 
-        externally_tagged_tuple_enum IntoJs {
+        tuple_enum_externally_tagged IntoJs {
             enum Enum {
                 A(i8, i8),
                 B(String),
@@ -351,7 +380,7 @@ mod test {
             }
         };
 
-        adjacently_tagged_tuple_enum IntoJs {
+        tuple_enum_adjacently_tagged IntoJs {
             #[quickjs(tag, content)]
             enum Enum {
                 A(i8, i8),
@@ -377,7 +406,7 @@ mod test {
             }
         };
 
-        untagged_tuple_enum IntoJs {
+        tuple_enum_untagged IntoJs {
             #[quickjs(untagged)]
             enum Enum {
                 A(i8, i8),
@@ -399,10 +428,11 @@ mod test {
             }
         };
 
-        externally_tagged_enum_with_fields IntoJs {
+        enum_with_fields_externally_tagged IntoJs {
             enum Enum {
                 A { x: i8, y: i8 },
                 B { msg: String },
+                C,
             }
         } {
             impl<'js> rquickjs::IntoJs<'js> for Enum {
@@ -419,6 +449,7 @@ mod test {
                             _val.set("msg", __msg)?;
                             _val.into_value()
                         }),
+                        Enum::C => ("C", rquickjs::Value::new_undefined(_ctx)),
                     };
                     let _val = rquickjs::Object::new(_ctx)?;
                     _val.set(_tag, _data)?;
@@ -427,11 +458,12 @@ mod test {
             }
         };
 
-        internally_tagged_enum_with_fields IntoJs {
+        enum_with_fields_internally_tagged IntoJs {
             #[quickjs(tag = "$")]
             enum Enum {
                 A { x: i8, y: i8 },
                 B { msg: String },
+                C,
             }
         } {
             impl<'js> rquickjs::IntoJs<'js> for Enum {
@@ -448,6 +480,7 @@ mod test {
                             _val.set("msg", __msg)?;
                             _val.into_value()
                         }),
+                        Enum::C => ("C", rquickjs::Object::new(_ctx)?.into_value()),
                     };
                     _val.as_object().unwrap().set("$", _tag)?;
                     Ok(_val)
@@ -455,7 +488,7 @@ mod test {
             }
         };
 
-        untagged_enum_with_fields IntoJs {
+        enum_with_fields_untagged IntoJs {
             #[quickjs(untagged)]
             enum Enum {
                 A { x: i8, y: i8 },
@@ -476,6 +509,33 @@ mod test {
                             _val.set("msg", __msg)?;
                             _val.into_value()
                         },
+                    })
+                }
+            }
+        };
+
+        enum_with_value_and_unit_untagged IntoJs {
+            #[quickjs(untagged)]
+            enum Any {
+                None,
+                Bool(bool),
+                Int(i64),
+                Float(f64),
+                Str(String),
+                List(Vec<Value>),
+                Dict(Map<String, Value>),
+            }
+        } {
+            impl<'js> rquickjs::IntoJs<'js> for Any {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    Ok(match self {
+                        Any::None => rquickjs::Undefined.into_js(_ctx)?,
+                        Any::Bool(_0) => _0.into_js(_ctx)?,
+                        Any::Int(_0) => _0.into_js(_ctx)?,
+                        Any::Float(_0) => _0.into_js(_ctx)?,
+                        Any::Str(_0) => _0.into_js(_ctx)?,
+                        Any::List(_0) => _0.into_js(_ctx)?,
+                        Any::Dict(_0) => _0.into_js(_ctx)?,
                     })
                 }
             }

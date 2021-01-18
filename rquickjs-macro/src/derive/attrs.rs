@@ -1,6 +1,6 @@
 use crate::{Config, Ident, TokenStream};
 use darling::{
-    ast::{Data, Fields, GenericParam, GenericParamExt, Generics},
+    ast::{Data, Fields, GenericParam, GenericParamExt, Generics, Style},
     usage::{CollectTypeParams, GenericsExt, Purpose},
     uses_lifetimes, uses_type_params,
     util::Override,
@@ -65,7 +65,9 @@ pub enum EnumRepr<'a> {
         tag: Cow<'a, str>,
         content: Cow<'a, str>,
     },
-    Untagged,
+    Untagged {
+        constant: bool,
+    },
 }
 
 /// Tha pattern to apply to type parameters in where clause
@@ -277,7 +279,19 @@ impl DataType {
                     "Because `untagged` enum representation is used so the `content` is ignored"
                 );
             }
-            Untagged
+            let mut constant = false;
+            if let Data::Enum(variants) = &self.data {
+                let units = variants
+                    .iter()
+                    .filter(|variant| variant.fields.style == Style::Unit)
+                    .count();
+                if units == variants.len() {
+                    constant = true;
+                } else if units > 1 {
+                    warning!(self.ident, "Multiple unit variants appears");
+                }
+            }
+            Untagged { constant }
         } else if let Some(tag) = &self.tag {
             let tag = tag
                 .as_ref()

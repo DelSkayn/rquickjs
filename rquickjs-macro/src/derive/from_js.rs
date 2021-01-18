@@ -7,12 +7,12 @@ use syn::{parse_quote, Index};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum SourceType {
+    Void,
     Int,
     String,
     Array,
     Object,
     Value,
-    Void,
 }
 
 impl SourceType {
@@ -84,8 +84,12 @@ impl FromJs {
             Enum(variants) => {
                 use EnumRepr::*;
 
-                let body = if input.enum_repr() == Untagged {
-                    self.expand_variants_untagged(input, ident, variants)
+                let body = if let Untagged { constant } = input.enum_repr() {
+                    if constant {
+                        self.expand_variants_constant(input, ident, variants)
+                    } else {
+                        self.expand_variants_untagged(input, ident, variants)
+                    }
                 } else {
                     self.expand_variants_tagged(input, ident, variants)
                 };
@@ -105,7 +109,7 @@ impl FromJs {
                         let _val: #lib_crate::Value = _val.get(#content)?;
                         #body
                     },
-                    Untagged => quote! { #body },
+                    Untagged { .. } => quote! { #body },
                 }
             }
         };
@@ -139,9 +143,28 @@ impl FromJs {
         quote! {
             match _tag.as_str() {
                 #(#variants,)*
-                _ => Err(#lib_crate::Error::new_from_js_message("value", "enum", "Unknown tag")),
+                tag => Err(#lib_crate::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'", tag))),
             }
         }
+    }
+
+    fn expand_variants_constant(
+        &self,
+        input: &DataType,
+        ident: &Ident,
+        variants: &[DataVariant],
+    ) -> TokenStream {
+        let variants = variants.iter().map(|variant| {
+            let variant_ident = &variant.ident;
+            let ctor = quote! { #ident::#variant_ident };
+            if let Some(expr) = &variant.discriminant {
+                (quote! { #expr => Ok(#ctor), }, SourceType::Int)
+            } else {
+                let name = input.name_for(variant).unwrap();
+                (quote! { #name => Ok(#ctor), }, SourceType::String)
+            }
+        });
+        self.expand_variants(ident, variants)
     }
 
     fn expand_variants_untagged(
@@ -154,12 +177,7 @@ impl FromJs {
             if variant.fields.style == Style::Unit {
                 let variant_ident = &variant.ident;
                 let ctor = quote! { #ident::#variant_ident };
-                if let Some(expr) = &variant.discriminant {
-                    (quote! { #expr => Ok(#ctor), }, SourceType::Int)
-                } else {
-                    let name = input.name_for(variant).unwrap();
-                    (quote! { #name => Ok(#ctor), }, SourceType::String)
-                }
+                (quote! { Ok(#ctor) }, SourceType::Void)
             } else {
                 self.expand_fields(input, ident, Some(&variant.ident), &variant.fields)
             }
@@ -381,7 +399,7 @@ mod test {
                         "C" => {
                             Ok(Enum::C)
                         },
-                        _ => Err(rquickjs::Error::new_from_js_message("value", "enum", "Unknown tag")),
+                        tag => Err(rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'", tag))),
                     }
                 }
             }
@@ -406,7 +424,7 @@ mod test {
             }
         };
 
-        unit_enum_untagged_with_discriminant FromJs {
+        unit_enum_with_discriminant_untagged FromJs {
             #[quickjs(untagged)]
             enum Enum {
                 A = 1,
@@ -450,6 +468,73 @@ mod test {
             }
         };
 
+        enum_with_fields_externally_tagged FromJs {
+            enum Enum {
+                A { x: i8, y: i8 },
+                B { msg: String },
+                C,
+            }
+        } {
+            impl<'js> rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                    let (_tag, _val): (String, rquickjs::Value) = _val.get::<rquickjs::Object>()?
+                        .props().next()
+                        .ok_or_else(|| rquickjs::Error::new_from_js_message("value", "enum", "Missing property"))??;
+                    match _tag.as_str() {
+                        "A" => {
+                            let _val: rquickjs::Object = _val.get()?;
+                            Ok(Enum::A {
+                                x: _val.get("x")?,
+                                y: _val.get("y")?,
+                            })
+                        },
+                        "B" => {
+                            let _val: rquickjs::Object = _val.get()?;
+                            Ok(Enum::B {
+                                msg:_val.get("msg")?,
+                            })
+                        },
+                        "C" => { Ok(Enum::C) },
+                        tag => Err(rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'" , tag))),
+                    }
+                }
+            }
+        };
+
+        enum_with_fields_internally_tagged FromJs {
+            #[quickjs(tag = "$")]
+            enum Enum {
+                A { x: i8, y: i8 },
+                B { msg: String },
+                C,
+            }
+        } {
+            impl<'js> rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                    let _tag: String = _val.get::<rquickjs::Object>()?.get("$")?;
+                    match _tag.as_str() {
+                        "A" => {
+                            let _val: rquickjs::Object = _val.get()?;
+                            Ok(Enum::A {
+                                x: _val.get("x")?,
+                                y: _val.get("y")?,
+                            })
+                        },
+                        "B" => {
+                            let _val: rquickjs::Object = _val.get()?;
+                            Ok(Enum::B {
+                                msg: _val.get("msg")?,
+                            })
+                        },
+                        "C" => {
+                            Ok(Enum::C)
+                        },
+                        tag => Err(rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'" , tag))),
+                    }
+                }
+            }
+        };
+
         enum_with_fields_untagged FromJs {
             #[quickjs(untagged)]
             enum Enum {
@@ -473,6 +558,52 @@ mod test {
                         } else {
                             Err(error)
                         })
+                }
+            }
+        };
+
+        enum_with_value_and_unit_untagged FromJs {
+            #[quickjs(untagged)]
+            enum Any {
+                None,
+                Bool(bool),
+                Int(i64),
+                Float(f64),
+                Str(String),
+                List(Vec<Value>),
+                Dict(Map<String, Value>),
+            }
+        } {
+            impl<'js> rquickjs::FromJs<'js> for Any {
+                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                    match _val.type_of() {
+                        rquickjs::Type::Uninitialized | rquickjs::Type::Undefined | rquickjs::Type::Null => { Ok(Any::None) }
+                        _ => {
+                            (|| -> rquickjs::Result<_> {
+                                Ok(Any::Bool(_val.get()?))
+                            })().or_else(|error| if error.is_from_js() {
+                                Ok(Any::Int(_val.get()?))
+                            } else {
+                                Err(error)
+                            }).or_else(|error| if error.is_from_js() {
+                                Ok(Any::Float(_val.get()?))
+                            } else {
+                                Err(error)
+                            }).or_else(|error| if error.is_from_js() {
+                                Ok(Any::Str(_val.get()?))
+                            } else {
+                                Err(error)
+                            }).or_else(|error| if error.is_from_js() {
+                                Ok (Any::List(_val.get()?))
+                            } else {
+                                Err(error)
+                            }).or_else(|error| if error.is_from_js() {
+                                Ok(Any::Dict(_val.get()?))
+                            } else {
+                                Err(error)
+                            })
+                        }
+                    }
                 }
             }
         };
