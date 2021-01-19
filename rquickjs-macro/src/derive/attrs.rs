@@ -426,6 +426,10 @@ pub struct DataField {
     #[darling(default)]
     pub default: Option<Override<Path>>,
 
+    /// Skip serializing this field when values is default
+    #[darling(default)]
+    pub skip_default: bool,
+
     /// The field has references
     #[darling(default)]
     pub has_refs: bool,
@@ -443,6 +447,12 @@ impl DataField {
         !self.skip
     }
 
+    /// Has default value
+    pub fn has_default(&self) -> bool {
+        self.default.is_some()
+    }
+
+    /// Is implicit default
     pub fn is_default(&self) -> bool {
         self.skip
             && self
@@ -456,9 +466,9 @@ impl DataField {
         match &self.default {
             Some(default) if default.is_explicit() => {
                 let default = default.as_ref().explicit().unwrap();
-                quote! { #default() }
+                quote! { #default }
             }
-            _ => quote! { Default::default() },
+            _ => quote! { Default::default },
         }
     }
 }

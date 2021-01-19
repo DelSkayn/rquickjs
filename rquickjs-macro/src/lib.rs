@@ -643,6 +643,23 @@ struct MyStruct {
 }
 ```
 
+### Struct with fields with default values
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+struct MyStruct {
+    #[quickjs(default)]
+    int: i32,
+    #[quickjs(default = "default_text")]
+    text: String,
+}
+
+fn default_text() -> String {
+    "hello".into()
+}
+```
+
 ### Externally tagged enum
 
 ```
@@ -752,6 +769,29 @@ enum MyEnum {
 }
 ```
 
+### Internally tagged enum with fields with defaults
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+#[quickjs(tag = "$")]
+enum MyEnum {
+    Foo {
+        x: f64,
+        #[quickjs(default)]
+        y: f64,
+    },
+    Bar {
+        #[quickjs(default = "default_msg")]
+        msg: String,
+    },
+}
+
+fn default_msg() -> String {
+    "my message".into()
+}
+```
+
 ### Untagged enum with fields
 
 ```
@@ -811,6 +851,7 @@ Attribute                         | Description
 --------------------------------- | ---------------------------
 __`rename = "new_name"`__         | Renames a field
 __`default`__, __`default = "path"`__ | Sets the default for a field
+__`skip_default`__                | Skip named field when default value is set
 __`skip`__                        | Skips this field
 
 # Examples
@@ -840,6 +881,23 @@ struct MyTuple(i32, String);
 struct MyStruct {
     int: i32,
     text: String,
+}
+```
+
+### Struct with fields with default values
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+struct MyStruct {
+    #[quickjs(skip_default)]
+    int: i32,
+    #[quickjs(default = "default_text", skip_default)]
+    text: String,
+}
+
+fn default_text() -> String {
+    "hello".into()
 }
 ```
 
@@ -912,6 +970,29 @@ enum MyEnum {
 enum MyEnum {
     Foo { x: f64, y: f64 },
     Bar { msg: String },
+}
+```
+
+### Internally tagged enum with fields with defaults
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+#[quickjs(tag = "$")]
+enum MyEnum {
+    Foo {
+        x: f64,
+        #[quickjs(skip_default)]
+        y: f64,
+    },
+    Bar {
+        #[quickjs(default = "default_msg", skip_default)]
+        msg: String,
+    },
+}
+
+fn default_msg() -> String {
+    "my message".into()
 }
 ```
 

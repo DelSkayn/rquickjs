@@ -78,21 +78,29 @@ impl IntoJs {
         match fields.style {
             Unit => quote! { Ok(#lib_crate::Value::new_undefined(_ctx)) },
             Struct => {
-                let field_names = fields
-                    .fields
-                    .iter()
-                    .filter(|field| field.is_used())
-                    .map(|field| input.name_for(field).unwrap());
-
-                let field_idents = fields
-                    .fields
-                    .iter()
-                    .filter(|field| field.is_used())
-                    .map(|field| field.ident.as_ref().unwrap());
+                let assignments =
+                    fields
+                        .fields
+                        .iter()
+                        .filter(|field| field.is_used())
+                        .map(|field| {
+                            let name = input.name_for(field).unwrap();
+                            let ident = field.ident.as_ref().unwrap();
+                            if field.skip_default {
+                                let default = field.default();
+                                quote! {
+                                    if PartialEq::ne(&self.#ident, &#default()) {
+                                        _val.set(#name, self.#ident)?;
+                                    }
+                                }
+                            } else {
+                                quote! { _val.set(#name, self.#ident)?; }
+                            }
+                        });
 
                 quote! {
                     let _val = #lib_crate::Object::new(_ctx)?;
-                    #(_val.set(#field_names, self.#field_idents)?;)*
+                    #(#assignments)*
                     Ok(_val.into_value())
                 }
             }
@@ -198,21 +206,25 @@ impl IntoJs {
         let body = match style {
             Unit => quote! { #unit },
             Struct => {
-                let field_names = fields
-                    .iter()
-                    .filter(|field| field.is_used())
-                    .map(|field| input.name_for(field).unwrap());
-
-                let field_aliases = fields
-                    .iter()
-                    .filter(|field| field.is_used())
-                    .map(|field| format_ident!("__{}", field.ident.as_ref().unwrap()))
-                    .collect::<Vec<_>>();
+                let assignments = fields.iter().filter(|field| field.is_used()).map(|field| {
+                    let name = input.name_for(field).unwrap();
+                    let alias = format_ident!("__{}", field.ident.as_ref().unwrap());
+                    if field.skip_default {
+                        let default = field.default();
+                        quote! {
+                            if PartialEq::ne(&#alias, &#default()) {
+                                _val.set(#name, #alias)?;
+                            }
+                        }
+                    } else {
+                        quote! { _val.set(#name, #alias)?; }
+                    }
+                });
 
                 quote! {
                     {
                         let _val = #lib_crate::Object::new(_ctx)?;
-                        #(_val.set(#field_names, #field_aliases)?;)*
+                        #(#assignments)*
                         _val.into_value()
                     }
                 }
@@ -292,6 +304,28 @@ mod test {
                     let _val = rquickjs::Object::new(_ctx)?;
                     _val.set("int", self.int)?;
                     _val.set("text", self.text)?;
+                    Ok(_val.into_value())
+                }
+            }
+        };
+
+        struct_with_fields_default IntoJs {
+            struct Struct {
+                #[quickjs(default, skip_default)]
+                int: i32,
+                #[quickjs(default = "default_text", skip_default)]
+                text: String,
+            }
+        } {
+            impl<'js> rquickjs::IntoJs<'js> for Struct {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let _val = rquickjs::Object::new(_ctx)?;
+                    if PartialEq::ne(&self.int, &Default::default()) {
+                        _val.set("int", self.int)?;
+                    }
+                    if PartialEq::ne(&self.text, &default_text()) {
+                        _val.set("text", self.text)?;
+                    }
                     Ok(_val.into_value())
                 }
             }
@@ -430,7 +464,7 @@ mod test {
 
         enum_with_fields_externally_tagged IntoJs {
             enum Enum {
-                A { x: i8, y: i8 },
+                A { x: i8, #[quickjs(skip_default)] y: i8 },
                 B { msg: String },
                 C,
             }
@@ -441,7 +475,9 @@ mod test {
                         Enum::A { x: __x, y: __y } => ("A", {
                             let _val = rquickjs::Object::new(_ctx)?;
                             _val.set("x", __x)?;
-                            _val.set("y", __y)?;
+                            if PartialEq::ne(& __y, &Default::default()) {
+                                _val.set("y", __y)?;
+                            }
                             _val.into_value()
                         }),
                         Enum::B { msg: __msg } => ("B", {
@@ -462,7 +498,7 @@ mod test {
             #[quickjs(tag = "$")]
             enum Enum {
                 A { x: i8, y: i8 },
-                B { msg: String },
+                B { #[quickjs(default = "default_msg", skip_default)] msg: String },
                 C,
             }
         } {
@@ -477,7 +513,9 @@ mod test {
                         }),
                         Enum::B { msg: __msg } => ("B", {
                             let _val = rquickjs::Object::new(_ctx)?;
-                            _val.set("msg", __msg)?;
+                            if PartialEq::ne(&__msg, &default_msg()) {
+                                _val.set("msg", __msg)?;
+                            }
                             _val.into_value()
                         }),
                         Enum::C => ("C", rquickjs::Object::new(_ctx)?.into_value()),

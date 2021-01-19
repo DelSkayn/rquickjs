@@ -286,10 +286,15 @@ impl FromJs {
                 let fields = fields.fields.iter().map(|field| {
                     let ident = field.ident.as_ref().unwrap();
                     let name = input.name_for(field).unwrap();
+                    let default = field.default();
                     let value = if field.is_used() {
-                        quote! { _val.get(#name)? }
+                        if field.has_default() {
+                            quote! { _val.get::<_, Option<_>>(#name)?.unwrap_or_else(#default) }
+                        } else {
+                            quote! { _val.get(#name)? }
+                        }
                     } else {
-                        field.default()
+                        quote! { #default() }
                     };
                     quote! { #ident: #value }
                 });
@@ -303,7 +308,8 @@ impl FromJs {
                         let index = Index::from(index);
                         quote! { _val.get(#index)? }
                     } else {
-                        field.default()
+                        let default = field.default();
+                        quote! { #default() }
                     };
                     quote! { #value }
                 });
@@ -367,6 +373,25 @@ mod test {
                     Ok(Struct {
                         int: _val.get("int")?,
                         text: _val.get("text")?,
+                    })
+                }
+            }
+        };
+
+        struct_with_fields_default FromJs {
+            struct Struct {
+                #[quickjs(default, skip_default)]
+                int: i32,
+                #[quickjs(default = "default_text", skip_default)]
+                text: String,
+            }
+        } {
+            impl<'js> rquickjs::FromJs<'js> for Struct {
+                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                    let _val: rquickjs::Object = _val.get()?;
+                    Ok(Struct {
+                        int: _val.get::<_, Option<_>>("int")?.unwrap_or_else(Default::default),
+                        text: _val.get::<_, Option<_>>("text")?.unwrap_or_else(default_text),
                     })
                 }
             }
@@ -470,7 +495,7 @@ mod test {
 
         enum_with_fields_externally_tagged FromJs {
             enum Enum {
-                A { x: i8, y: i8 },
+                A { x: i8, #[quickjs(default)] y: i8 },
                 B { msg: String },
                 C,
             }
@@ -485,7 +510,7 @@ mod test {
                             let _val: rquickjs::Object = _val.get()?;
                             Ok(Enum::A {
                                 x: _val.get("x")?,
-                                y: _val.get("y")?,
+                                y: _val.get::<_, Option<_>>("y")?.unwrap_or_else(Default::default),
                             })
                         },
                         "B" => {
@@ -505,7 +530,7 @@ mod test {
             #[quickjs(tag = "$")]
             enum Enum {
                 A { x: i8, y: i8 },
-                B { msg: String },
+                B { #[quickjs(default = "default_msg")] msg: String },
                 C,
             }
         } {
@@ -523,7 +548,7 @@ mod test {
                         "B" => {
                             let _val: rquickjs::Object = _val.get()?;
                             Ok(Enum::B {
-                                msg: _val.get("msg")?,
+                                msg: _val.get::<_, Option<_>>("msg")?.unwrap_or_else(default_msg),
                             })
                         },
                         "C" => {
