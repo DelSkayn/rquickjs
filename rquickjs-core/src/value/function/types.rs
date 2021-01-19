@@ -163,7 +163,7 @@ type_impls! {
     OnceFn<F>(RefCell<Option<F>>): AsRef Deref;
     Method<F>(F): AsRef Deref;
     This<T>(T): into From AsRef AsMut Deref DerefMut;
-    Opt<T>(Option<T>): into From AsRef AsMut Deref DerefMut;
+    Opt<T>(Option<T>): Into From AsRef AsMut Deref DerefMut;
     Rest<T>(Vec<T>): Into From AsRef AsMut Deref DerefMut;
 }
 
