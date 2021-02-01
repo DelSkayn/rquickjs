@@ -108,9 +108,10 @@ pin_project! {
     struct PromiseTask<T> {
         #[pin]
         future: T,
-        context: Context,
         then: Persistent<Function<'static>>,
         catch: Persistent<Function<'static>>,
+        // context should be last for dropping runtime after that `then` and `catch` functions is dropped
+        context: Context,
     }
 }
 
@@ -126,9 +127,9 @@ impl<T> PromiseTask<T> {
         Ok((
             Self {
                 future,
-                context,
                 then,
                 catch,
+                context,
             },
             promise,
         ))
