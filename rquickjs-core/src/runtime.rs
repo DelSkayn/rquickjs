@@ -105,6 +105,10 @@ impl Inner {
 
     pub(crate) fn execute_pending_job(&mut self) -> Result<bool> {
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
+        #[cfg(feature = "parallel")]
+        unsafe {
+            qjs::JS_ResetStackPointerRT(self.rt)
+        };
         let result = unsafe { qjs::JS_ExecutePendingJob(self.rt, ctx_ptr.as_mut_ptr()) };
         if result == 0 {
             // no jobs executed
