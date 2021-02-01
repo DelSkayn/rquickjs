@@ -108,9 +108,10 @@ pin_project! {
     struct PromiseTask<T> {
         #[pin]
         future: T,
-        context: Context,
         then: Persistent<Function<'static>>,
         catch: Persistent<Function<'static>>,
+        // context should be last for dropping runtime after that `then` and `catch` functions is dropped
+        context: Context,
     }
 }
 
@@ -126,9 +127,9 @@ impl<T> PromiseTask<T> {
         Ok((
             Self {
                 future,
-                context,
                 then,
                 catch,
+                context,
             },
             promise,
         ))
@@ -265,6 +266,32 @@ mod test {
 
             let res = res.await.unwrap();
             assert_eq!(res, 5);
+        }
+
+        delayed_fn_swarm (ctx) {
+            let res: Promise<i32> = ctx.with(|ctx| {
+                let global = ctx.globals();
+                global
+                    .set(
+                        "delayed",
+                        Func::from(|msec, data: i32| PromiseJs(delayed(msec, data))),
+                    )
+                    .unwrap();
+                let test: Function = ctx.eval(r#"
+async (iterations, min_parallel, max_parallel, min_timeout, max_timeout) => {
+    for (let i = 0; i < iterations; i++) {
+        let parallel = Math.round(Math.random() * (max_parallel - min_parallel) + min_parallel);
+        let promises = Array.from({length: parallel}, () => delayed(Math.random() * (max_timeout - min_timeout) + min_timeout, 0));
+        await Promise.all(promises);
+    }
+    return 42;
+}
+"#).unwrap();
+                test.call((15, 100, 1000, 0, 15)).unwrap()
+            });
+
+            let res = res.await.unwrap();
+            assert_eq!(res, 42);
         }
 
         delayed_fn (ctx) {

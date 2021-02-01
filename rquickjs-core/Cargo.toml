@@ -26,16 +26,12 @@ optional = true
 version = "^1"
 optional = true
 
-[dependencies.vec-arena]
-version = "^1"
+[dependencies.async-task]
+version = "^4"
 optional = true
 
-[dependencies.cooked-waker]
-version = "^5"
-optional = true
-
-[dependencies.async-executor]
-version = "^1"
+[dependencies.flume]
+version = "^0.10"
 optional = true
 
 [dependencies.pin-project-lite]
@@ -114,7 +110,7 @@ classes = []
 properties = []
 
 # Enable interop between Rust futures and JS Promises
-futures = ["pin-project-lite", "futures-lite", "vec-arena", "cooked-waker", "async-executor"]
+futures = ["pin-project-lite", "futures-lite", "async-task", "flume"]
 
 # Enable Tokio async runtime support
 tokio = ["futures", "tokio-rs"]

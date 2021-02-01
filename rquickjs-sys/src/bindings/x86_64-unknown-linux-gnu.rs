@@ -455,6 +455,9 @@ extern "C" {
     pub fn JS_GetClassProto(ctx: *mut JSContext, class_id: JSClassID) -> JSValue;
 }
 extern "C" {
+    pub fn JS_ResetStackPointerRT(rt: *mut JSRuntime);
+}
+extern "C" {
     pub fn JS_ResetStackPointer(ctx: *mut JSContext);
 }
 extern "C" {

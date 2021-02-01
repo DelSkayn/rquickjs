@@ -43,8 +43,9 @@ pub unsafe fn JS_VALUE_GET_FLOAT64(v: JSValue) -> f64 {
         v: JSValue,
         d: f64,
     }
-    let mut u = U { v };
-    u.v += (JS_FLOAT64_TAG_ADDEND as u64) << 32;
+    let u = U {
+        v: v.wrapping_add((JS_FLOAT64_TAG_ADDEND as u64) << 32),
+    };
     u.d
 }
 
@@ -70,7 +71,7 @@ pub fn __JS_NewFloat64(d: f64) -> JSValue {
         if (u.v & 0x7fffffffffffffff) > 0x7ff0000000000000 {
             JS_NAN
         } else {
-            u.v - ((JS_FLOAT64_TAG_ADDEND as u64) << 32)
+            u.v.wrapping_sub((JS_FLOAT64_TAG_ADDEND as u64) << 32)
         }
     }
 }
