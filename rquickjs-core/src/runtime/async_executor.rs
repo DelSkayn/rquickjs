@@ -1,216 +1,136 @@
-use crate::{Mut, Ref, SendWhenParallel, Weak};
-use cooked_waker::{IntoWaker, WakeRef};
+use crate::{Ref, SendWhenParallel};
+use async_task::Runnable;
+use flume::{r#async::RecvStream, unbounded, Receiver, Sender};
+use futures_lite::Stream;
+use pin_project_lite::pin_project;
 use std::{
     future::Future,
     pin::Pin,
-    sync::Arc,
+    sync::atomic::{AtomicBool, Ordering},
     task::{Context, Poll, Waker},
 };
-use vec_arena::Arena;
 
 #[cfg(feature = "parallel")]
-use async_executor::Executor as AsyncExecutor;
+use async_task::spawn as spawn_task;
 #[cfg(not(feature = "parallel"))]
-use async_executor::LocalExecutor as AsyncExecutor;
+use async_task::spawn_local as spawn_task;
 
-#[cfg(feature = "parallel")]
-use futures_lite::future::Boxed as TaskFuture;
-#[cfg(not(feature = "parallel"))]
-use futures_lite::future::BoxedLocal as TaskFuture;
-
-use futures_lite::FutureExt;
-
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-pub struct Executor(Weak<State>);
+pin_project! {
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub struct Executor {
+        #[pin]
+        tasks: RecvStream<'static, Runnable>,
+        idles: Receiver<Waker>,
+        idle: Ref<AtomicBool>,
+    }
+}
 
 impl Executor {
     pub(crate) fn new() -> (Self, Spawner) {
-        let state = Ref::new(Default::default());
-        (Self(Ref::downgrade(&state)), Spawner(state))
+        let (tasks_tx, tasks_rx) = unbounded();
+        let (idles_tx, idles_rx) = unbounded();
+        let idle = Ref::new(AtomicBool::new(true));
+        (
+            Self {
+                tasks: tasks_rx.into_stream(),
+                idles: idles_rx,
+                idle: idle.clone(),
+            },
+            Spawner {
+                tasks: tasks_tx,
+                idles: idles_tx,
+                idle: idle,
+            },
+        )
     }
 }
 
 impl Future for Executor {
     type Output = ();
 
-    fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        if let Some(state) = self.0.upgrade() {
-            if state.executor.try_tick() {
-                cx.waker().wake_by_ref();
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
+        let result = {
+            if let Poll::Ready(task) = self.as_mut().project().tasks.poll_next(cx) {
+                if let Some(task) = task {
+                    task.run();
+                    cx.waker().wake_by_ref();
+                    return Poll::Pending;
+                } else {
+                    // spawner is closed and queue is empty
+                    Poll::Ready(())
+                }
             } else {
-                state.set_waker(cx.waker().clone());
-                state.idles.lock().retain(|_, waker| {
-                    wake(waker.take());
-                    false
-                });
+                // spawner is alive and queue is empty
+                Poll::Pending
             }
-            Poll::Pending
-        } else {
-            Poll::Ready(())
+        };
+
+        self.idle.store(true, Ordering::SeqCst);
+
+        // wake idle futures
+        while let Ok(waker) = self.idles.try_recv() {
+            waker.wake();
         }
+
+        result
     }
 }
 
-pub struct Spawner(Ref<State>);
+pub struct Spawner {
+    tasks: Sender<Runnable>,
+    idles: Sender<Waker>,
+    idle: Ref<AtomicBool>,
+}
 
 impl Spawner {
     pub fn spawn<F>(&self, future: F)
     where
         F: Future + SendWhenParallel + 'static,
     {
-        let future = Box::pin(async move {
-            future.await;
-        });
-        self.0.executor.spawn(Task::new(&self.0, future)).detach();
-        wake(self.0.get_waker());
+        let (runnable, task) = spawn_task(
+            async move {
+                future.await;
+            },
+            self.schedule(),
+        );
+        task.detach();
+        runnable.schedule();
+    }
+
+    fn schedule(&self) -> impl Fn(Runnable) + Send + Sync + 'static {
+        let tasks = self.tasks.clone();
+        move |runnable: Runnable| {
+            tasks
+                .send(runnable)
+                .expect("Async executor unfortunately destroyed");
+        }
     }
 
     pub fn idle(&self) -> Idle {
-        Idle::new(&self.0)
-    }
-}
-
-#[inline]
-fn wake(waker: Option<Waker>) {
-    if let Some(waker) = waker {
-        waker.wake();
-    }
-}
-
-struct State {
-    executor: AsyncExecutor<'static>,
-    idles: Mut<Arena<Option<Waker>>>,
-    waker: Mut<Option<Waker>>,
-}
-
-impl State {
-    #[inline]
-    fn set_waker(&self, waker: Waker) {
-        *self.waker.lock() = Some(waker);
-    }
-
-    #[inline]
-    fn get_waker(&self) -> Option<Waker> {
-        self.waker.lock().take()
-    }
-}
-
-impl Default for State {
-    fn default() -> Self {
-        Self {
-            executor: AsyncExecutor::new(),
-            idles: Mut::new(Arena::new()),
-            waker: Mut::new(None),
-        }
-    }
-}
-
-struct Task {
-    future: TaskFuture<()>,
-    state: Weak<State>,
-}
-
-impl Task {
-    #[inline]
-    fn new(state: &Ref<State>, future: TaskFuture<()>) -> Self {
-        Task {
-            state: Ref::downgrade(state),
-            future,
-        }
-    }
-}
-
-impl Future for Task {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        let waker = Arc::new(TaskWaker::new(&self.state, cx.waker().clone())).into_waker();
-        let mut cx = Context::from_waker(&waker);
-        self.as_mut().future.poll(&mut cx)
-    }
-}
-
-struct TaskWaker {
-    state: Weak<State>,
-    waker: Mut<Option<Waker>>,
-}
-
-impl TaskWaker {
-    #[inline]
-    fn new(state: &Weak<State>, waker: Waker) -> Self {
-        Self {
-            state: state.clone(),
-            waker: Mut::new(Some(waker)),
-        }
-    }
-
-    #[inline]
-    fn get_state(&self) -> Option<Ref<State>> {
-        self.state.upgrade()
-    }
-
-    #[inline]
-    fn get_waker(&self) -> Option<Waker> {
-        self.waker.lock().take()
-    }
-}
-
-unsafe impl Send for TaskWaker {}
-unsafe impl Sync for TaskWaker {}
-
-impl WakeRef for TaskWaker {
-    fn wake_by_ref(&self) {
-        wake(self.get_waker());
-        if let Some(state) = self.get_state() {
-            wake(state.get_waker());
+        if self.idle.load(Ordering::SeqCst) {
+            Idle::default()
+        } else {
+            Idle::new(&self.idles)
         }
     }
 }
 
 /// The idle awaiting future
-pub struct Idle(Option<IdleData>);
-
-struct IdleData {
-    id: usize,
-    state: Weak<State>,
-}
+#[derive(Default)]
+pub struct Idle(Option<Sender<Waker>>);
 
 impl Idle {
-    fn new(state: &Ref<State>) -> Self {
-        let id = {
-            if state.executor.is_empty() {
-                return Self(None);
-            }
-            state.idles.lock().insert(None)
-        };
-        Self(Some(IdleData {
-            id,
-            state: Ref::downgrade(state),
-        }))
-    }
-}
-
-impl Drop for Idle {
-    fn drop(&mut self) {
-        if let Some(data) = &self.0 {
-            if let Some(state) = data.state.upgrade() {
-                state.idles.lock().remove(data.id);
-            }
-        }
+    fn new(sender: &Sender<Waker>) -> Self {
+        Self(Some(sender.clone()))
     }
 }
 
 impl Future for Idle {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        if let Some(data) = &self.0 {
-            if let Some(state) = data.state.upgrade() {
-                if state.executor.is_empty() {
-                    state.idles.lock().remove(data.id);
-                } else {
-                    state.idles.lock()[data.id] = Some(cx.waker().clone());
-                    return Poll::Pending;
-                }
+        if let Some(sender) = &self.0 {
+            if sender.send(cx.waker().clone()).is_ok() {
+                return Poll::Pending;
             }
         }
         Poll::Ready(())
