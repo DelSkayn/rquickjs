@@ -39,7 +39,7 @@ impl Executor {
             Spawner {
                 tasks: tasks_tx,
                 idles: idles_tx,
-                idle: idle,
+                idle,
             },
         )
     }

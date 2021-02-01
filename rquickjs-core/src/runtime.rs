@@ -67,6 +67,7 @@ pub(crate) struct Inner {
     pub(crate) rt: *mut qjs::JSRuntime,
 
     // To keep rt info alive for the entire duration of the lifetime of rt
+    #[allow(dead_code)]
     info: Option<CString>,
 
     #[cfg(feature = "allocator")]
@@ -74,6 +75,7 @@ pub(crate) struct Inner {
     allocator: Option<AllocatorHolder>,
 
     #[cfg(feature = "loader")]
+    #[allow(dead_code)]
     loader: Option<LoaderHolder>,
 }
 
