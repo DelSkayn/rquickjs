@@ -295,6 +295,7 @@ jobs:
           args: --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         uses: actions-rs/cargo@v1
+        timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
         with:
