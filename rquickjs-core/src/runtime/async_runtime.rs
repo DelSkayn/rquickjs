@@ -9,17 +9,21 @@ pub trait ExecutorSpawner: Sized {
     type JoinHandle;
 
     /// Spawn pending jobs using async runtime spawn function
-    fn spawn_executor(task: Executor) -> Self::JoinHandle;
+    fn spawn_executor(self, task: Executor) -> Self::JoinHandle;
 }
 
 macro_rules! async_rt_impl {
     ($($(#[$meta:meta])* $type:ident { $join_handle:ty, $spawn_local:path, $spawn:path })*) => {
         $(
             $(#[$meta])*
-            impl ExecutorSpawner for crate::$type {
+            pub struct $type;
+
+            $(#[$meta])*
+            impl ExecutorSpawner for $type {
                 type JoinHandle = $join_handle;
 
                 fn spawn_executor(
+                    self,
                     task: Executor,
                 ) -> Self::JoinHandle {
                     #[cfg(not(feature = "parallel"))]
@@ -35,10 +39,34 @@ macro_rules! async_rt_impl {
 }
 
 async_rt_impl! {
+    /// The [`tokio`] async runtime for spawning executors.
     #[cfg(feature = "tokio")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "tokio")))]
     Tokio { tokio::task::JoinHandle<()>, tokio::task::spawn_local, tokio::task::spawn }
+
+    /// The [`async_std`] runtime for spawning executors.
     #[cfg(feature = "async-std")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "async-std")))]
     AsyncStd { async_std::task::JoinHandle<()>, async_std::task::spawn_local, async_std::task::spawn }
+
+    /// The [`smol`] async runtime for spawning executors.
+    #[cfg(all(feature = "smol", feature = "parallel"))]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(all(feature = "smol", feature = "parallel"))))]
+    Smol { smol::Task<()>, smol::spawn_local, smol::spawn }
+}
+
+#[cfg(all(feature = "smol", feature = "parallel"))]
+use smol::Executor as SmolExecutor;
+#[cfg(all(feature = "smol", not(feature = "parallel")))]
+use smol::LocalExecutor as SmolExecutor;
+
+#[cfg(feature = "smol")]
+impl<'a> ExecutorSpawner for &SmolExecutor<'a> {
+    type JoinHandle = smol::Task<()>;
+
+    fn spawn_executor(self, task: Executor) -> Self::JoinHandle {
+        self.spawn(task)
+    }
 }
 
 impl Inner {
@@ -86,8 +114,8 @@ impl Runtime {
     /// Spawn pending jobs and futures executor
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[inline(always)]
-    pub fn spawn_executor<A: ExecutorSpawner>(&self) -> A::JoinHandle {
-        A::spawn_executor(self.run_executor())
+    pub fn spawn_executor<A: ExecutorSpawner>(&self, spawner: A) -> A::JoinHandle {
+        spawner.spawn_executor(self.run_executor())
     }
 
     pub(crate) fn spawn_pending_jobs(&self) {

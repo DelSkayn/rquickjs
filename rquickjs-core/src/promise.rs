@@ -193,7 +193,7 @@ mod test {
                                 let rt = Runtime::new().unwrap();
                                 let $ctx = Context::full(&rt).unwrap();
 
-                                rt.spawn_executor::<Tokio>();
+                                rt.spawn_executor(Tokio);
 
                                 $($content)*
 
@@ -205,7 +205,7 @@ mod test {
                             let rt = Runtime::new().unwrap();
                             let $ctx = Context::full(&rt).unwrap();
 
-                            rt.spawn_executor::<Tokio>();
+                            rt.spawn_executor(Tokio);
 
                             $($content)*
 
@@ -231,7 +231,7 @@ mod test {
                         let rt = Runtime::new().unwrap();
                         let $ctx = Context::full(&rt).unwrap();
 
-                        rt.spawn_executor::<AsyncStd>();
+                        rt.spawn_executor(AsyncStd);
 
                         $($content)*
 

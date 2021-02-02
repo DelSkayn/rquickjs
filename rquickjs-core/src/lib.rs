@@ -12,6 +12,9 @@ extern crate async_std_rs as async_std;
 #[cfg(feature = "tokio")]
 extern crate tokio_rs as tokio;
 
+#[cfg(feature = "smol")]
+extern crate smol_rs as smol;
+
 //#[doc(hidden)]
 pub mod qjs {
     //! Native low-level bindings
@@ -32,6 +35,12 @@ pub use result::{Error, Result};
 mod safe_ref;
 pub(crate) use safe_ref::*;
 mod runtime;
+#[cfg(feature = "async-std")]
+pub use runtime::AsyncStd;
+#[cfg(all(feature = "smol", feature = "parallel"))]
+pub use runtime::Smol;
+#[cfg(feature = "tokio")]
+pub use runtime::Tokio;
 #[cfg(feature = "futures")]
 pub use runtime::{Executor, ExecutorSpawner, Idle};
 pub use runtime::{MemoryUsage, Runtime};
@@ -88,16 +97,6 @@ pub use loader::{
 
 #[cfg(feature = "dyn-load")]
 pub use loader::NativeLoader;
-
-/// A marker type to support the __tokio__ async runtime
-#[cfg(feature = "tokio")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "tokio")))]
-pub struct Tokio;
-
-/// A marker type to support the __async-std__ runtime
-#[cfg(feature = "async-std")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "async-std")))]
-pub struct AsyncStd;
 
 #[cfg(test)]
 pub(crate) fn test_with<'js, F, R>(func: F) -> R

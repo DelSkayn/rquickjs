@@ -317,7 +317,7 @@ pub async fn sleep(msecs: u64) {
 let rt = Runtime::new().unwrap();
 let ctx = Context::full(&rt).unwrap();
 
-rt.spawn_executor::<AsyncStd>();
+rt.spawn_executor(AsyncStd);
 
 ctx.with(|ctx| {
     ctx.globals().init_def::<Sleep>().unwrap();

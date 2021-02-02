@@ -42,8 +42,9 @@
 //! - `loader` adds support for custom ES6 modules resolvers and loaders. The resolvers and loaders should implements [`Resolver`] and [`Loader`] traits respectively and can be plugged in already existing [`Runtime`] before loading modules via [`Runtime::set_loader`]. The resolvers and loaders can be easily combined via tuples. When the previous resolver or loader failed the next one will be applied.
 //! - `dyn-load` adds support for loadable native modules (so/dll/dylib).
 //! - `futures` adds support for async Rust. When enabled the Rust futures can be passed to JS as [ES6 Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) and ES6 Promises can be given back as Rust futures.
-//! - `tokio` adds integration with [`tokio`] async runtime. The method [`Runtime::spawn_executor`] can be used with [`Tokio`] as a parameter to spawn async executor.
-//! - `async-std` adds integration with [`async_std`] runtime. The method [`Runtime::spawn_executor`] can be used with [`AsyncStd`] as a parameter to spawn async executor.
+//! - `tokio` adds integration with [`tokio`] async runtime. The method [`Runtime::spawn_executor`] can be used with [`Tokio`] to spawn async executor.
+//! - `async-std` adds integration with [`async_std`] runtime. The method [`Runtime::spawn_executor`] can be used with [`AsyncStd`] to spawn async executor.
+//! - `smol` adds integrations with [`smol`] async runtime. The method [`Runtime::spawn_executor`] can be used with [`Smol`] to spawn async executor.
 //! - `macro` enables some useful procedural macros which gets Rust/JS interop much easy. An [attribute](#attributes) macros can be applied to functions, constants and modules. An [derive](#derives) macros can be used with structs and enums.
 //!
 //! ## Custom
@@ -105,3 +106,6 @@ extern crate async_std_rs as async_std;
 
 #[cfg(feature = "tokio")]
 extern crate tokio_rs as tokio;
+
+#[cfg(feature = "smol")]
+extern crate smol_rs as smol;
