@@ -27,32 +27,36 @@ It optionally supports mathematical extensions such as big decimal floating poin
 ## Features provided by this crate
 
 - Full integration with async Rust
-  The ES6 Promises can be handled as Rust futures and vice versa
-  Both __Tokio__ and __AsyncStd__ runtimes supported.
-- Powerful data conversion between Rust and JS
-  Many widely used Rust types can be converted to JS and vice versa
+  - The ES6 Promises can be handled as Rust futures and vice versa
+  - Both __Tokio__ and __AsyncStd__ runtimes supported natively
+  - Easy integration with almost any async runtime or executor
+- Flexible data conversion between Rust and JS
+  - Many widely used Rust types can be converted to JS and vice versa
   - `FromJs` and `IntoJs` derive macros can help adapt user defined types too
-- Support for user defined allocators
-  The Runtime can be created using custom allocator
-  Rust-backed allocator is also fully supported
-- Support for user defined module resolvers and loaders which also
+- Support for user-defined allocators
+  - The `Runtime` can be created using custom allocator
+  - Using Rust's global allocator is also fully supported
+- Support for user-defined module resolvers and loaders which also
   can be combined to get more flexible solution for concrete case
-- Support for bundling JS modules as a bytecode using `embed` macros
-- Support for executing deferred JS tasks which can be handled either in sync or async manner
+- Support for bundling JS modules as a bytecode using `embed` macro
+- Support for deferred calling of JS functions
 - Full support of ES6 classes
-  - Rust data types can be used as classes from JS
-  - Data fields can be accessed through object properties
-  - Both instance and static methods is also supported
-  - The properties can be defined with with getters and setters
-  - Support for constants static properties
+  - Rust data types can be represented as JS classes
+  - Data fields can be accessed via object properties
+  - Both static and instance members is also supported
+  - The properties can be defined with getters and setters
+  - Support for constant static properties
   - Support for holding references to JS objects
-    Data type which holds refs should implement `HasRefs` trait to get garbage collector works proper
+    (Data type which holds refs should implement `HasRefs` trait to get garbage collector works properly)
+  - Support for extending defined classes by JS
 - Easy bindings using proc macro
-  The interfacing between JS and Rust became much easy with `bind` macros
+  (The interfacing between JS and Rust became much easy with `bind` macro)
 
-## Mostly stable
+## Development status
 
-This library is mostly stable and ready to use excluding some experimental features like `parallel` which can not works as expected. Use it in your own risk.
+This bindings is feature complete, mostly stable and ready to use.
+The error handling is only thing which may change in the future.
+Some experimental features like `parallel` may not works as expected. Use it for your own risk.
 
 ## License
 

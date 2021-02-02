@@ -52,9 +52,11 @@ It optionally supports mathematical extensions such as big decimal floating poin
 - Easy bindings using proc macro
   (The interfacing between JS and Rust became much easy with `bind` macro)
 
-## Mostly stable
+## Development status
 
-This bindings is mostly stable and ready to use. Some experimental features like `parallel` which may not works as expected. Use it in your own risk.
+This bindings is feature complete, mostly stable and ready to use.
+The error handling is only thing which may change in the future.
+Some experimental features like `parallel` may not works as expected. Use it for your own risk.
 
 ## License
 
