@@ -82,15 +82,15 @@ impl<T> Future for Promise<T> {
 /// Wrapper for futures to convert to JS promises
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[repr(transparent)]
-pub struct PromiseJs<T>(pub T);
+pub struct Promised<T>(pub T);
 
-impl<T> From<T> for PromiseJs<T> {
+impl<T> From<T> for Promised<T> {
     fn from(future: T) -> Self {
         Self(future)
     }
 }
 
-impl<'js, T> IntoJs<'js> for PromiseJs<T>
+impl<'js, T> IntoJs<'js> for Promised<T>
 where
     T: Future + ParallelSend + 'static,
     for<'js_> T::Output: IntoJs<'js_> + 'static,
@@ -258,7 +258,7 @@ mod test {
                 global
                     .set(
                         "delayed",
-                        Func::from(|msec, data: i32| PromiseJs(delayed(msec, data))),
+                        Func::from(|msec, data: i32| Promised(delayed(msec, data))),
                     )
                     .unwrap();
                 ctx.eval("delayed(50, 5)").unwrap()
@@ -274,7 +274,7 @@ mod test {
                 global
                     .set(
                         "delayed",
-                        Func::from(|msec, data: i32| PromiseJs(delayed(msec, data))),
+                        Func::from(|msec, data: i32| Promised(delayed(msec, data))),
                     )
                     .unwrap();
                 let test: Function = ctx.eval(r#"
@@ -300,7 +300,7 @@ async (iterations, min_parallel, max_parallel, min_timeout, max_timeout) => {
                 global
                     .set(
                         "delayed",
-                        Func::from(|msec, data: i32| PromiseJs(delayed(msec, data))),
+                        Func::from(|msec, data: i32| Promised(delayed(msec, data))),
                     )
                     .unwrap();
                 ctx.eval("delayed(50, 2)").unwrap()
@@ -322,7 +322,7 @@ async (iterations, min_parallel, max_parallel, min_timeout, max_timeout) => {
             let res: Promise<i32> = ctx.with(|ctx| {
                 let global = ctx.globals();
                 global
-                    .set("mul2", Func::from(|a, b| PromiseJs(mul2(a, b))))
+                    .set("mul2", Func::from(|a, b| Promised(mul2(a, b))))
                     .unwrap();
                 ctx.eval("mul2(2, 3)").unwrap()
             });
@@ -337,7 +337,7 @@ async (iterations, min_parallel, max_parallel, min_timeout, max_timeout) => {
             ctx.with(|ctx| {
                 let global = ctx.globals();
                 global
-                    .set("doit", Func::from(|| PromiseJs(doit())))
+                    .set("doit", Func::from(|| Promised(doit())))
                     .unwrap();
                 let _ = ctx.eval::<Value, _>("doit()").unwrap();
             });
@@ -349,7 +349,7 @@ async (iterations, min_parallel, max_parallel, min_timeout, max_timeout) => {
             let _res: Promise<()> = ctx.with(|ctx| {
                 let global = ctx.globals();
                 global
-                    .set("doit", Func::from(|| PromiseJs(doit())))
+                    .set("doit", Func::from(|| Promised(doit())))
                     .unwrap();
                 ctx.eval("doit()").unwrap()
             });

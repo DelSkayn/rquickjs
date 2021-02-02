@@ -69,7 +69,7 @@ pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 mod promise;
 
 #[cfg(feature = "futures")]
-pub use promise::{Promise, PromiseJs};
+pub use promise::{Promise, Promised};
 
 #[cfg(feature = "allocator")]
 mod allocator;
