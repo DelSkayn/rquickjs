@@ -13,7 +13,7 @@ use std::{
 /// The marker for the module which is created from text source
 pub struct Script;
 
-/// The marker for the module which is created using `ModuleDef`
+/// The marker for the module which is created using [`ModuleDef`]
 pub struct Native;
 
 /// The marker for the module which is created but not loaded yet

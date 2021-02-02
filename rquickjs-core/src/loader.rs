@@ -249,7 +249,25 @@ loader_impls! {
     A B C D E F G H,
 }
 
+/// The helper macro to impl [`Loader`] traits for generic module kind.
+///
+/// ```ignore
+/// generic_loader! {
+///     // Without bounds and metas
+///     // The `Loader<Script>` trait should be implemented for `MyScriptLoader`
+///     MyScriptLoader: Script,
+///
+///     // With bounds and metas
+///     // The `Loader<Native>` trait should be implemented for `MyModuleLoader<T>`
+///     /// My loader doc comment
+///     #[cfg(feature = "my-module-loader")]
+///     MyModuleLoader<T>: Native {
+///         T: Loader<Native>,
+///     },
+/// }
+/// ```
 #[macro_export]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 macro_rules! generic_loader {
     ($($(#[$meta:meta])* $type:ident $(<$($param:ident),*>)*: $kind:ident $({ $($bound:tt)* })*,)*) => {
         $(

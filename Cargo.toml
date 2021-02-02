@@ -19,6 +19,30 @@ version = "0.1.0"
 path = "./rquickjs-macro"
 optional = true
 
+[dependencies.async-std-rs]
+package = "async-std"
+version = "^1.8"
+optional = true
+default-features = false
+features = ["default", "unstable"]
+
+[dependencies.tokio-rs]
+package = "tokio"
+version = "^1.0"
+optional = true
+default-features = false
+features = ["rt"]
+
+[dependencies.indexmap-rs]
+package = "indexmap"
+version = "^1"
+optional = true
+
+[dependencies.either-rs]
+package = "either"
+version = "^1"
+optional = true
+
 [workspace]
 members = [
     "rquickjs-sys",
@@ -29,7 +53,7 @@ members = [
 ]
 
 [features]
-default = ["exports", "classes"]
+default = ["exports", "classes", "properties"]
 
 # Almost all features excluding "parallel" and support for async runtimes
 full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "macro", "phf"]
@@ -38,10 +62,10 @@ full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "reg
 full-async = ["full", "async-std", "tokio"]
 
 # Enable support for Either type
-either = ["rquickjs-core/either"]
+either = ["rquickjs-core/either", "either-rs"]
 
 # Enable support for IndexMap and IndexSet types type
-indexmap = ["rquickjs-core/indexmap"]
+indexmap = ["rquickjs-core/indexmap", "indexmap-rs"]
 
 # Enable support for perfect hash maps
 phf = ["rquickjs-core/phf", "rquickjs-macro/phf"]
@@ -85,10 +109,10 @@ macro = ["rquickjs-macro"]
 futures = ["rquickjs-core/futures"]
 
 # Enable Tokio async runtime support
-tokio = ["rquickjs-core/tokio"]
+tokio = ["rquickjs-core/tokio", "tokio-rs"]
 
 # Enable Async-std runtime support
-async-std = ["rquickjs-core/async-std"]
+async-std = ["rquickjs-core/async-std", "async-std-rs"]
 
 # Max number of function args
 max-args-7 = ["rquickjs-core/max-args-7"]

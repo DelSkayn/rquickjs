@@ -2,26 +2,6 @@
 //!
 //! The `rquickjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
-//!
-//! # The `Runtime` and `Context` objects
-//!
-//! The main entry point of this library is the [`Runtime`] struct.
-//! It represents the interperter state and is used to create [`Context`]
-//! objects. As the quickjs library does not support threading the runtime is locked behind a
-//! mutex. Multiple threads cannot run as script or create objects from the same runtime at the
-//! same time.
-//! The [`Context`] object represents a global environment and a stack. Contexts of the same runtime
-//! can share javascript objects like in browser between frames of the same origin.
-//!
-//! # Converting Values
-//!
-//! This library has multiple traits for converting to and from javascript.
-//! The [`IntoJs`] trait are used for taking rust values and turning them into javascript values.
-//! The [`FromJs`] is for converting javascript value to rust.
-//! Note that this trait does some automatic coercion.
-//! For values which represent the name of variables or indecies the
-//! trait [`IntoAtom`] is available to convert values to the represention
-//! quickjs requires.
 
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
@@ -32,9 +12,17 @@ extern crate async_std_rs as async_std;
 #[cfg(feature = "tokio")]
 extern crate tokio_rs as tokio;
 
+//#[doc(hidden)]
+pub mod qjs {
+    //! Native low-level bindings
+    pub use rquickjs_sys::*;
+}
+
 #[cfg(feature = "phf")]
 #[doc(hidden)]
-pub use phf;
+pub mod phf {
+    pub use phf::*;
+}
 
 mod markers;
 pub use markers::SendWhenParallel;
@@ -44,9 +32,9 @@ pub use result::{Error, Result};
 mod safe_ref;
 pub(crate) use safe_ref::*;
 mod runtime;
-pub use runtime::Runtime;
 #[cfg(feature = "futures")]
 pub use runtime::{Executor, ExecutorSpawner, Idle};
+pub use runtime::{MemoryUsage, Runtime};
 mod context;
 pub use context::{intrinsic, Context, ContextBuilder, Ctx, Intrinsic, MultiWith};
 mod value;
@@ -76,9 +64,6 @@ mod property;
 pub use property::{Accessor, AsProperty, Property};
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
-
-#[doc(hidden)]
-pub use rquickjs_sys as qjs;
 
 #[cfg(feature = "futures")]
 mod promise;

@@ -16,6 +16,11 @@ use async_task::spawn as spawn_task;
 use async_task::spawn_local as spawn_task;
 
 pin_project! {
+    /// The async executor future
+    ///
+    /// The executor which returning by [`Runtime::run_executor`](crate::Runtime::run_executor).
+    /// It should be spawned using preferred async runtime to get async features works as expected.
+    /// The executor future will be pending until runtime is dropped.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub struct Executor {
         #[pin]

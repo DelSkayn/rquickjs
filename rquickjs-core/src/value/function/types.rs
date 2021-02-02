@@ -6,14 +6,56 @@ use std::{
 };
 
 /// The wrapper for method functions
+///
+/// The method-like functions is functions which get `this` as the first argument. This wrapper allows receive `this` directly as first argument and do not requires using [`This`] for that purpose.
+///
+/// ```
+/// # use rquickjs::{Runtime, Context, Result, Method, Function, This};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx| -> Result<()> {
+/// #
+/// let func = Function::new(ctx, Method(|this: i32, factor: i32| {
+///     this * factor
+/// }))?;
+/// assert_eq!(func.call::<_, i32>((This(3), 2))?, 6);
+/// #
+/// # Ok(())
+/// # }).unwrap();
+/// ```
 #[repr(transparent)]
 pub struct Method<F>(pub F);
 
-/// The wrapper for function to convert into JS
+/// The wrapper for function to convert is into JS
+///
+/// The Rust functions should be wrapped to convert it to JS using [`IntoJs`] trait.
+/// ```
+/// # use rquickjs::{Runtime, Context, Result, Func, Coerced};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx| -> Result<()> {
+/// #
+/// // Anonymous function
+/// ctx.globals().set("sum", Func::from(|a: i32, b: i32| a + b))?;
+/// assert_eq!(ctx.eval::<i32, _>("sum(3, 2)")?, 5);
+/// assert_eq!(ctx.eval::<usize, _>("sum.length")?, 2);
+/// assert!(ctx.eval::<Option<String>, _>("sum.name")?.is_none());
+///
+/// // Named function
+/// ctx.globals().set("prod", Func::new("multiply", |a: i32, b: i32| a * b))?;
+/// assert_eq!(ctx.eval::<i32, _>("prod(3, 2)")?, 6);
+/// assert_eq!(ctx.eval::<usize, _>("prod.length")?, 2);
+/// assert_eq!(ctx.eval::<String, _>("prod.name")?, "multiply");
+/// #
+/// # Ok(())
+/// # }).unwrap();
+/// ```
 #[repr(transparent)]
 pub struct Func<F>(pub F);
 
 /// The wrapper for mutable functions
+///
+/// This wrapper is useful for closures which encloses mutable state.
 #[repr(transparent)]
 pub struct MutFn<F>(RefCell<F>);
 
@@ -24,6 +66,8 @@ impl<F> From<F> for MutFn<F> {
 }
 
 /// The wrapper for once functions
+///
+/// This wrapper is useful for callbacks which can be invoked only once.
 #[repr(transparent)]
 pub struct OnceFn<F>(RefCell<Option<F>>);
 
@@ -34,18 +78,72 @@ impl<F> From<F> for OnceFn<F> {
 }
 
 /// The wrapper to get `this` from input
+///
+/// ```
+/// # use rquickjs::{Runtime, Context, Result, This, Function};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx| -> Result<()> {
+/// #
+/// // Get the `this` value via arguments
+/// let func = Function::new(ctx, |this: This<i32>, factor: i32| {
+///     this.into_inner() * factor
+/// })?;
+/// // Pass the `this` value to a function
+/// assert_eq!(func.call::<_, i32>((This(3), 2))?, 6);
+/// #
+/// # Ok(())
+/// # }).unwrap();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(transparent)]
 pub struct This<T>(pub T);
 
 /// The wrapper to get optional argument from input
 ///
-/// Which is needed because the `Option` implements `FromJs` so requires the argument which may be `undefined`.
+/// The [`Option`] type cannot be used for that purpose because it implements [`FromJs`](crate::FromJs) trait and requires the argument which may be `undefined`.
+///
+/// ```
+/// # use rquickjs::{Runtime, Context, Result, Opt, Function};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx| -> Result<()> {
+/// #
+/// let func = Function::new(ctx, |required: i32, optional: Opt<i32>| {
+///     required * optional.into_inner().unwrap_or(1)
+/// })?;
+/// assert_eq!(func.call::<_, i32>((3,))?, 3);
+/// assert_eq!(func.call::<_, i32>((3, 1))?, 3);
+/// assert_eq!(func.call::<_, i32>((3, 2))?, 6);
+/// #
+/// # Ok(())
+/// # }).unwrap();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 #[repr(transparent)]
 pub struct Opt<T>(pub Option<T>);
 
 /// The wrapper the rest arguments from input
+///
+/// The [`Vec`] type cannot be used for that purpose because it implements [`FromJs`](crate::FromJs) and already used to convert JS arrays.
+///
+/// ```
+/// # use rquickjs::{Runtime, Context, Result, Rest, Function};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx| -> Result<()> {
+/// #
+/// let func = Function::new(ctx, |required: i32, optional: Rest<i32>| {
+///     optional.into_inner().into_iter().fold(required, |prod, arg| prod * arg)
+/// })?;
+/// assert_eq!(func.call::<_, i32>((3,))?, 3);
+/// assert_eq!(func.call::<_, i32>((3, 2))?, 6);
+/// assert_eq!(func.call::<_, i32>((3, 2, 1))?, 6);
+/// assert_eq!(func.call::<_, i32>((3, 2, 1, 4))?, 24);
+/// #
+/// # Ok(())
+/// # }).unwrap();
+/// ```
 #[derive(Clone, Default)]
 pub struct Rest<T>(pub Vec<T>);
 
@@ -61,9 +159,9 @@ macro_rules! type_impls {
 
     (@impls $type:ident[$($params:ident)*]($($fields:tt)*)) => {};
 
-    (@impl into($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+    (@impl into_inner($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
         impl<$param $(, $params)*> $type<$param $(, $params)*> {
-            pub fn into(self) -> $field {
+            pub fn into_inner(self) -> $field {
                 self.0
             }
         }
@@ -162,9 +260,9 @@ type_impls! {
     MutFn<F>(RefCell<F>): AsRef Deref;
     OnceFn<F>(RefCell<Option<F>>): AsRef Deref;
     Method<F>(F): AsRef Deref;
-    This<T>(T): into From AsRef AsMut Deref DerefMut;
-    Opt<T>(Option<T>): Into From AsRef AsMut Deref DerefMut;
-    Rest<T>(Vec<T>): Into From AsRef AsMut Deref DerefMut;
+    This<T>(T): into_inner From AsRef AsMut Deref DerefMut;
+    Opt<T>(Option<T>): into_inner Into From AsRef AsMut Deref DerefMut;
+    Rest<T>(Vec<T>): into_inner Into From AsRef AsMut Deref DerefMut;
 }
 
 impl<T> Rest<T> {
