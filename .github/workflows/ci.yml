@@ -326,7 +326,7 @@ jobs:
             Bindings should be updated to be consistent with latest changes
 
   publish:
-    if: github.repository == 'DelSkayn/rquickjs' && startsWith(github.ref, 'refs/tags/')
+    if: (github.repository == 'DelSkayn/rquickjs' || github.repository == 'katyo/rquickjs') && startsWith(github.ref, 'refs/tags/')
     needs:
       - format
       - doc
