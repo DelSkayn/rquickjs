@@ -9,13 +9,13 @@ pub type Invariant<'a> = PhantomData<Cell<&'a ()>>;
 
 /// The marker trait which requires [`Send`] when `"parallel"` feature is used
 #[cfg(not(feature = "parallel"))]
-pub trait SendWhenParallel {}
+pub trait ParallelSend {}
 
 #[cfg(feature = "parallel")]
-pub trait SendWhenParallel: Send {}
+pub trait ParallelSend: Send {}
 
 #[cfg(not(feature = "parallel"))]
-impl<T> SendWhenParallel for T {}
+impl<T> ParallelSend for T {}
 
 #[cfg(feature = "parallel")]
-impl<T: Send> SendWhenParallel for T {}
+impl<T: Send> ParallelSend for T {}

@@ -7,7 +7,7 @@ use crate::{
 use std::future::Future;
 
 #[cfg(feature = "futures")]
-use crate::SendWhenParallel;
+use crate::ParallelSend;
 
 #[cfg(feature = "registery")]
 use crate::RegisteryKey;
@@ -128,8 +128,8 @@ impl<'js> Ctx<'js> {
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub fn spawn<F, T>(&self, future: F)
     where
-        F: Future<Output = T> + SendWhenParallel + 'static,
-        T: SendWhenParallel + 'static,
+        F: Future<Output = T> + ParallelSend + 'static,
+        T: ParallelSend + 'static,
     {
         let opaque = unsafe { self.get_opaque() };
         opaque.get_spawner().spawn(future);

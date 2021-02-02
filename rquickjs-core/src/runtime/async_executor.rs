@@ -1,4 +1,4 @@
-use crate::{Ref, SendWhenParallel};
+use crate::{ParallelSend, Ref};
 use async_task::Runnable;
 use flume::{r#async::RecvStream, unbounded, Receiver, Sender};
 use futures_lite::Stream;
@@ -90,7 +90,7 @@ pub struct Spawner {
 impl Spawner {
     pub fn spawn<F>(&self, future: F)
     where
-        F: Future + SendWhenParallel + 'static,
+        F: Future + ParallelSend + 'static,
     {
         let (runnable, task) = spawn_task(
             async move {

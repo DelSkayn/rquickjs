@@ -25,7 +25,7 @@ pub mod phf {
 }
 
 mod markers;
-pub use markers::SendWhenParallel;
+pub use markers::ParallelSend;
 mod result;
 use result::{get_exception, handle_exception, handle_panic};
 pub use result::{Error, Result};

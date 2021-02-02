@@ -1,4 +1,4 @@
-use crate::{AsFunction, Ctx, Function, IntoJs, Result, SendWhenParallel, Value};
+use crate::{AsFunction, Ctx, Function, IntoJs, ParallelSend, Result, Value};
 use std::{
     cell::RefCell,
     marker::PhantomData,
@@ -228,7 +228,7 @@ impl<F, A, R> From<F> for Func<(F, PhantomData<(A, R)>)> {
 
 impl<'js, F, A, R> IntoJs<'js> for Func<(F, PhantomData<(A, R)>)>
 where
-    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+    F: AsFunction<'js, A, R> + ParallelSend + 'static,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let data = self.0;
@@ -245,7 +245,7 @@ impl<N, F, A, R> Func<(N, F, PhantomData<(A, R)>)> {
 impl<'js, N, F, A, R> IntoJs<'js> for Func<(N, F, PhantomData<(A, R)>)>
 where
     N: AsRef<str>,
-    F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+    F: AsFunction<'js, A, R> + ParallelSend + 'static,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let data = self.0;

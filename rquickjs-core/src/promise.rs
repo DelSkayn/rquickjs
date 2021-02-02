@@ -1,6 +1,6 @@
 use crate::{
-    Context, Ctx, Error, FromJs, Func, Function, IntoJs, Mut, Object, Persistent, Ref, Result,
-    SendWhenParallel, This, Value,
+    Context, Ctx, Error, FromJs, Func, Function, IntoJs, Mut, Object, ParallelSend, Persistent,
+    Ref, Result, This, Value,
 };
 use pin_project_lite::pin_project;
 use std::{
@@ -40,7 +40,7 @@ impl<T> Default for State<T> {
 
 impl<'js, T> FromJs<'js> for Promise<T>
 where
-    T: FromJs<'js> + SendWhenParallel + 'static,
+    T: FromJs<'js> + ParallelSend + 'static,
 {
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let obj = Object::from_value(value)?;
@@ -92,7 +92,7 @@ impl<T> From<T> for PromiseJs<T> {
 
 impl<'js, T> IntoJs<'js> for PromiseJs<T>
 where
-    T: Future + SendWhenParallel + 'static,
+    T: Future + ParallelSend + 'static,
     for<'js_> T::Output: IntoJs<'js_> + 'static,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
@@ -138,7 +138,7 @@ impl<T> PromiseTask<T> {
 
 impl<T> Future for PromiseTask<T>
 where
-    T: Future + SendWhenParallel + 'static,
+    T: Future + ParallelSend + 'static,
     for<'js_> T::Output: IntoJs<'js_> + 'static,
 {
     type Output = ();

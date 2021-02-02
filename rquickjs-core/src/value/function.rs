@@ -1,6 +1,6 @@
 use crate::{
-    get_exception, handle_exception, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result,
-    SendWhenParallel, Value,
+    get_exception, handle_exception, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object,
+    ParallelSend, Result, Value,
 };
 
 mod args;
@@ -22,7 +22,7 @@ pub struct Function<'js>(pub(crate) Value<'js>);
 impl<'js> Function<'js> {
     pub fn new<F, A, R>(ctx: Ctx<'js>, func: F) -> Result<Self>
     where
-        F: AsFunction<'js, A, R> + SendWhenParallel + 'static,
+        F: AsFunction<'js, A, R> + ParallelSend + 'static,
     {
         let func = JsFunction::new(move |input: &Input<'js>| func.call(input));
         let func = unsafe {

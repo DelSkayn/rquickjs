@@ -1,5 +1,5 @@
 use super::{Executor, Idle, Inner, Opaque, Spawner};
-use crate::{Runtime, SendWhenParallel};
+use crate::{ParallelSend, Runtime};
 use std::future::Future;
 
 /// The trait to spawn execution of pending jobs on async runtime
@@ -115,8 +115,8 @@ impl Runtime {
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub fn spawn<F, T>(&self, future: F)
     where
-        F: Future<Output = T> + SendWhenParallel + 'static,
-        T: SendWhenParallel + 'static,
+        F: Future<Output = T> + ParallelSend + 'static,
+        T: ParallelSend + 'static,
     {
         self.get_spawner().spawn(future);
     }

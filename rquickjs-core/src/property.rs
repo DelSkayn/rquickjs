@@ -1,6 +1,6 @@
 use crate::{
-    get_exception, qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, Result,
-    SendWhenParallel, Undefined, Value,
+    get_exception, qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result,
+    Undefined, Value,
 };
 
 impl<'js> Object<'js> {
@@ -213,7 +213,7 @@ impl<G, S> Accessor<G, S> {
 /// A property with getter only
 impl<'js, G, GA, GR> AsProperty<'js, (GA, GR, (), ())> for Accessor<G, ()>
 where
-    G: AsFunction<'js, GA, GR> + SendWhenParallel + 'static,
+    G: AsFunction<'js, GA, GR> + ParallelSend + 'static,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((
@@ -228,7 +228,7 @@ where
 /// A property with setter only
 impl<'js, S, SA, SR> AsProperty<'js, ((), (), SA, SR)> for Accessor<(), S>
 where
-    S: AsFunction<'js, SA, SR> + SendWhenParallel + 'static,
+    S: AsFunction<'js, SA, SR> + ParallelSend + 'static,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((
@@ -243,8 +243,8 @@ where
 /// A property with getter and setter
 impl<'js, G, GA, GR, S, SA, SR> AsProperty<'js, (GA, GR, SA, SR)> for Accessor<G, S>
 where
-    G: AsFunction<'js, GA, GR> + SendWhenParallel + 'static,
-    S: AsFunction<'js, SA, SR> + SendWhenParallel + 'static,
+    G: AsFunction<'js, GA, GR> + ParallelSend + 'static,
+    S: AsFunction<'js, SA, SR> + ParallelSend + 'static,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((
