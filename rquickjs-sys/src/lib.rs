@@ -3,6 +3,7 @@
 #![allow(non_snake_case)]
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_safety_doc)]
+#![allow(clippy::upper_case_acronyms)]
 
 use std::ptr;
 

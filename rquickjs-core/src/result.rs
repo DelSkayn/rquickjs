@@ -27,7 +27,7 @@ pub enum Error {
     /// String from rquickjs was not UTF-8
     Utf8(Utf8Error),
     /// An io error
-    IO(IoError),
+    Io(IoError),
     /// An exception raised by quickjs itself.
     Exception {
         message: StdString,
@@ -351,7 +351,7 @@ impl Display for Error {
                     }
                 }
             }
-            IO(error) => {
+            Io(error) => {
                 "IO Error: ".fmt(f)?;
                 error.fmt(f)?;
             }
@@ -375,7 +375,7 @@ macro_rules! from_impls {
 from_impls! {
     NulError => InvalidString,
     Utf8Error => Utf8,
-    IoError => IO,
+    IoError => Io,
 }
 
 impl From<FromUtf8Error> for Error {

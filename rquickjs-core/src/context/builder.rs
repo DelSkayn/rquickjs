@@ -60,7 +60,7 @@ pub mod intrinsic {
         /// Add RegExp object support
         RegExp JS_AddIntrinsicRegExp,
         /// Add JSON parse and stringify
-        JSON JS_AddIntrinsicJSON,
+        Json JS_AddIntrinsicJSON,
         /// Add Proxy object support
         Proxy JS_AddIntrinsicProxy,
         /// Add MapSet object support
@@ -95,7 +95,7 @@ pub mod intrinsic {
         StringNormalize,
         RegExpCompiler,
         RegExp,
-        JSON,
+        Json,
         Proxy,
         MapSet,
         TypedArrays,
