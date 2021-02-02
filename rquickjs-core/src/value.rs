@@ -23,6 +23,9 @@ pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
 
+#[cfg(feature = "futures")]
+pub use function::Async;
+
 use std::{fmt, marker::PhantomData, mem, ops::Deref, result::Result as StdResult, str};
 
 /// Any javascript value

@@ -15,6 +15,9 @@ pub use as_func::AsFunction;
 use ffi::JsFunction;
 pub use types::{Func, Method, MutFn, OnceFn, Opt, Rest, This};
 
+#[cfg(feature = "futures")]
+pub use types::Async;
+
 /// Rust representation of a javascript function.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Function<'js>(pub(crate) Value<'js>);

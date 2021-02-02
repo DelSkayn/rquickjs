@@ -532,7 +532,7 @@ mod test {
                 fn init_proto<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
                     exports.set("len", rquickjs::Func::new("len", rquickjs::Method(test::Node::len)))?;
                     exports.set("add", rquickjs::Func::new("add", rquickjs::Method(test::Node::add)))?;
-                    exports.set("run", rquickjs::Func::new("run", rquickjs::Method(|self_| rquickjs::Promised(test::Node::run(self_)))))?;
+                    exports.set("run", rquickjs::Func::new("run", rquickjs::Async(rquickjs::Method(test::Node::run))))?;
                     Ok(())
                 }
             }

@@ -258,7 +258,8 @@ mod test {
                 global
                     .set(
                         "delayed",
-                        Func::from(|msec, data: i32| Promised(delayed(msec, data))),
+                        //Func::from(|msec, data: i32| Promised(delayed(msec, data))),
+                        Func::from(Async(delayed::<i32>)),
                     )
                     .unwrap();
                 ctx.eval("delayed(50, 5)").unwrap()
@@ -274,7 +275,8 @@ mod test {
                 global
                     .set(
                         "delayed",
-                        Func::from(|msec, data: i32| Promised(delayed(msec, data))),
+                        //Func::from(|msec, data: i32| Promised(delayed(msec, data))),
+                        Func::from(Async(delayed::<i32>)),
                     )
                     .unwrap();
                 let test: Function = ctx.eval(r#"

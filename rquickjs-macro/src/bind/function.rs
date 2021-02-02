@@ -88,14 +88,13 @@ impl BindFn1 {
         let lib_crate = &cfg.lib_crate;
 
         let path = &self.src;
-        let bind = if self.async_ {
-            let args = &self.args;
-            quote! { |#(#args),*| #lib_crate::Promised(#path(#(#args),*)) }
+        let bind = if self.method {
+            quote! { #lib_crate::Method(#path) }
         } else {
             quote! { #path }
         };
-        let bind = if self.method {
-            quote! { #lib_crate::Method(#bind) }
+        let bind = if self.async_ {
+            quote! { #lib_crate::Async(#bind) }
         } else {
             bind
         };
@@ -279,7 +278,7 @@ mod test {
 
             impl rquickjs::ObjectDef for Fetch {
                 fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.set("fetch", rquickjs::Func::new("fetch", |url| rquickjs::Promised(fetch(url))))?;
+                    exports.set("fetch", rquickjs::Func::new("fetch", rquickjs::Async(fetch)))?;
                     Ok(())
                 }
             }

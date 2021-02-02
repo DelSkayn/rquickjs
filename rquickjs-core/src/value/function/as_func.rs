@@ -7,6 +7,11 @@ use std::ops::Range;
 #[cfg(feature = "classes")]
 use crate::{Class, ClassDef, Constructor};
 
+#[cfg(feature = "futures")]
+use crate::{Async, Promised};
+#[cfg(feature = "futures")]
+use std::future::Future;
+
 /// The trait to wrap rust function to JS directly
 pub trait AsFunction<'js, A, R> {
     /// The possible range of function arguments
@@ -63,6 +68,32 @@ macro_rules! as_function_impls {
                 }
             }
 
+            // for async Fn() via Async wrapper
+            #[cfg(feature = "futures")]
+            $(#[$meta])*
+            impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<F>
+            where
+                F: Fn($($arg),*) -> R + ParallelSend + 'static,
+                R: Future + ParallelSend + 'static,
+                R::Output: for<'js_> IntoJs<'js_>,
+                $($arg: FromInput<'js>,)*
+            {
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
+                }
+
+                #[allow(unused_mut)]
+                fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
+                    let mut accessor = input.access();
+                    Promised(self(
+                        $($arg::from_input(&mut accessor)?,)*
+                    )).into_js(accessor.ctx())
+                }
+            }
+
             // for FnMut() via MutFn wrapper
             $(#[$meta])*
             impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), R> for MutFn<F>
@@ -86,6 +117,34 @@ macro_rules! as_function_impls {
                     func(
                         $($arg::from_input(&mut accessor)?,)*
                     ).into_js(accessor.ctx())
+                }
+            }
+
+            // for async FnMut() via MutFn wrapper
+            #[cfg(feature = "futures")]
+            $(#[$meta])*
+            impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<MutFn<F>>
+            where
+                F: FnMut($($arg),*) -> R + ParallelSend + 'static,
+                R: Future + ParallelSend + 'static,
+                R::Output: for<'js_> IntoJs<'js_>,
+                $($arg: FromInput<'js>,)*
+            {
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
+                }
+
+                #[allow(unused_mut)]
+                fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
+                    let mut func = self.try_borrow_mut()
+                        .expect("Mutable function callback is already in use! Could it have been called recursively?");
+                    let mut accessor = input.access();
+                    Promised(func(
+                        $($arg::from_input(&mut accessor)?,)*
+                    )).into_js(accessor.ctx())
                 }
             }
 
@@ -117,6 +176,36 @@ macro_rules! as_function_impls {
                 }
             }
 
+            // for async FnOnce() via OnceFn wrapper
+            #[cfg(feature = "futures")]
+            $(#[$meta])*
+            impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<OnceFn<F>>
+            where
+                F: FnOnce($($arg),*) -> R + ParallelSend + 'static,
+                R: Future + ParallelSend + 'static,
+                R::Output: for<'js_> IntoJs<'js_>,
+                $($arg: FromInput<'js>,)*
+            {
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
+                }
+
+                #[allow(unused_mut)]
+                fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
+                    let mut func = self.try_borrow_mut()
+                        .expect("Once function callback is already in use! Could it have been called recursively?");
+                    let func = func.take()
+                        .expect("Once function callback is already was used! Could it have been called twice?");
+                    let mut accessor = input.access();
+                    Promised(func(
+                        $($arg::from_input(&mut accessor)?,)*
+                    )).into_js(accessor.ctx())
+                }
+            }
+
             // for methods via Method wrapper
             $(#[$meta])*
             impl<'js, F, R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), R> for Method<F>
@@ -140,6 +229,34 @@ macro_rules! as_function_impls {
                         This::<T>::from_input(&mut accessor)?.0,
                         $($arg::from_input(&mut accessor)?,)*
                     ).into_js(accessor.ctx())
+                }
+            }
+
+            // for async methods via Method wrapper
+            #[cfg(feature = "futures")]
+            $(#[$meta])*
+            impl<'js, F, R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), Promised<R>> for Async<Method<F>>
+            where
+                F: Fn(T, $($arg),*) -> R + ParallelSend + 'static,
+                R: Future + ParallelSend + 'static,
+                R::Output: for<'js_> IntoJs<'js_>,
+                T: FromJs<'js>,
+                $($arg: FromInput<'js>,)*
+            {
+                #[allow(non_snake_case)]
+                fn num_args() -> Range<usize> {
+                    $(let $arg = $arg::num_args();)*
+                    0usize $(+ $arg.start)* .. 0usize $(.saturating_add($arg.end))*
+                }
+
+                #[allow(unused_mut)]
+                fn call(&self, input: &Input<'js>) -> Result<Value<'js>> {
+                    input.check_num_args::<Self, _, _>()?;
+                    let mut accessor = input.access();
+                    Promised(self(
+                        This::<T>::from_input(&mut accessor)?.0,
+                        $($arg::from_input(&mut accessor)?,)*
+                    )).into_js(accessor.ctx())
                 }
             }
         )*

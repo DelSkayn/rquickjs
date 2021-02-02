@@ -29,8 +29,9 @@ pub struct Method<F>(pub F);
 /// The wrapper for function to convert is into JS
 ///
 /// The Rust functions should be wrapped to convert it to JS using [`IntoJs`] trait.
+///
 /// ```
-/// # use rquickjs::{Runtime, Context, Result, Func, Coerced};
+/// # use rquickjs::{Runtime, Context, Result, Func};
 /// # let rt = Runtime::new().unwrap();
 /// # let ctx = Context::full(&rt).unwrap();
 /// # ctx.with(|ctx| -> Result<()> {
@@ -52,6 +53,27 @@ pub struct Method<F>(pub F);
 /// ```
 #[repr(transparent)]
 pub struct Func<F>(pub F);
+
+/// The wrapper for async functons
+///
+/// This type wraps returned future into [`Promised`](crate::Promised)
+///
+/// ```
+/// # use rquickjs::{Runtime, Context, Result, Function, Async};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx| -> Result<()> {
+/// #
+/// async fn my_func() {}
+/// let func = Function::new(ctx, Async(my_func));
+/// #
+/// # Ok(())
+/// # }).unwrap();
+/// ```
+#[cfg(feature = "futures")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+#[repr(transparent)]
+pub struct Async<F>(pub F);
 
 /// The wrapper for mutable functions
 ///
@@ -263,6 +285,11 @@ type_impls! {
     This<T>(T): into_inner From AsRef AsMut Deref DerefMut;
     Opt<T>(Option<T>): into_inner Into From AsRef AsMut Deref DerefMut;
     Rest<T>(Vec<T>): into_inner Into From AsRef AsMut Deref DerefMut;
+}
+
+#[cfg(feature = "futures")]
+type_impls! {
+    Async<F>(F): AsRef Deref;
 }
 
 impl<T> Rest<T> {
