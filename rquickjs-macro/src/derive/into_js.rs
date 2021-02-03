@@ -127,7 +127,7 @@ impl IntoJs {
                         Ok(_val.into_value())
                     }
                 } else if !array_indexes.is_empty() {
-                    quote! { #(self.#field_indexes.into_js(_ctx)?)* }
+                    quote! { #(self.#field_indexes.into_js(_ctx))* }
                 } else {
                     quote! { Ok(#lib_crate::Value::new_undefined(_ctx)) }
                 }
@@ -276,6 +276,16 @@ mod test {
             impl<'js> rquickjs::IntoJs<'js> for SomeStruct {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
                     Ok(rquickjs::Value::new_undefined(_ctx))
+                }
+            }
+        };
+
+        newtype_struct IntoJs {
+            struct Newtype(i32);
+        } {
+            impl<'js> rquickjs::IntoJs<'js> for Newtype {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    self.0.into_js(_ctx)
                 }
             }
         };
