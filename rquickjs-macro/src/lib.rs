@@ -804,6 +804,35 @@ enum MyEnum {
 }
 ```
 
+### Generic newtype-like struct
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+struct Newtype<T>(pub T);
+```
+
+### Generic struct with fields
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+struct MyStruct<T> {
+    pub tag: i32,
+    pub value: T,
+}
+```
+
+### Generic enum
+
+```
+# use rquickjs::FromJs;
+#[derive(FromJs)]
+enum MyEnum<T> {
+    Foo(T),
+    Bar { value: T, tag: i32 },
+}
+```
  */
 #[proc_macro_error]
 #[proc_macro_derive(FromJs, attributes(quickjs))]
@@ -1008,6 +1037,34 @@ enum MyEnum {
 }
 ```
 
+### Generic newtype-like struct
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+struct Newtype<T>(pub T);
+```
+
+### Generic struct with fields
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+struct MyStruct<T, V> {
+    pub tag: T,
+    pub value: V,
+}
+```
+
+### Generic enum
+
+```
+# use rquickjs::IntoJs;
+#[derive(IntoJs)]
+enum MyEnum<T, V> {
+    Foo(V),
+    Bar { value: V, tag: T },
+}
  */
 #[proc_macro_error]
 #[proc_macro_derive(IntoJs, attributes(quickjs))]
@@ -1212,6 +1269,34 @@ enum MyEnum {
 }
 ```
 
+### Generic newtype-like struct
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+struct Newtype<T>(pub T);
+```
+
+### Generic struct with fields
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+struct MyStruct<T, V> {
+    pub tag: T,
+    pub value: V,
+}
+```
+
+### Generic enum
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+enum MyEnum<T, V> {
+    Foo(V),
+    Bar { value: V, tag: T },
+}
  */
 #[proc_macro_error]
 #[proc_macro_derive(IntoJsByRef, attributes(quickjs))]

@@ -67,7 +67,6 @@ impl FromJs {
 
     pub fn expand(&self, input: &DataType) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
-        let ident = &input.ident;
         let impl_params = input.impl_params(true);
         let type_name = input.type_name();
         let where_clause = input.where_clause(
@@ -78,7 +77,7 @@ impl FromJs {
         use Data::*;
         let body = match &input.data {
             Struct(fields) => {
-                let (body, src) = self.expand_fields(input, ident, None, fields);
+                let (body, src) = self.expand_fields(input, None, fields);
                 src.wrap_value(lib_crate, body)
             }
             Enum(variants) => {
@@ -86,12 +85,12 @@ impl FromJs {
 
                 let body = if let Untagged { constant } = input.enum_repr() {
                     if constant {
-                        self.expand_variants_constant(input, ident, variants)
+                        self.expand_variants_constant(input, variants)
                     } else {
-                        self.expand_variants_untagged(input, ident, variants)
+                        self.expand_variants_untagged(input, variants)
                     }
                 } else {
-                    self.expand_variants_tagged(input, ident, variants)
+                    self.expand_variants_tagged(input, variants)
                 };
 
                 match input.enum_repr() {
@@ -123,17 +122,11 @@ impl FromJs {
         }
     }
 
-    fn expand_variants_tagged(
-        &self,
-        input: &DataType,
-        ident: &Ident,
-        variants: &[DataVariant],
-    ) -> TokenStream {
+    fn expand_variants_tagged(&self, input: &DataType, variants: &[DataVariant]) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
         let variants = variants.iter().map(|variant| {
             let tag = input.name_for(variant).unwrap();
-            let (body, src) =
-                self.expand_fields(input, ident, Some(&variant.ident), &variant.fields);
+            let (body, src) = self.expand_fields(input, Some(&variant.ident), &variant.fields);
             let body = src.wrap_value(lib_crate, body);
             quote! {
                 #tag => { #body }
@@ -148,12 +141,8 @@ impl FromJs {
         }
     }
 
-    fn expand_variants_constant(
-        &self,
-        input: &DataType,
-        ident: &Ident,
-        variants: &[DataVariant],
-    ) -> TokenStream {
+    fn expand_variants_constant(&self, input: &DataType, variants: &[DataVariant]) -> TokenStream {
+        let ident = &input.ident;
         let variants = variants.iter().map(|variant| {
             let variant_ident = &variant.ident;
             let ctor = quote! { #ident::#variant_ident };
@@ -164,33 +153,30 @@ impl FromJs {
                 (quote! { #name => Ok(#ctor), }, SourceType::String)
             }
         });
-        self.expand_variants(ident, variants)
+        self.expand_variants(input, variants)
     }
 
-    fn expand_variants_untagged(
-        &self,
-        input: &DataType,
-        ident: &Ident,
-        variants: &[DataVariant],
-    ) -> TokenStream {
+    fn expand_variants_untagged(&self, input: &DataType, variants: &[DataVariant]) -> TokenStream {
+        let ident = &input.ident;
         let variants = variants.iter().map(|variant| {
             if variant.fields.style == Style::Unit {
                 let variant_ident = &variant.ident;
                 let ctor = quote! { #ident::#variant_ident };
                 (quote! { Ok(#ctor) }, SourceType::Void)
             } else {
-                self.expand_fields(input, ident, Some(&variant.ident), &variant.fields)
+                self.expand_fields(input, Some(&variant.ident), &variant.fields)
             }
         });
-        self.expand_variants(ident, variants)
+        self.expand_variants(input, variants)
     }
 
     fn expand_variants<I: Iterator<Item = (TokenStream, SourceType)>>(
         &self,
-        ident: &Ident,
+        input: &DataType,
         variants: I,
     ) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
+        let ident = &input.ident;
         let mut grouped = HashMap::<_, Vec<_>>::new();
 
         for (body, src) in variants {
@@ -271,10 +257,10 @@ impl FromJs {
     fn expand_fields(
         &self,
         input: &DataType,
-        ident: &Ident,
         variant: Option<&Ident>,
         fields: &Fields<DataField>,
     ) -> (TokenStream, SourceType) {
+        let ident = &input.ident;
         let ctor = variant
             .map(|variant| quote! { #ident::#variant })
             .unwrap_or_else(|| quote! { #ident });
@@ -347,6 +333,19 @@ mod test {
             }
         };
 
+        newtype_struct_generic FromJs {
+            struct Newtype<T>(T);
+        } {
+            impl<'js, T> rquickjs::FromJs<'js> for Newtype<T>
+            where
+                T: rquickjs::FromJs<'js>
+            {
+                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                    Ok(Newtype(_val.get()?))
+                }
+            }
+        };
+
         tuple_struct FromJs {
             struct Struct(i32, String);
         } {
@@ -368,6 +367,27 @@ mod test {
             }
         } {
             impl<'js> rquickjs::FromJs<'js> for Struct {
+                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                    let _val: rquickjs::Object = _val.get()?;
+                    Ok(Struct {
+                        int: _val.get("int")?,
+                        text: _val.get("text")?,
+                    })
+                }
+            }
+        };
+
+        struct_with_fields_generic FromJs {
+            struct Struct<N, T> {
+                int: N,
+                text: T,
+            }
+        } {
+            impl<'js, N, T> rquickjs::FromJs<'js> for Struct<N, T>
+            where
+                T: rquickjs::FromJs<'js>,
+                N: rquickjs::FromJs<'js>
+            {
                 fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
                     let _val: rquickjs::Object = _val.get()?;
                     Ok(Struct {
@@ -568,6 +588,37 @@ mod test {
             }
         } {
             impl<'js> rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                    let _val: rquickjs::Object = _val.get()?;
+                    (|| -> rquickjs::Result<_> {
+                        Ok(Enum::A {
+                            x: _val.get("x")?,
+                            y: _val.get("y")?,
+                        })
+                    })()
+                        .or_else(|error| if error.is_from_js() {
+                            Ok(Enum::B {
+                                msg: _val.get("msg")?,
+                            })
+                        } else {
+                            Err(error)
+                        })
+                }
+            }
+        };
+
+        enum_with_fields_untagged_generic FromJs {
+            #[quickjs(untagged)]
+            enum Enum<N, T> {
+                A { x: N, y: N },
+                B { msg: T },
+            }
+        } {
+            impl<'js, N, T> rquickjs::FromJs<'js> for Enum<N, T>
+            where
+                T: rquickjs::FromJs<'js>,
+                N: rquickjs::FromJs<'js>
+            {
                 fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
                     let _val: rquickjs::Object = _val.get()?;
                     (|| -> rquickjs::Result<_> {

@@ -1,5 +1,5 @@
 use super::{DataField, DataType, DataVariant, EnumRepr};
-use crate::{Config, Ident, TokenStream};
+use crate::{Config, TokenStream};
 use darling::ast::{Data, Fields, Style};
 use quote::{format_ident, quote};
 use syn::{parse_quote, Index};
@@ -15,7 +15,6 @@ impl IntoJs {
 
     pub fn expand(&self, input: &DataType, byref: bool) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
-        let ident = &input.ident;
         let impl_params = input.impl_params(true);
         let type_name = input.type_name();
         let (ref_def, ref_by, ref_of) = if byref {
@@ -34,7 +33,7 @@ impl IntoJs {
             Enum(variants) => {
                 let bodies = variants
                     .iter()
-                    .map(|variant| self.expand_enum_fields(input, ident, variant, &ref_of));
+                    .map(|variant| self.expand_enum_fields(input, variant, &ref_of));
 
                 let body = quote! {
                     match self {
@@ -83,7 +82,7 @@ impl IntoJs {
         ref_of: &TokenStream,
     ) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
-        let ctor = input.type_name();
+        let ctor = &input.ident;
         let style = &fields.style;
         let fields = &fields.fields;
 
@@ -171,11 +170,11 @@ impl IntoJs {
     fn expand_enum_fields(
         &self,
         input: &DataType,
-        ident: &Ident,
         variant: &DataVariant,
         ref_of: &TokenStream,
     ) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
+        let ident = &input.ident;
         let variant_ident = &variant.ident;
         let ctor = quote! { #ident::#variant_ident };
         let name = input.name_for(variant).unwrap();
@@ -346,6 +345,34 @@ mod test {
             }
         };
 
+        newtype_struct_generic IntoJs {
+            struct Newtype<T>(T);
+        } {
+            impl<'js, T> rquickjs::IntoJs<'js> for Newtype<T>
+            where
+                T: rquickjs::IntoJs<'js>
+            {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Newtype(_0) = self;
+                    rquickjs::IntoJs::into_js(_0, _ctx)
+                }
+            }
+        };
+
+        newtype_struct_generic_byref IntoJsByRef {
+            struct Newtype<T>(T);
+        } {
+            impl<'js, T> rquickjs::IntoJs<'js> for &Newtype<T>
+            where
+                for<'r> &'r T: rquickjs::IntoJs<'js>
+            {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Newtype(_0) = self;
+                    rquickjs::IntoJs::into_js(_0, _ctx)
+                }
+            }
+        };
+
         tuple_struct IntoJs {
             struct Struct(i32, String);
         } {
@@ -367,6 +394,48 @@ mod test {
             }
         } {
             impl<'js> rquickjs::IntoJs<'js> for Struct {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Struct { int: __int, text: __text } = self;
+                    let _val = rquickjs::Object::new(_ctx)?;
+                    _val.set("int", __int)?;
+                    _val.set("text", __text)?;
+                    Ok(_val.into_value())
+                }
+            }
+        };
+
+        struct_with_fields_generic IntoJs {
+            struct Struct<N, T> {
+                int: N,
+                text: T,
+            }
+        } {
+            impl<'js, N, T> rquickjs::IntoJs<'js> for Struct<N, T>
+            where
+                T: rquickjs::IntoJs<'js>,
+                N: rquickjs::IntoJs<'js>
+            {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Struct { int: __int, text: __text } = self;
+                    let _val = rquickjs::Object::new(_ctx)?;
+                    _val.set("int", __int)?;
+                    _val.set("text", __text)?;
+                    Ok(_val.into_value())
+                }
+            }
+        };
+
+        struct_with_fields_generic_byref IntoJsByRef {
+            struct Struct<N, T> {
+                int: N,
+                text: T,
+            }
+        } {
+            impl<'js, N, T> rquickjs::IntoJs<'js> for &Struct<N, T>
+            where
+                for<'r> &'r T: rquickjs::IntoJs<'js>,
+                for<'r> &'r N: rquickjs::IntoJs<'js>
+            {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
                     let Struct { int: __int, text: __text } = self;
                     let _val = rquickjs::Object::new(_ctx)?;
@@ -626,6 +695,66 @@ mod test {
             }
         } {
             impl<'js> rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    Ok(match self {
+                        Enum::A { x: __x, y: __y } => {
+                            let _val = rquickjs::Object::new(_ctx)?;
+                            _val.set("x", __x)?;
+                            _val.set("y", __y)?;
+                            _val.into_value()
+                        },
+                        Enum::B { msg: __msg } => {
+                            let _val = rquickjs::Object::new(_ctx)?;
+                            _val.set("msg", __msg)?;
+                            _val.into_value()
+                        },
+                    })
+                }
+            }
+        };
+
+        enum_with_fields_untagged_generic IntoJs {
+            #[quickjs(untagged)]
+            enum Enum<N, T> {
+                A { x: N, y: N },
+                B { msg: T },
+            }
+        } {
+            impl<'js, N, T> rquickjs::IntoJs<'js> for Enum<N, T>
+            where
+                T: rquickjs::IntoJs<'js>,
+                N: rquickjs::IntoJs<'js>
+            {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    Ok(match self {
+                        Enum::A { x: __x, y: __y } => {
+                            let _val = rquickjs::Object::new(_ctx)?;
+                            _val.set("x", __x)?;
+                            _val.set("y", __y)?;
+                            _val.into_value()
+                        },
+                        Enum::B { msg: __msg } => {
+                            let _val = rquickjs::Object::new(_ctx)?;
+                            _val.set("msg", __msg)?;
+                            _val.into_value()
+                        },
+                    })
+                }
+            }
+        };
+
+        enum_with_fields_untagged_generic_byref IntoJsByRef {
+            #[quickjs(untagged)]
+            enum Enum<N, T> {
+                A { x: N, y: N },
+                B { msg: T },
+            }
+        } {
+            impl<'js, N, T> rquickjs::IntoJs<'js> for &Enum<N, T>
+            where
+                for<'r> &'r T: rquickjs::IntoJs<'js>,
+                for<'r> &'r N: rquickjs::IntoJs<'js>
+            {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
                     Ok(match self {
                         Enum::A { x: __x, y: __y } => {

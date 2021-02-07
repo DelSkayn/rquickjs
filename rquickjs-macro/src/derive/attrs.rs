@@ -74,6 +74,7 @@ pub enum EnumRepr<'a> {
 /// `for<$lifetimes> T: $bounds`
 pub struct TypePredicatePattern {
     pub lifetimes: Vec<LifetimeDef>,
+    pub reference: Option<Option<Lifetime>>,
     pub bounds: Vec<TypeParamBound>,
 }
 
@@ -82,30 +83,41 @@ impl TypePredicatePattern {
         let lifetimes = &self.lifetimes;
         let bounds = &self.bounds;
 
-        if lifetimes.is_empty() {
-            quote! { #type_param: #(#bounds)+* }
+        let lifetimes = if lifetimes.is_empty() {
+            quote! {}
         } else {
-            quote! { for<#(#lifetimes),*> #type_param: #(#bounds)+* }
-        }
+            quote! { for<#(#lifetimes),*> }
+        };
+        let reference = self
+            .reference
+            .as_ref()
+            .map(|lifetime| quote! { & #lifetime })
+            .unwrap_or_else(|| quote! {});
+
+        quote! { #lifetimes #reference #type_param: #(#bounds)+* }
     }
 }
 
 impl syn::parse::Parse for TypePredicatePattern {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        use WherePredicate::*;
         match WherePredicate::parse(input)? {
-            Type(pt) => Ok(Self {
+            WherePredicate::Type(pt) => Ok(Self {
                 lifetimes: pt
                     .lifetimes
                     .map(|bound| bound.lifetimes.into_iter().collect())
                     .unwrap_or_else(Vec::new),
+                reference: if let Type::Reference(ref_) = pt.bounded_ty {
+                    Some(ref_.lifetime)
+                } else {
+                    None
+                },
                 bounds: pt.bounds.into_iter().collect(),
             }),
-            Lifetime(lt) => Err(syn::Error::new(
+            WherePredicate::Lifetime(lt) => Err(syn::Error::new(
                 lt.lifetime.apostrophe,
                 "Type predicate required",
             )),
-            Eq(eq) => Err(syn::Error::new(
+            WherePredicate::Eq(eq) => Err(syn::Error::new(
                 eq.eq_token.spans[0],
                 "Type predicate required",
             )),
