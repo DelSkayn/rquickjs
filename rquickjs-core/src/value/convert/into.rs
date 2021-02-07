@@ -20,6 +20,12 @@ impl<'js> IntoJs<'js> for Value<'js> {
     }
 }
 
+impl<'js> IntoJs<'js> for &Value<'js> {
+    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(self.clone())
+    }
+}
+
 impl<'js> IntoJs<'js> for StdString {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         self.as_str().into_js(ctx)

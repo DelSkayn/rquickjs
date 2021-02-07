@@ -1018,6 +1018,210 @@ pub fn into_js(input: TokenStream1) -> TokenStream1 {
     });
     let config = input.config();
     let binder = IntoJs::new(config);
-    let output = binder.expand(&input);
+    let output = binder.expand(&input, false);
+    output.into()
+}
+
+/**
+A macro to derive [`IntoJs`](rquickjs_core::IntoJs) for an arbitrary structured types when it used by reference
+
+# Supported attributes
+
+## Macro attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename_all = "<rule>"`__       | Renames variants and fields by applying renaming rule ("lowercase", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case")
+__`bound = "for<'a> &'a T: Bound"`__          | Overrides type paremters bounds
+__`tag`__, __`tag = "type"`__     | Turns `enum` representation to **internally tagged**
+__`content`__, __`content = "data"`__ | With `tag` turns `enum` representation to **adjacently tagged**
+__`untagged`__                    | Turns `enum` representation to **untagged**
+__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
+
+The default `enum` representation is **externally tagged**.
+
+## Variant attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename = "new_name"`__         | Renames a variant
+__`skip`__                        | Skips this variant
+
+If a `enum` representation is `untagged` the variants with `discriminant` will be represented as a numbers.
+
+## Field attributes
+
+Attribute                         | Description
+--------------------------------- | ---------------------------
+__`rename = "new_name"`__         | Renames a field
+__`default`__, __`default = "path"`__ | Sets the default for a field
+__`skip_default`__                | Skip named field when default value is set
+__`skip`__                        | Skips this field
+
+# Examples
+
+### Unit struct
+
+```
+use rquickjs::IntoJsByRef;
+
+#[derive(IntoJsByRef)]
+struct MyUnit;
+```
+
+### Tuple struct
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+struct MyTuple(i32, String);
+```
+
+### Struct with fields
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+struct MyStruct {
+    int: i32,
+    text: String,
+}
+```
+
+### Struct with fields with default values
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+struct MyStruct {
+    #[quickjs(skip_default)]
+    int: i32,
+    #[quickjs(default = "default_text", skip_default)]
+    text: String,
+}
+
+fn default_text() -> String {
+    "hello".into()
+}
+```
+
+### Untagged unit enum
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+#[quickjs(untagged)]
+enum MyEnum {
+    Foo,
+    Bar,
+}
+```
+
+### Untagged unit enum with discriminant
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+#[quickjs(untagged)]
+#[repr(i32)]
+enum MyEnum {
+    Foo = 1,
+    Bar = 2,
+}
+```
+
+### Externally tagged tuple enum
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Adjacently tagged tuple enum
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+#[quickjs(tag, content = "data")]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Untagged tuple enum
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+#[quickjs(untagged)]
+enum MyEnum {
+    Foo(f64, f64),
+    Bar(String),
+}
+```
+
+### Internally tagged enum with fields
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+#[quickjs(tag = "$")]
+enum MyEnum {
+    Foo { x: f64, y: f64 },
+    Bar { msg: String },
+}
+```
+
+### Internally tagged enum with fields with defaults
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+#[quickjs(tag = "$")]
+enum MyEnum {
+    Foo {
+        x: f64,
+        #[quickjs(skip_default)]
+        y: f64,
+    },
+    Bar {
+        #[quickjs(default = "default_msg", skip_default)]
+        msg: String,
+    },
+}
+
+fn default_msg() -> String {
+    "my message".into()
+}
+```
+
+### Untagged enum with fields
+
+```
+# use rquickjs::IntoJsByRef;
+#[derive(IntoJsByRef)]
+#[quickjs(untagged)]
+enum MyEnum {
+    Foo { x: f64, y: f64 },
+    Bar { msg: String },
+}
+```
+
+ */
+#[proc_macro_error]
+#[proc_macro_derive(IntoJsByRef, attributes(quickjs))]
+pub fn into_js_by_ref(input: TokenStream1) -> TokenStream1 {
+    let input = parse_macro_input!(input);
+    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
+        abort!(input.ident.span(), "IntoJs deriving error: {}", error);
+    });
+    let config = input.config();
+    let binder = IntoJs::new(config);
+    let output = binder.expand(&input, true);
     output.into()
 }

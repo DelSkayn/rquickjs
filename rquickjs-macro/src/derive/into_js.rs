@@ -13,23 +13,28 @@ impl IntoJs {
         Self { config }
     }
 
-    pub fn expand(&self, input: &DataType) -> TokenStream {
+    pub fn expand(&self, input: &DataType, byref: bool) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
         let ident = &input.ident;
         let impl_params = input.impl_params(true);
         let type_name = input.type_name();
+        let (ref_def, ref_by, ref_of) = if byref {
+            (quote! { for<'r> &'r }, quote! { & }, quote! {})
+        } else {
+            (quote! {}, quote! {}, quote! { & })
+        };
         let where_clause = input.where_clause(
-            Some(parse_quote!(T: #lib_crate::IntoJs<'js>)),
+            Some(parse_quote!(#ref_def T: #lib_crate::IntoJs<'js>)),
             Some(parse_quote!(T: Default)),
         );
 
         use Data::*;
         let body = match &input.data {
-            Struct(fields) => self.expand_struct_fields(input, &fields),
+            Struct(fields) => self.expand_struct_fields(input, &fields, &ref_of),
             Enum(variants) => {
                 let bodies = variants
                     .iter()
-                    .map(|variant| self.expand_enum_fields(input, ident, variant));
+                    .map(|variant| self.expand_enum_fields(input, ident, variant, &ref_of));
 
                 let body = quote! {
                     match self {
@@ -63,7 +68,7 @@ impl IntoJs {
         };
 
         quote! {
-            impl<#impl_params> #lib_crate::IntoJs<'js> for #type_name #where_clause {
+            impl<#impl_params> #lib_crate::IntoJs<'js> for #ref_by #type_name #where_clause {
                 fn into_js(self, _ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>> {
                     #body
                 }
@@ -71,34 +76,55 @@ impl IntoJs {
         }
     }
 
-    fn expand_struct_fields(&self, input: &DataType, fields: &Fields<DataField>) -> TokenStream {
+    fn expand_struct_fields(
+        &self,
+        input: &DataType,
+        fields: &Fields<DataField>,
+        ref_of: &TokenStream,
+    ) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
+        let ctor = input.type_name();
+        let style = &fields.style;
+        let fields = &fields.fields;
 
         use Style::*;
-        match fields.style {
+        match style {
             Unit => quote! { Ok(#lib_crate::Value::new_undefined(_ctx)) },
             Struct => {
-                let assignments =
-                    fields
-                        .fields
-                        .iter()
-                        .filter(|field| field.is_used())
-                        .map(|field| {
-                            let name = input.name_for(field).unwrap();
-                            let ident = field.ident.as_ref().unwrap();
-                            if field.skip_default {
-                                let default = field.default();
-                                quote! {
-                                    if PartialEq::ne(&self.#ident, &#default()) {
-                                        _val.set(#name, self.#ident)?;
-                                    }
-                                }
-                            } else {
-                                quote! { _val.set(#name, self.#ident)?; }
+                let field_idents = fields
+                    .iter()
+                    .filter(|field| field.is_used())
+                    .map(|field| field.ident.as_ref().unwrap());
+
+                let field_aliases = fields
+                    .iter()
+                    .filter(|field| field.is_used())
+                    .map(|field| format_ident!("__{}", field.ident.as_ref().unwrap()))
+                    .collect::<Vec<_>>();
+
+                let rest = if field_aliases.len() < fields.len() {
+                    quote! { , .. }
+                } else {
+                    quote! {}
+                };
+
+                let assignments = fields.iter().filter(|field| field.is_used()).map(|field| {
+                    let name = input.name_for(field).unwrap();
+                    let alias = format_ident!("__{}", field.ident.as_ref().unwrap());
+                    if field.skip_default {
+                        let default = field.default();
+                        quote! {
+                            if PartialEq::ne(#ref_of #alias, &#default()) {
+                                _val.set(#name, #alias)?;
                             }
-                        });
+                        }
+                    } else {
+                        quote! { _val.set(#name, #alias)?; }
+                    }
+                });
 
                 quote! {
+                    let #ctor { #(#field_idents: #field_aliases),* #rest } = self;
                     let _val = #lib_crate::Object::new(_ctx)?;
                     #(#assignments)*
                     Ok(_val.into_value())
@@ -106,28 +132,35 @@ impl IntoJs {
             }
             Tuple => {
                 let array_indexes = fields
-                    .fields
                     .iter()
                     .filter(|field| field.is_used())
                     .enumerate()
                     .map(|(index, _)| Index::from(index))
                     .collect::<Vec<_>>();
 
-                let field_indexes = fields
-                    .fields
+                let field_patterns = fields
+                    .iter()
+                    .enumerate()
+                    .map(|(index, _)| format_ident!("_{}", index));
+
+                let field_aliases = fields
                     .iter()
                     .enumerate()
                     .filter(|(_, field)| field.is_used())
-                    .map(|(index, _)| Index::from(index));
+                    .map(|(index, _)| format_ident!("_{}", index));
 
                 if array_indexes.len() > 1 {
                     quote! {
+                        let #ctor(#(#field_patterns),*) = self;
                         let _val = #lib_crate::Array::new(_ctx)?;
-                        #(_val.set(#array_indexes, self.#field_indexes)?;)*
+                        #(_val.set(#array_indexes, #field_aliases)?;)*
                         Ok(_val.into_value())
                     }
                 } else if !array_indexes.is_empty() {
-                    quote! { #(self.#field_indexes.into_js(_ctx))* }
+                    quote! {
+                        let #ctor(#(#field_patterns),*) = self;
+                        #(#lib_crate::IntoJs::into_js(#field_aliases, _ctx))*
+                    }
                 } else {
                     quote! { Ok(#lib_crate::Value::new_undefined(_ctx)) }
                 }
@@ -140,6 +173,7 @@ impl IntoJs {
         input: &DataType,
         ident: &Ident,
         variant: &DataVariant,
+        ref_of: &TokenStream,
     ) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
         let variant_ident = &variant.ident;
@@ -155,12 +189,12 @@ impl IntoJs {
                 Untagged { constant } => {
                     if constant {
                         if let Some(expr) = &variant.discriminant {
-                            quote! { #expr.into_js(_ctx)? }
+                            quote! { #lib_crate::IntoJs::into_js(#expr, _ctx)? }
                         } else {
-                            quote! { #name.into_js(_ctx)? }
+                            quote! { #lib_crate::IntoJs::into_js(#name, _ctx)? }
                         }
                     } else {
-                        quote! { #lib_crate::Undefined.into_js(_ctx)? }
+                        quote! { #lib_crate::Value::new_undefined(_ctx) }
                     }
                 }
                 InternallyTagged { .. } => quote! { #lib_crate::Object::new(_ctx)?.into_value() },
@@ -186,7 +220,7 @@ impl IntoJs {
                     .collect::<Vec<_>>();
 
                 let rest = if field_aliases.len() < fields.len() {
-                    quote! { .. }
+                    quote! { , .. }
                 } else {
                     quote! {}
                 };
@@ -212,7 +246,7 @@ impl IntoJs {
                     if field.skip_default {
                         let default = field.default();
                         quote! {
-                            if PartialEq::ne(&#alias, &#default()) {
+                            if PartialEq::ne(#ref_of #alias, &#default()) {
                                 _val.set(#name, #alias)?;
                             }
                         }
@@ -252,7 +286,7 @@ impl IntoJs {
                         }
                     }
                 } else if !array_indexes.is_empty() {
-                    quote! { #(#field_aliases.into_js(_ctx)?)* }
+                    quote! { #(#lib_crate::IntoJs::into_js(#field_aliases, _ctx)?)* }
                 } else {
                     unit
                 }
@@ -280,12 +314,34 @@ mod test {
             }
         };
 
+        unit_struct_byref IntoJsByRef {
+            struct SomeStruct;
+        } {
+            impl<'js> rquickjs::IntoJs<'js> for &SomeStruct {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    Ok(rquickjs::Value::new_undefined(_ctx))
+                }
+            }
+        };
+
         newtype_struct IntoJs {
             struct Newtype(i32);
         } {
             impl<'js> rquickjs::IntoJs<'js> for Newtype {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    self.0.into_js(_ctx)
+                    let Newtype(_0) = self;
+                    rquickjs::IntoJs::into_js(_0, _ctx)
+                }
+            }
+        };
+
+        newtype_struct_byref IntoJsByRef {
+            struct Newtype(i32);
+        } {
+            impl<'js> rquickjs::IntoJs<'js> for &Newtype {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Newtype(_0) = self;
+                    rquickjs::IntoJs::into_js(_0, _ctx)
                 }
             }
         };
@@ -295,9 +351,10 @@ mod test {
         } {
             impl<'js> rquickjs::IntoJs<'js> for Struct {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Struct(_0, _1) = self;
                     let _val = rquickjs::Array::new(_ctx)?;
-                    _val.set(0, self.0)?;
-                    _val.set(1, self.1)?;
+                    _val.set(0, _0)?;
+                    _val.set(1, _1)?;
                     Ok(_val.into_value())
                 }
             }
@@ -311,9 +368,10 @@ mod test {
         } {
             impl<'js> rquickjs::IntoJs<'js> for Struct {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Struct { int: __int, text: __text } = self;
                     let _val = rquickjs::Object::new(_ctx)?;
-                    _val.set("int", self.int)?;
-                    _val.set("text", self.text)?;
+                    _val.set("int", __int)?;
+                    _val.set("text", __text)?;
                     Ok(_val.into_value())
                 }
             }
@@ -329,12 +387,36 @@ mod test {
         } {
             impl<'js> rquickjs::IntoJs<'js> for Struct {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Struct { int: __int, text: __text } = self;
                     let _val = rquickjs::Object::new(_ctx)?;
-                    if PartialEq::ne(&self.int, &Default::default()) {
-                        _val.set("int", self.int)?;
+                    if PartialEq::ne(&__int, &Default::default()) {
+                        _val.set("int", __int)?;
                     }
-                    if PartialEq::ne(&self.text, &default_text()) {
-                        _val.set("text", self.text)?;
+                    if PartialEq::ne(&__text, &default_text()) {
+                        _val.set("text", __text)?;
+                    }
+                    Ok(_val.into_value())
+                }
+            }
+        };
+
+        struct_with_fields_default_byref IntoJsByRef {
+            struct Struct {
+                #[quickjs(default, skip_default)]
+                int: i32,
+                #[quickjs(default = "default_text", skip_default)]
+                text: String,
+            }
+        } {
+            impl<'js> rquickjs::IntoJs<'js> for &Struct {
+                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                    let Struct { int: __int, text: __text } = self;
+                    let _val = rquickjs::Object::new(_ctx)?;
+                    if PartialEq::ne(__int, &Default::default()) {
+                        _val.set("int", __int)?;
+                    }
+                    if PartialEq::ne(__text, &default_text()) {
+                        _val.set("text", __text)?;
                     }
                     Ok(_val.into_value())
                 }
@@ -351,7 +433,7 @@ mod test {
             impl<'js> rquickjs::IntoJs<'js> for Enum {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
                     let (_tag, _data) = match self {
-                        Enum::A(_0) => ("A", _0.into_js(_ctx)?),
+                        Enum::A(_0) => ("A", rquickjs::IntoJs::into_js(_0, _ctx)?),
                         Enum::B { s: __s } => ("B", {
                             let _val = rquickjs::Object::new(_ctx)?;
                             _val.set("s", __s)?;
@@ -376,8 +458,8 @@ mod test {
             impl<'js> rquickjs::IntoJs<'js> for Enum {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
                     Ok(match self {
-                        Enum::A => "A".into_js(_ctx)?,
-                        Enum::B => "B".into_js(_ctx)?,
+                        Enum::A => rquickjs::IntoJs::into_js("A", _ctx)?,
+                        Enum::B => rquickjs::IntoJs::into_js("B", _ctx)?,
                     })
                 }
             }
@@ -393,8 +475,8 @@ mod test {
             impl<'js> rquickjs::IntoJs<'js> for Enum {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
                     Ok(match self {
-                        Enum::A => 1.into_js(_ctx)?,
-                        Enum::B => 2.into_js(_ctx)?,
+                        Enum::A => rquickjs::IntoJs::into_js(1, _ctx)?,
+                        Enum::B => rquickjs::IntoJs::into_js(2, _ctx)?,
                     })
                 }
             }
@@ -415,7 +497,7 @@ mod test {
                             _val.set(1, _1)?;
                             _val.into_value()
                         }),
-                        Enum::B(_0) => ("B", _0.into_js(_ctx)?),
+                        Enum::B(_0) => ("B", rquickjs::IntoJs::into_js(_0, _ctx)?),
                     };
                     let _val = rquickjs::Object::new(_ctx)?;
                     _val.set(_tag, _data)?;
@@ -440,7 +522,7 @@ mod test {
                             _val.set(1, _1)?;
                             _val.into_value()
                         }),
-                        Enum::B(_0) => ("B", _0.into_js(_ctx)?),
+                        Enum::B(_0) => ("B", rquickjs::IntoJs::into_js(_0, _ctx)?),
                     };
                     let _val = rquickjs::Object::new(_ctx)?;
                     _val.set("tag", _tag)?;
@@ -466,7 +548,7 @@ mod test {
                             _val.set(1, _1)?;
                             _val.into_value()
                         },
-                        Enum::B(_0) => _0.into_js(_ctx)?,
+                        Enum::B(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
                     })
                 }
             }
@@ -577,13 +659,13 @@ mod test {
             impl<'js> rquickjs::IntoJs<'js> for Any {
                 fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
                     Ok(match self {
-                        Any::None => rquickjs::Undefined.into_js(_ctx)?,
-                        Any::Bool(_0) => _0.into_js(_ctx)?,
-                        Any::Int(_0) => _0.into_js(_ctx)?,
-                        Any::Float(_0) => _0.into_js(_ctx)?,
-                        Any::Str(_0) => _0.into_js(_ctx)?,
-                        Any::List(_0) => _0.into_js(_ctx)?,
-                        Any::Dict(_0) => _0.into_js(_ctx)?,
+                        Any::None => rquickjs::Value::new_undefined(_ctx),
+                        Any::Bool(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Int(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Float(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Str(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::List(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Dict(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
                     })
                 }
             }

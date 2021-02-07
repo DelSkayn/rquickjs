@@ -48,6 +48,12 @@ impl<'js> IntoAtom<'js> for StdString {
     }
 }
 
+impl<'js> IntoAtom<'js> for &StdString {
+    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+        Atom::from_str(ctx, self)
+    }
+}
+
 macro_rules! into_atom_impls {
 	  ($($from:ident: $($type:ident)*,)*) => {
 		    $(

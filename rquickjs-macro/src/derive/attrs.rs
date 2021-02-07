@@ -133,18 +133,22 @@ impl DataType {
         config
     }
 
-    /// List of parameters with bounds for implimentation
+    /// List of parameters with bounds for implementation
     /// `impl<...>`
     pub fn impl_params(&self, need_js_lt: bool) -> TokenStream {
         let params = &self.generics.params;
 
-        let has_js_lt = params.iter().any(|param| {
-            if let GenericParam::Lifetime(lt) = param {
-                lt.lifetime.ident == "js"
-            } else {
-                false
-            }
-        });
+        fn has_lifetime(params: &[GenericParam<DataParam>], lifetime: &str) -> bool {
+            params.iter().any(|param| {
+                if let GenericParam::Lifetime(lt) = param {
+                    lt.lifetime.ident == lifetime
+                } else {
+                    false
+                }
+            })
+        }
+
+        let has_js_lt = has_lifetime(&params, "js");
 
         let params = params.iter().map(|param| match param {
             GenericParam::Type(dp) => quote!(#dp),
@@ -185,8 +189,8 @@ impl DataType {
     /// The where clause for implementation
     /// `where ...`
     ///
-    /// - `need_traits` is a type params traits for used fields, typically `FromJs`/`IntoJs`
-    /// - `skip_traits` is a type params traits for skipped fields, typically `Default` for `FromJs`
+    /// - `need_bound` is a type params traits for used fields, typically `FromJs`/`IntoJs`
+    /// - `skip_bound` is a type params traits for skipped fields, typically `Default` for `FromJs`
     pub fn where_clause(
         &self,
         need_bound: Option<TypePredicatePattern>,
