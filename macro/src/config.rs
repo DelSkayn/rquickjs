@@ -25,8 +25,14 @@ impl Default for Config {
 
 impl Config {
     pub fn new() -> Self {
-        let lib_crate = proc_macro_crate::crate_name(&lib_crate())
+        use proc_macro_crate::{crate_name, FoundCrate};
+
+        let lib_crate = crate_name(&lib_crate())
             .unwrap_or_else(|error| abort!("Unable to determine lib crate name: {}", error));
+        let lib_crate = match lib_crate {
+            FoundCrate::Name(name) => name,
+            _ => unreachable!(),
+        };
         Self {
             lib_crate: format_ident!("{}", lib_crate),
             ..Default::default()

@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-sys"
-version = "0.1.0"
+version = "0.1.2"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -11,15 +11,15 @@ categories = ["external-ffi-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [build-dependencies]
-cc = "^1"
+cc = "1"
 
 [build-dependencies.bindgen-rs]
 package = "bindgen"
-version = "^0.57"
+version = "0.59"
 optional = true
 
 [build-dependencies.pretty_env_logger]
-version = "^0.4"
+version = "0.4"
 optional = true
 
 [features]

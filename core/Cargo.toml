@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-core"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2018"
 license = "MIT"
@@ -11,66 +11,66 @@ categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [dependencies.fxhash]
-version = "^0.2"
+version = "0.2"
 optional = true
 
 [dependencies.phf]
-version = "^0.8"
+version = "0.10"
 optional = true
 
 [dependencies.indexmap]
-version = "^1"
+version = "1"
 optional = true
 
 [dependencies.either]
-version = "^1"
+version = "1"
 optional = true
 
 [dependencies.async-task]
-version = "^4"
+version = "4"
 optional = true
 
 [dependencies.flume]
-version = "^0.10"
+version = "0.10"
 optional = true
 
 [dependencies.pin-project-lite]
-version = "^0.2"
+version = "0.2"
 optional = true
 
 [dependencies.futures-lite]
-version = "^1"
+version = "1"
 optional = true
 
 [dependencies.rquickjs-sys]
-version = "0.1.0"
-path = "../rquickjs-sys"
+version = "0.1.2"
+path = "../sys"
 
 [dependencies.tokio-rs]
 package = "tokio"
-version = "^1"
+version = "1"
 optional = true
 default-features = false
 features = ["rt"]
 
 [dependencies.async-std-rs]
 package = "async-std"
-version = "^1"
+version = "1"
 optional = true
 default-features = false
 features = ["default", "unstable"]
 
 [dependencies.smol-rs]
 package = "smol"
-version = "^1"
+version = "1"
 optional = true
 
 [dependencies.dlopen]
-version = "^0.1"
+version = "0.1"
 optional = true
 
 [dependencies.relative-path]
-version = "^1.3"
+version = "1.3"
 optional = true
 
 [features]
@@ -161,17 +161,17 @@ doc-cfg = []
 
 [dev-dependencies.futures-rs]
 package = "futures"
-version = "^0.3"
+version = "0.3"
 
 [dev-dependencies.tokio-rs]
 package = "tokio"
-version = "^1.0"
+version = "1.0"
 default-features = false
 features = ["rt", "time", "macros"]
 
 [dev-dependencies.async-std-rs]
 package = "async-std"
-version = "^1.8"
+version = "1.8"
 default-features = false
 features = ["attributes"]
 

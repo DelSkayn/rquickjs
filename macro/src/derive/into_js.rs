@@ -292,7 +292,7 @@ impl IntoJs {
             }
         };
 
-        if matches!(enum_repr, Untagged {..}) {
+        if matches!(enum_repr, Untagged { .. }) {
             quote! { #pattern => #body, }
         } else {
             quote! { #pattern => (#name, #body), }
