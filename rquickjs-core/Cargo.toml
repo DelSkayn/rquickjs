@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-core"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2018"
 license = "MIT"
@@ -43,7 +43,7 @@ version = "^1"
 optional = true
 
 [dependencies.rquickjs-sys]
-version = "0.1.0"
+version = "0.1.1"
 path = "../rquickjs-sys"
 
 [dependencies.tokio-rs]
