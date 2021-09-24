@@ -72,7 +72,7 @@ impl<'js> Object<'js> {
     where
         T: ObjectDef,
     {
-        T::init(self.0.ctx, &self)
+        T::init(self.0.ctx, self)
     }
 
     /// Create an object using `ObjectDef`

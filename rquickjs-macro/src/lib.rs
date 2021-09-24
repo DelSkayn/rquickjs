@@ -1,7 +1,7 @@
 #[cfg(test)]
 macro_rules! abort {
     ($err:expr) => { panic!($err); };
-    ($fmt:literal $($tts:tt)*) => { panic!("{}", format!($fmt $($tts)*)); };
+    ($fmt:literal $($tts:tt)*) => { panic!("{}", format!($fmt $($tts)*)) };
     ($span:expr, $($tts:tt)*) => { { let _ = $span; panic!("{}", format!($($tts)*)); } };
 }
 
@@ -15,23 +15,23 @@ macro_rules! error {
 #[cfg(test)]
 macro_rules! warning {
     ($err:expr) => { panic!($err); };
-    ($fmt:literal $($tts:tt)*) => { eprintln!("{}", format!($fmt $($tts)*)); };
+    ($fmt:literal $($tts:tt)*) => { eprintln!("{}", format!($fmt $($tts)*)) };
     ($span:expr, $($tts:tt)*) => { { let _ = $span; eprintln!("{}", format!($($tts)*)); } };
 }
 
 #[cfg(not(test))]
 macro_rules! abort {
-    ($($tokens:tt)*) => { proc_macro_error::abort!($($tokens)*); };
+    ($($tokens:tt)*) => { proc_macro_error::abort!($($tokens)*) };
 }
 
 #[cfg(not(test))]
 macro_rules! error {
-    ($($tokens:tt)*) => { proc_macro_error::emit_error!($($tokens)*); };
+    ($($tokens:tt)*) => { proc_macro_error::emit_error!($($tokens)*) };
 }
 
 #[cfg(not(test))]
 macro_rules! warning {
-    ($($tokens:tt)*) => { proc_macro_error::emit_warning!($($tokens)*); };
+    ($($tokens:tt)*) => { proc_macro_error::emit_warning!($($tokens)*) };
 }
 
 #[cfg(test)]
