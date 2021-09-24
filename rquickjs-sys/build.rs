@@ -84,11 +84,6 @@ fn main() {
         defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
     }
 
-    if env::var("CARGO_FEATURE_PARALLEL").is_ok() {
-        patch_files.push("reset_stack_pointer.patch");
-        defines.push(("CONFIG_PARALLEL".into(), None));
-    }
-
     for feature in &features {
         if feature.starts_with("dump-") && env::var(feature_to_cargo(feature)).is_ok() {
             defines.push((feature_to_define(feature), None));
