@@ -1,4 +1,4 @@
-use crate::{qjs, Error, Result, Runtime};
+use crate::{qjs, runtime::Inner, Error, Result, Runtime};
 use std::mem;
 
 mod builder;
@@ -90,12 +90,12 @@ impl Context {
     }
 
     #[cfg(feature = "parallel")]
-    fn reset_stack(&self) {
-        unsafe { qjs::JS_ResetStackPointer(self.ctx) };
+    fn reset_stack(&self, rt: &Inner) {
+        unsafe { qjs::JS_UpdateStackTop(rt.rt) };
     }
 
     #[cfg(not(feature = "parallel"))]
-    fn reset_stack(&self) {}
+    fn reset_stack(&self, rt: &Inner) {}
 
     /// Create a context builder for creating a context with a specific set of intrinsics
     pub fn builder() -> ContextBuilder<()> {
@@ -104,7 +104,7 @@ impl Context {
 
     pub fn enable_big_num_ext(&self, enable: bool) {
         let guard = self.rt.inner.lock();
-        self.reset_stack();
+        self.reset_stack(&*guard);
         unsafe { qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 }) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
@@ -134,7 +134,7 @@ impl Context {
         #[cfg(not(feature = "futures"))]
         {
             let guard = self.rt.inner.lock();
-            self.reset_stack();
+            self.reset_stack(&*guard);
             let ctx = Ctx::new(self);
             let result = f(ctx);
             mem::drop(guard);
@@ -145,7 +145,7 @@ impl Context {
         {
             let (spawn_pending_jobs, result) = {
                 let guard = self.rt.inner.lock();
-                self.reset_stack();
+                self.reset_stack(&*guard);
                 let ctx = Ctx::new(self);
                 let result = f(ctx);
                 (guard.has_spawner() && guard.is_job_pending(), result)
@@ -166,9 +166,9 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         //TODO
-        let guard = match self.rt.inner.try_lock() {
-            Some(x) => x,
-            None => {
+        let guard = match self.rt.inner.lock_poisoned() {
+            Ok(x) => x,
+            Err(e) => {
                 let p = unsafe { &mut *(self.ctx as *const _ as *mut qjs::JSRefCountHeader) };
                 if p.ref_count <= 1 {
                     // Lock was poisened, this should only happen on a panic.
@@ -177,12 +177,12 @@ impl Drop for Context {
                     // following assertion to trigger
                     assert!(std::thread::panicking());
                 }
-                self.reset_stack();
+                self.reset_stack(&*e.get_ref());
                 unsafe { qjs::JS_FreeContext(self.ctx) }
                 return;
             }
         };
-        self.reset_stack();
+        self.reset_stack(&*guard);
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);

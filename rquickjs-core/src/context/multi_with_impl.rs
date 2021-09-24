@@ -23,7 +23,7 @@ macro_rules! impl_multi_with{
                     panic!("Tried to use contexts of different runtimes with eachother");
                 })*
                 let guard = self.0.rt.inner.lock();
-                self.0.reset_stack();
+                self.0.reset_stack(&*guard);
                 let res = f(($(Ctx::new($t),)*));
                 mem::drop(guard);
                 res
