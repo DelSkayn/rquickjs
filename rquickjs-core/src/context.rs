@@ -166,7 +166,7 @@ impl Context {
 impl Drop for Context {
     fn drop(&mut self) {
         //TODO
-        let guard = match self.rt.inner.lock_poisoned() {
+        let guard = match self.rt.inner.try_lock() {
             Ok(x) => x,
             Err(e) => {
                 let p = unsafe { &mut *(self.ctx as *const _ as *mut qjs::JSRefCountHeader) };

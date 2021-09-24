@@ -2,7 +2,7 @@
 use std::cell::RefCell as Cell;
 
 #[cfg(feature = "parallel")]
-use std::sync::{Mutex as Cell, TryLockError};
+use std::sync::{Mutex as Cell};
 
 #[cfg(not(feature = "parallel"))]
 pub use std::{
@@ -43,20 +43,8 @@ impl<T: ?Sized> Mut<T> {
         }
     }
 
-    pub fn try_lock(&self) -> Option<Lock<T>> {
-        #[cfg(not(feature = "parallel"))]
-        {
-            self.0.try_borrow_mut().ok()
-        }
-
-        #[cfg(feature = "parallel")]
-        {
-            self.0.lock().ok()
-        }
-    }
-
     /// Lock the 'mutex' and return the value if the lock is poisoned
-    pub fn lock_poisoned(&self) -> Result<Lock<T>, PoisonError<Lock<T>>> {
+    pub fn try_lock(&self) -> Result<Lock<T>, PoisonError<Lock<T>>> {
         #[cfg(not(feature = "parallel"))]
         {
             Ok(self.lock())
