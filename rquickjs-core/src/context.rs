@@ -95,7 +95,7 @@ impl Context {
     }
 
     #[cfg(not(feature = "parallel"))]
-    fn reset_stack(&self, rt: &Inner) {}
+    fn reset_stack(&self, _rt: &Inner) {}
 
     /// Create a context builder for creating a context with a specific set of intrinsics
     pub fn builder() -> ContextBuilder<()> {

@@ -2,7 +2,7 @@
 use std::cell::RefCell as Cell;
 
 #[cfg(feature = "parallel")]
-use std::sync::{Mutex as Cell};
+use std::sync::Mutex as Cell;
 
 #[cfg(not(feature = "parallel"))]
 pub use std::{
