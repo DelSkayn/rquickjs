@@ -405,6 +405,9 @@ extern "C" {
     pub fn JS_SetMaxStackSize(rt: *mut JSRuntime, stack_size: size_t);
 }
 extern "C" {
+    pub fn JS_UpdateStackTop(rt: *mut JSRuntime);
+}
+extern "C" {
     pub fn JS_NewRuntime2(
         mf: *const JSMallocFunctions,
         opaque: *mut ::std::os::raw::c_void,
