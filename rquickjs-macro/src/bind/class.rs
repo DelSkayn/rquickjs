@@ -193,12 +193,12 @@ impl Binder {
             return;
         }
 
-        self.identify(&ident);
+        self.identify(ident);
 
         let name = name.unwrap_or_else(|| ident.to_string());
 
         self.with_dir(ident, |this| {
-            this.with_item::<BindClass, _>(&ident, &name, |this| {
+            this.with_item::<BindClass, _>(ident, &name, |this| {
                 this.update_class(ident, &name, has_refs, cloneable);
 
                 use Fields::*;
@@ -243,12 +243,12 @@ impl Binder {
             return;
         }
 
-        self.identify(&ident);
+        self.identify(ident);
 
         let name = name.unwrap_or_else(|| ident.to_string());
 
         self.with_dir(ident, |this| {
-            this.with_item::<BindClass, _>(&ident, &name, |this| {
+            this.with_item::<BindClass, _>(ident, &name, |this| {
                 this.update_class(ident, &name, has_refs, cloneable);
 
                 // TODO support for variant fields
@@ -375,12 +375,12 @@ impl Binder {
             return;
         };
 
-        self.identify(&ident);
+        self.identify(ident);
 
         let name = name.unwrap_or_else(|| ident.to_string());
 
         self.with_dir(ident, |this| {
-            this.with_item::<BindClass, _>(&ident, &name, |this| {
+            this.with_item::<BindClass, _>(ident, &name, |this| {
                 this.update_class(ident, &name, has_refs, cloneable);
 
                 this.bind_impl_items(items);

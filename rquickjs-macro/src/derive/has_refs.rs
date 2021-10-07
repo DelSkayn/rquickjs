@@ -22,7 +22,7 @@ impl HasRefs {
 
         use Data::*;
         let body = match &input.data {
-            Struct(fields) => self.expand_fields(ident, None, &fields),
+            Struct(fields) => self.expand_fields(ident, None, fields),
             Enum(variants) => {
                 let bodies = variants.iter().map(|variant| {
                     self.expand_fields(ident, Some(&variant.ident), &variant.fields)

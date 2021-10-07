@@ -232,6 +232,8 @@ impl<'js> Function<'js> {
 mod test {
     use crate::*;
 
+    use approx::assert_abs_diff_eq;
+
     #[test]
     fn call_js_fn_with_no_args_and_no_return() {
         test_with(|ctx| {
@@ -410,12 +412,14 @@ mod test {
 
     #[test]
     fn const_callback() {
-        use std::sync::{Arc, Mutex};
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::Arc;
+
         test_with(|ctx| {
-            let called = Arc::new(Mutex::new(false));
+            let called = Arc::new(AtomicBool::new(false));
             let called_clone = called.clone();
             let f = Function::new(ctx, move || {
-                (*called_clone.lock().unwrap()) = true;
+                called_clone.store(true, Ordering::Release);
             })
             .unwrap();
             f.set_name("test").unwrap();
@@ -423,7 +427,7 @@ mod test {
             let eval: Function = ctx.eval("a => { a() }").unwrap();
             eval.call::<_, ()>((f.clone(),)).unwrap();
             f.call::<_, ()>(()).unwrap();
-            assert!(*called.lock().unwrap());
+            assert!(called.load(Ordering::Acquire));
 
             let name: StdString = f.clone().into_object().get("name").unwrap();
             assert_eq!(name, "test");
@@ -519,7 +523,7 @@ mod test {
                 .unwrap();
 
             let r: f64 = ctx.eval("neg(add(one(), 2))").unwrap();
-            assert_eq!(r, -3.0);
+            assert_abs_diff_eq!(r, -3.0);
         })
     }
 
@@ -616,11 +620,11 @@ mod test {
                 .unwrap();
 
             let r: f64 = ctx.eval("calc()").unwrap();
-            assert_eq!(r, 1.0);
+            assert_abs_diff_eq!(r, 1.0);
             let r: f64 = ctx.eval("calc(2)").unwrap();
-            assert_eq!(r, 3.0);
+            assert_abs_diff_eq!(r, 3.0);
             let r: f64 = ctx.eval("calc(2, 3)").unwrap();
-            assert_eq!(r, 9.0);
+            assert_abs_diff_eq!(r, 9.0);
         })
     }
 

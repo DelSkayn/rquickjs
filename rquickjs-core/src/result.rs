@@ -135,7 +135,7 @@ impl Error {
 
     /// Returns whether the error is a quickjs generated exception.
     pub fn is_exception(&self) -> bool {
-        matches!(self, Error::Exception{..})
+        matches!(self, Error::Exception { .. })
     }
 
     /// Create from JS conversion error

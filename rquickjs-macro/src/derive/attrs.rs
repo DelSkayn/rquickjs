@@ -160,7 +160,7 @@ impl DataType {
             })
         }
 
-        let has_js_lt = has_lifetime(&params, "js");
+        let has_js_lt = has_lifetime(params, "js");
 
         let params = params.iter().map(|param| match param {
             GenericParam::Type(dp) => quote!(#dp),
@@ -514,6 +514,7 @@ mod test {
     macro_rules! tests {
         ($c:ident { $($s:tt)* } ($var:ident) { $($d:tt)* }; $($r:tt)*) => {
             #[test]
+            #[allow(clippy::redundant_closure_call)]
             fn $c() {
                 let input = syn::parse_quote! { $($s)* };
                 let output = DataType::from_derive_input(&input).unwrap();

@@ -229,6 +229,7 @@ mod test {
     }
 
     #[test]
+    #[allow(clippy::bool_assert_comparison)]
     fn into_iter() {
         test_with(|ctx| {
             let val: Array = ctx

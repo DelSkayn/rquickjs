@@ -587,6 +587,8 @@ macro_rules! class_def {
 mod test {
     use crate::*;
 
+    use approx::assert_abs_diff_eq;
+
     #[test]
     fn class_basics() {
         struct Foo(pub StdString);
@@ -691,7 +693,7 @@ mod test {
                     "#,
                 )
                 .unwrap();
-            assert_eq!(res, 6.0);
+            assert_abs_diff_eq!(res, 6.0);
 
             let res: f64 = ctx
                 .eval(
@@ -710,7 +712,7 @@ mod test {
                     "#,
                 )
                 .unwrap();
-            assert_eq!(res, 17.0);
+            assert_abs_diff_eq!(res, 17.0);
         });
     }
 
