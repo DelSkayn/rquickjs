@@ -14,6 +14,7 @@ fn main() {
     let resolver = (
         BuiltinResolver::default()
             .with_module("bundle/script_module")
+            .with_module("native_module")
             .with_module("bundle/native_module"),
         FileResolver::default()
             .with_path("./")
@@ -22,7 +23,9 @@ fn main() {
     );
     let loader = (
         BuiltinLoader::default().with_module("bundle/script_module", SCRIPT_MODULE),
-        ModuleLoader::default().with_module("bundle/native_module", NativeModule),
+        ModuleLoader::default()
+            .with_module("native_module", NativeModule)
+            .with_module("bundle/native_module", NativeModule),
         ScriptLoader::default(),
         NativeLoader::default(),
     );
