@@ -242,7 +242,7 @@ mod test {
             assert_eq!(elems.len(), 3);
             assert_eq!(i8::from_js(ctx, elems[0].clone()).unwrap(), 1);
             assert_eq!(StdString::from_js(ctx, elems[1].clone()).unwrap(), "abcd");
-            assert_eq!(bool::from_js(ctx, elems[2].clone()).unwrap(), true);
+            assert!(bool::from_js(ctx, elems[2].clone()).unwrap());
         })
     }
 

@@ -109,7 +109,7 @@ impl LoaderHolder {
         let base = base.to_str()?;
         let name = name.to_str()?;
 
-        let name = opaque.resolver.resolve(ctx, &base, &name)?;
+        let name = opaque.resolver.resolve(ctx, base, name)?;
 
         // We should transfer ownership of this string to QuickJS
         Ok(unsafe { qjs::js_strndup(ctx.ctx, name.as_ptr() as _, name.as_bytes().len() as _) })
@@ -126,7 +126,7 @@ impl LoaderHolder {
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::normalize(loader, ctx, &base, &name).unwrap_or_else(|error| {
+        Self::normalize(loader, ctx, base, name).unwrap_or_else(|error| {
             error.throw(ctx);
             ptr::null_mut()
         })
@@ -152,7 +152,7 @@ impl LoaderHolder {
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::load(loader, ctx, &name).unwrap_or_else(|error| {
+        Self::load(loader, ctx, name).unwrap_or_else(|error| {
             error.throw(ctx);
             ptr::null_mut()
         })

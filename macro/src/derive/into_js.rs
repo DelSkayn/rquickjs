@@ -29,7 +29,7 @@ impl IntoJs {
 
         use Data::*;
         let body = match &input.data {
-            Struct(fields) => self.expand_struct_fields(input, &fields, &ref_of),
+            Struct(fields) => self.expand_struct_fields(input, fields, &ref_of),
             Enum(variants) => {
                 let bodies = variants
                     .iter()

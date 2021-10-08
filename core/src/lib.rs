@@ -99,7 +99,7 @@ pub use loader::{
 pub use loader::NativeLoader;
 
 #[cfg(test)]
-pub(crate) fn test_with<'js, F, R>(func: F) -> R
+pub(crate) fn test_with<F, R>(func: F) -> R
 where
     F: FnOnce(Ctx) -> R,
 {

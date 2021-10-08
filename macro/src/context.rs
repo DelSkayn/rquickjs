@@ -4,7 +4,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use syn::{PathArguments, PathSegment};
 
 /// The source for import from
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
 pub struct Source(Vec<PathSegment>);
 
 impl Source {
@@ -39,12 +39,6 @@ impl Display for Source {
             }
         }
         Ok(())
-    }
-}
-
-impl Default for Source {
-    fn default() -> Self {
-        Self(Vec::default())
     }
 }
 

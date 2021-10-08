@@ -6,7 +6,7 @@ use std::collections::HashSet;
 ///
 /// This resolver can also be used as the nested backing resolver in user-defined resolvers.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BuiltinResolver {
     modules: HashSet<String>,
 }
@@ -22,14 +22,6 @@ impl BuiltinResolver {
     pub fn with_module<P: Into<String>>(mut self, path: P) -> Self {
         self.add_module(path);
         self
-    }
-}
-
-impl Default for BuiltinResolver {
-    fn default() -> Self {
-        Self {
-            modules: HashSet::new(),
-        }
     }
 }
 

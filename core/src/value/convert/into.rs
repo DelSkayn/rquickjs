@@ -107,7 +107,7 @@ where
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         self.as_ref()
-            .map_err(|error| Error::from(error))
+            .map_err(Error::from)
             .and_then(|value| value.into_js(ctx))
     }
 }

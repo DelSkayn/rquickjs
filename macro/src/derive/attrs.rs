@@ -160,7 +160,7 @@ impl DataType {
             })
         }
 
-        let has_js_lt = has_lifetime(&params, "js");
+        let has_js_lt = has_lifetime(params, "js");
 
         let params = params.iter().map(|param| match param {
             GenericParam::Type(dp) => quote!(#dp),
@@ -517,7 +517,8 @@ mod test {
             fn $c() {
                 let input = syn::parse_quote! { $($s)* };
                 let output = DataType::from_derive_input(&input).unwrap();
-                (|$var: DataType| { $($d)* })(output);
+                let $var: DataType = output;
+                $($d)*
             }
 
             tests! { $($r)* }

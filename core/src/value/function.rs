@@ -412,6 +412,7 @@ mod test {
     fn const_callback() {
         use std::sync::{Arc, Mutex};
         test_with(|ctx| {
+            #[allow(clippy::mutex_atomic)]
             let called = Arc::new(Mutex::new(false));
             let called_clone = called.clone();
             let f = Function::new(ctx, move || {

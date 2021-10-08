@@ -103,9 +103,10 @@ impl Runtime {
     pub fn run_executor(&self) -> Executor {
         let mut inner = self.inner.lock();
         let opaque = unsafe { &mut *(inner.get_opaque_mut() as *mut Opaque) };
-        if opaque.spawner.is_some() {
-            panic!("Async executor already initialized for the Runtime.");
-        }
+        assert!(
+            opaque.spawner.is_none(),
+            "Async executor already initialized for the Runtime."
+        );
         let (executor, spawner) = Executor::new();
         opaque.spawner = Some(spawner);
         executor

@@ -5,7 +5,7 @@ use std::collections::HashMap;
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct BuiltinLoader {
     modules: HashMap<String, Vec<u8>>,
 }
@@ -25,14 +25,6 @@ impl BuiltinLoader {
     pub fn with_module<N: Into<String>, S: Into<Vec<u8>>>(mut self, name: N, source: S) -> Self {
         self.add_module(name, source);
         self
-    }
-}
-
-impl Default for BuiltinLoader {
-    fn default() -> Self {
-        Self {
-            modules: HashMap::new(),
-        }
     }
 }
 

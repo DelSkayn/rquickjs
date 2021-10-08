@@ -169,7 +169,7 @@ impl Embedder {
     #[cfg(feature = "phf")]
     fn build_phf(&self, entries: &[Entry<String, TokenStream>]) -> TokenStream {
         let lib_crate = &self.config.lib_crate;
-        let state = phf_generator::generate_hash(&entries);
+        let state = phf_generator::generate_hash(entries);
         let key = state.key;
         let disps = state.disps.iter().map(|&(d1, d2)| quote!((#d1, #d2)));
         let entries = state.map.iter().map(|&index| {
