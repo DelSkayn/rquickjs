@@ -375,7 +375,7 @@ impl<'js, S> Module<'js, Loaded<S>> {
     pub fn eval(self) -> Result<Module<'js, Evaluated>> {
         let ctx = self.0.ctx;
         unsafe {
-            let ret = qjs::JS_EvalFunction(ctx.ctx, self.0.value);
+            let ret = qjs::JS_EvalFunction(ctx.ctx, qjs::JS_DupValue(self.0.value));
             handle_exception(ctx, ret)?;
         }
         Ok(Module(self.0, PhantomData))
