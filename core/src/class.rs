@@ -586,6 +586,7 @@ macro_rules! class_def {
 #[cfg(test)]
 mod test {
     use crate::*;
+    use approx::assert_abs_diff_eq as assert_approx_eq;
 
     #[test]
     fn class_basics() {
@@ -691,7 +692,7 @@ mod test {
                     "#,
                 )
                 .unwrap();
-            assert_eq!(res, 6.0);
+            assert_approx_eq!(res, 6.0);
 
             let res: f64 = ctx
                 .eval(
@@ -710,7 +711,7 @@ mod test {
                     "#,
                 )
                 .unwrap();
-            assert_eq!(res, 17.0);
+            assert_approx_eq!(res, 17.0);
         });
     }
 

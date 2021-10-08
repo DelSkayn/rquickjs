@@ -179,6 +179,7 @@ features = ["attributes"]
 path = "../"
 
 [dev-dependencies]
+approx = "0.5"
 trybuild = "1.0.23"
 
 [package.metadata.docs.rs]

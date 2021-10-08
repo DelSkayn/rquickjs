@@ -231,6 +231,7 @@ impl<'js> Function<'js> {
 #[cfg(test)]
 mod test {
     use crate::*;
+    use approx::assert_abs_diff_eq as assert_approx_eq;
 
     #[test]
     fn call_js_fn_with_no_args_and_no_return() {
@@ -520,7 +521,7 @@ mod test {
                 .unwrap();
 
             let r: f64 = ctx.eval("neg(add(one(), 2))").unwrap();
-            assert_eq!(r, -3.0);
+            assert_approx_eq!(r, -3.0);
         })
     }
 
@@ -617,11 +618,11 @@ mod test {
                 .unwrap();
 
             let r: f64 = ctx.eval("calc()").unwrap();
-            assert_eq!(r, 1.0);
+            assert_approx_eq!(r, 1.0);
             let r: f64 = ctx.eval("calc(2)").unwrap();
-            assert_eq!(r, 3.0);
+            assert_approx_eq!(r, 3.0);
             let r: f64 = ctx.eval("calc(2, 3)").unwrap();
-            assert_eq!(r, 9.0);
+            assert_approx_eq!(r, 9.0);
         })
     }
 
