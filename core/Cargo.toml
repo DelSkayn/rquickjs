@@ -87,7 +87,7 @@ full-async = ["full", "async-std", "tokio", "smol"]
 bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
-parallel = ["rquickjs-sys/parallel"]
+parallel = []
 
 # Enable runtime registery
 registery = ["fxhash"]

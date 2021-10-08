@@ -399,6 +399,9 @@ extern "C" {
     pub fn JS_SetMaxStackSize(rt: *mut JSRuntime, stack_size: size_t);
 }
 extern "C" {
+    pub fn JS_UpdateStackTop(rt: *mut JSRuntime);
+}
+extern "C" {
     pub fn JS_NewRuntime2(
         mf: *const JSMallocFunctions,
         opaque: *mut ::std::os::raw::c_void,
@@ -447,12 +450,6 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_GetClassProto(ctx: *mut JSContext, class_id: JSClassID) -> JSValue;
-}
-extern "C" {
-    pub fn JS_ResetStackPointerRT(rt: *mut JSRuntime);
-}
-extern "C" {
-    pub fn JS_ResetStackPointer(ctx: *mut JSContext);
 }
 extern "C" {
     pub fn JS_NewContextRaw(rt: *mut JSRuntime) -> *mut JSContext;

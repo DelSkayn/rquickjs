@@ -91,7 +91,7 @@ impl Context {
 
     #[cfg(feature = "parallel")]
     fn reset_stack(&self) {
-        unsafe { qjs::JS_ResetStackPointer(self.ctx) };
+        unsafe { qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx)) };
     }
 
     #[cfg(not(feature = "parallel"))]

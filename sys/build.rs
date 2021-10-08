@@ -12,7 +12,6 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let features = [
-        "parallel",
         "exports",
         "bindgen",
         "update-bindings",
@@ -82,11 +81,6 @@ fn main() {
     if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
         patch_files.push("read_module_exports.patch");
         defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
-    }
-
-    if env::var("CARGO_FEATURE_PARALLEL").is_ok() {
-        patch_files.push("reset_stack_pointer.patch");
-        defines.push(("CONFIG_PARALLEL".into(), None));
     }
 
     for feature in &features {
