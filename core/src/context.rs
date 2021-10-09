@@ -89,14 +89,6 @@ impl Context {
         Ok(res)
     }
 
-    #[cfg(feature = "parallel")]
-    fn reset_stack(&self) {
-        unsafe { qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx)) };
-    }
-
-    #[cfg(not(feature = "parallel"))]
-    fn reset_stack(&self) {}
-
     /// Create a context builder for creating a context with a specific set of intrinsics
     pub fn builder() -> ContextBuilder<()> {
         ContextBuilder::default()
@@ -104,7 +96,7 @@ impl Context {
 
     pub fn enable_big_num_ext(&self, enable: bool) {
         let guard = self.rt.inner.lock();
-        self.reset_stack();
+        guard.update_stack_top();
         unsafe { qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 }) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
@@ -134,7 +126,7 @@ impl Context {
         #[cfg(not(feature = "futures"))]
         {
             let guard = self.rt.inner.lock();
-            self.reset_stack();
+            guard.update_stack_top();
             let ctx = Ctx::new(self);
             let result = f(ctx);
             mem::drop(guard);
@@ -145,7 +137,7 @@ impl Context {
         {
             let (spawn_pending_jobs, result) = {
                 let guard = self.rt.inner.lock();
-                self.reset_stack();
+                guard.update_stack_top();
                 let ctx = Ctx::new(self);
                 let result = f(ctx);
                 (guard.has_spawner() && guard.is_job_pending(), result)
@@ -177,12 +169,11 @@ impl Drop for Context {
                     // following assertion to trigger
                     assert!(std::thread::panicking());
                 }
-                self.reset_stack();
                 unsafe { qjs::JS_FreeContext(self.ctx) }
                 return;
             }
         };
-        self.reset_stack();
+        guard.update_stack_top();
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);

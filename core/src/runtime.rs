@@ -91,6 +91,13 @@ impl Drop for Inner {
 }
 
 impl Inner {
+    pub(crate) fn update_stack_top(&self) {
+        #[cfg(feature = "parallel")]
+        unsafe {
+            qjs::JS_UpdateStackTop(self.rt);
+        }
+    }
+
     #[cfg(feature = "futures")]
     pub(crate) unsafe fn get_opaque(&self) -> &Opaque {
         &*(qjs::JS_GetRuntimeOpaque(self.rt) as *const _)
@@ -107,10 +114,7 @@ impl Inner {
 
     pub(crate) fn execute_pending_job(&mut self) -> Result<bool> {
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
-        #[cfg(feature = "parallel")]
-        unsafe {
-            qjs::JS_UpdateStackTop(self.rt)
-        };
+        self.update_stack_top();
         let result = unsafe { qjs::JS_ExecutePendingJob(self.rt, ctx_ptr.as_mut_ptr()) };
         if result == 0 {
             // no jobs executed
