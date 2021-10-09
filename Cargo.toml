@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2018"
 license = "MIT"
@@ -11,48 +11,48 @@ categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [dependencies.rquickjs-core]
-version = "0.1.1"
-path = "./rquickjs-core"
+version = "0.1.2"
+path = "core"
 
 [dependencies.rquickjs-macro]
-version = "0.1.1"
-path = "./rquickjs-macro"
+version = "0.1.2"
+path = "macro"
 optional = true
 
 [dependencies.async-std-rs]
 package = "async-std"
-version = "^1"
+version = "1"
 optional = true
 default-features = false
 features = ["default", "unstable"]
 
 [dependencies.tokio-rs]
 package = "tokio"
-version = "^1"
+version = "1"
 optional = true
 default-features = false
 features = ["rt"]
 
 [dependencies.smol-rs]
 package = "smol"
-version = "^1"
+version = "1"
 optional = true
 
 [dependencies.indexmap-rs]
 package = "indexmap"
-version = "^1"
+version = "1"
 optional = true
 
 [dependencies.either-rs]
 package = "either"
-version = "^1"
+version = "1"
 optional = true
 
 [workspace]
 members = [
-    "rquickjs-sys",
-    "rquickjs-core",
-    "rquickjs-macro",
+    "sys",
+    "core",
+    "macro",
     "examples/native-module",
     "examples/module-loader",
 ]
