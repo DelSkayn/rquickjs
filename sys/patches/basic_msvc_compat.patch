@@ -392,3 +392,17 @@ index 92457a2..f60a937 100644
  }
  
  int JS_ToBool(JSContext *ctx, JSValueConst val); /* return -1 for JS_EXCEPTION */
+diff --git a/quickjs.c b/quickjs.c
+index 48aeffc..4ac7507 100644
+--- a/quickjs.c
++++ b/quickjs.c
+@@ -41906,6 +41906,9 @@ static JSValue js_math_random(JSContext *ctx, JSValueConst this_val,
+     return __JS_NewFloat64(ctx, u.d - 1.0);
+ }
+
++#pragma function (ceil)
++#pragma function (floor)
++
+ static const JSCFunctionListEntry js_math_funcs[] = {
+     JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max, 0 ),
+     JS_CFUNC_MAGIC_DEF("max", 2, js_math_min_max, 1 ),
