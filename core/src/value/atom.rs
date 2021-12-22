@@ -69,7 +69,7 @@ impl<'js> Atom<'js> {
         // It seems like it could but I have not yet figured out
         // how to detect this.
         unsafe {
-            let ptr = name.as_ptr() as *const i8;
+            let ptr = name.as_ptr() as *const std::os::raw::c_char;
             let atom = qjs::JS_NewAtomLen(ctx.ctx, ptr, name.len() as _);
             Atom { atom, ctx }
         }
@@ -77,7 +77,7 @@ impl<'js> Atom<'js> {
 
     /// Convert the atom to a javascript string.
     pub fn to_string(&self) -> Result<StdString> {
-        pub struct DropStr<'js>(Ctx<'js>, *const i8);
+        pub struct DropStr<'js>(Ctx<'js>, *const std::os::raw::c_char);
 
         impl<'js> Drop for DropStr<'js> {
             fn drop(&mut self) {
