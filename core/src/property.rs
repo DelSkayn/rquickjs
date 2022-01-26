@@ -89,6 +89,7 @@ macro_rules! wrapper_impls {
 
     (@flag $flag:ident $doc:expr) => {
         #[doc = $doc]
+        #[must_use]
         pub fn $flag(mut self) -> Self {
             self.flags |= wrapper_impls!(@flag $flag);
             self

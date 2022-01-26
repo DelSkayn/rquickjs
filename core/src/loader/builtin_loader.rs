@@ -22,6 +22,7 @@ impl BuiltinLoader {
     }
 
     /// Add builtin script module
+    #[must_use]
     pub fn with_module<N: Into<String>, S: Into<Vec<u8>>>(mut self, name: N, source: S) -> Self {
         self.add_module(name, source);
         self
