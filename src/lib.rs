@@ -41,11 +41,13 @@
 //! - `rust-alloc` forces using Rust's global allocator by default instead of libc's one.
 //! - `loader` adds support for custom ES6 modules resolvers and loaders. The resolvers and loaders should implements [`Resolver`] and [`Loader`] traits respectively and can be plugged in already existing [`Runtime`] before loading modules via [`Runtime::set_loader`]. The resolvers and loaders can be easily combined via tuples. When the previous resolver or loader failed the next one will be applied.
 //! - `dyn-load` adds support for loadable native modules (so/dll/dylib).
+//! - `array-buffer` adds support for [`ArrayBuffer`] and [`TypedArray`].
 //! - `futures` adds support for async Rust. When enabled the Rust futures can be passed to JS as [ES6 Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise) and ES6 Promises can be given back as Rust futures.
 //! - `tokio` adds integration with [`tokio`] async runtime. The method [`Runtime::spawn_executor`] can be used with [`Tokio`] to spawn async executor.
 //! - `async-std` adds integration with [`async_std`] runtime. The method [`Runtime::spawn_executor`] can be used with [`AsyncStd`] to spawn async executor.
 //! - `smol` adds integrations with [`smol`] async runtime. The method [`Runtime::spawn_executor`] can be used with [`Smol`] to spawn async executor.
 //! - `macro` enables some useful procedural macros which gets Rust/JS interop much easy. An [attribute](#attributes) macros can be applied to functions, constants and modules. An [derive](#derives) macros can be used with structs and enums.
+//! - `phf` enables using Perfect Hash Function for builtin modules lookup
 //!
 //! ## Custom
 //!

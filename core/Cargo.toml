@@ -77,7 +77,7 @@ optional = true
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties"]
+full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "async-std", "tokio", "smol"]
@@ -113,6 +113,9 @@ classes = []
 
 # Enable user-defined properties support
 properties = []
+
+# Enable ArrayBuffer and TypedArray support
+array-buffer = []
 
 # Enable interop between Rust futures and JS Promises
 futures = ["pin-project-lite", "futures-lite", "async-task", "flume"]
