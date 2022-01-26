@@ -7,6 +7,11 @@ mod object;
 mod string;
 mod symbol;
 
+#[cfg(feature = "array-buffer")]
+mod array_buffer;
+#[cfg(feature = "array-buffer")]
+mod typed_array;
+
 use crate::{qjs, Ctx, Error, Result};
 
 pub use module::{Created, Evaluated, Loaded, Module, ModuleDef, ModuleLoadFn, Native, Script};
@@ -22,6 +27,11 @@ pub use function::{
 pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
+
+#[cfg(feature = "array-buffer")]
+pub use array_buffer::ArrayBuffer;
+#[cfg(feature = "array-buffer")]
+pub use typed_array::TypedArray;
 
 #[cfg(feature = "futures")]
 pub use function::Async;

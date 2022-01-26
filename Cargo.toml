@@ -61,7 +61,7 @@ members = [
 default = ["exports", "classes", "properties"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "macro", "phf"]
+full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer", "macro", "phf"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "async-std", "tokio", "smol"]
@@ -106,6 +106,9 @@ classes = ["rquickjs-core/classes"]
 
 # Enable user-defined properties support
 properties = ["rquickjs-core/properties"]
+
+# Enable ArrayBuffer and TypedArray support
+array-buffer = ["rquickjs-core/array-buffer"]
 
 # Enable helper macros
 macro = ["rquickjs-macro"]

@@ -226,6 +226,14 @@ impl<'js> Object<'js> {
         }
     }
 
+    /// Check instance of object
+    pub fn is_instance_of(&self, class: impl AsRef<Value<'js>>) -> bool {
+        let class = class.as_ref();
+        0 != unsafe {
+            qjs::JS_IsInstanceOf(self.0.ctx.ctx, self.0.as_js_value(), class.as_js_value())
+        }
+    }
+
     /// Convert into a function
     pub fn into_function(self) -> Option<Function<'js>> {
         if self.is_function() {
