@@ -18,6 +18,7 @@ impl ScriptLoader {
     }
 
     /// Add script file extension
+    #[must_use]
     pub fn with_extension<X: Into<String>>(mut self, extension: X) -> Self {
         self.add_extension(extension);
         self

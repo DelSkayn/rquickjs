@@ -19,6 +19,7 @@ impl BuiltinResolver {
     }
 
     /// Add builtin module
+    #[must_use]
     pub fn with_module<P: Into<String>>(mut self, path: P) -> Self {
         self.add_module(path);
         self

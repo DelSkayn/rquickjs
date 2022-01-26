@@ -274,24 +274,28 @@ impl Filter {
     }
 
     /// Include string properties
+    #[must_use]
     pub fn string(mut self) -> Self {
         self.flags |= qjs::JS_GPN_STRING_MASK as qjs::c_int;
         self
     }
 
     /// Include symbol properties
+    #[must_use]
     pub fn symbol(mut self) -> Self {
         self.flags |= qjs::JS_GPN_SYMBOL_MASK as qjs::c_int;
         self
     }
 
     /// Include private properties
+    #[must_use]
     pub fn private(mut self) -> Self {
         self.flags |= qjs::JS_GPN_PRIVATE_MASK as qjs::c_int;
         self
     }
 
     /// Include only enumerable properties
+    #[must_use]
     pub fn enum_only(mut self) -> Self {
         self.flags |= qjs::JS_GPN_ENUM_ONLY as qjs::c_int;
         self

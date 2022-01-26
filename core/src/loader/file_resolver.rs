@@ -19,6 +19,7 @@ impl FileResolver {
     }
 
     /// Add search path for modules
+    #[must_use]
     pub fn with_path<P: Into<RelativePathBuf>>(mut self, path: P) -> Self {
         self.add_path(path);
         self
@@ -34,6 +35,7 @@ impl FileResolver {
     }
 
     /// Add search paths for modules
+    #[must_use]
     pub fn with_paths<I: IntoIterator<Item = P>, P: Into<RelativePathBuf>>(
         mut self,
         paths: I,
@@ -49,6 +51,7 @@ impl FileResolver {
     }
 
     /// Add module file pattern
+    #[must_use]
     pub fn with_pattern<P: Into<String>>(mut self, pattern: P) -> Self {
         self.add_pattern(pattern);
         self
@@ -69,6 +72,7 @@ impl FileResolver {
     }
 
     /// Add support for native modules
+    #[must_use]
     pub fn with_native(mut self) -> Self {
         self.add_native();
         self

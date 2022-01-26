@@ -35,6 +35,7 @@ impl ModuleLoader {
     }
 
     /// Add module
+    #[must_use]
     pub fn with_module<N: Into<String>, M: ModuleDef>(mut self, name: N, module: M) -> Self {
         self.add_module(name, module);
         self
