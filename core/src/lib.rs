@@ -45,7 +45,7 @@ pub use runtime::Tokio;
 pub use runtime::{Executor, ExecutorSpawner, Idle};
 pub use runtime::{MemoryUsage, Runtime};
 mod context;
-pub use context::{intrinsic, Context, ContextBuilder, Ctx, Intrinsic, MultiWith};
+pub use context::{intrinsic, Context, ContextBuilder, Ctx, CtxGuard, Intrinsic, MultiWith};
 mod value;
 pub use value::*;
 mod persistent;

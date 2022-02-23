@@ -117,36 +117,28 @@ impl Context {
     /// Furthermore, this way it is impossible to use values from different runtimes in this
     /// context which would otherwise be undefined behaviour.
     ///
-    ///
-    /// This is the only way to get a [`Ctx`] object.
+    /// This is the only way to get a [`Ctx`] object with a shared reference.
     pub fn with<F, R>(&self, f: F) -> R
     where
         F: FnOnce(Ctx) -> R,
     {
-        #[cfg(not(feature = "futures"))]
-        {
-            let guard = self.rt.inner.lock();
-            guard.update_stack_top();
-            let ctx = Ctx::new(self);
-            let result = f(ctx);
-            mem::drop(guard);
-            result
-        }
+        let guard = self.lock();
+        f(guard.get())
+    }
 
-        #[cfg(feature = "futures")]
-        {
-            let (spawn_pending_jobs, result) = {
-                let guard = self.rt.inner.lock();
-                guard.update_stack_top();
-                let ctx = Ctx::new(self);
-                let result = f(ctx);
-                (guard.has_spawner() && guard.is_job_pending(), result)
-            };
-            #[cfg(feature = "futures")]
-            if spawn_pending_jobs {
-                self.rt.spawn_pending_jobs();
-            }
-            result
+    /// Gets a [`CtxGuard`] for manipulating and using javascript objects and scripts,
+    /// blocking the current thread until it is able to do so.
+    ///
+    /// This function will block the local thread until it is available to acquire
+    /// the lock. Upon returning, the thread is the only thread with the lock
+    /// held. An RAII guard is returned to allow scoped unlock of the lock. When
+    /// the guard goes out of scope, the runtime will be unlocked.
+    pub fn lock(&self) -> CtxGuard {
+        let guard = self.rt.inner.lock();
+        guard.update_stack_top();
+        CtxGuard {
+            context: self,
+            guard: mem::ManuallyDrop::new(guard),
         }
     }
 
@@ -177,6 +169,33 @@ impl Drop for Context {
         unsafe { qjs::JS_FreeContext(self.ctx) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
+    }
+}
+
+pub struct CtxGuard<'ctx> {
+    context: &'ctx Context,
+    #[cfg(feature = "parallel")]
+    guard: mem::ManuallyDrop<std::sync::MutexGuard<'ctx, crate::runtime::Inner>>,
+    #[cfg(not(feature = "parallel"))]
+    guard: mem::ManuallyDrop<std::cell::RefMut<'ctx, crate::runtime::Inner>>,
+}
+
+impl<'ctx> CtxGuard<'ctx> {
+    pub fn get(&self) -> Ctx {
+        Ctx::new(self.context)
+    }
+}
+
+impl<'ctx> Drop for CtxGuard<'ctx> {
+    fn drop(&mut self) {
+        #[cfg(feature = "futures")]
+        let should_spawn = self.guard.has_spawner() && self.guard.is_job_pending();
+        // Safety: The only code-path where the guard is dropped.
+        unsafe { mem::ManuallyDrop::drop(&mut self.guard) };
+        #[cfg(feature = "futures")]
+        if should_spawn {
+            self.context.runtime().spawn_pending_jobs();
+        }
     }
 }
 
