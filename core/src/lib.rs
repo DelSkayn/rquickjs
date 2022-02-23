@@ -46,7 +46,7 @@ pub use runtime::{Executor, ExecutorSpawner, Idle};
 pub use runtime::{MemoryUsage, Runtime};
 mod context;
 pub use context::{
-    intrinsic, Context, ContextBuilder, Ctx, CtxGuard, Intrinsic, MultiWith, OwnedCtxGuard,
+    intrinsic, Context, ContextBuilder, ContextGuard, Ctx, Intrinsic, MultiWith, OwnedContextGuard,
 };
 mod value;
 pub use value::*;

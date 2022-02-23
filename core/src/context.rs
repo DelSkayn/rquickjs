@@ -133,10 +133,10 @@ impl Context {
     /// the lock. Upon returning, the thread is the only thread with the lock
     /// held. An RAII guard is returned to allow scoped unlock of the lock. When
     /// the guard goes out of scope, the runtime will be unlocked.
-    pub fn lock(&self) -> CtxGuard {
+    pub fn lock(&self) -> ContextGuard {
         let guard = self.rt.inner.lock();
         guard.update_stack_top();
-        CtxGuard {
+        ContextGuard {
             context: Cow::Borrowed(self),
             guard: mem::ManuallyDrop::new(guard),
         }
@@ -149,10 +149,10 @@ impl Context {
     /// the lock. Upon returning, the thread is the only thread with the lock
     /// held. An RAII guard is returned to allow scoped unlock of the lock. When
     /// the guard goes out of scope, the runtime will be unlocked.
-    pub fn owned_lock(self) -> OwnedCtxGuard {
+    pub fn owned_lock(self) -> OwnedContextGuard {
         let guard = self.rt.inner.lock();
         guard.update_stack_top();
-        CtxGuard {
+        ContextGuard {
             // Safety: here we force the guard to have the static lifetime by transmuting.
             // This is safe because Context and it's contents refer to a stable addresses, even
             // when moved. Furthermore, we are guaranteeing that those addresses contents stay
@@ -192,9 +192,9 @@ impl Drop for Context {
     }
 }
 
-pub type OwnedCtxGuard = CtxGuard<'static>;
+pub type OwnedContextGuard = ContextGuard<'static>;
 
-pub struct CtxGuard<'ctx> {
+pub struct ContextGuard<'ctx> {
     context: Cow<'ctx, Context>,
     // Safety: the guard is dropped _before_ the context (see CtxGuard::drop)
     #[cfg(feature = "parallel")]
@@ -203,7 +203,9 @@ pub struct CtxGuard<'ctx> {
     guard: mem::ManuallyDrop<crate::Lock<'ctx, crate::runtime::Inner>>,
 }
 
-impl<'ctx> CtxGuard<'ctx> {
+impl<'ctx> ContextGuard<'ctx> {
+    /// Gets a `[Ctx]` for manipulating and using javascript
+    /// objects and scripts associated with this `[Context]`.
     pub fn get(&self) -> Ctx {
         Ctx::new(self.context.as_ref())
     }
@@ -214,7 +216,7 @@ impl<'ctx> CtxGuard<'ctx> {
     }
 }
 
-impl<'ctx> Drop for CtxGuard<'ctx> {
+impl<'ctx> Drop for ContextGuard<'ctx> {
     fn drop(&mut self) {
         #[cfg(feature = "futures")]
         let should_spawn = self.guard.has_spawner() && self.guard.is_job_pending();
