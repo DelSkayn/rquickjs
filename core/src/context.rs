@@ -1,5 +1,5 @@
 use crate::{qjs, Error, Result, Runtime};
-use std::mem;
+use std::{borrow::Cow, mem};
 
 mod builder;
 pub use builder::{intrinsic, ContextBuilder, Intrinsic};
@@ -137,8 +137,28 @@ impl Context {
         let guard = self.rt.inner.lock();
         guard.update_stack_top();
         CtxGuard {
-            context: self,
+            context: Cow::Borrowed(self),
             guard: mem::ManuallyDrop::new(guard),
+        }
+    }
+
+    /// Transforms a [`Context`] in a [`OwnedCtxGuard`] for manipulating and using javascript
+    /// objects and scripts, blocking the current thread until it is able to do so.
+    ///
+    /// This function will block the local thread until it is available to acquire
+    /// the lock. Upon returning, the thread is the only thread with the lock
+    /// held. An RAII guard is returned to allow scoped unlock of the lock. When
+    /// the guard goes out of scope, the runtime will be unlocked.
+    pub fn owned_lock(self) -> OwnedCtxGuard {
+        let guard = self.rt.inner.lock();
+        guard.update_stack_top();
+        CtxGuard {
+            // Safety: here we force the guard to have the static lifetime by transmuting.
+            // This is safe because Context and it's contents refer to a stable addresses, even
+            // when moved. Furthermore, we are guaranteeing that those addresses contents stay
+            // valid by moving self into the CtxGuard as well.
+            guard: mem::ManuallyDrop::new(unsafe { mem::transmute(guard) }),
+            context: Cow::Owned(self),
         }
     }
 
@@ -172,17 +192,25 @@ impl Drop for Context {
     }
 }
 
+pub type OwnedCtxGuard = CtxGuard<'static>;
+
 pub struct CtxGuard<'ctx> {
-    context: &'ctx Context,
+    context: Cow<'ctx, Context>,
+    // Safety: the guard is dropped _before_ the context (see CtxGuard::drop)
     #[cfg(feature = "parallel")]
-    guard: mem::ManuallyDrop<std::sync::MutexGuard<'ctx, crate::runtime::Inner>>,
+    guard: mem::ManuallyDrop<crate::Lock<'ctx, crate::runtime::Inner>>,
     #[cfg(not(feature = "parallel"))]
-    guard: mem::ManuallyDrop<std::cell::RefMut<'ctx, crate::runtime::Inner>>,
+    guard: mem::ManuallyDrop<crate::Lock<'ctx, crate::runtime::Inner>>,
 }
 
 impl<'ctx> CtxGuard<'ctx> {
     pub fn get(&self) -> Ctx {
-        Ctx::new(self.context)
+        Ctx::new(self.context.as_ref())
+    }
+
+    /// The `[Context]` associated with this guard.
+    pub fn context(&self) -> &Context {
+        self.context.as_ref()
     }
 }
 
