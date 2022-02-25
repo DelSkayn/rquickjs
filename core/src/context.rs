@@ -142,14 +142,14 @@ impl Context {
         }
     }
 
-    /// Transforms a [`Context`] in a [`OwnedCtxGuard`] for manipulating and using javascript
+    /// Transforms a [`Context`] into an [`OwnedCtxGuard`] for manipulating and using javascript
     /// objects and scripts, blocking the current thread until it is able to do so.
     ///
     /// This function will block the local thread until it is available to acquire
     /// the lock. Upon returning, the thread is the only thread with the lock
     /// held. An RAII guard is returned to allow scoped unlock of the lock. When
     /// the guard goes out of scope, the runtime will be unlocked.
-    pub fn owned_lock(self) -> OwnedContextGuard {
+    pub fn lock_owned(self) -> OwnedContextGuard {
         let guard = self.rt.inner.lock();
         guard.update_stack_top();
         ContextGuard {
