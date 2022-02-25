@@ -108,9 +108,10 @@ impl<T> Persistent<T> {
     /// Save the value of an arbitrary type
     pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target>
     where
-        T: AsRef<Value<'js>> + Outlive<'static>,
+        T: Into<Value<'js>> + Outlive<'static>,
     {
-        let value = val.as_ref().value;
+        let val = val.into();
+        let value = val.value;
         mem::forget(val);
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
 
