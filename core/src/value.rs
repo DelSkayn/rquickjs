@@ -346,6 +346,12 @@ impl<'js> Value<'js> {
     }
 }
 
+impl<'js> AsRef<Value<'js>> for Value<'js> {
+    fn as_ref(&self) -> &Value<'js> {
+        self
+    }
+}
+
 macro_rules! type_impls {
     // type: name => tag
     ($($type:ident: $name:ident => $tag:ident,)*) => {
