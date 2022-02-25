@@ -211,4 +211,22 @@ mod test {
         });
         assert_eq!(res, 1);
     }
+
+    #[test]
+    fn persistent_value() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        let persistent_v = ctx.with(|ctx| {
+            let v: Value = ctx.eval("1").unwrap();
+            Persistent::save(ctx, v)
+        });
+
+        ctx.with(|ctx| {
+            let v = persistent_v.clone().restore(ctx).unwrap();
+            ctx.globals().set("v", v).unwrap();
+            let eq: Value = ctx.eval("v == 1").unwrap();
+            assert!(eq.as_bool().unwrap());
+        });
+    }
 }
