@@ -108,9 +108,10 @@ impl<T> Persistent<T> {
     /// Save the value of an arbitrary type
     pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target>
     where
-        T: AsRef<Value<'js>> + Outlive<'static>,
+        T: Into<Value<'js>> + Outlive<'static>,
     {
-        let value = val.as_ref().value;
+        let val = val.into();
+        let value = val.value;
         mem::forget(val);
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
 
@@ -210,5 +211,23 @@ mod test {
             func.call((0,)).unwrap()
         });
         assert_eq!(res, 1);
+    }
+
+    #[test]
+    fn persistent_value() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        let persistent_v = ctx.with(|ctx| {
+            let v: Value = ctx.eval("1").unwrap();
+            Persistent::save(ctx, v)
+        });
+
+        ctx.with(|ctx| {
+            let v = persistent_v.clone().restore(ctx).unwrap();
+            ctx.globals().set("v", v).unwrap();
+            let eq: Value = ctx.eval("v == 1").unwrap();
+            assert!(eq.as_bool().unwrap());
+        });
     }
 }
