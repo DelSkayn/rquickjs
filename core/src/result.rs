@@ -17,6 +17,7 @@ pub type Result<T> = StdResult<T, Error>;
 
 /// Error type of the library.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum Error {
     /// Could not allocate memory
     /// This is generally only triggered when out of memory.
@@ -65,6 +66,8 @@ pub enum Error {
         name: StdString,
         message: Option<StdString>,
     },
+    /// Error when restoring a Persistent in a runtime other than the original runtime.
+    UnrelatedRuntime,
     /// An error from quickjs from which the specifics are unknown.
     /// Should eventually be removed as development progresses.
     Unknown,
@@ -355,6 +358,7 @@ impl Display for Error {
                 "IO Error: ".fmt(f)?;
                 error.fmt(f)?;
             }
+            UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
         Ok(())
     }
