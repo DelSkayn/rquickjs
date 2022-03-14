@@ -1,4 +1,6 @@
-use crate::{qjs, Array, Ctx, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value};
+use crate::{
+    qjs, Array, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
+};
 use std::{
     cell::Cell,
     cmp::PartialEq,
@@ -55,7 +57,11 @@ outlive_impls! {
 /// assert_eq!(res, 1);
 /// ```
 ///
-/// NOTE: Be careful and ensure that no persistent links outlives the runtime.
+/// It is an error (`Error::UnrelatedRuntime`) to restore the `Persistent` in a
+/// context who isn't part of the original `Runtime`.
+///
+/// NOTE: Be careful and ensure that no persistent links outlives the runtime,
+/// otherwise Runtime will abort the process when dropped.
 ///
 pub struct Persistent<T> {
     pub(crate) rt: *mut qjs::JSRuntime,
@@ -123,6 +129,10 @@ impl<T> Persistent<T> {
         T: Outlive<'js>,
         T::Target: FromJs<'js>,
     {
+        let ctx_runtime_ptr = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
+        if self.rt != ctx_runtime_ptr {
+            return Err(Error::UnrelatedRuntime);
+        }
         let value = unsafe { Value::from_js_value(ctx, self.value.get()) };
         mem::forget(self);
         T::Target::from_js(ctx, value)
@@ -187,6 +197,24 @@ impl<T> Eq for Persistent<T> {}
 #[cfg(test)]
 mod test {
     use crate::*;
+
+    #[test]
+    #[should_panic(expected = "UnrelatedRuntime")]
+    fn different_runtime() {
+        let rt1 = Runtime::new().unwrap();
+        let ctx = Context::full(&rt1).unwrap();
+
+        let persistent_v = ctx.with(|ctx| {
+            let v: Value = ctx.eval("1").unwrap();
+            Persistent::save(ctx, v)
+        });
+
+        let rt2 = Runtime::new().unwrap();
+        let ctx = Context::full(&rt2).unwrap();
+        ctx.with(|ctx| {
+            let _ = persistent_v.clone().restore(ctx).unwrap();
+        });
+    }
 
     #[test]
     fn persistent_function() {
