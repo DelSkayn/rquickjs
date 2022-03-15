@@ -1,5 +1,5 @@
 use crate::{get_exception, qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
-use std::{any::Any, ffi::CString, mem};
+use std::{any::Any, ffi::CString, mem, panic};
 
 #[cfg(feature = "futures")]
 mod async_runtime;
@@ -38,6 +38,9 @@ pub struct Opaque {
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
 
+    /// The user provided interrupt handler, if any.
+    pub interrupt_handler: Option<Box<dyn FnMut() -> bool + 'static>>,
+
     /// Used to ref Runtime from Ctx
     pub runtime: WeakRuntime,
 
@@ -54,6 +57,7 @@ impl Opaque {
     fn new(runtime: &Runtime) -> Self {
         Opaque {
             panic: None,
+            interrupt_handler: None,
             runtime: runtime.weak(),
             #[cfg(feature = "registery")]
             registery: HashSet::default(),
@@ -103,7 +107,6 @@ impl Inner {
         &*(qjs::JS_GetRuntimeOpaque(self.rt) as *const _)
     }
 
-    #[cfg(feature = "futures")]
     pub(crate) unsafe fn get_opaque_mut(&mut self) -> &mut Opaque {
         &mut *(qjs::JS_GetRuntimeOpaque(self.rt) as *mut _)
     }
@@ -212,6 +215,42 @@ impl Runtime {
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
         WeakRuntime(Ref::downgrade(&self.inner))
+    }
+
+    /// Set a closure which is regularly called by the engine when it is executing code.
+    /// If the provided closure returns `true` the interpreter will raise and uncatchable
+    /// exception and return control flow to the caller.
+    pub fn set_interrupt_handler(&self, handler: Option<Box<dyn FnMut() -> bool + 'static>>) {
+        unsafe extern "C" fn interrupt_handler_trampoline(
+            _rt: *mut qjs::JSRuntime,
+            opaque: *mut ::std::os::raw::c_void,
+        ) -> ::std::os::raw::c_int {
+            let should_interrupt = match panic::catch_unwind(move || {
+                let opaque = &mut *(opaque as *mut Opaque);
+                opaque.interrupt_handler.as_mut().expect("handler is set")()
+            }) {
+                Ok(should_interrupt) => should_interrupt,
+                Err(panic) => {
+                    let opaque = &mut *(opaque as *mut Opaque);
+                    opaque.panic = Some(panic);
+                    // Returning true here will cause the interpreter to raise an un-catchable exception.
+                    // The rust code that is running the interpreter will see that exception and continue
+                    // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
+                    true
+                }
+            };
+            should_interrupt as _
+        }
+
+        let mut guard = self.inner.lock();
+        unsafe {
+            qjs::JS_SetInterruptHandler(
+                guard.rt,
+                handler.as_ref().map(|_| interrupt_handler_trampoline as _),
+                qjs::JS_GetRuntimeOpaque(guard.rt),
+            );
+            guard.get_opaque_mut().interrupt_handler = handler;
+        }
     }
 
     /// Set the module loader
