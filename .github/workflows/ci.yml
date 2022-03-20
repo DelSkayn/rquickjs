@@ -230,21 +230,22 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET}
           echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
-      - name: Setup clang on windows
-        if: startsWith(matrix.os, 'windows')
-        uses: KyleMayes/install-llvm-action@v1
+      - name: Setup msys2 toolchains
+        if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
+        uses: msys2/setup-msys2@v2
         with:
-          version: 11.0
-          directory: ${{ runner.temp }}/llvm
+          release: false
+          install: mingw-w64-x86_64-gcc mingw-w64-i686-gcc
       - name: Prepare env for windows
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         run: |
-          # Add symlinks to the GNU C headers for Clang
-          New-Item -Path "${{ runner.temp }}\llvm\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
-          New-Item -Path "${{ runner.temp }}\llvm\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw32\i686-w64-mingw32"
-          # Add mingw executable paths to PATH
+          # Add symlinks to the target-specific GNU sysroots for Clang
+          New-Item -Path "C:\Program Files\LLVM\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
+          New-Item -Path "C:\Program Files\LLVM\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\i686-w64-mingw32"
+          # Add paths to GCC executables to PATH
           echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           echo "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          # Configure CC_<target> environment variables
           echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
