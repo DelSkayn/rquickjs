@@ -1,4 +1,3 @@
-patch = all 
 diff --git a/cutils.c b/cutils.c
 index a02fb76..f28e6f6 100644
 --- a/cutils.c
