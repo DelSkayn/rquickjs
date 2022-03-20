@@ -1,4 +1,3 @@
-patch = all 
 diff --git a/quickjs.c b/quickjs.c
 index 4cef3ce..4e6a2c9 100644
 --- a/quickjs.c
