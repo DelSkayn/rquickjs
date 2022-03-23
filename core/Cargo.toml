@@ -179,7 +179,7 @@ default-features = false
 features = ["attributes"]
 
 [dev-dependencies.rquickjs]
-path = "../"
+path = ".."
 
 [dev-dependencies]
 approx = "0.5"

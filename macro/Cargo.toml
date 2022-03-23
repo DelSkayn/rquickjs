@@ -46,7 +46,7 @@ features = ["loader"]
 version = "2"
 
 [dev-dependencies.rquickjs]
-path = "../"
+path = ".."
 version = "0.1.5"
 features = ["macro", "classes", "properties", "async-std"]
 
