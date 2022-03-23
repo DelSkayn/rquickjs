@@ -347,5 +347,5 @@ jobs:
         uses: katyo/publish-crates@v1
         with:
           registry-token: ${{ secrets.CRATES_TOKEN }}
-          args: --no-verify
+          no-verify: true
           #dry-run: true
