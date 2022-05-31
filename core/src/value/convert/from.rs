@@ -396,14 +396,14 @@ mod test {
     #[test]
     fn js_to_chrono() {
         use crate::{Context, Runtime};
-        use chrono::{DateTime, Duration, Utc};
+        use chrono::{DateTime, Utc};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
 
         ctx.with(|ctx| {
-            let res: DateTime<Utc> = ctx.eval("new Date()").unwrap();
-            assert!(Utc::now() - res < Duration::seconds(1))
+            let res: DateTime<Utc> = ctx.eval("new Date(123456789)").unwrap();
+            assert_eq!(123456789, res.timestamp_millis());
         });
     }
 }
