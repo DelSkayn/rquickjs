@@ -17,17 +17,8 @@ use indexmap::{IndexMap, IndexSet};
 #[cfg(feature = "chrono")]
 impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let global = unsafe { crate::qjs::JS_GetGlobalObject(ctx.ctx) };
-        let date_constructor = unsafe {
-            crate::qjs::JS_GetPropertyStr(
-                ctx.ctx,
-                global,
-                std::ffi::CStr::from_bytes_with_nul(b"Date\0")
-                    .unwrap()
-                    .as_ptr(),
-            )
-        };
-        unsafe { crate::qjs::JS_FreeValue(ctx.ctx, global) };
+        let global = ctx.globals();
+        let date_constructor: Object = global.get("Date")?;
 
         let f = self.timestamp_millis() as f64;
 
@@ -38,18 +29,17 @@ impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
 
         let mut args = vec![timestamp];
 
+        // TODO:
+        //  Currently we lack equivalent hight-level alternative for CallConstructor.
+        //  https://github.com/DelSkayn/rquickjs/pull/67#discussion_r885592941
         let value = unsafe {
             crate::qjs::JS_CallConstructor(
                 ctx.ctx,
-                date_constructor,
+                date_constructor.0.value,
                 args.len() as i32,
                 args.as_mut_ptr(),
             )
         };
-
-        unsafe {
-            crate::qjs::JS_FreeValue(ctx.ctx, date_constructor);
-        }
 
         Ok(Value { ctx, value })
     }

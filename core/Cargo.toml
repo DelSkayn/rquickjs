@@ -90,9 +90,6 @@ full-async = ["full", "async-std", "tokio", "smol"]
 # otherwise bundled bindings will be used
 bindgen = ["rquickjs-sys/bindgen"]
 
-# Chrono support.
-chrono = ["dep:chrono"]
-
 # Enable support of parallel execution
 parallel = []
 

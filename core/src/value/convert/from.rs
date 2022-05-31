@@ -21,67 +21,27 @@ impl<'js> FromJs<'js> for chrono::DateTime<chrono::Utc> {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::Utc>> {
         use chrono::TimeZone;
 
-        let global = unsafe { crate::qjs::JS_GetGlobalObject(ctx.ctx) };
-        let date_constructor = unsafe {
-            crate::qjs::JS_GetPropertyStr(
-                ctx.ctx,
-                global,
-                std::ffi::CStr::from_bytes_with_nul(b"Date\0")
-                    .unwrap()
-                    .as_ptr(),
-            )
-        };
-        unsafe { crate::qjs::JS_FreeValue(ctx.ctx, global) };
+        let value_obj = value.into_object().ok_or(Error::FromJs {
+            from: "Date",
+            to: "DateTime<Utc>",
+            message: None,
+        })?;
 
-        let is_date =
-            unsafe { crate::qjs::JS_IsInstanceOf(ctx.ctx, value.value, date_constructor) > 0 };
+        let global = ctx.globals();
+        let date_constructor: Object = global.get("Date")?;
+        let is_date = value_obj.is_instance_of(&date_constructor);
 
         if is_date {
-            let getter = unsafe {
-                crate::qjs::JS_GetPropertyStr(
-                    ctx.ctx,
-                    value.value,
-                    std::ffi::CStr::from_bytes_with_nul(b"getTime\0")
-                        .unwrap()
-                        .as_ptr(),
-                )
-            };
+            let getter: crate::Function = value_obj.get("getTime")?;
+            let millis: i64 = getter.call((crate::This(value_obj),))?;
 
-            let timestamp_raw = unsafe {
-                crate::qjs::JS_Call(ctx.ctx, getter, value.value, 0, std::ptr::null_mut())
-            };
-
-            unsafe {
-                crate::qjs::JS_FreeValue(ctx.ctx, getter);
-                crate::qjs::JS_FreeValue(ctx.ctx, date_constructor);
-            };
-
-            let res = if timestamp_raw.tag == crate::qjs::JS_TAG_FLOAT64.into() {
-                let f = unsafe { timestamp_raw.u.float64 } as i64;
-                let datetime = chrono::Utc.timestamp_millis(f);
-                Ok(datetime)
-            } else if timestamp_raw.tag == crate::qjs::JS_TAG_INT.into() {
-                let f = unsafe { timestamp_raw.u.int32 } as i64;
-                let datetime = chrono::Utc.timestamp_millis(f);
-                Ok(datetime)
-            } else {
-                Err(Error::FromJs {
-                    from: "Date",
-                    to: "DateTime<Utc>",
-                    message: None,
-                })
-            };
-
-            return res;
+            Ok(chrono::Utc.timestamp_millis(millis))
         } else {
-            unsafe {
-                crate::qjs::JS_FreeValue(ctx.ctx, date_constructor);
-            }
-            return Err(Error::FromJs {
+            Err(Error::FromJs {
                 from: "Date",
                 to: "DateTime<Utc>",
                 message: None,
-            });
+            })
         }
     }
 }
