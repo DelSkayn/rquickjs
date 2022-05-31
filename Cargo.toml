@@ -61,10 +61,13 @@ members = [
 default = ["exports", "classes", "properties"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer", "macro", "phf"]
+full = ["chrono", "exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer", "macro", "phf"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "async-std", "tokio", "smol"]
+
+# Chrono support.
+chrono = ["rquickjs-core/chrono"]
 
 # Enable support for Either type
 either = ["rquickjs-core/either", "either-rs"]

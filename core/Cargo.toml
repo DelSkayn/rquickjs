@@ -42,6 +42,10 @@ optional = true
 version = "1"
 optional = true
 
+[dependencies.chrono]
+version = "0.4"
+optional = true
+
 [dependencies.rquickjs-sys]
 version = "0.1.5"
 path = "../sys"
@@ -77,7 +81,7 @@ optional = true
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer"]
+full = ["chrono", "exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "async-std", "tokio", "smol"]
@@ -85,6 +89,9 @@ full-async = ["full", "async-std", "tokio", "smol"]
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
 bindgen = ["rquickjs-sys/bindgen"]
+
+# Chrono support.
+chrono = ["dep:chrono"]
 
 # Enable support of parallel execution
 parallel = []

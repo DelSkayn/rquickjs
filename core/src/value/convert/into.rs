@@ -14,6 +14,47 @@ use either::{Either, Left, Right};
 #[cfg(feature = "indexmap")]
 use indexmap::{IndexMap, IndexSet};
 
+#[cfg(feature = "chrono")]
+impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let global = unsafe { crate::qjs::JS_GetGlobalObject(ctx.ctx) };
+        let date_constructor = unsafe {
+            crate::qjs::JS_GetPropertyStr(
+                ctx.ctx,
+                global,
+                std::ffi::CStr::from_bytes_with_nul(b"Date\0")
+                    .unwrap()
+                    .as_ptr(),
+            )
+        };
+        unsafe { crate::qjs::JS_FreeValue(ctx.ctx, global) };
+
+        let f = self.timestamp_millis() as f64;
+
+        let timestamp = crate::qjs::JSValue {
+            u: crate::qjs::JSValueUnion { float64: f },
+            tag: crate::qjs::JS_TAG_FLOAT64.into(),
+        };
+
+        let mut args = vec![timestamp];
+
+        let value = unsafe {
+            crate::qjs::JS_CallConstructor(
+                ctx.ctx,
+                date_constructor,
+                args.len() as i32,
+                args.as_mut_ptr(),
+            )
+        };
+
+        unsafe {
+            crate::qjs::JS_FreeValue(ctx.ctx, date_constructor);
+        }
+
+        Ok(Value { ctx, value })
+    }
+}
+
 impl<'js> IntoJs<'js> for Value<'js> {
     fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
         Ok(self)
@@ -437,4 +478,26 @@ into_js_impls! {
 into_js_impls! {
     val:
     i32 f64 => i64 u32 u64 usize isize,
+}
+
+mod test {
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn chrono_to_js() {
+        use crate::{Context, IntoJs, Runtime};
+        use chrono::Utc;
+
+        let ts = Utc::now();
+        let millis = ts.timestamp_millis();
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        ctx.with(|ctx| {
+            let globs = ctx.globals();
+            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            let res: i64 = ctx.eval("ts.getTime()").unwrap();
+            assert_eq!(millis, res);
+        });
+    }
 }
