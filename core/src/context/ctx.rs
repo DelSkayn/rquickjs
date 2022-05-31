@@ -55,18 +55,23 @@ impl<'js> Ctx<'js> {
         handle_exception(self, val)
     }
 
-    /// Evaluate a script in global context
-    pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
+    pub(crate) fn eval_with_flag<V: FromJs<'js>, S: Into<Vec<u8>>>(
+        self,
+        source: S,
+        flag: i32,
+    ) -> Result<V> {
         let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
-        let flag = qjs::JS_EVAL_TYPE_GLOBAL;
         V::from_js(self, unsafe {
             let val = self.eval_raw(source, file_name, flag as i32)?;
             Value::from_js_value(self, val)
         })
     }
 
-    /// Evaluate a script directly from a file.
-    pub fn eval_file<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
+    pub(crate) fn eval_file_with_flag<V: FromJs<'js>, P: AsRef<Path>>(
+        self,
+        path: P,
+        flag: i32,
+    ) -> Result<V> {
         let buffer = fs::read(path.as_ref())?;
         let file_name = CString::new(
             path.as_ref()
@@ -75,11 +80,40 @@ impl<'js> Ctx<'js> {
                 .to_string_lossy()
                 .into_owned(),
         )?;
-        let flag = qjs::JS_EVAL_TYPE_GLOBAL;
         V::from_js(self, unsafe {
             let val = self.eval_raw(buffer, file_name.as_c_str(), flag as i32)?;
             Value::from_js_value(self, val)
         })
+    }
+
+    /// Evaluate a script in global context.
+    /// This enforces strict mode.
+    pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
+        self.eval_with_flag(
+            source,
+            (qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT) as i32,
+        )
+    }
+
+    /// Evaluate a script in global context.
+    /// This does not enforce strict mode.
+    pub fn eval_nonstrict<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
+        self.eval_with_flag(source, qjs::JS_EVAL_TYPE_GLOBAL as i32)
+    }
+
+    /// Evaluate a script directly from a file.
+    /// This enforces strict mode.
+    pub fn eval_file<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
+        self.eval_file_with_flag(
+            path,
+            (qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT) as i32,
+        )
+    }
+
+    /// Evaluate a script directly from a file.
+    /// This does not enforce strict mode.
+    pub fn eval_file_nonstrict<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
+        self.eval_file_with_flag(path, qjs::JS_EVAL_TYPE_GLOBAL as i32)
     }
 
     /// Compile a module for later use.
@@ -196,7 +230,7 @@ mod test {
     }
 
     #[test]
-    fn eval_sloppy_mode() {
+    fn eval() {
         use crate::{Context, Error, Runtime};
 
         let runtime = Runtime::new().unwrap();
@@ -205,7 +239,7 @@ mod test {
             let res: Result<String, Error> = ctx.eval(
                 r#"
                     function test() {
-                        foo = "bar";
+                        var foo = "bar";
                         return foo;
                     }
 
@@ -218,7 +252,7 @@ mod test {
     }
 
     #[test]
-    fn eval_strict_mode() {
+    fn eval_with_sloppy_code() {
         use crate::{Context, Error, Runtime};
 
         let runtime = Runtime::new().unwrap();
@@ -226,8 +260,6 @@ mod test {
         ctx.with(|ctx| {
             let res: Result<String, Error> = ctx.eval(
                 r#"
-                    "use strict";
-
                     function test() {
                         foo = "bar";
                         return foo;
@@ -248,6 +280,28 @@ mod test {
             } else {
                 panic!("Unexpected result: {:?}", res);
             }
+        })
+    }
+
+    #[test]
+    fn eval_nonstrict() {
+        use crate::{Context, Error, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let res: Result<String, Error> = ctx.eval_nonstrict(
+                r#"
+                    function test() {
+                        foo = "bar";
+                        return foo;
+                    }
+
+                    test()
+                "#,
+            );
+
+            assert_eq!("bar".to_string(), res.unwrap());
         })
     }
 }
