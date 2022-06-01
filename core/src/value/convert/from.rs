@@ -22,27 +22,26 @@ impl<'js> FromJs<'js> for chrono::DateTime<chrono::Utc> {
         use chrono::TimeZone;
 
         let value_obj = value.into_object().ok_or(Error::FromJs {
-            from: "Date",
-            to: "DateTime<Utc>",
+            from: "Value",
+            to: "Object",
             message: None,
         })?;
 
         let global = ctx.globals();
         let date_constructor: Object = global.get("Date")?;
-        let is_date = value_obj.is_instance_of(&date_constructor);
 
-        if is_date {
-            let getter: crate::Function = value_obj.get("getTime")?;
-            let millis: i64 = getter.call((crate::This(value_obj),))?;
-
-            Ok(chrono::Utc.timestamp_millis(millis))
-        } else {
-            Err(Error::FromJs {
+        if !value_obj.is_instance_of(&date_constructor) {
+            return Err(Error::FromJs {
                 from: "Date",
                 to: "DateTime<Utc>",
                 message: None,
-            })
+            });
         }
+
+        let getter: crate::Function = value_obj.get("getTime")?;
+        let millis: i64 = getter.call((crate::This(value_obj),))?;
+
+        Ok(chrono::Utc.timestamp_millis(millis))
     }
 }
 

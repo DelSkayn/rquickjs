@@ -19,15 +19,7 @@ impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let global = ctx.globals();
         let date_constructor: Object = global.get("Date")?;
-
-        let f = self.timestamp_millis() as f64;
-
-        let timestamp = crate::qjs::JSValue {
-            u: crate::qjs::JSValueUnion { float64: f },
-            tag: crate::qjs::JS_TAG_FLOAT64.into(),
-        };
-
-        let mut args = vec![timestamp];
+        let timestamp = self.timestamp_millis().into_js(ctx)?;
 
         // TODO:
         //  Currently we lack equivalent hight-level alternative for CallConstructor.
@@ -35,9 +27,9 @@ impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
         let value = unsafe {
             crate::qjs::JS_CallConstructor(
                 ctx.ctx,
-                date_constructor.0.value,
-                args.len() as i32,
-                args.as_mut_ptr(),
+                date_constructor.as_js_value(),
+                1,
+                &timestamp.as_js_value() as *const _ as *mut _,
             )
         };
 
