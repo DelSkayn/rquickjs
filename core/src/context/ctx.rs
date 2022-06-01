@@ -20,6 +20,23 @@ use std::{
     path::Path,
 };
 
+/// Eval options.
+pub struct EvalOptions {
+    /// Global code.
+    pub global: bool,
+    /// Force 'strict' mode.
+    pub strict: bool,
+}
+
+impl Default for EvalOptions {
+    fn default() -> Self {
+        EvalOptions {
+            global: true,
+            strict: true,
+        }
+    }
+}
+
 /// Context in use, passed to [`Context::with`].
 #[derive(Clone, Copy, Debug)]
 pub struct Ctx<'js> {
@@ -55,22 +72,43 @@ impl<'js> Ctx<'js> {
         handle_exception(self, val)
     }
 
-    pub(crate) fn eval_with_flag<V: FromJs<'js>, S: Into<Vec<u8>>>(
+    /// Evaluate a script in global context.
+    pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
+        self.eval_with_options(source, Default::default())
+    }
+
+    /// Evaluate a script with the given options.
+    pub fn eval_with_options<V: FromJs<'js>, S: Into<Vec<u8>>>(
         self,
         source: S,
-        flag: i32,
+        options: EvalOptions,
     ) -> Result<V> {
         let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
+        let mut flag = 0;
+
+        if options.global {
+            flag |= qjs::JS_EVAL_TYPE_GLOBAL;
+        }
+
+        if options.strict {
+            flag |= qjs::JS_EVAL_FLAG_STRICT;
+        }
+
         V::from_js(self, unsafe {
             let val = self.eval_raw(source, file_name, flag as i32)?;
             Value::from_js_value(self, val)
         })
     }
 
-    pub(crate) fn eval_file_with_flag<V: FromJs<'js>, P: AsRef<Path>>(
+    /// Evaluate a script directly from a file.
+    pub fn eval_file<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
+        self.eval_file_with_options(path, Default::default())
+    }
+
+    pub fn eval_file_with_options<V: FromJs<'js>, P: AsRef<Path>>(
         self,
         path: P,
-        flag: i32,
+        options: EvalOptions,
     ) -> Result<V> {
         let buffer = fs::read(path.as_ref())?;
         let file_name = CString::new(
@@ -80,40 +118,20 @@ impl<'js> Ctx<'js> {
                 .to_string_lossy()
                 .into_owned(),
         )?;
+        let mut flag = 0;
+
+        if options.global {
+            flag |= qjs::JS_EVAL_TYPE_GLOBAL;
+        }
+
+        if options.strict {
+            flag |= qjs::JS_EVAL_FLAG_STRICT;
+        }
+
         V::from_js(self, unsafe {
             let val = self.eval_raw(buffer, file_name.as_c_str(), flag as i32)?;
             Value::from_js_value(self, val)
         })
-    }
-
-    /// Evaluate a script in global context.
-    /// This enforces strict mode.
-    pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
-        self.eval_with_flag(
-            source,
-            (qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT) as i32,
-        )
-    }
-
-    /// Evaluate a script in global context.
-    /// This does not enforce strict mode.
-    pub fn eval_nonstrict<V: FromJs<'js>, S: Into<Vec<u8>>>(self, source: S) -> Result<V> {
-        self.eval_with_flag(source, qjs::JS_EVAL_TYPE_GLOBAL as i32)
-    }
-
-    /// Evaluate a script directly from a file.
-    /// This enforces strict mode.
-    pub fn eval_file<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
-        self.eval_file_with_flag(
-            path,
-            (qjs::JS_EVAL_TYPE_GLOBAL | qjs::JS_EVAL_FLAG_STRICT) as i32,
-        )
-    }
-
-    /// Evaluate a script directly from a file.
-    /// This does not enforce strict mode.
-    pub fn eval_file_nonstrict<V: FromJs<'js>, P: AsRef<Path>>(self, path: P) -> Result<V> {
-        self.eval_file_with_flag(path, qjs::JS_EVAL_TYPE_GLOBAL as i32)
     }
 
     /// Compile a module for later use.
@@ -231,13 +249,14 @@ mod test {
 
     #[test]
     fn eval() {
-        use crate::{Context, Error, Runtime};
+        use crate::{Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            let res: Result<String, Error> = ctx.eval(
-                r#"
+            let res: String = ctx
+                .eval(
+                    r#"
                     function test() {
                         var foo = "bar";
                         return foo;
@@ -245,21 +264,24 @@ mod test {
 
                     test()
                 "#,
-            );
+                )
+                .unwrap();
 
-            assert_eq!("bar".to_string(), res.unwrap());
+            assert_eq!("bar".to_string(), res);
         })
     }
 
     #[test]
+    #[should_panic(expected = "'foo' is not defined")]
     fn eval_with_sloppy_code() {
-        use crate::{Context, Error, Runtime};
+        use crate::{Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            let res: Result<String, Error> = ctx.eval(
-                r#"
+            let _: String = ctx
+                .eval(
+                    r#"
                     function test() {
                         foo = "bar";
                         return foo;
@@ -267,31 +289,21 @@ mod test {
 
                     test()
                 "#,
-            );
-
-            if let Err(Error::Exception {
-                message,
-                file: _,
-                line: _,
-                stack: _,
-            }) = res
-            {
-                assert_eq!("'foo' is not defined", message);
-            } else {
-                panic!("Unexpected result: {:?}", res);
-            }
+                )
+                .unwrap();
         })
     }
 
     #[test]
-    fn eval_nonstrict() {
-        use crate::{Context, Error, Runtime};
+    fn eval_with_options_no_strict_sloppy_code() {
+        use crate::{Context, EvalOptions, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            let res: Result<String, Error> = ctx.eval_nonstrict(
-                r#"
+            let res: String = ctx
+                .eval_with_options(
+                    r#"
                     function test() {
                         foo = "bar";
                         return foo;
@@ -299,9 +311,41 @@ mod test {
 
                     test()
                 "#,
-            );
+                    EvalOptions {
+                        strict: false,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
 
-            assert_eq!("bar".to_string(), res.unwrap());
+            assert_eq!("bar".to_string(), res);
+        })
+    }
+
+    #[test]
+    #[should_panic(expected = "'foo' is not defined")]
+    fn eval_with_options_strict_sloppy_code() {
+        use crate::{Context, EvalOptions, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let _: String = ctx
+                .eval_with_options(
+                    r#"
+                    function test() {
+                        foo = "bar";
+                        return foo;
+                    }
+
+                    test()
+                "#,
+                    EvalOptions {
+                        strict: true,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
         })
     }
 }

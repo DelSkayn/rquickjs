@@ -4,7 +4,7 @@ use std::mem;
 mod builder;
 pub use builder::{intrinsic, ContextBuilder, Intrinsic};
 mod ctx;
-pub use ctx::Ctx;
+pub use ctx::{Ctx, EvalOptions};
 mod multi_with_impl;
 
 /// A trait for using multiple contexts at the same time.
