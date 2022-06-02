@@ -21,12 +21,7 @@ impl<'js> FromJs<'js> for chrono::DateTime<chrono::Utc> {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::Utc>> {
         use chrono::TimeZone;
 
-        let value_obj = value.into_object().ok_or(Error::FromJs {
-            from: "Value",
-            to: "Object",
-            message: None,
-        })?;
-
+        let value_obj = Object::from_value(value)?;
         let global = ctx.globals();
         let date_constructor: Object = global.get("Date")?;
 
