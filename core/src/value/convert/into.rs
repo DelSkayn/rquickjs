@@ -6,6 +6,7 @@ use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     sync::{Mutex, RwLock},
+    time::SystemTime,
 };
 
 #[cfg(feature = "either")]
@@ -13,29 +14,6 @@ use either::{Either, Left, Right};
 
 #[cfg(feature = "indexmap")]
 use indexmap::{IndexMap, IndexSet};
-
-#[cfg(feature = "chrono")]
-impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let global = ctx.globals();
-        let date_constructor: Object = global.get("Date")?;
-        let timestamp = self.timestamp_millis().into_js(ctx)?;
-
-        // TODO:
-        //  Currently we lack equivalent hight-level alternative for CallConstructor.
-        //  https://github.com/DelSkayn/rquickjs/pull/67#discussion_r885592941
-        let value = unsafe {
-            crate::qjs::JS_CallConstructor(
-                ctx.ctx,
-                date_constructor.as_js_value(),
-                1,
-                &timestamp.as_js_value() as *const _ as *mut _,
-            )
-        };
-
-        Ok(Value { ctx, value })
-    }
-}
 
 impl<'js> IntoJs<'js> for Value<'js> {
     fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
@@ -462,18 +440,117 @@ into_js_impls! {
     i32 f64 => i64 u32 u64 usize isize,
 }
 
+fn millis_to_date<'js>(ctx: Ctx<'js>, millis: i64) -> Result<Value<'js>> {
+    let global = ctx.globals();
+    let date_constructor: Object = global.get("Date")?;
+    let timestamp = millis.into_js(ctx)?;
+
+    // TODO:
+    //  Currently we lack equivalent hight-level alternative for CallConstructor.
+    //  https://github.com/DelSkayn/rquickjs/pull/67#discussion_r885592941
+    let value = unsafe {
+        crate::qjs::JS_CallConstructor(
+            ctx.ctx,
+            date_constructor.as_js_value(),
+            1,
+            &timestamp.as_js_value() as *const _ as *mut _,
+        )
+    };
+
+    Ok(Value { ctx, value })
+}
+
+impl<'js> IntoJs<'js> for SystemTime {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let millis = match self.duration_since(SystemTime::UNIX_EPOCH) {
+            /* since unix epoch */
+            Ok(duration) => {
+                let millis = duration.as_millis();
+
+                if millis > i64::MAX as _ {
+                    return Err(Error::new_into_js_message(
+                        "SystemTime",
+                        "Date",
+                        "Timestamp too big",
+                    ));
+                }
+
+                millis as i64
+            }
+            /* before unix epoch */
+            Err(error) => {
+                let millis = error.duration().as_millis();
+
+                if millis > -(i64::MIN as i128) as _ {
+                    return Err(Error::new_into_js_message(
+                        "SystemTime",
+                        "Date",
+                        "Timestamp too small",
+                    ));
+                }
+
+                (-(millis as i128)) as i64
+            }
+        };
+
+        millis_to_date(ctx, millis)
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        millis_to_date(ctx, self.timestamp_millis())
+    }
+}
+
 mod test {
+    #[test]
+    fn system_time_to_js() {
+        use crate::{Context, IntoJs, Runtime};
+        use std::time::{Duration, SystemTime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        let ts = SystemTime::now();
+        let millis = ts
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+
+        ctx.with(|ctx| {
+            let globs = ctx.globals();
+            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            let res: i64 = ctx.eval("ts.getTime()").unwrap();
+            assert_eq!(millis, res as _);
+        });
+
+        let ts = SystemTime::UNIX_EPOCH - Duration::from_millis(123456);
+        let millis = SystemTime::UNIX_EPOCH
+            .duration_since(ts)
+            .unwrap()
+            .as_millis();
+
+        ctx.with(|ctx| {
+            let globs = ctx.globals();
+            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            let res: i64 = ctx.eval("ts.getTime()").unwrap();
+            assert_eq!(-(millis as i64), res as _);
+        });
+    }
+
     #[cfg(feature = "chrono")]
     #[test]
     fn chrono_to_js() {
         use crate::{Context, IntoJs, Runtime};
         use chrono::Utc;
 
-        let ts = Utc::now();
-        let millis = ts.timestamp_millis();
-
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
+
+        let ts = Utc::now();
+        let millis = ts.timestamp_millis();
 
         ctx.with(|ctx| {
             let globs = ctx.globals();
