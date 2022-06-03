@@ -14,6 +14,29 @@ use either::{Either, Left, Right};
 #[cfg(feature = "indexmap")]
 use indexmap::{IndexMap, IndexSet};
 
+#[cfg(feature = "chrono")]
+impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let global = ctx.globals();
+        let date_constructor: Object = global.get("Date")?;
+        let timestamp = self.timestamp_millis().into_js(ctx)?;
+
+        // TODO:
+        //  Currently we lack equivalent hight-level alternative for CallConstructor.
+        //  https://github.com/DelSkayn/rquickjs/pull/67#discussion_r885592941
+        let value = unsafe {
+            crate::qjs::JS_CallConstructor(
+                ctx.ctx,
+                date_constructor.as_js_value(),
+                1,
+                &timestamp.as_js_value() as *const _ as *mut _,
+            )
+        };
+
+        Ok(Value { ctx, value })
+    }
+}
+
 impl<'js> IntoJs<'js> for Value<'js> {
     fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
         Ok(self)
@@ -437,4 +460,26 @@ into_js_impls! {
 into_js_impls! {
     val:
     i32 f64 => i64 u32 u64 usize isize,
+}
+
+mod test {
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn chrono_to_js() {
+        use crate::{Context, IntoJs, Runtime};
+        use chrono::Utc;
+
+        let ts = Utc::now();
+        let millis = ts.timestamp_millis();
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        ctx.with(|ctx| {
+            let globs = ctx.globals();
+            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            let res: i64 = ctx.eval("ts.getTime()").unwrap();
+            assert_eq!(millis, res);
+        });
+    }
 }

@@ -16,6 +16,30 @@ use either::{Either, Left, Right};
 #[cfg(feature = "indexmap")]
 use indexmap::{IndexMap, IndexSet};
 
+#[cfg(feature = "chrono")]
+impl<'js> FromJs<'js> for chrono::DateTime<chrono::Utc> {
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::Utc>> {
+        use chrono::TimeZone;
+
+        let value_obj = Object::from_value(value)?;
+        let global = ctx.globals();
+        let date_constructor: Object = global.get("Date")?;
+
+        if !value_obj.is_instance_of(&date_constructor) {
+            return Err(Error::FromJs {
+                from: "Date",
+                to: "DateTime<Utc>",
+                message: None,
+            });
+        }
+
+        let getter: crate::Function = value_obj.get("getTime")?;
+        let millis: i64 = getter.call((crate::This(value_obj),))?;
+
+        Ok(chrono::Utc.timestamp_millis(millis))
+    }
+}
+
 impl<'js> FromJs<'js> for Value<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Ok(value)
@@ -318,5 +342,22 @@ from_js_impls! {
 impl<'js> FromJs<'js> for f32 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         f64::from_js(ctx, value).map(|value| value as _)
+    }
+}
+
+mod test {
+    #[cfg(feature = "chrono")]
+    #[test]
+    fn js_to_chrono() {
+        use crate::{Context, Runtime};
+        use chrono::{DateTime, Utc};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        ctx.with(|ctx| {
+            let res: DateTime<Utc> = ctx.eval("new Date(123456789)").unwrap();
+            assert_eq!(123456789, res.timestamp_millis());
+        });
     }
 }
