@@ -8,6 +8,7 @@ use std::{
     hash::{BuildHasher, Hash},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
+    time::{Duration, SystemTime},
 };
 
 #[cfg(feature = "either")]
@@ -15,30 +16,6 @@ use either::{Either, Left, Right};
 
 #[cfg(feature = "indexmap")]
 use indexmap::{IndexMap, IndexSet};
-
-#[cfg(feature = "chrono")]
-impl<'js> FromJs<'js> for chrono::DateTime<chrono::Utc> {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::Utc>> {
-        use chrono::TimeZone;
-
-        let value_obj = Object::from_value(value)?;
-        let global = ctx.globals();
-        let date_constructor: Object = global.get("Date")?;
-
-        if !value_obj.is_instance_of(&date_constructor) {
-            return Err(Error::FromJs {
-                from: "Date",
-                to: "DateTime<Utc>",
-                message: None,
-            });
-        }
-
-        let getter: crate::Function = value_obj.get("getTime")?;
-        let millis: i64 = getter.call((crate::This(value_obj),))?;
-
-        Ok(chrono::Utc.timestamp_millis(millis))
-    }
-}
 
 impl<'js> FromJs<'js> for Value<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
@@ -345,7 +322,78 @@ impl<'js> FromJs<'js> for f32 {
     }
 }
 
+fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
+    let global = ctx.globals();
+    let date_ctor: Object = global.get("Date")?;
+
+    let value = Object::from_value(value)?;
+
+    if !value.is_instance_of(&date_ctor) {
+        return Err(Error::new_from_js("Object", "Date"));
+    }
+
+    let get_time_fn: crate::Function = value.get("getTime")?;
+
+    get_time_fn.call((crate::This(value),))
+}
+
+impl<'js> FromJs<'js> for SystemTime {
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
+        let millis = date_to_millis(ctx, value)?;
+
+        if millis >= 0 {
+            /* since unix epoch */
+            SystemTime::UNIX_EPOCH
+                .checked_add(Duration::from_millis(millis as _))
+                .ok_or_else(|| {
+                    Error::new_from_js_message("Date", "SystemTime", "Timestamp too big")
+                })
+        } else {
+            /* before unix epoch */
+            SystemTime::UNIX_EPOCH
+                .checked_sub(Duration::from_millis((-millis) as _))
+                .ok_or_else(|| {
+                    Error::new_from_js_message("Date", "SystemTime", "Timestamp too small")
+                })
+        }
+    }
+}
+
+#[cfg(feature = "chrono")]
+impl<'js> FromJs<'js> for chrono::DateTime<chrono::Utc> {
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::Utc>> {
+        use chrono::TimeZone;
+
+        let millis = date_to_millis(ctx, value)?;
+
+        Ok(chrono::Utc.timestamp_millis(millis))
+    }
+}
+
 mod test {
+    #[test]
+    fn js_to_system_time() {
+        use crate::{Context, Runtime};
+        use std::time::{Duration, SystemTime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        ctx.with(|ctx| {
+            let res: SystemTime = ctx.eval("new Date(123456789)").unwrap();
+            assert_eq!(
+                Duration::from_millis(123456789),
+                res.duration_since(SystemTime::UNIX_EPOCH).unwrap()
+            );
+
+            let res: SystemTime = ctx.eval("new Date(-123456789)").unwrap();
+            assert_eq!(
+                Duration::from_millis(123456789),
+                SystemTime::UNIX_EPOCH.duration_since(res).unwrap()
+            );
+        });
+    }
+
     #[cfg(feature = "chrono")]
     #[test]
     fn js_to_chrono() {
@@ -358,6 +406,20 @@ mod test {
         ctx.with(|ctx| {
             let res: DateTime<Utc> = ctx.eval("new Date(123456789)").unwrap();
             assert_eq!(123456789, res.timestamp_millis());
+        });
+
+        ctx.with(|ctx| {
+            let res: DateTime<Utc> = ctx
+                .eval("new Date('Fri Jun 03 2022 23:16:50 GMT+0300')")
+                .unwrap();
+            assert_eq!(1654287410000, res.timestamp_millis());
+        });
+
+        ctx.with(|ctx| {
+            let res: DateTime<Utc> = ctx
+                .eval("new Date('Fri Jun 03 2022 23:16:50 GMT-0300')")
+                .unwrap();
+            assert_eq!(1654309010000, res.timestamp_millis());
         });
     }
 }
