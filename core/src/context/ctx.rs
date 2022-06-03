@@ -84,11 +84,12 @@ impl<'js> Ctx<'js> {
         options: EvalOptions,
     ) -> Result<V> {
         let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
-        let mut flag = 0;
 
-        if options.global {
-            flag |= qjs::JS_EVAL_TYPE_GLOBAL;
-        }
+        let mut flag = if options.global {
+            qjs::JS_EVAL_TYPE_GLOBAL
+        } else {
+            qjs::JS_EVAL_TYPE_MODULE
+        };
 
         if options.strict {
             flag |= qjs::JS_EVAL_FLAG_STRICT;
@@ -118,11 +119,12 @@ impl<'js> Ctx<'js> {
                 .to_string_lossy()
                 .into_owned(),
         )?;
-        let mut flag = 0;
 
-        if options.global {
-            flag |= qjs::JS_EVAL_TYPE_GLOBAL;
-        }
+        let mut flag = if options.global {
+            qjs::JS_EVAL_TYPE_GLOBAL
+        } else {
+            qjs::JS_EVAL_TYPE_MODULE
+        };
 
         if options.strict {
             flag |= qjs::JS_EVAL_FLAG_STRICT;
