@@ -26,6 +26,28 @@ pub struct EvalOptions {
     pub global: bool,
     /// Force 'strict' mode.
     pub strict: bool,
+    /// Don't include the stack frames before this eval in the Error() backtraces.
+    pub backtrace_barrier: bool,
+}
+
+impl EvalOptions {
+    fn to_flag(&self) -> i32 {
+        let mut flag = if self.global {
+            qjs::JS_EVAL_TYPE_GLOBAL
+        } else {
+            qjs::JS_EVAL_TYPE_MODULE
+        };
+
+        if self.strict {
+            flag |= qjs::JS_EVAL_FLAG_STRICT;
+        }
+
+        if self.backtrace_barrier {
+            flag |= qjs::JS_EVAL_FLAG_BACKTRACE_BARRIER;
+        }
+
+        flag as i32
+    }
 }
 
 impl Default for EvalOptions {
@@ -33,6 +55,7 @@ impl Default for EvalOptions {
         EvalOptions {
             global: true,
             strict: true,
+            backtrace_barrier: false,
         }
     }
 }
@@ -85,18 +108,8 @@ impl<'js> Ctx<'js> {
     ) -> Result<V> {
         let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
 
-        let mut flag = if options.global {
-            qjs::JS_EVAL_TYPE_GLOBAL
-        } else {
-            qjs::JS_EVAL_TYPE_MODULE
-        };
-
-        if options.strict {
-            flag |= qjs::JS_EVAL_FLAG_STRICT;
-        }
-
         V::from_js(self, unsafe {
-            let val = self.eval_raw(source, file_name, flag as i32)?;
+            let val = self.eval_raw(source, file_name, options.to_flag())?;
             Value::from_js_value(self, val)
         })
     }
@@ -120,18 +133,8 @@ impl<'js> Ctx<'js> {
                 .into_owned(),
         )?;
 
-        let mut flag = if options.global {
-            qjs::JS_EVAL_TYPE_GLOBAL
-        } else {
-            qjs::JS_EVAL_TYPE_MODULE
-        };
-
-        if options.strict {
-            flag |= qjs::JS_EVAL_FLAG_STRICT;
-        }
-
         V::from_js(self, unsafe {
-            let val = self.eval_raw(buffer, file_name.as_c_str(), flag as i32)?;
+            let val = self.eval_raw(buffer, file_name.as_c_str(), options.to_flag())?;
             Value::from_js_value(self, val)
         })
     }
