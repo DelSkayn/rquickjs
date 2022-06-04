@@ -498,7 +498,7 @@ impl<'js> IntoJs<'js> for SystemTime {
 }
 
 #[cfg(feature = "chrono")]
-impl<'js> IntoJs<'js> for chrono::DateTime<chrono::Utc> {
+impl<'js, Tz: chrono::TimeZone> IntoJs<'js> for chrono::DateTime<Tz> {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         millis_to_date(ctx, self.timestamp_millis())
     }
