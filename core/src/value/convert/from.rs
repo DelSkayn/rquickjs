@@ -359,15 +359,26 @@ impl<'js> FromJs<'js> for SystemTime {
     }
 }
 
-#[cfg(feature = "chrono")]
-impl<'js> FromJs<'js> for chrono::DateTime<chrono::Utc> {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::Utc>> {
-        use chrono::TimeZone;
+macro_rules! chrono_from_js_impls {
+    ($($type:ident;)+) => {
+        $(
+            #[cfg(feature = "chrono")]
+            impl<'js> FromJs<'js> for chrono::DateTime<chrono::$type> {
+                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::$type>> {
+                    use chrono::TimeZone;
 
-        let millis = date_to_millis(ctx, value)?;
+                    let millis = date_to_millis(ctx, value)?;
 
-        Ok(chrono::Utc.timestamp_millis(millis))
-    }
+                    Ok(chrono::$type.timestamp_millis(millis))
+                }
+            }
+        )+
+    };
+}
+
+chrono_from_js_impls! {
+    Utc;
+    Local;
 }
 
 mod test {
