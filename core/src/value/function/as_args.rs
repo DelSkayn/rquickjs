@@ -44,6 +44,12 @@ impl<'js> CallInput<'js> {
         Ok(())
     }
 
+    /// Check this value
+    #[inline]
+    pub fn has_this(&self) -> bool {
+        qjs::JS_TAG_UNDEFINED != unsafe { qjs::JS_VALUE_GET_TAG(self.this) }
+    }
+
     /// Add this as an argument
     #[inline]
     pub fn this_arg(&mut self) {
@@ -158,6 +164,10 @@ pub trait AsArguments<'js> {
     where
         R: FromJs<'js>;
 
+    fn construct<R>(self, func: &Function<'js>) -> Result<R>
+    where
+        R: FromJs<'js>;
+
     fn defer_apply(self, func: &Function<'js>) -> Result<()>;
 }
 
@@ -179,6 +189,20 @@ macro_rules! as_args_impls {
                     let mut input = CallInput::new(ctx, len);
                     $($arg.into_input(&mut input)?;)*
                     let res = func.call_raw(&input)?;
+                    R::from_js(ctx, res)
+                }
+
+                #[allow(non_snake_case, unused_mut)]
+                fn construct<R>(self, func: &Function<'js>) -> Result<R>
+                where
+                    R: FromJs<'js>,
+                {
+                    let ctx = func.0.ctx;
+                    let ($($arg,)*) = self;
+                    let len = 0 $(+ $arg.num_args())*;
+                    let mut input = CallInput::new(ctx, len);
+                    $($arg.into_input(&mut input)?;)*
+                    let res = func.construct_raw(&input)?;
                     R::from_js(ctx, res)
                 }
 

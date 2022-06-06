@@ -1,6 +1,6 @@
 use crate::{
-    Array, Ctx, Error, IntoAtom, IntoJs, IteratorJs, Object, Result, StdResult, StdString, String,
-    Value,
+    Array, Ctx, Error, Function, IntoAtom, IntoJs, IteratorJs, Object, Result, StdResult,
+    StdString, String, Value,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -441,23 +441,9 @@ into_js_impls! {
 }
 
 fn millis_to_date<'js>(ctx: Ctx<'js>, millis: i64) -> Result<Value<'js>> {
-    let global = ctx.globals();
-    let date_constructor: Object = global.get("Date")?;
-    let timestamp = millis.into_js(ctx)?;
+    let date_ctor: Function = ctx.globals().get("Date")?;
 
-    // TODO:
-    //  Currently we lack equivalent hight-level alternative for CallConstructor.
-    //  https://github.com/DelSkayn/rquickjs/pull/67#discussion_r885592941
-    let value = unsafe {
-        crate::qjs::JS_CallConstructor(
-            ctx.ctx,
-            date_constructor.as_js_value(),
-            1,
-            &timestamp.as_js_value() as *const _ as *mut _,
-        )
-    };
-
-    Ok(Value { ctx, value })
+    date_ctor.construct((millis,))
 }
 
 impl<'js> IntoJs<'js> for SystemTime {

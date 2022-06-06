@@ -158,17 +158,7 @@ impl<'js, T> TypedArray<'js, T> {
     {
         let ctx = arraybuffer.0.ctx;
         let ctor: Function = ctx.globals().get(T::CLASS_NAME)?;
-        let val = unsafe {
-            let val = qjs::JS_CallConstructor(
-                ctx.ctx,
-                ctor.as_js_value(),
-                1,
-                &arraybuffer.as_js_value() as *const _ as *mut _,
-            );
-            handle_exception(ctx, val)?;
-            Value::from_js_value(ctx, val)
-        };
-        Self::from_value(val)
+        ctor.construct((arraybuffer,))
     }
 
     pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut T)> {

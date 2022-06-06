@@ -111,6 +111,44 @@ impl<'js> Function<'js> {
         })
     }
 
+    /// Call a constructor with given arguments
+    ///
+    /// You can use tuples to pass arguments. The `()` treated as no arguments, the `(arg,)` as a single argument and so on.
+    ///
+    /// To call constructor on a given `this` you can pass `This(this)` as a first argument.
+    pub fn construct<A, R>(&self, args: A) -> Result<R>
+    where
+        A: AsArguments<'js>,
+        R: FromJs<'js>,
+    {
+        args.construct(self)
+    }
+
+    /// Immadiate call of function as a constructor
+    pub(crate) fn construct_raw(&self, input: &CallInput) -> Result<Value<'js>> {
+        let ctx = self.0.ctx;
+        Ok(unsafe {
+            let val = if input.has_this() {
+                qjs::JS_CallConstructor2(
+                    ctx.ctx,
+                    self.0.as_js_value(),
+                    input.this,
+                    input.args.len() as _,
+                    input.args.as_ptr() as _,
+                )
+            } else {
+                qjs::JS_CallConstructor(
+                    ctx.ctx,
+                    self.0.as_js_value(),
+                    input.args.len() as _,
+                    input.args.as_ptr() as _,
+                )
+            };
+            let val = handle_exception(ctx, val)?;
+            Value::from_js_value(ctx, val)
+        })
+    }
+
     /// Deferred call a function with given arguments
     ///
     /// You can use tuples to pass arguments. The `()` treated as no arguments, the `(arg,)` as a single argument and so on.
