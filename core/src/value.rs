@@ -360,6 +360,7 @@ macro_rules! type_impls {
         #[repr(i32)]
         pub enum Type {
             $($type,)*
+            Unknown
         }
 
         impl Type {
@@ -386,6 +387,7 @@ macro_rules! type_impls {
             pub const fn as_str(self) -> &'static str {
                 match self {
                     $(Type::$type => stringify!($name),)*
+                    Type::Unknown => "Unknown type",
                 }
             }
         }
@@ -419,7 +421,7 @@ macro_rules! type_impls {
                 let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
                 match tag {
                     $(qjs::$tag if type_impls!(@cond $type self) => Type::$type,)*
-                    _ => panic!("Unknown JS value tag: {}", tag),
+                    _ => Type::Unknown,
                 }
             }
 
