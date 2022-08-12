@@ -282,7 +282,7 @@ jobs:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
         with:
           command: build
-          args: --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
+          args: --release --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
         uses: actions/upload-artifact@v2
