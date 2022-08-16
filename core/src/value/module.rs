@@ -217,7 +217,7 @@ impl<'js> Module<'js> {
         if ptr.is_null() {
             return Err(Error::Allocation);
         }
-        let module = unsafe { Module::<Created>::from_module_def(ctx, ptr) };
+        let module = unsafe { Module::<Created>::from_module_def_const(ctx, ptr) };
         D::load(ctx, &module)?;
         Ok(Module(module.0, PhantomData))
     }
@@ -541,6 +541,24 @@ where
 mod test {
     use super::*;
     use crate::*;
+
+    pub struct RustModule;
+
+    impl ModuleDef for RustModule {
+        fn load<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Created>) -> Result<()> {
+            Ok(())
+        }
+        fn eval<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Loaded<Native>>) -> Result<()> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn from_rust_def() {
+        test_with(|ctx| {
+            Module::new_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+        })
+    }
 
     #[test]
     fn from_javascript() {
