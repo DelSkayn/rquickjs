@@ -401,6 +401,7 @@ index 48aeffc..4ac7507 100644
 
 +#pragma function (ceil)
 +#pragma function (floor)
++#pragma function (log2)
 +
  static const JSCFunctionListEntry js_math_funcs[] = {
      JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max, 0 ),
