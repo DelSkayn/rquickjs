@@ -544,7 +544,7 @@ mod test {
 
     pub struct RustModule;
 
-    impl ModuleDef for RustModule{
+    impl ModuleDef for RustModule {
         fn load<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Created>) -> Result<()> {
             Ok(())
         }
@@ -552,11 +552,11 @@ mod test {
             Ok(())
         }
     }
-    
+
     #[test]
     fn from_rust_def() {
         test_with(|ctx| {
-            Module::new_def::<RustModule,_>(ctx,"rust_mod").unwrap();
+            Module::new_def::<RustModule, _>(ctx, "rust_mod").unwrap();
         })
     }
 
