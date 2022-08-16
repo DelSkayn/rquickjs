@@ -121,98 +121,123 @@ jobs:
             rust: stable
             target: i686-unknown-linux-gnu
             features: exports
+            optimization: false
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: exports
+            optimization: false
           - task: bindings
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
             features: full-async
+            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
             target: i686-pc-windows-gnu
             features: full-async
+            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-gnu
             features: full-async
+            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
             target: i686-pc-windows-msvc
             features: full-async
+            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-msvc
             features: full-async
+            optimization: false
+          - task: bindings
+            os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+            features: full-async
+            optimization: true
           # Test features
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: exports
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: rust-alloc
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: loader
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: classes
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: properties
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: futures
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: async-std
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: tokio
+            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: parallel
+            optimization: false
           # Test channels
           - task: channels
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: full-async
+            optimization: false 
           - task: channels
             os: ubuntu-latest
             rust: beta
             target: x86_64-unknown-linux-gnu
             features: full-async
+            optimization: false
           - task: channels
             os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
             features: full-async
+            optimization: false 
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
@@ -271,7 +296,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: target
-          key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-opt_${{ matrix.optimization }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Update deps
         uses: actions-rs/cargo@v1
         with:
@@ -282,7 +307,7 @@ jobs:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
         with:
           command: build
-          args: --release --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
+          args: ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
         uses: actions/upload-artifact@v2
@@ -293,7 +318,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+          args: ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         uses: actions-rs/cargo@v1
         timeout-minutes: 12
@@ -301,7 +326,7 @@ jobs:
           RUST_BACKTRACE: full
         with:
           command: test
-          args: --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+          args: ${{ matrix.optimization && '--release' || '' }} --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
   update-bindings:
     if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
