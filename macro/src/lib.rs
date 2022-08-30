@@ -84,7 +84,7 @@ Attribute                         | Description
 __`ident = "MyModule"`__          | The name of target unit struct to export
 __`public`__, __`public = "self/super/crate"`__ | Makes the target unit struct visible
 __`module`__                      | Adds the [`ModuleDef`](rquickjs_core::ModuleDef) impl to use bindings as ES6 module
-__`object`__                      | Adds the [`ObjectDef`](rquickjs_core::ModuleDef) impl for attaching bindings to an object
+__`object`__                      | Adds the [`ObjectDef`](rquickjs_core::ObjectDef) impl for attaching bindings to an object
 __`init`__, __`init = "js_module_init"`__     | Adds the `js_module_init` function (in particular for creating dynamically loadable modules or static libraries to use from `C`)
 __`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
 
