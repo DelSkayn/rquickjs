@@ -81,7 +81,7 @@ coerce_impls! {
     /// Coerce a value to a `i32` in the same way javascript would coerce values
     i32 JS_ToInt32,
     /// Coerce a value to a `i64` in the same way javascript would coerce values
-    i64 JS_ToInt64,
+    i64 JS_ToInt64Ext,
     /// Coerce a value to a `u64` in the same way javascript would coerce values
     u64 JS_ToIndex,
     /// Coerce a value to a `f64` in the same way javascript would coerce values

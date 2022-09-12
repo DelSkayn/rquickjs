@@ -6,6 +6,7 @@ mod module;
 mod object;
 mod string;
 mod symbol;
+mod bigint;
 
 #[cfg(feature = "array-buffer")]
 mod array_buffer;
@@ -27,6 +28,7 @@ pub use function::{
 pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
+pub use bigint::BigInt;
 
 #[cfg(feature = "array-buffer")]
 pub use array_buffer::ArrayBuffer;
@@ -450,6 +452,7 @@ type_impls! {
     Function: function => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
+    BigInt: big_int => JS_TAG_BIG_INT,
 }
 
 macro_rules! sub_types {
@@ -579,6 +582,7 @@ sub_types! {
     Array as_array ref_array into_array from_array,
     Function as_function ref_function into_function from_function,
     Module as_module ref_module into_module from_module,
+    BigInt as_big_int ref_big_int into_big_int from_big_int,
 }
 
 macro_rules! void_types {
