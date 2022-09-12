@@ -1,5 +1,6 @@
 mod array;
 mod atom;
+mod bigint;
 mod convert;
 mod function;
 mod module;
@@ -20,6 +21,7 @@ pub use module::{ExportEntriesIter, ExportNamesIter};
 
 pub use array::Array;
 pub use atom::*;
+pub use bigint::BigInt;
 pub use convert::*;
 pub use function::{
     AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
@@ -450,6 +452,7 @@ type_impls! {
     Function: function => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
+    BigInt: big_int => JS_TAG_BIG_INT,
 }
 
 macro_rules! sub_types {
@@ -579,6 +582,7 @@ sub_types! {
     Array as_array ref_array into_array from_array,
     Function as_function ref_function into_function from_function,
     Module as_module ref_module into_module from_module,
+    BigInt as_big_int ref_big_int into_big_int from_big_int,
 }
 
 macro_rules! void_types {

@@ -1,5 +1,5 @@
 use crate::{
-    qjs, Array, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
+    qjs, Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
 };
 use std::{
     cell::Cell,
@@ -33,6 +33,7 @@ outlive_impls! {
     String,
     Object,
     Array,
+    BigInt,
 }
 
 /// The wrapper for JS values to keep it from GC
