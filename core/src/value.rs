@@ -1,12 +1,12 @@
 mod array;
 mod atom;
+mod bigint;
 mod convert;
 mod function;
 mod module;
 mod object;
 mod string;
 mod symbol;
-mod bigint;
 
 #[cfg(feature = "array-buffer")]
 mod array_buffer;
@@ -21,6 +21,7 @@ pub use module::{ExportEntriesIter, ExportNamesIter};
 
 pub use array::Array;
 pub use atom::*;
+pub use bigint::BigInt;
 pub use convert::*;
 pub use function::{
     AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
@@ -28,7 +29,6 @@ pub use function::{
 pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
-pub use bigint::BigInt;
 
 #[cfg(feature = "array-buffer")]
 pub use array_buffer::ArrayBuffer;
