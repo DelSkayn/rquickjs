@@ -8,6 +8,7 @@ use std::{ffi::CString, marker::PhantomData, mem, ops::Deref, ptr};
 
 pub use refs::{HasRefs, RefsMarker};
 
+
 /// The ES6 class definition trait
 ///
 /// This trait helps export rust data types to QuickJS so JS code can interoperate with it as with usual ES6 classes.
@@ -24,6 +25,8 @@ pub use refs::{HasRefs, RefsMarker};
 ///
 /// impl ClassDef for MyClass {
 ///     const CLASS_NAME: &'static str = "MyClass";
+///
+///     type UserData = ();
 ///
 ///     unsafe fn class_id() -> &'static mut ClassId {
 ///         static mut CLASS_ID: ClassId = ClassId::new();
@@ -78,6 +81,8 @@ pub trait ClassDef {
     /// The name of a class
     const CLASS_NAME: &'static str;
 
+    type UserData: 'static;
+
     /// The reference to class identifier
     ///
     /// # Safety
@@ -116,6 +121,7 @@ pub trait ClassDef {
     fn into_js_obj<'js>(self, ctx: Ctx<'js>) -> Result<Value<'js>>
     where
         Self: Sized,
+        Self: ClassDef<UserData = ()>,
     {
         Class::<Self>::instance(ctx, self).map(|Class(Object(val), _)| val)
     }
@@ -151,6 +157,11 @@ pub trait ClassDef {
         let instance = Class::<Self>::try_ref(ctx, &value)?;
         Ok(instance.clone())
     }
+}
+
+struct ClassUserData<C: ClassDef>{
+    def: C,
+    user_data: C::UserData,
 }
 
 /// The class object interface
@@ -203,6 +214,23 @@ where
     }
 }
 
+
+impl<'js, C> Class<'js, C>
+where
+    C: ClassDef<UserData = ()>,
+{
+
+    /// Instantiate the object of class
+    pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
+        Self::instance_user(ctx,value,())
+    }
+
+    /// Instantiate the object of class with given prototype
+    pub fn instance_proto(ctx: Ctx<'js>, value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
+        Self::instance_proto_user(ctx,value,proto,())
+    }
+}
+
 impl<'js, C> Class<'js, C>
 where
     C: ClassDef,
@@ -228,9 +256,14 @@ where
     }
 
     /// Instantiate the object of class
-    pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
+    pub fn instance_user(ctx: Ctx<'js>, value: C,user_data: C::UserData) -> Result<Class<'js, C>> {
         let val =
             unsafe { handle_exception(ctx, qjs::JS_NewObjectClass(ctx.ctx, Self::id() as _)) }?;
+        let value = ClassUserData{
+            def: value,
+            user_data,
+        };
+
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
@@ -240,13 +273,17 @@ where
     }
 
     /// Instantiate the object of class with given prototype
-    pub fn instance_proto(ctx: Ctx<'js>, value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
+    pub fn instance_proto_user(ctx: Ctx<'js>, value: C, proto: Object<'js>,user_data: C::UserData) -> Result<Class<'js, C>> {
         let val = unsafe {
             handle_exception(
                 ctx,
                 qjs::JS_NewObjectProtoClass(ctx.ctx, proto.0.as_js_value(), Self::id()),
             )
         }?;
+        let value = ClassUserData{
+            def: value,
+            user_data,
+        };
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
@@ -257,17 +294,18 @@ where
 
     /// Get reference from object
     pub fn try_ref<'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r C> {
-        Ok(unsafe { &*Self::try_ptr(ctx.ctx, value.0.as_js_value())? })
+        Ok(unsafe { &(*Self::try_ptr(ctx.ctx, value.0.as_js_value())?).def })
     }
 
+    //TODO: check safety, seems widely unsound
     /// Get mutable reference from object
     pub fn try_mut<'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r mut C> {
-        Ok(unsafe { &mut *Self::try_ptr(ctx.ctx, value.0.as_js_value())? })
+        Ok(unsafe { &mut (*Self::try_ptr(ctx.ctx, value.0.as_js_value())?).def })
     }
 
     /// Get instance pointer from object
-    unsafe fn try_ptr(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Result<*mut C> {
-        let ptr = qjs::JS_GetOpaque2(ctx, value, Self::id()) as *mut C;
+    unsafe fn try_ptr(ctx: *mut qjs::JSContext, value: qjs::JSValue) -> Result<*mut ClassUserData<C>> {
+        let ptr = qjs::JS_GetOpaque2(ctx, value, Self::id()) as *mut ClassUserData<C>;
         if ptr.is_null() {
             return Err(Error::FromJs {
                 from: "object",
@@ -338,6 +376,13 @@ where
         }))
     }
 
+    pub fn userdata(&self) -> &C::UserData{
+        unsafe{
+            let ptr = qjs::JS_GetOpaque(self.value,C::class_id().get()).cast::<ClassUserData<C>>();
+            &(*ptr).user_data
+        }
+    }
+
     /// Get class from value
     pub fn from_object(value: Object<'js>) -> Result<Self> {
         if value.instance_of::<C>() {
@@ -370,15 +415,15 @@ where
         val: qjs::JSValue,
         mark_func: qjs::JS_MarkFunc,
     ) {
-        let ptr = qjs::JS_GetOpaque(val, Self::id()) as *mut C;
+        let ptr = qjs::JS_GetOpaque(val, Self::id()) as *mut ClassUserData<C>;
         debug_assert!(!ptr.is_null());
-        let inst = &mut *ptr;
+        let inst = &mut (*ptr).def;
         let marker = RefsMarker { rt, mark_func };
         inst.mark_refs(&marker);
     }
 
     unsafe extern "C" fn finalizer(rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
-        let ptr = qjs::JS_GetOpaque(val, Self::id()) as *mut C;
+        let ptr = qjs::JS_GetOpaque(val, Self::id()) as *mut ClassUserData<C>;
         debug_assert!(!ptr.is_null());
         let inst = Box::from_raw(ptr);
         qjs::JS_FreeValueRT(rt, val);
@@ -452,7 +497,7 @@ pub struct WithProto<'js, C>(pub C, pub Object<'js>);
 
 impl<'js, C> IntoJs<'js> for WithProto<'js, C>
 where
-    C: ClassDef + IntoJs<'js>,
+    C: ClassDef<UserData = ()> + IntoJs<'js>,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Class::<C>::instance_proto(ctx, self.0, self.1).map(|Class(Object(val), _)| val)
@@ -490,9 +535,18 @@ where
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 #[macro_export]
 macro_rules! class_def {
-    ($name:ident $($rest:tt)*) => {
+    ($name:ident $(<UserData = $userdata:ty>)* $($rest:tt)*) => {
         $crate::class_def!{@decl $name
+                            $crate::class_def!{@userdata <$($userdata)*>}
                            $crate::class_def!{@parse $($rest)*}}
+    };
+
+    (@userdata <$userdata:ty>) => {
+        type UserData = $userdata;
+    };
+
+    (@userdata <>) => {
+        type UserData = ();
     };
 
     (@parse ($proto:ident) { $($body:tt)* } $($rest:tt)*) => {

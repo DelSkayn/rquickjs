@@ -139,6 +139,8 @@ impl BindClass {
             impl #lib_crate::ClassDef for #src {
                 const CLASS_NAME: &'static str = #name;
 
+                type UserData = ();
+
                 unsafe fn class_id() -> &'static mut #lib_crate::ClassId {
                     static mut CLASS_ID: #lib_crate::ClassId = #lib_crate::ClassId::new();
                     &mut CLASS_ID
@@ -414,6 +416,8 @@ mod test {
             impl rquickjs::ClassDef for test::Test {
                 const CLASS_NAME: &'static str = "Test";
 
+                type UserData = ();
+
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
                     &mut CLASS_ID
@@ -452,6 +456,8 @@ mod test {
         } {
             impl rquickjs::ClassDef for test::Test {
                 const CLASS_NAME: &'static str = "Test";
+
+                type UserData = ();
 
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
@@ -521,6 +527,8 @@ mod test {
         } {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
+
+                type UserData = ();
 
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
@@ -601,6 +609,8 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
+                type UserData = ();
+
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
                     &mut CLASS_ID
@@ -659,6 +669,8 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
+                type UserData = ();
+
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
                     &mut CLASS_ID
@@ -701,6 +713,8 @@ mod test {
         } {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
+
+                type UserData = ();
 
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
@@ -748,6 +762,8 @@ mod test {
         } {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
+
+                type UserData = ();
 
                 unsafe fn class_id() -> &'static mut rquickjs::ClassId {
                     static mut CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
