@@ -717,15 +717,17 @@ mod test {
     }
 
     #[test]
-    fn no_prototype_with_constructor(){
+    fn no_prototype_with_constructor() {
         struct X;
         class_def!(X);
 
-        test_with(|ctx|{
+        test_with(|ctx| {
             Class::<X>::register(ctx).unwrap();
-            ctx.globals().set("X",Func::new("X",Class::<X>::constructor(||{ X }))).unwrap();
-            ctx.eval::<(),_>("X()").unwrap();
-            ctx.eval::<(),_>("new X()").unwrap();
+            ctx.globals()
+                .set("X", Func::new("X", Class::<X>::constructor(|| X)))
+                .unwrap();
+            ctx.eval::<(), _>("X()").unwrap();
+            ctx.eval::<(), _>("new X()").unwrap();
         });
     }
 
@@ -914,6 +916,5 @@ mod test {
                     .unwrap();
             });
         }
-
     }
 }
