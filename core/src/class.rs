@@ -332,7 +332,7 @@ where
                 return Err(Error::new_from_js_message(
                     type_.as_str(),
                     "prototype",
-                    "Unregistered class",
+                    "Tried to get the prototype of class without prototype",
                 ));
             }
         }))
@@ -587,6 +587,7 @@ macro_rules! class_def {
 mod test {
     use crate::*;
     use approx::assert_abs_diff_eq as assert_approx_eq;
+    use futures_rs::future::UnwrapOrElse;
 
     #[test]
     fn class_basics() {
@@ -712,6 +713,19 @@ mod test {
                 )
                 .unwrap();
             assert_approx_eq!(res, 17.0);
+        });
+    }
+
+    #[test]
+    fn no_prototype_with_constructor(){
+        struct X;
+        class_def!(X);
+
+        test_with(|ctx|{
+            Class::<X>::register(ctx).unwrap();
+            ctx.globals().set("X",Func::new("X",Class::<X>::constructor(||{ X }))).unwrap();
+            ctx.eval::<(),_>("X()").unwrap();
+            ctx.eval::<(),_>("new X()").unwrap();
         });
     }
 
@@ -900,5 +914,6 @@ mod test {
                     .unwrap();
             });
         }
+
     }
 }

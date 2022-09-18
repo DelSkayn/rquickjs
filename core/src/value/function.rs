@@ -228,6 +228,7 @@ impl<'js> Function<'js> {
         let ctx = self.0.ctx;
         let value = self.0.as_js_value();
         Ok(unsafe {
+            //TODO: can a function not have a prototype?.
             let proto = handle_exception(
                 ctx,
                 qjs::JS_GetPropertyStr(ctx.ctx, value, "prototype\0".as_ptr() as _),

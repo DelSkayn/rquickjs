@@ -316,7 +316,14 @@ where
             // called as a constructor (with new keyword)
             .map(|func| func.get_prototype())
             // called as a function
-            .unwrap_or_else(|| Class::<C>::prototype(ctx))?;
+            .unwrap_or_else(|| if C::HAS_PROTO{
+                Class::<C>::prototype(ctx)
+            }else{
+                // Fallback to the a ordinary object as prototype.
+                // more correct would be the %Object.prototype% as defined by ecma but we dont have
+                // access to fundamental objects.
+                crate::Object::new(ctx)
+            })?;
         // call constructor
         let res = self.0.call(input)?;
         // set prototype to support inheritance
@@ -328,7 +335,14 @@ where
 
     fn post<'js_>(ctx: Ctx<'js_>, func: &Function<'js_>) -> Result<()> {
         func.set_constructor(true);
-        let proto = Class::<C>::prototype(ctx)?;
+        let proto = if C::HAS_PROTO{
+            Class::<C>::prototype(ctx)?
+        }else{
+            // Fallback to the a ordinary object as prototype.
+            // more correct would be the %Object.prototype% as defined by ecma but we dont have
+            // access to fundamental objects.
+            crate::Object::new(ctx)?
+        };
         func.set_prototype(&proto);
         Class::<C>::static_init(ctx, func)?;
         Ok(())
