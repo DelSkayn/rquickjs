@@ -116,11 +116,7 @@ where
     T: IntoJs<'js>,
 {
     fn num_args(&self) -> usize {
-        if self.is_some() {
-            1
-        } else {
-            0
-        }
+        usize::from(self.is_some())
     }
 
     fn into_input(self, input: &mut CallInput<'js>) -> Result<()> {

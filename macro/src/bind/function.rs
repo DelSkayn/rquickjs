@@ -206,10 +206,10 @@ impl Binder {
         if get || set {
             if let Some(prop) = self.top_item::<BindProp, _>(ident, &name, method) {
                 if get {
-                    prop.set_getter(&ident, &name, decl.clone());
+                    prop.set_getter(ident, &name, decl.clone());
                 }
                 if set {
-                    prop.set_setter(&ident, &name, decl);
+                    prop.set_setter(ident, &name, decl);
                 }
                 prop.set_configurable(configurable);
                 prop.set_enumerable(enumerable);

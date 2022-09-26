@@ -485,7 +485,7 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let attr: AttributeArgs = parse_macro_input!(attr);
     let item = parse_macro_input!(item);
 
-    let attr = AttrItem::from_list(&*attr).unwrap_or_else(|error| {
+    let attr = AttrItem::from_list(&attr).unwrap_or_else(|error| {
         abort!("{}", error);
     });
     let mut binder = Binder::new(attr.config());
@@ -534,7 +534,7 @@ pub fn embed(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let attr: AttributeArgs = parse_macro_input!(attr);
     let item = parse_macro_input!(item);
 
-    let attr = AttrEmbed::from_list(&*attr).unwrap_or_else(|error| {
+    let attr = AttrEmbed::from_list(&attr).unwrap_or_else(|error| {
         abort!("{}", error);
     });
     let embedder = Embedder::new(attr.config());

@@ -556,7 +556,6 @@ macro_rules! class_def {
 mod test {
     use crate::*;
     use approx::assert_abs_diff_eq as assert_approx_eq;
-    use futures_rs::future::UnwrapOrElse;
 
     #[test]
     fn class_basics() {
