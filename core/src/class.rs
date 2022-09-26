@@ -61,12 +61,6 @@ pub use refs::{HasRefs, RefsMarker};
 ///     }
 /// }
 ///
-/// impl<'js> FromJs<'js> for &'js mut MyClass {
-///     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-///         MyClass::from_js_mut(ctx, value)
-///     }
-/// }
-///
 /// impl<'js> FromJs<'js> for MyClass {
 ///     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
 ///         MyClass::from_js_obj(ctx, value)
@@ -131,17 +125,6 @@ pub trait ClassDef {
         Class::<Self>::try_ref(ctx, &value)
     }
 
-    /// Get mutable reference from JS object
-    ///
-    /// This method helps implement [`FromJs`] trait for classes
-    fn from_js_mut<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<&'js mut Self>
-    where
-        Self: Sized,
-    {
-        let value = Object::from_js(ctx, value)?;
-        Class::<Self>::try_mut(ctx, &value)
-    }
-
     /// Get an instance of class from JS object
     fn from_js_obj<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self>
     where
@@ -190,16 +173,6 @@ where
     fn as_ref(&self) -> &C {
         let obj = &self.0;
         Class::<C>::try_ref(obj.0.ctx, obj).unwrap()
-    }
-}
-
-impl<'js, C> AsMut<C> for Class<'js, C>
-where
-    C: ClassDef,
-{
-    fn as_mut(&mut self) -> &mut C {
-        let obj = &self.0;
-        Class::<C>::try_mut(obj.0.ctx, obj).unwrap()
     }
 }
 
@@ -258,11 +231,6 @@ where
     /// Get reference from object
     pub fn try_ref<'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r C> {
         Ok(unsafe { &*Self::try_ptr(ctx.ctx, value.0.as_js_value())? })
-    }
-
-    /// Get mutable reference from object
-    pub fn try_mut<'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r mut C> {
-        Ok(unsafe { &mut *Self::try_ptr(ctx.ctx, value.0.as_js_value())? })
     }
 
     /// Get instance pointer from object
@@ -345,6 +313,13 @@ where
         } else {
             Err(Error::new_from_js("object", C::CLASS_NAME))
         }
+    }
+
+    /// Get reference to class definition
+    #[inline]
+    pub fn as_class_def(&self) -> &C {
+        // This should always succeed
+        Self::try_ref(self.ctx, &self.0).unwrap()
     }
 
     /// Get reference to object
@@ -574,12 +549,6 @@ macro_rules! class_def {
                 <$name as $crate::ClassDef>::from_js_ref(ctx, value)
             }
         }
-
-        impl<'js> $crate::FromJs<'js> for &'js mut $name {
-            fn from_js(ctx: $crate::Ctx<'js>, value: $crate::Value<'js>) -> $crate::Result<Self> {
-                <$name as $crate::ClassDef>::from_js_mut(ctx, value)
-            }
-        }
     };
 }
 
@@ -767,17 +736,17 @@ mod test {
 
     mod internal_refs {
         use super::*;
-        use std::collections::HashSet;
+        use std::{cell::RefCell, collections::HashSet};
 
         struct A {
             name: StdString,
-            refs: HashSet<Persistent<Class<'static, A>>>,
+            refs: RefCell<HashSet<Persistent<Class<'static, A>>>>,
         }
 
         impl HasRefs for A {
             fn mark_refs(&self, marker: &RefsMarker) {
                 println!("A::mark {}", self.name);
-                self.refs.mark_refs(marker);
+                self.refs.borrow_mut().mark_refs(marker);
             }
         }
 
@@ -792,18 +761,18 @@ mod test {
                 println!("A::new {}", name);
                 Self {
                     name,
-                    refs: HashSet::new(),
+                    refs: RefCell::new(HashSet::new()),
                 }
             }
         }
 
         impl<'js> Class<'js, A> {
-            pub fn add(mut self, val: Persistent<Class<'static, A>>) {
-                self.as_mut().refs.insert(val);
+            pub fn add(self, val: Persistent<Class<'static, A>>) {
+                self.as_class_def().refs.borrow_mut().insert(val);
             }
 
-            pub fn rm(mut self, val: Persistent<Class<'static, A>>) {
-                self.as_mut().refs.remove(&val);
+            pub fn rm(self, val: Persistent<Class<'static, A>>) {
+                self.as_class_def().refs.borrow_mut().remove(&val);
             }
         }
 
