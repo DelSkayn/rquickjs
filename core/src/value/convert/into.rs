@@ -496,6 +496,7 @@ impl<'js, Tz: chrono::TimeZone> IntoJs<'js> for chrono::DateTime<Tz> {
 
 #[cfg(test)]
 mod test {
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn system_time_to_js() {
         use crate::{Context, IntoJs, Runtime};

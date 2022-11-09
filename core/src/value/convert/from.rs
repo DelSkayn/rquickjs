@@ -383,6 +383,7 @@ chrono_from_js_impls! {
 
 #[cfg(test)]
 mod test {
+    #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn js_to_system_time() {
         use crate::{Context, Runtime};
