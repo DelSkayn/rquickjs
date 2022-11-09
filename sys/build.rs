@@ -84,6 +84,22 @@ fn main() {
         defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
     }
 
+    if env::var("CARGO_CFG_TARGET_ARCH").unwrap() == "wasm32" {
+        if env::var("CARGO_CFG_TARGET_OS").unwrap() != "wasi" {
+            panic!("can only compile to wasi");
+        }
+        let wasi_sdk_path = env::var("WASI_SDK")
+            .unwrap_or_else(|_| panic!("WASI_SDK must be set to the path of your wasi-sdk"));
+        if !Path::new(&wasi_sdk_path).exists() {
+            panic!("{} does not exist", wasi_sdk_path);
+        }
+        env::set_var("CC", format!("{}/bin/clang", &wasi_sdk_path));
+        env::set_var("AR", format!("{}/bin/ar", &wasi_sdk_path));
+        let sysroot = format!("--sysroot={}/share/wasi-sysroot", &wasi_sdk_path);
+        env::set_var("CFLAGS", &sysroot);
+        patch_files.push("not_safe_for_wasi.patch");
+    }
+
     for feature in &features {
         if feature.starts_with("dump-") && env::var(feature_to_cargo(feature)).is_ok() {
             defines.push((feature_to_define(feature), None));
