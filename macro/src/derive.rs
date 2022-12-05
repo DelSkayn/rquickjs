@@ -1,9 +1,14 @@
 #[cfg(test)]
 macro_rules! test_cases {
-    ($($c:ident $k:ident { $($s:tt)* } { $($d:tt)* };)*) => {
+    (
+        $lib_crate_ident:ident,
+        $($c:ident $k:ident { $($s:tt)* } { $($d:tt)* };)*
+    ) => {
         $(
             #[test]
             fn $c() {
+                let config = crate::Config::default();
+                let $lib_crate_ident = &config.lib_crate;
                 let input: syn::DeriveInput = syn::parse_quote! { $($s)* };
                 let attrs: crate::DataType = darling::FromDeriveInput::from_derive_input(&input).unwrap();
                 let binder = test_cases!(@macro_new $k)(attrs.config());

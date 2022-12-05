@@ -46,7 +46,7 @@ features = ["loader"]
 [dev-dependencies.difference]
 version = "2"
 
-[dev-dependencies.rquickjs]
+[dev-dependencies.anode-rquickjs]
 package = "anode-rquickjs"
 path = ".."
 version = "0.1.7"

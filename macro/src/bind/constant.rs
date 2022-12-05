@@ -103,6 +103,7 @@ impl Binder {
 #[cfg(test)]
 mod test {
     test_cases! {
+        rquickjs,
         num_const { test } {
             const PI: f32 = core::math::f32::PI;
         } {
@@ -116,8 +117,8 @@ mod test {
 
             struct Math;
 
-            impl rquickjs::ObjectDef for Math {
-                fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{
+            impl #rquickjs::ObjectDef for Math {
+                fn init<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Object<'js>) -> #rquickjs::Result<()>{
                     exports.set("PI" , PI)?;
                     Ok(())
                 }
@@ -132,13 +133,13 @@ mod test {
 
             struct Constants;
 
-            impl rquickjs::ModuleDef for Constants {
-                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
+            impl #rquickjs::ModuleDef for Constants {
+                fn load<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Created>) -> #rquickjs::Result<()>{
                     exports.add("pi")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
+                fn eval<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Loaded<#rquickjs::Native>>) -> #rquickjs::Result<()>{
                     exports.set("pi", PI)?;
                     Ok(())
                 }

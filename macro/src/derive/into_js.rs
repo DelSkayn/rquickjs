@@ -303,12 +303,13 @@ impl IntoJs {
 #[cfg(test)]
 mod test {
     test_cases! {
+        rquickjs,
         unit_struct IntoJs {
             struct SomeStruct;
         } {
-            impl<'js> rquickjs::IntoJs<'js> for SomeStruct {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    Ok(rquickjs::Value::new_undefined(_ctx))
+            impl<'js> #rquickjs::IntoJs<'js> for SomeStruct {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
+                    Ok(#rquickjs::Value::new_undefined(_ctx))
                 }
             }
         };
@@ -316,9 +317,9 @@ mod test {
         unit_struct_byref IntoJsByRef {
             struct SomeStruct;
         } {
-            impl<'js> rquickjs::IntoJs<'js> for &SomeStruct {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    Ok(rquickjs::Value::new_undefined(_ctx))
+            impl<'js> #rquickjs::IntoJs<'js> for &SomeStruct {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
+                    Ok(#rquickjs::Value::new_undefined(_ctx))
                 }
             }
         };
@@ -326,10 +327,10 @@ mod test {
         newtype_struct IntoJs {
             struct Newtype(i32);
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Newtype {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Newtype {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Newtype(_0) = self;
-                    rquickjs::IntoJs::into_js(_0, _ctx)
+                    #rquickjs::IntoJs::into_js(_0, _ctx)
                 }
             }
         };
@@ -337,10 +338,10 @@ mod test {
         newtype_struct_byref IntoJsByRef {
             struct Newtype(i32);
         } {
-            impl<'js> rquickjs::IntoJs<'js> for &Newtype {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for &Newtype {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Newtype(_0) = self;
-                    rquickjs::IntoJs::into_js(_0, _ctx)
+                    #rquickjs::IntoJs::into_js(_0, _ctx)
                 }
             }
         };
@@ -348,13 +349,13 @@ mod test {
         newtype_struct_generic IntoJs {
             struct Newtype<T>(T);
         } {
-            impl<'js, T> rquickjs::IntoJs<'js> for Newtype<T>
+            impl<'js, T> #rquickjs::IntoJs<'js> for Newtype<T>
             where
-                T: rquickjs::IntoJs<'js>
+                T: #rquickjs::IntoJs<'js>
             {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Newtype(_0) = self;
-                    rquickjs::IntoJs::into_js(_0, _ctx)
+                    #rquickjs::IntoJs::into_js(_0, _ctx)
                 }
             }
         };
@@ -362,13 +363,13 @@ mod test {
         newtype_struct_generic_byref IntoJsByRef {
             struct Newtype<T>(T);
         } {
-            impl<'js, T> rquickjs::IntoJs<'js> for &Newtype<T>
+            impl<'js, T> #rquickjs::IntoJs<'js> for &Newtype<T>
             where
-                for<'r> &'r T: rquickjs::IntoJs<'js>
+                for<'r> &'r T: #rquickjs::IntoJs<'js>
             {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Newtype(_0) = self;
-                    rquickjs::IntoJs::into_js(_0, _ctx)
+                    #rquickjs::IntoJs::into_js(_0, _ctx)
                 }
             }
         };
@@ -376,10 +377,10 @@ mod test {
         tuple_struct IntoJs {
             struct Struct(i32, String);
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Struct {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Struct {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Struct(_0, _1) = self;
-                    let _val = rquickjs::Array::new(_ctx)?;
+                    let _val = #rquickjs::Array::new(_ctx)?;
                     _val.set(0, _0)?;
                     _val.set(1, _1)?;
                     Ok(_val.into_value())
@@ -393,10 +394,10 @@ mod test {
                 text: String,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Struct {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Struct {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Struct { int: __int, text: __text } = self;
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     _val.set("int", __int)?;
                     _val.set("text", __text)?;
                     Ok(_val.into_value())
@@ -410,14 +411,14 @@ mod test {
                 text: T,
             }
         } {
-            impl<'js, N, T> rquickjs::IntoJs<'js> for Struct<N, T>
+            impl<'js, N, T> #rquickjs::IntoJs<'js> for Struct<N, T>
             where
-                T: rquickjs::IntoJs<'js>,
-                N: rquickjs::IntoJs<'js>
+                T: #rquickjs::IntoJs<'js>,
+                N: #rquickjs::IntoJs<'js>
             {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Struct { int: __int, text: __text } = self;
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     _val.set("int", __int)?;
                     _val.set("text", __text)?;
                     Ok(_val.into_value())
@@ -431,14 +432,14 @@ mod test {
                 text: T,
             }
         } {
-            impl<'js, N, T> rquickjs::IntoJs<'js> for &Struct<N, T>
+            impl<'js, N, T> #rquickjs::IntoJs<'js> for &Struct<N, T>
             where
-                for<'r> &'r T: rquickjs::IntoJs<'js>,
-                for<'r> &'r N: rquickjs::IntoJs<'js>
+                for<'r> &'r T: #rquickjs::IntoJs<'js>,
+                for<'r> &'r N: #rquickjs::IntoJs<'js>
             {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Struct { int: __int, text: __text } = self;
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     _val.set("int", __int)?;
                     _val.set("text", __text)?;
                     Ok(_val.into_value())
@@ -454,10 +455,10 @@ mod test {
                 text: String,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Struct {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Struct {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Struct { int: __int, text: __text } = self;
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     if PartialEq::ne(&__int, &Default::default()) {
                         _val.set("int", __int)?;
                     }
@@ -477,10 +478,10 @@ mod test {
                 text: String,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for &Struct {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for &Struct {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let Struct { int: __int, text: __text } = self;
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     if PartialEq::ne(__int, &Default::default()) {
                         _val.set("int", __int)?;
                     }
@@ -499,18 +500,18 @@ mod test {
                 C,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let (_tag, _data) = match self {
-                        Enum::A(_0) => ("A", rquickjs::IntoJs::into_js(_0, _ctx)?),
+                        Enum::A(_0) => ("A", #rquickjs::IntoJs::into_js(_0, _ctx)?),
                         Enum::B { s: __s } => ("B", {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("s", __s)?;
                             _val.into_value()
                         }),
-                        Enum::C => ("C", rquickjs::Value::new_undefined(_ctx)),
+                        Enum::C => ("C", #rquickjs::Value::new_undefined(_ctx)),
                     };
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     _val.set(_tag, _data)?;
                     Ok(_val.into_value())
                 }
@@ -524,11 +525,11 @@ mod test {
                 B,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     Ok(match self {
-                        Enum::A => rquickjs::IntoJs::into_js("A", _ctx)?,
-                        Enum::B => rquickjs::IntoJs::into_js("B", _ctx)?,
+                        Enum::A => #rquickjs::IntoJs::into_js("A", _ctx)?,
+                        Enum::B => #rquickjs::IntoJs::into_js("B", _ctx)?,
                     })
                 }
             }
@@ -541,11 +542,11 @@ mod test {
                 B = 2,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     Ok(match self {
-                        Enum::A => rquickjs::IntoJs::into_js(1, _ctx)?,
-                        Enum::B => rquickjs::IntoJs::into_js(2, _ctx)?,
+                        Enum::A => #rquickjs::IntoJs::into_js(1, _ctx)?,
+                        Enum::B => #rquickjs::IntoJs::into_js(2, _ctx)?,
                     })
                 }
             }
@@ -557,18 +558,18 @@ mod test {
                 B(String),
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let (_tag, _data) = match self {
                         Enum::A(_0, _1) => ("A", {
-                            let _val = rquickjs::Array::new(_ctx)?;
+                            let _val = #rquickjs::Array::new(_ctx)?;
                             _val.set(0, _0)?;
                             _val.set(1, _1)?;
                             _val.into_value()
                         }),
-                        Enum::B(_0) => ("B", rquickjs::IntoJs::into_js(_0, _ctx)?),
+                        Enum::B(_0) => ("B", #rquickjs::IntoJs::into_js(_0, _ctx)?),
                     };
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     _val.set(_tag, _data)?;
                     Ok(_val.into_value())
                 }
@@ -582,18 +583,18 @@ mod test {
                 B(String),
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let (_tag, _data) = match self {
                         Enum::A(_0, _1) => ("A", {
-                            let _val = rquickjs::Array::new(_ctx)?;
+                            let _val = #rquickjs::Array::new(_ctx)?;
                             _val.set(0, _0)?;
                             _val.set(1, _1)?;
                             _val.into_value()
                         }),
-                        Enum::B(_0) => ("B", rquickjs::IntoJs::into_js(_0, _ctx)?),
+                        Enum::B(_0) => ("B", #rquickjs::IntoJs::into_js(_0, _ctx)?),
                     };
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     _val.set("tag", _tag)?;
                     _val.set("content", _data)?;
                     Ok(_val.into_value())
@@ -608,16 +609,16 @@ mod test {
                 B(String),
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     Ok(match self {
                         Enum::A(_0, _1) => {
-                            let _val = rquickjs::Array::new(_ctx)?;
+                            let _val = #rquickjs::Array::new(_ctx)?;
                             _val.set(0, _0)?;
                             _val.set(1, _1)?;
                             _val.into_value()
                         },
-                        Enum::B(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Enum::B(_0) => #rquickjs::IntoJs::into_js(_0, _ctx)?,
                     })
                 }
             }
@@ -630,11 +631,11 @@ mod test {
                 C,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let (_tag, _data) = match self {
                         Enum::A { x: __x, y: __y } => ("A", {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("x", __x)?;
                             if PartialEq::ne(& __y, &Default::default()) {
                                 _val.set("y", __y)?;
@@ -642,13 +643,13 @@ mod test {
                             _val.into_value()
                         }),
                         Enum::B { msg: __msg } => ("B", {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("msg", __msg)?;
                             _val.into_value()
                         }),
-                        Enum::C => ("C", rquickjs::Value::new_undefined(_ctx)),
+                        Enum::C => ("C", #rquickjs::Value::new_undefined(_ctx)),
                     };
-                    let _val = rquickjs::Object::new(_ctx)?;
+                    let _val = #rquickjs::Object::new(_ctx)?;
                     _val.set(_tag, _data)?;
                     Ok(_val.into_value())
                 }
@@ -663,23 +664,23 @@ mod test {
                 C,
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     let (_tag, _val) = match self {
                         Enum::A { x: __x, y: __y } => ("A", {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("x", __x)?;
                             _val.set("y", __y)?;
                             _val.into_value()
                         }),
                         Enum::B { msg: __msg } => ("B", {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             if PartialEq::ne(&__msg, &default_msg()) {
                                 _val.set("msg", __msg)?;
                             }
                             _val.into_value()
                         }),
-                        Enum::C => ("C", rquickjs::Object::new(_ctx)?.into_value()),
+                        Enum::C => ("C", #rquickjs::Object::new(_ctx)?.into_value()),
                     };
                     _val.as_object().unwrap().set("$", _tag)?;
                     Ok(_val)
@@ -694,17 +695,17 @@ mod test {
                 B { msg: String },
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Enum {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Enum {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     Ok(match self {
                         Enum::A { x: __x, y: __y } => {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("x", __x)?;
                             _val.set("y", __y)?;
                             _val.into_value()
                         },
                         Enum::B { msg: __msg } => {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("msg", __msg)?;
                             _val.into_value()
                         },
@@ -720,21 +721,21 @@ mod test {
                 B { msg: T },
             }
         } {
-            impl<'js, N, T> rquickjs::IntoJs<'js> for Enum<N, T>
+            impl<'js, N, T> #rquickjs::IntoJs<'js> for Enum<N, T>
             where
-                T: rquickjs::IntoJs<'js>,
-                N: rquickjs::IntoJs<'js>
+                T: #rquickjs::IntoJs<'js>,
+                N: #rquickjs::IntoJs<'js>
             {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     Ok(match self {
                         Enum::A { x: __x, y: __y } => {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("x", __x)?;
                             _val.set("y", __y)?;
                             _val.into_value()
                         },
                         Enum::B { msg: __msg } => {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("msg", __msg)?;
                             _val.into_value()
                         },
@@ -750,21 +751,21 @@ mod test {
                 B { msg: T },
             }
         } {
-            impl<'js, N, T> rquickjs::IntoJs<'js> for &Enum<N, T>
+            impl<'js, N, T> #rquickjs::IntoJs<'js> for &Enum<N, T>
             where
-                for<'r> &'r T: rquickjs::IntoJs<'js>,
-                for<'r> &'r N: rquickjs::IntoJs<'js>
+                for<'r> &'r T: #rquickjs::IntoJs<'js>,
+                for<'r> &'r N: #rquickjs::IntoJs<'js>
             {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     Ok(match self {
                         Enum::A { x: __x, y: __y } => {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("x", __x)?;
                             _val.set("y", __y)?;
                             _val.into_value()
                         },
                         Enum::B { msg: __msg } => {
-                            let _val = rquickjs::Object::new(_ctx)?;
+                            let _val = #rquickjs::Object::new(_ctx)?;
                             _val.set("msg", __msg)?;
                             _val.into_value()
                         },
@@ -785,16 +786,16 @@ mod test {
                 Dict(Map<String, Value>),
             }
         } {
-            impl<'js> rquickjs::IntoJs<'js> for Any {
-                fn into_js(self, _ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
+            impl<'js> #rquickjs::IntoJs<'js> for Any {
+                fn into_js(self, _ctx: #rquickjs::Ctx<'js>) -> #rquickjs::Result<#rquickjs::Value<'js>> {
                     Ok(match self {
-                        Any::None => rquickjs::Value::new_undefined(_ctx),
-                        Any::Bool(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
-                        Any::Int(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
-                        Any::Float(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
-                        Any::Str(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
-                        Any::List(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
-                        Any::Dict(_0) => rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::None => #rquickjs::Value::new_undefined(_ctx),
+                        Any::Bool(_0) => #rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Int(_0) => #rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Float(_0) => #rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Str(_0) => #rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::List(_0) => #rquickjs::IntoJs::into_js(_0, _ctx)?,
+                        Any::Dict(_0) => #rquickjs::IntoJs::into_js(_0, _ctx)?,
                     })
                 }
             }

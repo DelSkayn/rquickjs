@@ -1,11 +1,16 @@
 #[cfg(test)]
 macro_rules! test_cases {
-    ($($(#[$m:meta])* $c:ident { $($a:tt)* } { $($s:tt)* } { $($d:tt)* };)*) => {
+    (
+        $lib_crate_ident:ident,
+        $($(#[$m:meta])* $c:ident { $($a:tt)* } { $($s:tt)* } { $($d:tt)* };)*
+    ) => {
         $(
             $(#[$m])*
             #[test]
             fn $c() {
                 let embedder = crate::Embedder::new(crate::Config::default());
+                let config = crate::Config::default();
+                let $lib_crate_ident = &config.lib_crate;
                 let attrs: crate::AttributeArgs = syn::parse_quote! { $($a)* };
                 let attrs = darling::FromMeta::from_list(&*attrs).unwrap();
                 let input = syn::parse_quote! { $($s)* };
@@ -189,20 +194,21 @@ impl Embedder {
 #[cfg(test)]
 mod test {
     test_cases! {
+        rquickjs,
         static_const_array { test, path = "." } { mod my_module {} } {
-            static MY_MODULE: rquickjs::Bundle<&'static [(&'static str, &'static [u8])]> = rquickjs::Bundle(&[
+            static MY_MODULE: #rquickjs::Bundle<&'static [(&'static str, &'static [u8])]> = #rquickjs::Bundle(&[
                 ("my_module", &[0u8, 1u8, 2u8, 3u8])
             ]);
         };
 
         #[cfg(feature = "phf")]
         perfect_hash_map { test, perfect, path = "." } { mod my_module {} } {
-            static MY_MODULE: rquickjs::Bundle<&'static rquickjs::phf::Map<&'static str, &'static [u8]>> = rquickjs::Bundle(&rquickjs::phf::Map {
+            static MY_MODULE: #rquickjs::Bundle<&'static #rquickjs::phf::Map<&'static str, &'static [u8]>> = #rquickjs::Bundle(&#rquickjs::phf::Map {
                 key: 12913932095322966823u64,
-                disps: rquickjs::phf::Slice::Static(&[
+                disps: #rquickjs::phf::Slice::Static(&[
                     (0u32 , 0u32)
                 ]),
-                entries: rquickjs::phf::Slice::Static(&[
+                entries: #rquickjs::phf::Slice::Static(&[
                     ("my_module", &[0u8, 1u8, 2u8, 3u8])
                 ]),
             });

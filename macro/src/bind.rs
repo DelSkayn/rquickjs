@@ -1,10 +1,15 @@
 #[cfg(test)]
 macro_rules! test_cases {
-    ($($c:ident { $($a:tt)* } { $($s:tt)* } { $($d:tt)* };)*) => {
+    (
+        $lib_crate_ident:ident,
+        $($c:ident { $($a:tt)* } { $($s:tt)* } { $($d:tt)* };)*
+    ) => {
         $(
             #[test]
             fn $c() {
                 let mut binder = crate::Binder::new(crate::Config::default());
+                let config = crate::Config::default();
+                let $lib_crate_ident = &config.lib_crate;
                 let attrs: crate::AttributeArgs = syn::parse_quote! { $($a)* };
                 let attrs = darling::FromMeta::from_list(&*attrs).unwrap();
                 let input = syn::parse_quote! { $($s)* };

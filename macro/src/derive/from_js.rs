@@ -313,11 +313,12 @@ impl FromJs {
 #[cfg(test)]
 mod test {
     test_cases! {
+        rquickjs,
         unit_struct FromJs {
             struct SomeStruct;
         } {
-            impl<'js> rquickjs::FromJs<'js> for SomeStruct {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+            impl<'js> #rquickjs::FromJs<'js> for SomeStruct {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
                     Ok(SomeStruct)
                 }
             }
@@ -326,8 +327,8 @@ mod test {
         newtype_struct FromJs {
             struct Newtype(i32);
         } {
-            impl<'js> rquickjs::FromJs<'js> for Newtype {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+            impl<'js> #rquickjs::FromJs<'js> for Newtype {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
                     Ok(Newtype(_val.get()?))
                 }
             }
@@ -336,11 +337,11 @@ mod test {
         newtype_struct_generic FromJs {
             struct Newtype<T>(T);
         } {
-            impl<'js, T> rquickjs::FromJs<'js> for Newtype<T>
+            impl<'js, T> #rquickjs::FromJs<'js> for Newtype<T>
             where
-                T: rquickjs::FromJs<'js>
+                T: #rquickjs::FromJs<'js>
             {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
                     Ok(Newtype(_val.get()?))
                 }
             }
@@ -349,9 +350,9 @@ mod test {
         tuple_struct FromJs {
             struct Struct(i32, String);
         } {
-            impl<'js> rquickjs::FromJs<'js> for Struct {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let _val: rquickjs::Array = _val.get()?;
+            impl<'js> #rquickjs::FromJs<'js> for Struct {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let _val: #rquickjs::Array = _val.get()?;
                     Ok(Struct(
                         _val.get(0)?,
                         _val.get(1)?,
@@ -366,9 +367,9 @@ mod test {
                 text: String,
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Struct {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let _val: rquickjs::Object = _val.get()?;
+            impl<'js> #rquickjs::FromJs<'js> for Struct {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let _val: #rquickjs::Object = _val.get()?;
                     Ok(Struct {
                         int: _val.get("int")?,
                         text: _val.get("text")?,
@@ -383,13 +384,13 @@ mod test {
                 text: T,
             }
         } {
-            impl<'js, N, T> rquickjs::FromJs<'js> for Struct<N, T>
+            impl<'js, N, T> #rquickjs::FromJs<'js> for Struct<N, T>
             where
-                T: rquickjs::FromJs<'js>,
-                N: rquickjs::FromJs<'js>
+                T: #rquickjs::FromJs<'js>,
+                N: #rquickjs::FromJs<'js>
             {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let _val: rquickjs::Object = _val.get()?;
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let _val: #rquickjs::Object = _val.get()?;
                     Ok(Struct {
                         int: _val.get("int")?,
                         text: _val.get("text")?,
@@ -406,9 +407,9 @@ mod test {
                 text: String,
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Struct {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let _val: rquickjs::Object = _val.get()?;
+            impl<'js> #rquickjs::FromJs<'js> for Struct {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let _val: #rquickjs::Object = _val.get()?;
                     Ok(Struct {
                         int: _val.get::<_, Option<_>>("int")?.unwrap_or_else(Default::default),
                         text: _val.get::<_, Option<_>>("text")?.unwrap_or_else(default_text),
@@ -424,19 +425,19 @@ mod test {
                 C,
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Enum {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let (_tag, _val): (String, rquickjs::Value) = _val
-                        .get::<rquickjs::Object>()?
+            impl<'js> #rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let (_tag, _val): (String, #rquickjs::Value) = _val
+                        .get::<#rquickjs::Object>()?
                         .props()
                         .next()
-                        .ok_or_else(|| rquickjs::Error::new_from_js_message("value", "enum", "Missing property"))??;
+                        .ok_or_else(|| #rquickjs::Error::new_from_js_message("value", "enum", "Missing property"))??;
                     match _tag.as_str() {
                         "A" => {
                             Ok(Enum::A(_val.get()?))
                         },
                         "B" => {
-                            let _val: rquickjs::Object = _val.get()?;
+                            let _val: #rquickjs::Object = _val.get()?;
                             Ok(Enum::B {
                                 s: _val.get("s")?,
                             })
@@ -444,7 +445,7 @@ mod test {
                         "C" => {
                             Ok(Enum::C)
                         },
-                        tag => Err(rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'", tag))),
+                        tag => Err(#rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'", tag))),
                     }
                 }
             }
@@ -457,13 +458,13 @@ mod test {
                 B,
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Enum {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+            impl<'js> #rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
                     let _val: String = _val.get()?;
                     match _val.as_str() {
                         "A" => Ok(Enum::A),
                         "B" => Ok(Enum::B),
-                        _ => Err(rquickjs::Error::new_from_js("string", "Enum")),
+                        _ => Err(#rquickjs::Error::new_from_js("string", "Enum")),
                     }
                 }
             }
@@ -476,13 +477,13 @@ mod test {
                 B = 2,
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Enum {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+            impl<'js> #rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
                     let _val: i32 = _val.get()?;
                     match _val {
                         1 => Ok(Enum::A),
                         2 => Ok(Enum::B),
-                        _ => Err(rquickjs::Error::new_from_js("int", "Enum")),
+                        _ => Err(#rquickjs::Error::new_from_js("int", "Enum")),
                     }
                 }
             }
@@ -495,11 +496,11 @@ mod test {
                 B(String),
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Enum {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+            impl<'js> #rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
                     match _val.type_of() {
-                        rquickjs::Type::Array => {
-                            let _val: rquickjs::Array = _val.get()?;
+                        #rquickjs::Type::Array => {
+                            let _val: #rquickjs::Array = _val.get()?;
                             Ok(Enum::A(
                                 _val.get(0)?,
                                 _val.get(1)?,
@@ -520,27 +521,27 @@ mod test {
                 C,
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Enum {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let (_tag, _val): (String, rquickjs::Value) = _val.get::<rquickjs::Object>()?
+            impl<'js> #rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let (_tag, _val): (String, #rquickjs::Value) = _val.get::<#rquickjs::Object>()?
                         .props().next()
-                        .ok_or_else(|| rquickjs::Error::new_from_js_message("value", "enum", "Missing property"))??;
+                        .ok_or_else(|| #rquickjs::Error::new_from_js_message("value", "enum", "Missing property"))??;
                     match _tag.as_str() {
                         "A" => {
-                            let _val: rquickjs::Object = _val.get()?;
+                            let _val: #rquickjs::Object = _val.get()?;
                             Ok(Enum::A {
                                 x: _val.get("x")?,
                                 y: _val.get::<_, Option<_>>("y")?.unwrap_or_else(Default::default),
                             })
                         },
                         "B" => {
-                            let _val: rquickjs::Object = _val.get()?;
+                            let _val: #rquickjs::Object = _val.get()?;
                             Ok(Enum::B {
                                 msg:_val.get("msg")?,
                             })
                         },
                         "C" => { Ok(Enum::C) },
-                        tag => Err(rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'" , tag))),
+                        tag => Err(#rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'" , tag))),
                     }
                 }
             }
@@ -554,19 +555,19 @@ mod test {
                 C,
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Enum {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let _tag: String = _val.get::<rquickjs::Object>()?.get("$")?;
+            impl<'js> #rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let _tag: String = _val.get::<#rquickjs::Object>()?.get("$")?;
                     match _tag.as_str() {
                         "A" => {
-                            let _val: rquickjs::Object = _val.get()?;
+                            let _val: #rquickjs::Object = _val.get()?;
                             Ok(Enum::A {
                                 x: _val.get("x")?,
                                 y: _val.get("y")?,
                             })
                         },
                         "B" => {
-                            let _val: rquickjs::Object = _val.get()?;
+                            let _val: #rquickjs::Object = _val.get()?;
                             Ok(Enum::B {
                                 msg: _val.get::<_, Option<_>>("msg")?.unwrap_or_else(default_msg),
                             })
@@ -574,7 +575,7 @@ mod test {
                         "C" => {
                             Ok(Enum::C)
                         },
-                        tag => Err(rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'" , tag))),
+                        tag => Err(#rquickjs::Error::new_from_js_message("value", "enum", format!("Unknown tag '{}'" , tag))),
                     }
                 }
             }
@@ -587,10 +588,10 @@ mod test {
                 B { msg: String },
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Enum {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let _val: rquickjs::Object = _val.get()?;
-                    (|| -> rquickjs::Result<_> {
+            impl<'js> #rquickjs::FromJs<'js> for Enum {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let _val: #rquickjs::Object = _val.get()?;
+                    (|| -> #rquickjs::Result<_> {
                         Ok(Enum::A {
                             x: _val.get("x")?,
                             y: _val.get("y")?,
@@ -614,14 +615,14 @@ mod test {
                 B { msg: T },
             }
         } {
-            impl<'js, N, T> rquickjs::FromJs<'js> for Enum<N, T>
+            impl<'js, N, T> #rquickjs::FromJs<'js> for Enum<N, T>
             where
-                T: rquickjs::FromJs<'js>,
-                N: rquickjs::FromJs<'js>
+                T: #rquickjs::FromJs<'js>,
+                N: #rquickjs::FromJs<'js>
             {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    let _val: rquickjs::Object = _val.get()?;
-                    (|| -> rquickjs::Result<_> {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
+                    let _val: #rquickjs::Object = _val.get()?;
+                    (|| -> #rquickjs::Result<_> {
                         Ok(Enum::A {
                             x: _val.get("x")?,
                             y: _val.get("y")?,
@@ -650,12 +651,12 @@ mod test {
                 Dict(Map<String, Value>),
             }
         } {
-            impl<'js> rquickjs::FromJs<'js> for Any {
-                fn from_js(_ctx: rquickjs::Ctx<'js>, _val: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
+            impl<'js> #rquickjs::FromJs<'js> for Any {
+                fn from_js(_ctx: #rquickjs::Ctx<'js>, _val: #rquickjs::Value<'js>) -> #rquickjs::Result<Self> {
                     match _val.type_of() {
-                        rquickjs::Type::Uninitialized | rquickjs::Type::Undefined | rquickjs::Type::Null => { Ok(Any::None) }
+                        #rquickjs::Type::Uninitialized | #rquickjs::Type::Undefined | #rquickjs::Type::Null => { Ok(Any::None) }
                         _ => {
-                            (|| -> rquickjs::Result<_> {
+                            (|| -> #rquickjs::Result<_> {
                                 Ok(Any::Bool(_val.get()?))
                             })().or_else(|error| if error.is_from_js() {
                                 Ok(Any::Int(_val.get()?))

@@ -88,6 +88,7 @@ impl Binder {
 #[cfg(test)]
 mod test {
     test_cases! {
+        rquickjs,
         no_bare_module_without_init { module } {
             mod lib {
                 pub const N: i8 = 3;
@@ -101,17 +102,17 @@ mod test {
 
             struct Lib;
 
-            impl rquickjs::ModuleDef for Lib {
-                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
+            impl #rquickjs::ModuleDef for Lib {
+                fn load<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Created>) -> #rquickjs::Result<()>{
                     exports.add("lib")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
+                fn eval<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Loaded<#rquickjs::Native>>) -> #rquickjs::Result<()>{
                     exports.set("lib", {
-                        let exports = rquickjs::Object::new(_ctx)?;
+                        let exports = #rquickjs::Object::new(_ctx)?;
                         exports.set("N", lib::N)?;
-                        exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                        exports.set("doit", #rquickjs::Func::new("doit", lib::doit))?;
                         exports
                     })?;
                     Ok(())
@@ -132,12 +133,12 @@ mod test {
 
             pub(crate) struct Lib;
 
-            impl rquickjs::ObjectDef for Lib {
-                fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{
+            impl #rquickjs::ObjectDef for Lib {
+                fn init<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Object<'js>) -> #rquickjs::Result<()>{
                     exports.set("lib", {
-                        let exports = rquickjs::Object::new(_ctx)?;
+                        let exports = #rquickjs::Object::new(_ctx)?;
                         exports.set("N", lib::N)?;
-                        exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                        exports.set("doit", #rquickjs::Func::new("doit", lib::doit))?;
                         exports
                     })?;
                     Ok(())
@@ -159,10 +160,10 @@ mod test {
 
             pub struct Lib;
 
-            impl rquickjs::ObjectDef for Lib {
-                fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{
+            impl #rquickjs::ObjectDef for Lib {
+                fn init<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Object<'js>) -> #rquickjs::Result<()>{
                     exports.set("N", lib::N)?;
-                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                    exports.set("doit", #rquickjs::Func::new("doit", lib::doit))?;
                     Ok(())
                 }
             }
@@ -182,16 +183,16 @@ mod test {
 
             struct Lib;
 
-            impl rquickjs::ModuleDef for Lib {
-                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
+            impl #rquickjs::ModuleDef for Lib {
+                fn load<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Created>) -> #rquickjs::Result<()>{
                     exports.add("N")?;
                     exports.add("doit")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
+                fn eval<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Loaded<#rquickjs::Native>>) -> #rquickjs::Result<()>{
                     exports.set("N", lib::N)?;
-                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                    exports.set("doit", #rquickjs::Func::new("doit", lib::doit))?;
                     Ok(())
                 }
             }
@@ -211,26 +212,26 @@ mod test {
 
             struct Lib;
 
-            impl rquickjs::ModuleDef for Lib {
-                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
+            impl #rquickjs::ModuleDef for Lib {
+                fn load<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Created>) -> #rquickjs::Result<()>{
                     exports.add("N")?;
                     exports.add("doit")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
+                fn eval<'js>(_ctx: #rquickjs::Ctx<'js>, exports: &#rquickjs::Module<'js, #rquickjs::Loaded<#rquickjs::Native>>) -> #rquickjs::Result<()>{
                     exports.set("N", lib::N)?;
-                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                    exports.set("doit", #rquickjs::Func::new("doit", lib::doit))?;
                     Ok(())
                 }
             }
 
             #[no_mangle]
             unsafe extern "C" fn js_init_module(
-                ctx: *mut rquickjs::qjs::JSContext,
-                name: *const rquickjs::qjs::c_char,
-            ) -> *mut rquickjs::qjs::JSModuleDef {
-                rquickjs::Module::init_raw::<Lib>(ctx, name)
+                ctx: *mut #rquickjs::qjs::JSContext,
+                name: *const #rquickjs::qjs::c_char,
+            ) -> *mut #rquickjs::qjs::JSModuleDef {
+                #rquickjs::Module::init_raw::<Lib>(ctx, name)
             }
         };
     }

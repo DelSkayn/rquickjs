@@ -12,11 +12,15 @@ fn lib_crate() -> String {
     env!("CARGO_PKG_NAME").replace("-macro", "")
 }
 
+fn crate_name_to_ident(name: &str) -> String {
+    name.replace('-', "_")
+}
+
 impl Default for Config {
     fn default() -> Self {
         let lib_crate = lib_crate();
         Self {
-            lib_crate: format_ident!("{}", lib_crate),
+            lib_crate: format_ident!("{}", crate_name_to_ident(&lib_crate)),
             bind_attr: format_ident!("quickjs"),
             exports_var: format_ident!("exports"),
         }
@@ -34,7 +38,7 @@ impl Config {
             _ => unreachable!(),
         };
         Self {
-            lib_crate: format_ident!("{}", lib_crate),
+            lib_crate: format_ident!("{}", crate_name_to_ident(&lib_crate)),
             ..Default::default()
         }
     }

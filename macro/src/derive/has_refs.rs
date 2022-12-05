@@ -142,6 +142,7 @@ impl HasRefs {
 #[cfg(test)]
 mod test {
     test_cases! {
+        rquickjs,
         struct_with_refs HasRefs {
             struct Data {
                 #[quickjs(has_refs)]
@@ -152,10 +153,10 @@ mod test {
                 text: String,
             }
         } {
-            impl rquickjs::HasRefs for Data {
-                fn mark_refs(&self, _marker: &rquickjs::RefsMarker) {
-                    rquickjs::HasRefs::mark_refs(&self.lists, _marker);
-                    rquickjs::HasRefs::mark_refs(&self.func, _marker);
+            impl #rquickjs::HasRefs for Data {
+                fn mark_refs(&self, _marker: &#rquickjs::RefsMarker) {
+                    #rquickjs::HasRefs::mark_refs(&self.lists, _marker);
+                    #rquickjs::HasRefs::mark_refs(&self.func, _marker);
                 }
             }
         };
@@ -175,14 +176,14 @@ mod test {
                 Text(String),
             }
         } {
-            impl rquickjs::HasRefs for Data {
-                fn mark_refs(&self, _marker: &rquickjs::RefsMarker) {
+            impl #rquickjs::HasRefs for Data {
+                fn mark_refs(&self, _marker: &#rquickjs::RefsMarker) {
                     match self {
                         Data::Lists(_0) => {
-                            rquickjs::HasRefs::mark_refs(_0, _marker);
+                            #rquickjs::HasRefs::mark_refs(_0, _marker);
                         }
                         Data::Func { func, .. } => {
-                            rquickjs::HasRefs::mark_refs(func, _marker);
+                            #rquickjs::HasRefs::mark_refs(func, _marker);
                         }
                         Data::Flag(_) => { }
                         Data::Text(_) => { }
