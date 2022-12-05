@@ -1590,9 +1590,7 @@ static inline uintptr_t js_get_stack_pointer(void)
 
 static inline BOOL js_check_stack_overflow(JSRuntime *rt, size_t alloca_size)
 {
-    uintptr_t sp;
-    sp = js_get_stack_pointer() - alloca_size;
-    return unlikely(sp < rt->stack_limit);
+    return unlikely(js_get_stack_pointer() < rt->stack_limit + alloca_size);
 }
 #endif
 
@@ -3373,12 +3371,18 @@ static inline BOOL JS_IsEmptyString(JSValueConst v)
 JSClassID JS_NewClassID(JSClassID *pclass_id)
 {
     JSClassID class_id;
-    /* XXX: make it thread safe */
+#ifdef CONFIG_ATOMICS
+    static atomic_flag lock = ATOMIC_FLAG_INIT;
+    while(atomic_flag_test_and_set_explicit(&lock, memory_order_acquire));
+#endif
     class_id = *pclass_id;
     if (class_id == 0) {
         class_id = js_class_id_alloc++;
         *pclass_id = class_id;
     }
+#ifdef CONFIG_ATOMICS
+    atomic_flag_clear_explicit(&lock, memory_order_release);
+#endif
     return class_id;
 }
 
@@ -10237,7 +10241,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
             } else
 #endif
             {
-                double d = 1.0 / 0.0;
+                double d = INFINITY;
                 if (is_neg)
                     d = -d;
                 val = JS_NewFloat64(ctx, d);
@@ -27252,6 +27256,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
     rt->module_loader_opaque = opaque;
 }
 
+#ifdef CONFIG_MODULE_EXPORTS
+/* Hooks into module loading functions */
+JSValueConst JS_GetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name) {
+    JSExportEntry *me;
+    JSAtom name;
+    name = JS_NewAtom(ctx, export_name);
+    if (name == JS_ATOM_NULL)
+        goto fail;
+    me = find_export_entry(ctx, m, name);
+    JS_FreeAtom(ctx, name);
+    if (!me)
+        goto fail;
+    return JS_DupValue(ctx, me->u.local.var_ref->value);
+ fail:
+    return JS_UNDEFINED;
+}
+int JS_GetModuleExportEntriesCount(JSModuleDef *m) {
+    return m->export_entries_count;
+}
+
+JSValue JS_GetModuleExportEntry(JSContext *ctx, JSModuleDef *m, int idx) {
+    if (idx >= m->export_entries_count || idx < 0)
+        return JS_UNDEFINED;
+    return JS_DupValue(ctx, m->export_entries[idx].u.local.var_ref->value);
+}
+
+JSAtom JS_GetModuleExportEntryName(JSContext *ctx, JSModuleDef *m, int idx) {
+    if (idx >= m->export_entries_count || idx < 0)
+        return JS_ATOM_NULL;
+    return JS_DupAtom(ctx, m->export_entries[idx].export_name);
+}
+#endif
+
+
 /* default module filename normalizer */
 static char *js_default_module_normalize_name(JSContext *ctx,
                                               const char *base_name,
@@ -41750,7 +41788,7 @@ static JSValue js_math_min_max(JSContext *ctx, JSValueConst this_val,
     uint32_t tag;
 
     if (unlikely(argc == 0)) {
-        return __JS_NewFloat64(ctx, is_max ? -1.0 / 0.0 : 1.0 / 0.0);
+        return __JS_NewFloat64(ctx, is_max ? -INFINITY : INFINITY);
     }
 
     tag = JS_VALUE_GET_TAG(argv[0]);
@@ -47857,7 +47895,7 @@ static const JSCFunctionListEntry js_global_funcs[] = {
     JS_CFUNC_MAGIC_DEF("encodeURIComponent", 1, js_global_encodeURI, 1 ),
     JS_CFUNC_DEF("escape", 1, js_global_escape ),
     JS_CFUNC_DEF("unescape", 1, js_global_unescape ),
-    JS_PROP_DOUBLE_DEF("Infinity", 1.0 / 0.0, 0 ),
+    JS_PROP_DOUBLE_DEF("Infinity", INFINITY, 0 ),
     JS_PROP_DOUBLE_DEF("NaN", NAN, 0 ),
     JS_PROP_UNDEFINED_DEF("undefined", 0 ),
 
