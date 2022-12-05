@@ -33,7 +33,8 @@ fn main() {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
 
-    let src_dir = Path::new("quickjs");
+    let src_dir = Path::new("c-src");
+    let header_dir = Path::new("c-include");
     let patches_dir = Path::new("patches");
 
     let out_dir = env::var("OUT_DIR").expect("No OUT_DIR env var is set by cargo");
@@ -61,9 +62,9 @@ fn main() {
     ];
 
     let mut patch_files = vec![
-        "check_stack_overflow.patch",
-        "infinity_handling.patch",
-        "atomic_new_class_id.patch",
+    //     "check_stack_overflow.patch",
+    //     "infinity_handling.patch",
+    //     "atomic_new_class_id.patch",
     ];
 
     let mut defines = vec![
@@ -89,17 +90,17 @@ fn main() {
         }
     }
 
-    for file in source_files.iter().chain(header_files.iter()) {
-        fs::copy(src_dir.join(file), out_dir.join(file)).expect("Unable to copy source");
-    }
+    // for file in source_files.iter().chain(header_files.iter()) {
+    //     fs::copy(src_dir.join(file), out_dir.join(file)).expect("Unable to copy source");
+    // }
 
-    // applying patches
-    for file in &patch_files {
-        patch(out_dir, patches_dir.join(file));
-    }
+    // // applying patches
+    // for file in &patch_files {
+    //     patch(out_dir, patches_dir.join(file));
+    // }
 
     // generating bindings
-    bindgen(out_dir, out_dir.join("quickjs.h"), &defines);
+    bindgen(out_dir, header_dir.join("quickjs.h"), &defines);
 
     let mut builder = cc::Build::new();
     builder
@@ -113,8 +114,10 @@ fn main() {
     }
 
     for src in &source_files {
-        builder.file(out_dir.join(src));
+        builder.file(src_dir.join(src));
     }
+
+    builder.include(header_dir);
 
     builder.compile("libquickjs.a");
 }
