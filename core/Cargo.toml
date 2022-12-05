@@ -47,6 +47,7 @@ version = "0.4"
 optional = true
 
 [dependencies.rquickjs-sys]
+package = "anode-rquickjs-sys"
 version = "0.1.7"
 path = "../sys"
 
@@ -195,6 +196,7 @@ default-features = false
 features = ["attributes"]
 
 [dev-dependencies.rquickjs]
+package = "anode-rquickjs"
 path = ".."
 
 [dev-dependencies]

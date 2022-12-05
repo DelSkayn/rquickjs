@@ -11,10 +11,12 @@ categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [dependencies.rquickjs-core]
+package = "anode-rquickjs-core"
 version = "0.1.7"
 path = "core"
 
 [dependencies.rquickjs-macro]
+package = "anode-rquickjs-macro"
 version = "0.1.7"
 path = "macro"
 optional = true

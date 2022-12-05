@@ -1,5 +1,5 @@
 [package]
-name = "rquickjs-macro"
+name = "anode-rquickjs-macro"
 version = "0.1.7"
 authors = ["K. <kayo@illumium.org>"]
 edition = "2018"
@@ -38,6 +38,7 @@ version = "0.10"
 optional = true
 
 [dependencies.rquickjs-core]
+package = "anode-rquickjs-core"
 path = "../core"
 version = "0.1.7"
 features = ["loader"]
@@ -46,6 +47,7 @@ features = ["loader"]
 version = "2"
 
 [dev-dependencies.rquickjs]
+package = "anode-rquickjs"
 path = ".."
 version = "0.1.7"
 features = ["macro", "classes", "properties", "async-std"]
