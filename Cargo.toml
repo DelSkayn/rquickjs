@@ -48,20 +48,34 @@ package = "either"
 version = "1"
 optional = true
 
-[workspace]
-members = [
-    "sys",
-    "core",
-    "macro",
-    "examples/native-module",
-    "examples/module-loader",
-]
+# [workspace]
+# members = [
+#     "sys",
+#     "core",
+#     "macro",
+#     "examples/native-module",
+#     "examples/module-loader",
+# ]
 
 [features]
 default = ["exports", "classes", "properties"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer", "macro", "phf"]
+full = [
+    "chrono",
+    "exports",
+    "loader",
+    "allocator",
+    "dyn-load",
+    "either",
+    "indexmap",
+    "registery",
+    "classes",
+    "properties",
+    "array-buffer",
+    "macro",
+    "phf",
+]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "async-std", "tokio", "smol"]
