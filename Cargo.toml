@@ -1,5 +1,5 @@
 [package]
-name = "rquickjs"
+name = "anode-rquickjs"
 version = "0.1.7"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2018"

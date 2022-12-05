@@ -1,7 +1,10 @@
 [package]
-name = "rquickjs-sys"
+name = "anode-rquickjs-sys"
 version = "0.1.7"
-authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
+authors = [
+    "Mees Delzenne <mees.delzenne@gmail.com>",
+    "Rynco Maekawa <i@rynco.me>",
+]
 edition = "2018"
 license = "MIT"
 readme = "README.md"
