@@ -174,7 +174,7 @@ __`hide`__                | Do not output this impl block (bindings only)
 ### Single function binding
 
 ```
-use rquickjs::{Runtime, Context, bind};
+use anode_rquickjs::{Runtime, Context, bind};
 
 #[bind(object)]
 pub fn add2(a: f32, b: f32) -> f32 {
@@ -196,7 +196,7 @@ ctx.with(|ctx| {
 ### Module with two functions
 
 ```
-use rquickjs::{Runtime, Context, Object, bind};
+use anode_rquickjs::{Runtime, Context, Object, bind};
 
 #[bind(object)]
 pub mod math {
@@ -226,7 +226,7 @@ ctx.with(|ctx| {
 ### Module with two functions which reused from another module
 
 ```
-use rquickjs::{Runtime, Context, Object, bind};
+use anode_rquickjs::{Runtime, Context, Object, bind};
 
 mod my_math {
     pub const PI: f32 = core::f32::consts::PI;
@@ -271,7 +271,7 @@ ctx.with(|ctx| {
 ### Bare module definition
 
 ```
-use rquickjs::{Runtime, Context, Object, bind};
+use anode_rquickjs::{Runtime, Context, Object, bind};
 
 #[bind(object)]
 #[quickjs(bare)]
@@ -305,7 +305,7 @@ ctx.with(|ctx| {
 ```
 # #[async_std::main]
 # async fn main() {
-use rquickjs::{Runtime, Context, Promise, bind, AsyncStd};
+use anode_rquickjs::{Runtime, Context, Promise, bind, AsyncStd};
 
 #[bind(object)]
 pub async fn sleep(msecs: u64) {
@@ -343,7 +343,7 @@ rt.idle().await;
 ### Class binding
 
 ```
-use rquickjs::{bind, Runtime, Context, Error};
+use anode_rquickjs::{bind, Runtime, Context, Error};
 
 #[bind(object)]
 #[quickjs(bare)]
@@ -473,7 +473,7 @@ __`crate = "rquickjs"`__   | Allows rename `rquickjs` crate
 # Examples
 
 ```
-# use rquickjs::{embed, Runtime, Context, Module};
+# use anode_rquickjs::{embed, Runtime, Context, Module};
 
 #[embed(path = "../examples/module-loader")]
 mod script_module {}
@@ -528,7 +528,7 @@ __`has_refs`__           | Mark a field which has referenses
 
 ```
 # use std::collections::HashMap;
-# use rquickjs::{HasRefs, Persistent, Function, Array};
+# use anode_rquickjs::{HasRefs, Persistent, Function, Array};
 
 #[derive(HasRefs)]
 struct Data {
@@ -545,7 +545,7 @@ struct Data {
 
 ```
 # use std::collections::HashMap;
-# use rquickjs::{HasRefs, Persistent, Function, Array};
+# use anode_rquickjs::{HasRefs, Persistent, Function, Array};
 
 #[derive(HasRefs)]
 enum Data {
@@ -616,7 +616,7 @@ __`skip`__                        | Skips this field
 ### Unit struct
 
 ```
-use rquickjs::FromJs;
+use anode_rquickjs::FromJs;
 
 #[derive(FromJs)]
 struct MyUnit;
@@ -625,7 +625,7 @@ struct MyUnit;
 ### Tuple struct
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 struct MyTuple(i32, String);
 ```
@@ -633,7 +633,7 @@ struct MyTuple(i32, String);
 ### Struct with fields
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 struct MyStruct {
     int: i32,
@@ -646,7 +646,7 @@ struct MyStruct {
 ### Struct with fields with default values
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 struct MyStruct {
     #[quickjs(default)]
@@ -663,7 +663,7 @@ fn default_text() -> String {
 ### Externally tagged enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 enum Enum {
     A(f32),
@@ -675,7 +675,7 @@ enum Enum {
 ### Internally tagged enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(tag = "tag")]
 enum Enum {
@@ -688,7 +688,7 @@ enum Enum {
 ### Adjacently tagged enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(tag = "type", content = "data")]
 enum Enum {
@@ -701,7 +701,7 @@ enum Enum {
 ### Untagged unit enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -713,7 +713,7 @@ enum MyEnum {
 ### Untagged unit enum with discriminant
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -725,7 +725,7 @@ enum MyEnum {
 ### Externally tagged tuple enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 enum MyEnum {
     Foo(f64, f64),
@@ -736,7 +736,7 @@ enum MyEnum {
 ### Adjacently tagged tuple enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(tag, content = "data")]
 enum MyEnum {
@@ -748,7 +748,7 @@ enum MyEnum {
 ### Untagged tuple enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -760,7 +760,7 @@ enum MyEnum {
 ### Internally tagged enum with fields
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(tag = "$")]
 enum MyEnum {
@@ -772,7 +772,7 @@ enum MyEnum {
 ### Internally tagged enum with fields with defaults
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(tag = "$")]
 enum MyEnum {
@@ -795,7 +795,7 @@ fn default_msg() -> String {
 ### Untagged enum with fields
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -807,7 +807,7 @@ enum MyEnum {
 ### Generic newtype-like struct
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 struct Newtype<T>(pub T);
 ```
@@ -815,7 +815,7 @@ struct Newtype<T>(pub T);
 ### Generic struct with fields
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 struct MyStruct<T> {
     pub tag: i32,
@@ -826,7 +826,7 @@ struct MyStruct<T> {
 ### Generic enum
 
 ```
-# use rquickjs::FromJs;
+# use anode_rquickjs::FromJs;
 #[derive(FromJs)]
 enum MyEnum<T> {
     Foo(T),
@@ -888,7 +888,7 @@ __`skip`__                        | Skips this field
 ### Unit struct
 
 ```
-use rquickjs::IntoJs;
+use anode_rquickjs::IntoJs;
 
 #[derive(IntoJs)]
 struct MyUnit;
@@ -897,7 +897,7 @@ struct MyUnit;
 ### Tuple struct
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 struct MyTuple(i32, String);
 ```
@@ -905,7 +905,7 @@ struct MyTuple(i32, String);
 ### Struct with fields
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 struct MyStruct {
     int: i32,
@@ -916,7 +916,7 @@ struct MyStruct {
 ### Struct with fields with default values
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 struct MyStruct {
     #[quickjs(skip_default)]
@@ -933,7 +933,7 @@ fn default_text() -> String {
 ### Untagged unit enum
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -945,7 +945,7 @@ enum MyEnum {
 ### Untagged unit enum with discriminant
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 #[quickjs(untagged)]
 #[repr(i32)]
@@ -958,7 +958,7 @@ enum MyEnum {
 ### Externally tagged tuple enum
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 enum MyEnum {
     Foo(f64, f64),
@@ -969,7 +969,7 @@ enum MyEnum {
 ### Adjacently tagged tuple enum
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 #[quickjs(tag, content = "data")]
 enum MyEnum {
@@ -981,7 +981,7 @@ enum MyEnum {
 ### Untagged tuple enum
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -993,7 +993,7 @@ enum MyEnum {
 ### Internally tagged enum with fields
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 #[quickjs(tag = "$")]
 enum MyEnum {
@@ -1005,7 +1005,7 @@ enum MyEnum {
 ### Internally tagged enum with fields with defaults
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 #[quickjs(tag = "$")]
 enum MyEnum {
@@ -1028,7 +1028,7 @@ fn default_msg() -> String {
 ### Untagged enum with fields
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -1040,7 +1040,7 @@ enum MyEnum {
 ### Generic newtype-like struct
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 struct Newtype<T>(pub T);
 ```
@@ -1048,7 +1048,7 @@ struct Newtype<T>(pub T);
 ### Generic struct with fields
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 struct MyStruct<T, V> {
     pub tag: T,
@@ -1059,7 +1059,7 @@ struct MyStruct<T, V> {
 ### Generic enum
 
 ```
-# use rquickjs::IntoJs;
+# use anode_rquickjs::IntoJs;
 #[derive(IntoJs)]
 enum MyEnum<T, V> {
     Foo(V),
@@ -1120,7 +1120,7 @@ __`skip`__                        | Skips this field
 ### Unit struct
 
 ```
-use rquickjs::IntoJsByRef;
+use anode_rquickjs::IntoJsByRef;
 
 #[derive(IntoJsByRef)]
 struct MyUnit;
@@ -1129,7 +1129,7 @@ struct MyUnit;
 ### Tuple struct
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 struct MyTuple(i32, String);
 ```
@@ -1137,7 +1137,7 @@ struct MyTuple(i32, String);
 ### Struct with fields
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 struct MyStruct {
     int: i32,
@@ -1148,7 +1148,7 @@ struct MyStruct {
 ### Struct with fields with default values
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 struct MyStruct {
     #[quickjs(skip_default)]
@@ -1165,7 +1165,7 @@ fn default_text() -> String {
 ### Untagged unit enum
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -1177,7 +1177,7 @@ enum MyEnum {
 ### Untagged unit enum with discriminant
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 #[quickjs(untagged)]
 #[repr(i32)]
@@ -1190,7 +1190,7 @@ enum MyEnum {
 ### Externally tagged tuple enum
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 enum MyEnum {
     Foo(f64, f64),
@@ -1201,7 +1201,7 @@ enum MyEnum {
 ### Adjacently tagged tuple enum
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 #[quickjs(tag, content = "data")]
 enum MyEnum {
@@ -1213,7 +1213,7 @@ enum MyEnum {
 ### Untagged tuple enum
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -1225,7 +1225,7 @@ enum MyEnum {
 ### Internally tagged enum with fields
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 #[quickjs(tag = "$")]
 enum MyEnum {
@@ -1237,7 +1237,7 @@ enum MyEnum {
 ### Internally tagged enum with fields with defaults
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 #[quickjs(tag = "$")]
 enum MyEnum {
@@ -1260,7 +1260,7 @@ fn default_msg() -> String {
 ### Untagged enum with fields
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 #[quickjs(untagged)]
 enum MyEnum {
@@ -1272,7 +1272,7 @@ enum MyEnum {
 ### Generic newtype-like struct
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 struct Newtype<T>(pub T);
 ```
@@ -1280,7 +1280,7 @@ struct Newtype<T>(pub T);
 ### Generic struct with fields
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 struct MyStruct<T, V> {
     pub tag: T,
@@ -1291,7 +1291,7 @@ struct MyStruct<T, V> {
 ### Generic enum
 
 ```
-# use rquickjs::IntoJsByRef;
+# use anode_rquickjs::IntoJsByRef;
 #[derive(IntoJsByRef)]
 enum MyEnum<T, V> {
     Foo(V),
