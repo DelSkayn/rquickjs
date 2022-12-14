@@ -26,6 +26,8 @@ version = "0.4"
 optional = true
 
 [features]
+default = ["bindgen"]
+
 exports = []
 bindgen = ["bindgen-rs"]
 

@@ -99,8 +99,15 @@ fn main() {
     //     patch(out_dir, patches_dir.join(file));
     // }
 
+    let include_dir = [&src_dir, &header_dir];
+
     // generating bindings
-    bindgen(out_dir, header_dir.join("quickjs.h"), &defines);
+    bindgen(
+        out_dir.join("bindings.rs"),
+        header_dir.join("quickjs-internals.h"),
+        &defines,
+        include_dir,
+    );
 
     let mut builder = cc::Build::new();
     builder
@@ -149,6 +156,7 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
 }
 
 #[cfg(not(feature = "bindgen"))]
+#[allow(unused)] // until the todo!() is implemented
 fn bindgen<'a, D, H, X, K, V>(out_dir: D, _header_file: H, _defines: X)
 where
     D: AsRef<Path>,
@@ -157,6 +165,8 @@ where
     K: AsRef<str> + 'a,
     V: AsRef<str> + 'a,
 {
+    todo!("Reimplementing the bindings without bindgen is not supported yet.");
+
     let target = env::var("TARGET").unwrap();
 
     let bindings_file = out_dir.as_ref().join("bindings.rs");
@@ -174,8 +184,12 @@ where
 }
 
 #[cfg(feature = "bindgen")]
-fn bindgen<'a, D, H, X, K, V>(out_dir: D, header_file: H, defines: X)
-where
+fn bindgen<'a, D, H, X, K, V>(
+    out_file: D,
+    header_file: H,
+    defines: X,
+    includes: impl IntoIterator<Item = impl AsRef<Path>>,
+) where
     D: AsRef<Path>,
     H: AsRef<Path>,
     X: IntoIterator<Item = &'a (K, Option<V>)>,
@@ -183,12 +197,10 @@ where
     V: AsRef<str> + 'a,
 {
     let target = env::var("TARGET").unwrap();
-    let out_dir = out_dir.as_ref();
+    // let out_dir = out_dir.as_ref();
     let header_file = header_file.as_ref();
 
     let mut cflags = vec![format!("--target={}", target)];
-
-    //format!("-I{}", out_dir.parent().display()),
 
     for (name, value) in defines {
         cflags.push(if let Some(value) = value {
@@ -196,6 +208,10 @@ where
         } else {
             format!("-D{}", name.as_ref())
         });
+    }
+
+    for include in includes {
+        cflags.push(format!("-I{}", include.as_ref().display()));
     }
 
     let bindings = bindgen_rs::Builder::default()
@@ -215,10 +231,12 @@ where
         .generate()
         .expect("Unable to generate bindings");
 
-    let bindings_file = out_dir.join("bindings.rs");
+    // let bindings_file = out_dir.join("bindings.rs");
+    let bindings_file = out_file.as_ref();
+    println!("cargo:rerun-if-changed={}", header_file.display());
 
     bindings
-        .write_to_file(&bindings_file)
+        .write_to_file(bindings_file)
         .expect("Couldn't write bindings");
 
     // Special case to support bundled bindings
@@ -227,6 +245,6 @@ where
         fs::create_dir_all(&dest_dir).unwrap();
 
         let dest_file = format!("{}.rs", target);
-        fs::copy(&bindings_file, dest_dir.join(&dest_file)).unwrap();
+        fs::copy(bindings_file, dest_dir.join(&dest_file)).unwrap();
     }
 }
