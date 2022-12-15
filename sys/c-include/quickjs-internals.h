@@ -871,7 +871,7 @@ struct JSShape {
 struct JSObject {
   union {
     JSGCObjectHeader header;
-    struct {
+    struct JSObjectBitfield {
       int __gc_ref_count; /* corresponds to header.ref_count */
       uint8_t __gc_mark;  /* corresponds to header.mark/gc_obj_type */
 
@@ -886,8 +886,8 @@ struct JSObject {
       uint8_t tmp_mark : 1;             /* used in JS_WriteObjectRec() */
       uint8_t is_HTMLDDA : 1; /* specific annex B IsHtmlDDA behavior */
       uint16_t class_id;      /* see JS_CLASS_x */
-    };
-  };
+    } bitfield;
+  } hdr;
   /* byte offsets: 16/24 */
   JSShape *shape;   /* prototype and property names + flag */
   JSProperty *prop; /* array of properties */
@@ -930,14 +930,15 @@ struct JSObject {
         *async_from_sync_iterator_data; /* JS_CLASS_ASYNC_FROM_SYNC_ITERATOR */
     struct JSAsyncGeneratorData
         *async_generator_data; /* JS_CLASS_ASYNC_GENERATOR */
-    struct {                   /* JS_CLASS_BYTECODE_FUNCTION: 12/24 bytes */
-      /* also used by JS_CLASS_GENERATOR_FUNCTION, JS_CLASS_ASYNC_FUNCTION and
+    struct JSBytecodeFunctionData {
+      /* JS_CLASS_BYTECODE_FUNCTION: 12/24 bytes
+       * also used by JS_CLASS_GENERATOR_FUNCTION, JS_CLASS_ASYNC_FUNCTION and
        * JS_CLASS_ASYNC_GENERATOR_FUNCTION */
       struct JSFunctionBytecode *function_bytecode;
       JSVarRef **var_refs;
       JSObject *home_object; /* for 'super' access */
     } func;
-    struct { /* JS_CLASS_C_FUNCTION: 12/20 bytes */
+    struct JSCFuntionData { /* JS_CLASS_C_FUNCTION: 12/20 bytes */
       JSContext *realm;
       JSCFunctionType c_function;
       uint8_t length;
@@ -945,8 +946,8 @@ struct JSObject {
       int16_t magic;
     } cfunc;
     /* array part for fast arrays and typed arrays */
-    struct { /* JS_CLASS_ARRAY, JS_CLASS_ARGUMENTS,
-                JS_CLASS_UINT8C_ARRAY..JS_CLASS_FLOAT64_ARRAY */
+    struct JSArrayData { /* JS_CLASS_ARRAY, JS_CLASS_ARGUMENTS,
+                 JS_CLASS_UINT8C_ARRAY..JS_CLASS_FLOAT64_ARRAY */
       union {
         uint32_t size; /* JS_CLASS_ARRAY, JS_CLASS_ARGUMENTS */
         struct JSTypedArray

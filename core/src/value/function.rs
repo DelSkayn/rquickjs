@@ -268,18 +268,26 @@ impl<'js> Function<'js> {
 
     /// Get the underlying JSFunctionBytecode instance from a JSValue
     #[doc(hidden)]
-    pub fn get_bytecode(&self) -> &qjs::JSFunctionBytecode {
+    pub fn get_bytecode(&self) -> Option<&qjs::JSFunctionBytecode> {
         let js_value = self.0.as_js_value();
 
         unsafe {
             let obj_ptr = qjs::JS_VALUE_GET_PTR(js_value) as *mut qjs::JSObject;
             debug_assert!(!obj_ptr.is_null(), "JSObject pointer is null");
+
+            // then we check class to make sure it's a **bytecode** function.
+            // never use the union unless you have asserted the class :P
+            let class_id = (*obj_ptr).hdr.bitfield.class_id;
+            if class_id as u32 != qjs::JS_CLASS_BYTECODE_FUNCTION {
+                return None;
+            }
+
             let bytecode_ptr = (*obj_ptr).u.func.function_bytecode;
             debug_assert!(
                 !bytecode_ptr.is_null(),
                 "JSFunctionBytecode pointer is null"
             );
-            &*bytecode_ptr
+            Some(&*bytecode_ptr)
         }
     }
 }
