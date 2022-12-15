@@ -27,6 +27,7 @@ pub use function::{
     AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
 };
 pub use object::{Filter, Object, ObjectDef};
+use rquickjs_sys::JS_TAG_FUNCTION_BYTECODE;
 pub use string::String;
 pub use symbol::Symbol;
 
@@ -112,25 +113,60 @@ impl<'js> PartialEq for Value<'js> {
 }
 
 impl<'js> Value<'js> {
-    // unsafe becuase the value must belong the context and the lifetime must be constrained by its lifetime
+    /// Converts a QuickJS [`JSValue`] into the corresponding Rust type.
+    ///
+    /// # Safety
+    ///
+    /// Unsafe becuase the value must belong the context and the lifetime must be constrained by its lifetime.
+    ///
+    /// # Remarks
+    ///
+    /// This function should only be used when interfacing with QuickJS C API.
     #[inline]
-    pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
+    #[doc(hidden)]
+    pub unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
         Self { ctx, value }
     }
 
+    /// Converts a QuickJS [`JSValueConst`] into the corresponding Rust type.
+    ///
+    /// # Safety
+    ///
+    /// Unsafe becuase the value must belong the context and the lifetime must be constrained by its lifetime
+    ///
+    /// # Remarks
+    ///
+    /// This function should only be used when interfacing with QuickJS C API.
     #[inline]
-    pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
+    #[doc(hidden)]
+    pub unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
         let value = qjs::JS_DupValue(value);
         Self { ctx, value }
     }
 
+    /// Converts a reference of this type as a [`JSValueConst`].
+    ///
+    /// A [`JSValueConst`] does not own the value.
+    ///
+    /// # Remarks
+    ///
+    /// This function should only be used when interfacing with QuickJS C API.
     #[inline]
-    pub(crate) fn as_js_value(&self) -> qjs::JSValueConst {
+    #[doc(hidden)]
+    pub fn as_js_value(&self) -> qjs::JSValueConst {
         self.value
     }
 
+    /// Converts this value into a [`JSValue`].
+    ///
+    /// # Remarks
+    ///
+    /// You must handle the lifetime of the value yourself.
+    ///
+    /// This function should only be used when interfacing with QuickJS C API.
     #[inline]
-    pub(crate) fn into_js_value(self) -> qjs::JSValue {
+    #[doc(hidden)]
+    pub fn into_js_value(self) -> qjs::JSValue {
         let value = self.value;
         mem::forget(self);
         value
@@ -243,27 +279,42 @@ impl<'js> Value<'js> {
         }
     }
 
+    /// Try get a reference of the function bytecode from value
+    #[doc(hidden)]
+    pub fn as_function_bytecode_ref(&self) -> Option<&qjs::JSFunctionBytecode> {
+        if self.is_function_bytecode() {
+            let ptr = unsafe { self.get_ptr() as *const qjs::JSFunctionBytecode };
+            Some(unsafe { &*ptr })
+        } else {
+            None
+        }
+    }
+
     #[allow(unused)]
     #[inline]
-    pub(crate) fn new_ptr(ctx: Ctx<'js>, tag: qjs::c_int, ptr: *mut qjs::c_void) -> Self {
+    #[doc(hidden)]
+    pub fn new_ptr(ctx: Ctx<'js>, tag: qjs::c_int, ptr: *mut qjs::c_void) -> Self {
         let value = qjs::JS_MKPTR(tag, ptr);
         Self { ctx, value }
     }
 
     #[allow(unused)]
     #[inline]
-    pub(crate) fn new_ptr_const(ctx: Ctx<'js>, tag: qjs::c_int, ptr: *mut qjs::c_void) -> Self {
+    #[doc(hidden)]
+    pub fn new_ptr_const(ctx: Ctx<'js>, tag: qjs::c_int, ptr: *mut qjs::c_void) -> Self {
         let value = unsafe { qjs::JS_DupValue(qjs::JS_MKPTR(tag, ptr)) };
         Self { ctx, value }
     }
 
     #[inline]
-    pub(crate) unsafe fn get_ptr(&self) -> *mut qjs::c_void {
+    #[doc(hidden)]
+    pub unsafe fn get_ptr(&self) -> *mut qjs::c_void {
         qjs::JS_VALUE_GET_PTR(self.value)
     }
 
     #[inline]
-    pub(crate) unsafe fn into_ptr(self) -> *mut qjs::c_void {
+    #[doc(hidden)]
+    pub unsafe fn into_ptr(self) -> *mut qjs::c_void {
         let ptr = self.get_ptr();
         mem::forget(self);
         ptr
@@ -316,6 +367,12 @@ impl<'js> Value<'js> {
     #[inline]
     pub fn is_module(&self) -> bool {
         qjs::JS_TAG_MODULE == unsafe { qjs::JS_VALUE_GET_TAG(self.value) }
+    }
+
+    /// Check if the value is a function bytecode
+    #[inline]
+    pub fn is_function_bytecode(&self) -> bool {
+        qjs::JS_TAG_FUNCTION_BYTECODE == unsafe { qjs::JS_VALUE_GET_TAG(self.value) }
     }
 
     /// Check if the value is an array

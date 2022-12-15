@@ -265,6 +265,23 @@ impl<'js> Function<'js> {
     pub(crate) unsafe fn init_raw(rt: *mut qjs::JSRuntime) {
         JsFunction::register(rt);
     }
+
+    /// Get the underlying JSFunctionBytecode instance from a JSValue
+    #[doc(hidden)]
+    pub fn get_bytecode(&self) -> &qjs::JSFunctionBytecode {
+        let js_value = self.0.as_js_value();
+
+        unsafe {
+            let obj_ptr = qjs::JS_VALUE_GET_PTR(js_value) as *mut qjs::JSObject;
+            debug_assert!(!obj_ptr.is_null(), "JSObject pointer is null");
+            let bytecode_ptr = (*obj_ptr).u.func.function_bytecode;
+            debug_assert!(
+                !bytecode_ptr.is_null(),
+                "JSFunctionBytecode pointer is null"
+            );
+            &*bytecode_ptr
+        }
+    }
 }
 
 #[cfg(test)]
