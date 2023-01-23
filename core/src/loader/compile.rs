@@ -115,7 +115,7 @@ impl<'i, 'r: 'i> IntoIterator for &'r CompiledBytecodes<'i> {
     type Item = (&'i str, &'i [u8]);
     fn into_iter(self) -> Self::IntoIter {
         CompiledBytecodesIter {
-            data: &*self.0,
+            data: &self.0,
             index: 0,
         }
     }

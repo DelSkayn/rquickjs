@@ -343,21 +343,28 @@ rt.idle().await;
 ### Class binding
 
 ```
-use rquickjs::{bind, Runtime, Context, Error};
+use rquickjs::{bind, Context, Runtime};
 
 #[bind(object)]
 #[quickjs(bare)]
 mod geom {
+    use std::cell::Cell;
+
     pub struct Point {
         // field properties
-        pub x: f64,
-        pub y: f64,
+        #[quickjs(skip)]
+        pub x: Cell<f64>,
+        #[quickjs(skip)]
+        pub y: Cell<f64>,
     }
 
     impl Point {
         // constructor
         pub fn new(x: f64, y: f64) -> Self {
-            Self { x, y }
+            Self {
+                x: Cell::new(x),
+                y: Cell::new(y),
+            }
         }
 
         // instance method
@@ -366,27 +373,54 @@ mod geom {
         }
 
         // instance property getter
+        #[quickjs(get, enumerable, rename = "x")]
+        pub fn x_get(&self) -> f64 {
+            self.x.get()
+        }
+
+        // instance property getter
+        #[quickjs(set, enumerable, rename = "x")]
+        pub fn x_set(&self, v: f64) {
+            self.x.set(v);
+        }
+
+        // instance property getter
+        #[quickjs(get, enumerable, rename = "y")]
+        pub fn y_get(&self) -> f64 {
+            self.y.get()
+        }
+
+        // instance property getter
+        #[quickjs(set, enumerable, rename = "y")]
+        pub fn y_set(&self, v: f64) {
+            self.y.set(v);
+        }
+
+        // instance property getter
         #[quickjs(get, enumerable)]
         pub fn xy(&self) -> (f64, f64) {
-            (self.x, self.y)
+            (self.x.get(), self.y.get())
         }
 
         // instance property setter
         #[quickjs(rename = "xy", set)]
-        pub fn set_xy(&mut self, xy: (f64, f64)) {
-            self.x = xy.0;
-            self.y = xy.1;
+        pub fn set_xy(&self, xy: (f64, f64)) {
+            self.x.set(xy.0);
+            self.y.set(xy.1);
         }
 
         // static method
         pub fn dot(a: &Point, b: &Point) -> f64 {
-            a.x * b.x + a.y * b.y
+            a.x.get() * b.x.get() + a.y.get() * b.y.get()
         }
 
         // static property with getter
         #[quickjs(get)]
         pub fn zero() -> Self {
-            Point { x: 0.0, y: 0.0 }
+            Point {
+                x: Cell::new(0.0),
+                y: Cell::new(0.0),
+            }
         }
     }
 }
@@ -399,45 +433,48 @@ ctx.with(|ctx| {
 });
 
 ctx.with(|ctx| {
-    ctx.eval::<(), _>(r#"
-        function assert(res) {
-            if (!res) throw new Error("Assertion failed");
-        }
+    ctx.eval::<(), _>(
+        r#"
+function assert(res) {
+    if (!res) throw new Error("Assertion failed");
+}
 
-        class ColorPoint extends Point {
-            constructor(x, y, color) {
-            super(x, y);
-                this.color = color;
-            }
-            get_color() {
-                return this.color;
-            }
-        }
+class ColorPoint extends Point {
+    constructor(x, y, color) {
+    super(x, y);
+        this.color = color;
+    }
+    get_color() {
+        return this.color;
+    }
+}
 
-        let pt = new Point(2, 3);
-        assert(pt.x === 2);
-        assert(pt.y === 3);
-        pt.x = 4;
-        assert(pt.x === 4);
-        assert(pt.norm() == 5);
-        let xy = pt.xy;
-        assert(xy.length === 2);
-        assert(xy[0] === 4);
-        assert(xy[1] === 3);
-        pt.xy = [3, 4];
-        assert(pt.x === 3);
-        assert(pt.y === 4);
-        assert(Point.dot(pt, Point(2, 1)) == 10);
+let pt = new Point(2, 3);
+assert(pt.x === 2);
+assert(pt.y === 3);
+pt.x = 4;
+assert(pt.x === 4);
+assert(pt.norm() == 5);
+let xy = pt.xy;
+assert(xy.length === 2);
+assert(xy[0] === 4);
+assert(xy[1] === 3);
+pt.xy = [3, 4];
+assert(pt.x === 3);
+assert(pt.y === 4);
+assert(Point.dot(pt, Point(2, 1)) == 10);
 
-        let ptz = Point.zero;
-        assert(ptz.x === 0);
-        assert(ptz.y === 0);
+let ptz = Point.zero;
+assert(ptz.x === 0);
+assert(ptz.y === 0);
 
-        let ptc = new ColorPoint(2, 3, 0xffffff);
-        assert(ptc.x === 2);
-        assert(ptc.color === 0xffffff);
-        assert(ptc.get_color() === 0xffffff);
-    "#).unwrap();
+let ptc = new ColorPoint(2, 3, 0xffffff);
+assert(ptc.x === 2);
+assert(ptc.color === 0xffffff);
+assert(ptc.get_color() === 0xffffff);
+"#,
+    )
+    .unwrap();
 });
 ```
 
@@ -448,7 +485,7 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let attr: AttributeArgs = parse_macro_input!(attr);
     let item = parse_macro_input!(item);
 
-    let attr = AttrItem::from_list(&*attr).unwrap_or_else(|error| {
+    let attr = AttrItem::from_list(&attr).unwrap_or_else(|error| {
         abort!("{}", error);
     });
     let mut binder = Binder::new(attr.config());
@@ -497,7 +534,7 @@ pub fn embed(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let attr: AttributeArgs = parse_macro_input!(attr);
     let item = parse_macro_input!(item);
 
-    let attr = AttrEmbed::from_list(&*attr).unwrap_or_else(|error| {
+    let attr = AttrEmbed::from_list(&attr).unwrap_or_else(|error| {
         abort!("{}", error);
     });
     let embedder = Embedder::new(attr.config());

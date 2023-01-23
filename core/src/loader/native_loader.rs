@@ -53,7 +53,7 @@ impl Loader<Native> for NativeLoader {
             return Err(Error::new_loading(path));
         }
 
-        let lib = Library::open(&path)
+        let lib = Library::open(path)
             .map_err(|_| Error::new_loading_message(path, "Unable to open library"))?;
         let load: ModuleLoadFn = unsafe { lib.symbol("js_init_module") }.map_err(|_| {
             Error::new_loading_message(path, "Unable to find symbol `js_init_module`")

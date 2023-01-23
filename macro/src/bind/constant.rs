@@ -89,7 +89,7 @@ impl Binder {
 
         if prop {
             if let Some(prop) = self.top_item::<BindProp, _>(ident, &name, proto) {
-                prop.set_const(&ident, &name, BindConst { src });
+                prop.set_const(ident, &name, BindConst { src });
                 prop.set_writable(&name, writable);
                 prop.set_configurable(configurable);
                 prop.set_enumerable(enumerable);

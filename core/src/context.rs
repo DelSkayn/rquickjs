@@ -97,7 +97,7 @@ impl Context {
     pub fn enable_big_num_ext(&self, enable: bool) {
         let guard = self.rt.inner.lock();
         guard.update_stack_top();
-        unsafe { qjs::JS_EnableBignumExt(self.ctx, if enable { 1 } else { 0 }) }
+        unsafe { qjs::JS_EnableBignumExt(self.ctx, i32::from(enable)) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }

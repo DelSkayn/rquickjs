@@ -199,13 +199,7 @@ impl<'js> Function<'js> {
 
     /// Mark the function as a constructor
     pub fn set_constructor(&self, flag: bool) {
-        unsafe {
-            qjs::JS_SetConstructorBit(
-                self.0.ctx.ctx,
-                self.0.as_js_value(),
-                if flag { 1 } else { 0 },
-            )
-        };
+        unsafe { qjs::JS_SetConstructorBit(self.0.ctx.ctx, self.0.as_js_value(), i32::from(flag)) };
     }
 
     /// Set a function prototype

@@ -39,7 +39,7 @@ impl Loader<Script> for ScriptLoader {
             return Err(Error::new_loading(path));
         }
 
-        let source: Vec<_> = std::fs::read(&path)?;
+        let source: Vec<_> = std::fs::read(path)?;
         Module::new(ctx, path, source)
     }
 }

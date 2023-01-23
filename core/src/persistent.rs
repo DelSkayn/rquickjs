@@ -86,7 +86,7 @@ impl<T> fmt::Debug for Persistent<T> {
     }
 }
 
-impl<'t, T> Drop for Persistent<T> {
+impl<T> Drop for Persistent<T> {
     fn drop(&mut self) {
         unsafe { qjs::JS_FreeValueRT(self.rt, self.value.get()) };
     }
@@ -148,7 +148,7 @@ impl<T> Persistent<T> {
     }
 }
 
-impl<'js, 't, T> FromJs<'js> for Persistent<T>
+impl<'js, T> FromJs<'js> for Persistent<T>
 where
     T: Outlive<'js>,
     T::Target: FromJs<'js> + IntoJs<'js>,
