@@ -92,6 +92,7 @@ impl Spawner {
     where
         F: Future + ParallelSend + 'static,
     {
+        self.idle.store(false, Ordering::SeqCst);
         let (runnable, task) = spawn_task(
             async move {
                 future.await;
@@ -115,26 +116,34 @@ impl Spawner {
         if self.idle.load(Ordering::SeqCst) {
             Idle::default()
         } else {
-            Idle::new(&self.idles)
+            Idle::new(&self.idle, &self.idles)
         }
     }
 }
 
+struct InnerIdle {
+    idle: Ref<AtomicBool>,
+    signal: Sender<Waker>,
+}
+
 /// The idle awaiting future
 #[derive(Default)]
-pub struct Idle(Option<Sender<Waker>>);
+pub struct Idle(Option<InnerIdle>);
 
 impl Idle {
-    fn new(sender: &Sender<Waker>) -> Self {
-        Self(Some(sender.clone()))
+    fn new(idle: &Ref<AtomicBool>, sender: &Sender<Waker>) -> Self {
+        Self(Some(InnerIdle {
+            idle: idle.clone(),
+            signal: sender.clone(),
+        }))
     }
 }
 
 impl Future for Idle {
     type Output = ();
     fn poll(self: Pin<&mut Self>, cx: &mut Context) -> Poll<Self::Output> {
-        if let Some(sender) = &self.0 {
-            if sender.send(cx.waker().clone()).is_ok() {
+        if let Some(inner) = &self.0 {
+            if !inner.idle.load(Ordering::SeqCst) && inner.signal.send(cx.waker().clone()).is_ok() {
                 return Poll::Pending;
             }
         }
