@@ -2,9 +2,9 @@ name: Rust
 on:
   push:
     branches:
-      - '*'
+      - "*"
     tags:
-      - '[0-9]+.[0-9]+.[0-9]+'
+      - "[0-9]+.[0-9]+.[0-9]+"
   pull_request:
 jobs:
   format:
@@ -63,13 +63,12 @@ jobs:
             target/doc/rquickjs
             target/doc/rquickjs-sys
             target/doc/rquickjs-macro
-
   check:
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - uses: dtolnay/rust-toolchain@v1
@@ -153,6 +152,18 @@ jobs:
             target: x86_64-pc-windows-msvc
             features: full-async
             optimization: true
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-musl
+            features: full-async
+            optimization: false
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: aarch64-unknown-linux-musl
+            features: full-async
+            optimization: false
           # Test features
           - task: features
             os: ubuntu-latest
@@ -233,7 +244,7 @@ jobs:
         with:
           submodules: true
       - name: Setup cross linux toolchain
-        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'x86_64-')
+        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
         run: |
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
@@ -244,6 +255,39 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET}
           echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
+      - name: Setup musl-tools
+        if: startsWith(matrix.target, 'x86_64-') && endsWith(matrix.target, '-musl')
+        run: sudo apt-get update -y && sudo apt-get install -y musl-tools
+      - name: Setup musl aarch64
+        if: startsWith(matrix.target, 'aarch64') && endsWith(matrix.target, '-musl')
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            curl \
+            libc6-arm64-cross \
+            libc6-dev-arm64-cross \
+            crossbuild-essential-arm64 \
+            clang \
+            qemu-system-arm \
+            qemu-efi-aarch64 \
+            qemu-utils \
+            qemu-user
+
+          curl --retry 5 https://musl.cc/aarch64-linux-musl-cross.tgz | tar xzf -
+          sudo mv aarch64-linux-musl-cross /musl
+
+          echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+          echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> $GITHUB_ENV
+          echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+
+          mkdir -p ~/.cargo/
+          echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "link-self-contained=yes","-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
+
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
+          echo "/musl/bin" >> $GITHUB_PATH
+
       - name: Setup msys2 toolchains
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         uses: msys2/setup-msys2@v2
@@ -325,7 +369,6 @@ jobs:
           title: Update bindings
           body: |
             Bindings should be updated to be consistent with latest changes
-
   publish:
     if: (github.repository == 'DelSkayn/rquickjs' || github.repository == 'katyo/rquickjs') && startsWith(github.ref, 'refs/tags/')
     needs:
