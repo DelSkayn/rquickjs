@@ -66,6 +66,8 @@ jobs:
 
   check:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     steps:
       - uses: actions/checkout@v1
         with:
@@ -86,10 +88,12 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
-      - uses: actions-rs/clippy-check@v1
+      - uses: sksat/action-clippy@main
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all --all-features
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          reporter: github-check
+          fail_on_error: true
+          clippy_flags: --all --all-targets --features full-async
 
   test:
     needs:
