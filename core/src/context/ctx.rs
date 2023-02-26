@@ -213,7 +213,7 @@ impl<'js> Ctx<'js> {
     pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
         unsafe {
             let register = self.get_opaque();
-            if (*register).registery.remove(&k) {
+            if register.registery.remove(&k) {
                 Some(Value::from_js_value(self, k.0))
             } else {
                 None
