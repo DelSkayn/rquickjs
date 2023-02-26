@@ -10,7 +10,7 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Setup Rust
@@ -22,7 +22,7 @@ jobs:
           default: true
           override: true
       - name: Cargo cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
@@ -37,7 +37,7 @@ jobs:
   doc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Setup Rust
@@ -49,14 +49,14 @@ jobs:
           default: true
           override: true
       - name: Cargo cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-doc-${{ hashFiles('**/Cargo.lock') }}
@@ -68,7 +68,7 @@ jobs:
           command: doc
           args: --features full-async,parallel,doc-cfg
       - name: Upload docs
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: docs
           path: |
@@ -90,14 +90,14 @@ jobs:
           default: true
           override: true
       - name: Cargo cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
@@ -225,7 +225,7 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: full-async
-            optimization: false 
+            optimization: false
           - task: channels
             os: ubuntu-latest
             rust: beta
@@ -237,10 +237,10 @@ jobs:
             rust: nightly
             target: x86_64-unknown-linux-gnu
             features: full-async
-            optimization: false 
+            optimization: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Setup cross linux toolchain
@@ -284,7 +284,7 @@ jobs:
           default: true
           override: true
       - name: Cargo cache
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: |
             ~/.cargo/registry
@@ -293,7 +293,7 @@ jobs:
       - name: Build cache
         if: |
           runner.os != 'macOS'
-        uses: actions/cache@v2
+        uses: actions/cache@v3
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-opt_${{ matrix.optimization }}-${{ hashFiles('**/Cargo.lock') }}
@@ -310,7 +310,7 @@ jobs:
           args: ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: bindings
           path: sys/src/bindings/${{ matrix.target }}.rs
@@ -334,14 +334,14 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Download bindings
-        uses: actions/download-artifact@v2
+        uses: actions/download-artifact@v3
         with:
           name: bindings
           path: sys/src/bindings
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v3
+        uses: peter-evans/create-pull-request@v4
         with:
           base: ${{ github.head_ref }}
           commit-message: Updated bindings
@@ -360,7 +360,7 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           submodules: true
       - name: Setup Rust
