@@ -14,13 +14,10 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
-          profile: minimal
           components: rustfmt
-          default: true
-          override: true
       - name: Cargo cache
         uses: actions/cache@v3
         with:
@@ -41,13 +38,10 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: nightly
-          profile: minimal
           components: rust-docs
-          default: true
-          override: true
       - name: Cargo cache
         uses: actions/cache@v3
         with:
@@ -82,13 +76,10 @@ jobs:
       - uses: actions/checkout@v1
         with:
           submodules: true
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: nightly
-          profile: minimal
           components: clippy
-          default: true
-          override: true
       - name: Cargo cache
         uses: actions/cache@v3
         with:
@@ -275,14 +266,11 @@ jobs:
           echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
-          target: ${{ matrix.target }}
-          profile: minimal
+          targets: ${{ matrix.target }}
           components: rustfmt
-          default: true
-          override: true
       - name: Cargo cache
         uses: actions/cache@v3
         with:
@@ -364,10 +352,9 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: stable
-          override: true
       - name: Publish crates
         uses: katyo/publish-crates@v1
         with:
