@@ -2,7 +2,7 @@ name: Rust
 on:
   push:
     branches:
-      - master
+      - '*'
     tags:
       - '[0-9]+.[0-9]+.[0-9]+'
   pull_request:
