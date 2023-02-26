@@ -26,10 +26,7 @@ jobs:
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_stable-${{ hashFiles('**/Cargo.lock') }}
       - name: Format
-        uses: actions-rs/cargo@v1
-        with:
-          command: fmt
-          args: --all -- --check
+        run: cargo fmt --all -- --check
 
   doc:
     runs-on: ubuntu-latest
@@ -55,12 +52,9 @@ jobs:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-doc-${{ hashFiles('**/Cargo.lock') }}
       - name: Documentation
-        uses: actions-rs/cargo@v1
         env:
           DOCS_RS: 1
-        with:
-          command: doc
-          args: --features full-async,parallel,doc-cfg
+        run: cargo doc --features full-async,parallel,doc-cfg
       - name: Upload docs
         uses: actions/upload-artifact@v3
         with:
@@ -286,16 +280,11 @@ jobs:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-opt_${{ matrix.optimization }}-${{ hashFiles('**/Cargo.lock') }}
       - name: Update deps
-        uses: actions-rs/cargo@v1
-        with:
-          command: update
+        run: cargo update
       - name: Build sys
-        uses: actions-rs/cargo@v1
         env:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
-        with:
-          command: build
-          args: ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
+        run: cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
         uses: actions/upload-artifact@v3
@@ -303,18 +292,12 @@ jobs:
           name: bindings
           path: sys/src/bindings/${{ matrix.target }}.rs
       - name: Build
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+        run: cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
-        uses: actions-rs/cargo@v1
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
-        with:
-          command: test
-          args: ${{ matrix.optimization && '--release' || '' }} --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+        run: cargo test ${{ matrix.optimization && '--release' || '' }} --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
   update-bindings:
     if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
