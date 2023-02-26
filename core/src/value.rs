@@ -258,7 +258,7 @@ impl<'js> Value<'js> {
     }
 
     #[inline]
-    pub(crate) unsafe fn get_ptr(&self) -> *mut qjs::c_void {
+    pub unsafe fn get_ptr(&self) -> *mut qjs::c_void {
         qjs::JS_VALUE_GET_PTR(self.value)
     }
 
