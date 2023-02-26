@@ -273,7 +273,7 @@ impl Binder {
 
         let name = name
             .or_else(|| ident.as_ref().map(|ident| ident.to_string()))
-            .or_else(|| index.map(|index| format!("{}", index)))
+            .or_else(|| index.map(|index| index.to_string()))
             .unwrap();
 
         let span = ident

@@ -7,7 +7,7 @@ mod bundle;
 use bundle::{NativeModule, SCRIPT_MODULE};
 
 fn print(msg: String) {
-    println!("{}", msg);
+    println!("{msg}");
 }
 
 fn main() {

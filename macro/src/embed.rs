@@ -75,7 +75,7 @@ impl Embedder {
         let ident = ident.unwrap_or_else(|| {
             format_ident!(
                 "{}",
-                RenameRule::ScreamingSnakeCase.apply_to_variant(&item.ident.to_string())
+                RenameRule::ScreamingSnakeCase.apply_to_variant(item.ident.to_string())
             )
         });
         if names.is_empty() {
@@ -112,7 +112,7 @@ impl Embedder {
 
             let source = names
                 .iter()
-                .map(|name| format!("import '{}';", name))
+                .map(|name| format!("import '{name}';"))
                 .collect::<Vec<_>>()
                 .join("");
 

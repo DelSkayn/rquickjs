@@ -757,7 +757,7 @@ mod test {
 
         impl A {
             fn new(name: StdString) -> Self {
-                println!("A::new {}", name);
+                println!("A::new {name}");
                 Self {
                     name,
                     refs: RefCell::new(HashSet::new()),

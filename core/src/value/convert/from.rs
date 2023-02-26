@@ -369,7 +369,10 @@ macro_rules! chrono_from_js_impls {
 
                     let millis = date_to_millis(ctx, value)?;
 
-                    Ok(chrono::$type.timestamp_millis(millis))
+                    chrono::$type.timestamp_millis_opt(millis).single()
+                        .ok_or_else(|| {
+                            Error::new_from_js_message("Date", "chrono::DateTime", "Invalid timestamp")
+                        })
                 }
             }
         )+

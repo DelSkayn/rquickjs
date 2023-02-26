@@ -48,7 +48,7 @@ pub trait Resolver {
     ///         (_, Some(path)) => path,
     ///         _ => "",
     ///     };
-    ///     format!("{}/{}", path, name)
+    ///     format!("{path}/{name}")
     /// })
     /// # }
     /// ```
@@ -374,7 +374,7 @@ mod test {
                     "#,
                 )
                 .map_err(|error| {
-                    println!("{:?}", error);
+                    println!("{error:?}");
                     // TODO: Error::Resolving
                     if let Error::Exception { message, .. } = error {
                         message

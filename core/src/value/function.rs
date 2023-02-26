@@ -719,7 +719,7 @@ mod test {
             global
                 .set(
                     "cat",
-                    Func::from(|a: StdString, b: StdString| format!("{}{}", a, b)),
+                    Func::from(|a: StdString, b: StdString| format!("{a}{b}")),
                 )
                 .unwrap();
             let res: StdString = ctx.eval("cat(\"foo\", \"bar\")").unwrap();

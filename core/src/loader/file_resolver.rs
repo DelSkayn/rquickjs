@@ -101,7 +101,7 @@ impl FileResolver {
                 .iter()
                 .filter_map(|pattern| {
                     let name = pattern.replace("{}", path.file_name()?);
-                    let file = path.with_file_name(&name);
+                    let file = path.with_file_name(name);
                     if is_file(&file) {
                         Some(file)
                     } else {

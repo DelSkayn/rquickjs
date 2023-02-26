@@ -159,12 +159,11 @@ where
     let bindings_file = out_dir.as_ref().join("bindings.rs");
 
     fs::write(
-        &bindings_file,
+        bindings_file,
         format!(
             r#"macro_rules! bindings_env {{
-                ("TARGET") => {{ "{}" }};
-            }}"#,
-            target
+                ("TARGET") => {{ "{target}" }};
+            }}"#
         ),
     )
     .unwrap();

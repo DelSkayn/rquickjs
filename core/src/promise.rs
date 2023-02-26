@@ -163,7 +163,7 @@ where
 
 fn resolve<'js>(_ctx: Ctx<'js>, func: Function<'js>, value: Value<'js>) {
     if let Err(error) = func.call::<_, Value>((value,)) {
-        eprintln!("Error when promise resolution: {}", error);
+        eprintln!("Error when promise resolution: {error}");
     }
 }
 

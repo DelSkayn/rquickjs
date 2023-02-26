@@ -133,7 +133,7 @@ impl Runtime {
                 Ok(true) => (),
                 // Task was failed with exception
                 Err(error) => {
-                    eprintln!("Error when pending job executing: {}", error);
+                    eprintln!("Error when pending job executing: {error}");
                 }
             }
             futures_lite::future::yield_now().await;

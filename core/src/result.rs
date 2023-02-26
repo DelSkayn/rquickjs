@@ -211,7 +211,7 @@ impl Error {
     /// Optimized conversion to CString
     pub(crate) fn to_cstring(&self) -> CString {
         // stringify error with NUL at end
-        let mut message = format!("{}\0", self).into_bytes();
+        let mut message = format!("{self}\0").into_bytes();
 
         message.pop(); // pop last NUL because CString add this later
 
