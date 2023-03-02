@@ -26,8 +26,8 @@ pub use refs::{HasRefs, RefsMarker};
 ///     const CLASS_NAME: &'static str = "MyClass";
 ///
 ///     fn class_id() -> &'static ClassId {
-///         static mut CLASS_ID: ClassId = ClassId::new();
-///         &mut CLASS_ID
+///         static CLASS_ID: ClassId = ClassId::new();
+///         &CLASS_ID
 ///     }
 ///
 ///     // With prototype
@@ -75,7 +75,7 @@ pub trait ClassDef {
     /// The reference to class identifier
     ///
     /// # Safety
-    /// This method should return reference to mutable static class id which should be initialized to zero.
+    /// This method should return reference to static class id which should be initialized to zero.
     fn class_id() -> &'static ClassId;
 
     /// The class has prototype
