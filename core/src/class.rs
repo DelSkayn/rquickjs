@@ -266,12 +266,13 @@ where
             if 0 != unsafe { qjs::JS_NewClass(rt, class_id, &class_def) } {
                 return Err(Error::Unknown);
             }
-
-            if C::HAS_PROTO {
-                let proto = Object::new(ctx)?;
-                C::init_proto(ctx, &proto)?;
-                unsafe { qjs::JS_SetClassProto(ctx.ctx, class_id, proto.0.into_js_value()) }
-            }
+        }
+        // Even if the class is registered we still need to set the prototype as this can be a new
+        // context.
+        if C::HAS_PROTO {
+            let proto = Object::new(ctx)?;
+            C::init_proto(ctx, &proto)?;
+            unsafe { qjs::JS_SetClassProto(ctx.ctx, class_id, proto.0.into_js_value()) }
         }
         Ok(())
     }
