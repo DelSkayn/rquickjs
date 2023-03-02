@@ -19,6 +19,11 @@ version = "0.1.7"
 path = "macro"
 optional = true
 
+[dependencies.rquickjs-macro2]
+version = "0.1.7"
+path = "macro2"
+optional = true
+
 [dependencies.async-std-rs]
 package = "async-std"
 version = "1"
@@ -47,6 +52,9 @@ optional = true
 package = "either"
 version = "1"
 optional = true
+
+[dev-dependencies.trybuild]
+version = "1"
 
 [workspace]
 members = [
@@ -115,6 +123,9 @@ array-buffer = ["rquickjs-core/array-buffer"]
 
 # Enable helper macros
 macro = ["rquickjs-macro"]
+
+# Enable helper macros
+macro2 = ["rquickjs-macro2"]
 
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]

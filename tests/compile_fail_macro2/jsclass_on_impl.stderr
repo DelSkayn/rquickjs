@@ -1,0 +1,5 @@
+error: #[jsclass] only supports structs and enums.
+ --> tests/compile_fail_macro2/jsclass_on_impl.rs:6:1
+  |
+6 | impl Foo {}
+  | ^^^^^^^^^^^

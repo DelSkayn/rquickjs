@@ -95,6 +95,9 @@ pub use rquickjs_core::*;
 #[cfg(feature = "macro")]
 pub use rquickjs_macro::{bind, embed, FromJs, HasRefs, IntoJs, IntoJsByRef};
 
+#[cfg(feature = "macro2")]
+pub use rquickjs_macro2::jsclass;
+
 // The following imports needed to linking docs
 
 #[cfg(feature = "either")]
