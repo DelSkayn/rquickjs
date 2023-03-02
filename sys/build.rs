@@ -61,6 +61,10 @@ fn main() {
         "libbf.c",
     ];
 
+    for file in header_files.iter().chain(source_files.iter()) {
+        println!("cargo:rerun-if-changed={}", src_dir.join(file).display());
+    }
+
     let mut patch_files = vec![
     //     "check_stack_overflow.patch",
     //     "infinity_handling.patch",
