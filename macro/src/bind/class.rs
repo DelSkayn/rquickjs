@@ -666,7 +666,7 @@ mod test {
             impl rquickjs::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
-                unsafe fn class_id() -> &'static rquickjs::ClassId {
+                fn class_id() -> &'static rquickjs::ClassId {
                     static CLASS_ID: rquickjs::ClassId = rquickjs::ClassId::new() ;
                     &CLASS_ID
                 }
