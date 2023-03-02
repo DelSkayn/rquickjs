@@ -25,7 +25,7 @@ pub use refs::{HasRefs, RefsMarker};
 /// impl ClassDef for MyClass {
 ///     const CLASS_NAME: &'static str = "MyClass";
 ///
-///     unsafe fn class_id() -> &'static mut ClassId {
+///     fn class_id() -> &'static ClassId {
 ///         static mut CLASS_ID: ClassId = ClassId::new();
 ///         &mut CLASS_ID
 ///     }
@@ -76,7 +76,7 @@ pub trait ClassDef {
     ///
     /// # Safety
     /// This method should return reference to mutable static class id which should be initialized to zero.
-    unsafe fn class_id() -> &'static mut ClassId;
+    fn class_id() -> &'static ClassId;
 
     /// The class has prototype
     const HAS_PROTO: bool = false;
@@ -183,7 +183,7 @@ where
     /// Get an integer class identifier
     #[inline(always)]
     pub(crate) fn id() -> qjs::JSClassID {
-        unsafe { C::class_id() }.get()
+        C::class_id().get()
     }
 
     /// Wrap constructor of class
@@ -249,8 +249,6 @@ where
     /// Register the class
     pub fn register(ctx: Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
-        let class_id = unsafe { C::class_id() };
-        class_id.init();
         let class_id = Self::id();
         let class_name = CString::new(C::CLASS_NAME)?;
         if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, class_id) } {
@@ -530,9 +528,9 @@ macro_rules! class_def {
         impl $crate::ClassDef for $name {
             const CLASS_NAME: &'static str = stringify!($name);
 
-            unsafe fn class_id() -> &'static mut $crate::ClassId {
-                static mut CLASS_ID: $crate::ClassId = $crate::ClassId::new();
-                &mut CLASS_ID
+            fn class_id() -> &'static $crate::ClassId {
+                static CLASS_ID: $crate::ClassId = $crate::ClassId::new();
+                &CLASS_ID
             }
 
             $($body)*
