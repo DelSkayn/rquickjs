@@ -1,20 +1,39 @@
+use std::{cell::Cell, sync::Once};
+
 use crate::qjs;
 
 /// The type of identifier of class
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
-#[repr(transparent)]
-pub struct ClassId(qjs::JSClassID);
+pub struct ClassId {
+    id: Cell<qjs::JSClassID>,
+    once: Once,
+}
+
+unsafe impl Send for ClassId {}
+unsafe impl Sync for ClassId {}
 
 impl ClassId {
     pub const fn new() -> Self {
-        Self(0)
+        Self {
+            id: Cell::new(0),
+            once: Once::new(),
+        }
     }
 
+    /// Get the class Id.
+    /// Will initialize itself if it has not done so.
     pub fn get(&self) -> qjs::JSClassID {
-        self.0
+        self.init();
+        self.id.get()
     }
 
-    pub fn init(&mut self) {
-        unsafe { qjs::JS_NewClassID(&mut self.0) };
+    /// Initialize the class ID.
+    /// Can be called multiple times but will only be initialized once.
+    fn init(&self) {
+        self.once.call_once(|| {
+            let mut id = 0;
+            unsafe { qjs::JS_NewClassID(&mut id) };
+            self.id.set(id);
+        })
     }
 }
