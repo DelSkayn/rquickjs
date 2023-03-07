@@ -2,7 +2,7 @@ use super::Input;
 use crate::{handle_panic, qjs, ClassId, Ctx, Result, Value};
 use std::{ops::Deref, panic::AssertUnwindSafe, ptr};
 
-static mut FUNC_CLASS_ID: ClassId = ClassId::new();
+static FUNC_CLASS_ID: ClassId = ClassId::new();
 
 type BoxedFunc<'js> = Box<dyn Fn(&Input<'js>) -> Result<Value<'js>>>;
 
@@ -26,7 +26,7 @@ impl<'js> JsFunction<'js> {
     }
 
     pub fn class_id() -> qjs::JSClassID {
-        unsafe { &FUNC_CLASS_ID }.get() as _
+        FUNC_CLASS_ID.get() as _
     }
 
     pub unsafe fn into_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
@@ -50,7 +50,6 @@ impl<'js> JsFunction<'js> {
     }
 
     pub unsafe fn register(rt: *mut qjs::JSRuntime) {
-        FUNC_CLASS_ID.init();
         let class_id = Self::class_id();
         if 0 == qjs::JS_IsRegisteredClass(rt, class_id) {
             let class_def = qjs::JSClassDef {
