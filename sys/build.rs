@@ -61,8 +61,14 @@ fn main() {
         "libbf.c",
     ];
 
-    for file in header_files.iter().chain(source_files.iter()) {
-        println!("cargo:rerun-if-changed={}", src_dir.join(file).display());
+    // rerun if anything in c-src or c-include changes
+    for file in src_dir.read_dir().expect("Unable to read c-src") {
+        let file = file.expect("Unable to read file");
+        println!("cargo:rerun-if-changed={}", file.path().display());
+    }
+    for file in header_dir.read_dir().expect("Unable to read c-include") {
+        let file = file.expect("Unable to read file");
+        println!("cargo:rerun-if-changed={}", file.path().display());
     }
 
     let mut patch_files = vec![
