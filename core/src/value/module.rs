@@ -371,19 +371,27 @@ impl<'js> Module<'js, Loaded<Native>> {
 impl<'js, S> Module<'js, Loaded<S>> {
     /// Evaluate a loaded module
     ///
-    /// To get access to module exports it should be evaluated first, in particular when you create module manually via [`Module::new`].
+    /// To get access to module exports it should be evaluated first, in particular when you create
+    /// module manually via [`Module::new`].
     pub fn eval(self) -> Result<Module<'js, Evaluated>> {
-        let ctx = self.0.ctx;
+        // If JS_EvalFunction fails the module is automatically freed wrapping self in manually
+        // drop prevents Module's drop implementation from dropping again.
+        let this = std::mem::ManuallyDrop::new(self);
+        let ctx = this.0.ctx;
         unsafe {
-            let ret = qjs::JS_EvalFunction(ctx.ctx, qjs::JS_DupValue(self.0.value));
+            let ret = qjs::JS_EvalFunction(ctx.ctx, qjs::JS_DupValue(this.0.value));
             handle_exception(ctx, ret)?;
         }
-        Ok(Module(self.0, PhantomData))
+        Ok(Module(
+            std::mem::ManuallyDrop::into_inner(this).0,
+            PhantomData,
+        ))
     }
 
     /// Cast the specific loaded module to generic one
     pub fn into_loaded(self) -> Module<'js, Loaded> {
-        Module(self.0, PhantomData)
+        let res = Module(self.0, PhantomData);
+        res
     }
 }
 
