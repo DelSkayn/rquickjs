@@ -22,8 +22,10 @@ pub(crate) fn impl_struct(attr: AttributeArgs, struct_: ItemStruct) -> Result<To
     } else {
         TokenStream::new()
     };
+    let class_def_impl = class_def::impl_struct(&options, &struct_)?;
     let res = quote! {
         #struct_
+        #class_def_impl
         #has_refs_impl
     };
     Ok(res)
@@ -36,8 +38,10 @@ pub(crate) fn impl_enum(attr: AttributeArgs, enum_: ItemEnum) -> Result<TokenStr
     } else {
         TokenStream::new()
     };
+    let class_def_impl = class_def::impl_enum(&options, &enum_)?;
     let res = quote! {
         #enum_
+        #class_def_impl
         #has_refs_impl
     };
     Ok(res)

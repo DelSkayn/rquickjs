@@ -1,3 +1,5 @@
+#[doc(hidden)]
+pub mod impl_;
 mod refs;
 
 use crate::{
@@ -68,7 +70,7 @@ pub use refs::{HasRefs, RefsMarker};
 /// }
 /// ```
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
-pub trait ClassDef {
+pub trait ClassDef: HasRefs {
     /// The name of a class
     const CLASS_NAME: &'static str;
 
@@ -93,16 +95,6 @@ pub trait ClassDef {
     fn init_static<'js>(_ctx: Ctx<'js>, _static: &Object<'js>) -> Result<()> {
         Ok(())
     }
-
-    /// The class has internal references to JS values
-    ///
-    /// Needed for correct garbage collection
-    const HAS_REFS: bool = false;
-
-    /// Mark internal references to JS values
-    ///
-    /// Should be implemented to work with garbage collector
-    fn mark_refs(&self, _marker: &RefsMarker) {}
 
     /// Convert an instance of class into JS object
     ///
@@ -255,7 +247,7 @@ where
             let class_def = qjs::JSClassDef {
                 class_name: class_name.as_ptr(),
                 finalizer: Some(Self::finalizer),
-                gc_mark: if C::HAS_REFS {
+                gc_mark: if C::contains_ref() {
                     Some(Self::gc_mark)
                 } else {
                     None
