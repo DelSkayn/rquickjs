@@ -35,6 +35,10 @@ impl<'js> JsFunction<'js> {
     }
 
     pub unsafe fn into_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
+        let length = self
+            .length
+            .try_into()
+            .expect("function argument length exceeded i32::MAX");
         let ptr = Box::into_raw(Box::new(self.func));
         let finalizer = qjs::JS_NewObjectClass(ctx.ctx, Self::class_id() as _);
         qjs::JS_SetOpaque(finalizer, ptr as _);
@@ -43,9 +47,7 @@ impl<'js> JsFunction<'js> {
         let function = qjs::JS_NewCFunctionData(
             ctx.ctx,
             Some(Self::call),
-            self.length
-                .try_into()
-                .expect("function argument length exceeded i32::MAX"),
+            length,
             0,
             1,
             (&mut data) as *mut _,

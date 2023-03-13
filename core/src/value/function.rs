@@ -34,7 +34,6 @@ impl<'js> Function<'js> {
             Self::from_js_value(ctx, func)
         };
         F::post(ctx, &func)?;
-        func.set_length(F::num_args().start)?;
         Ok(func)
     }
 
