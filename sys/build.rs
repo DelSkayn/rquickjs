@@ -59,6 +59,7 @@ fn main() {
         "cutils.c",
         "quickjs.c",
         "libbf.c",
+        "anode-ext.c",
     ];
 
     // rerun if anything in c-src or c-include changes
@@ -135,6 +136,7 @@ fn main() {
     }
 
     builder.include(header_dir);
+    builder.include(src_dir);
 
     builder.compile("libquickjs.a");
 }

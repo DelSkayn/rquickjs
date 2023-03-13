@@ -67,8 +67,8 @@
 #endif
 
 /* dump object free */
-//#define DUMP_FREE
-//#define DUMP_CLOSURE
+// #define DUMP_FREE
+// #define DUMP_CLOSURE
 /* dump the bytecode of the compiled functions: combination of bits
    1: dump pass 3 final byte code
    2: dump pass 2 code
@@ -77,24 +77,24 @@
   16: dump bytecode in hex
   32: dump line number table
  */
-//#define DUMP_BYTECODE  (1)
+// #define DUMP_BYTECODE  (1)
 /* dump the occurence of the automatic GC */
-//#define DUMP_GC
+// #define DUMP_GC
 /* dump objects freed by the garbage collector */
-//#define DUMP_GC_FREE
+// #define DUMP_GC_FREE
 /* dump objects leaking when freeing the runtime */
-//#define DUMP_LEAKS  1
+// #define DUMP_LEAKS  1
 /* dump memory usage before running the garbage collector */
-//#define DUMP_MEM
-//#define DUMP_OBJECTS    /* dump objects in JS_FreeContext */
-//#define DUMP_ATOMS      /* dump atoms in JS_FreeContext */
-//#define DUMP_SHAPES     /* dump shapes in JS_FreeContext */
-//#define DUMP_MODULE_RESOLVE
-//#define DUMP_PROMISE
-//#define DUMP_READ_OBJECT
+// #define DUMP_MEM
+// #define DUMP_OBJECTS    /* dump objects in JS_FreeContext */
+// #define DUMP_ATOMS      /* dump atoms in JS_FreeContext */
+// #define DUMP_SHAPES     /* dump shapes in JS_FreeContext */
+// #define DUMP_MODULE_RESOLVE
+// #define DUMP_PROMISE
+// #define DUMP_READ_OBJECT
 
 /* test the GC by forcing it before each object allocation */
-//#define FORCE_GC_AT_MALLOC
+// #define FORCE_GC_AT_MALLOC
 
 enum {
   /* classid tag        */ /* union usage   | properties */
@@ -1216,6 +1216,11 @@ JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom,
 JSValue JS_InstantiateFunctionListItem2(JSContext *ctx, JSObject *p,
                                         JSAtom atom, void *opaque);
 void JS_SetUncatchableError(JSContext *ctx, JSValueConst val, BOOL flag);
+
+#pragma region JS Arithmetic Impl
+int js_add_slow(JSContext *ctx, JSValue *sp);
+int js_binary_logic_slow(JSContext *ctx, JSValue *sp, enum OPCodeEnum op);
+#pragma endregion
 
 #undef kill_dependency
 #undef __exception
