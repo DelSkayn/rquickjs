@@ -27,7 +27,8 @@ impl<'js> Function<'js> {
     where
         F: AsFunction<'js, A, R> + ParallelSend + 'static,
     {
-        let func = JsFunction::new(move |input: &Input<'js>| func.call(input));
+        let length = F::num_args().start;
+        let func = JsFunction::new(length, move |input: &Input<'js>| func.call(input));
         let func = unsafe {
             let func = func.into_js_value(ctx);
             Self::from_js_value(ctx, func)

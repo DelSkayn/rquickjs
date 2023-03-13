@@ -40,7 +40,7 @@ pub struct Method<F>(pub F);
 /// ctx.globals().set("sum", Func::from(|a: i32, b: i32| a + b))?;
 /// assert_eq!(ctx.eval::<i32, _>("sum(3, 2)")?, 5);
 /// assert_eq!(ctx.eval::<usize, _>("sum.length")?, 2);
-/// assert!(ctx.eval::<Option<String>, _>("sum.name")?.is_none());
+/// assert_eq!(ctx.eval::<String, _>("sum.name")?,"");
 ///
 /// // Named function
 /// ctx.globals().set("prod", Func::new("multiply", |a: i32, b: i32| a * b))?;
