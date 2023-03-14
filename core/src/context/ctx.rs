@@ -28,6 +28,8 @@ pub struct EvalOptions {
     pub strict: bool,
     /// Don't include the stack frames before this eval in the Error() backtraces.
     pub backtrace_barrier: bool,
+    /// Compile only, don't run. Returns a function.
+    pub compile_only: bool,
 }
 
 impl EvalOptions {
@@ -46,6 +48,10 @@ impl EvalOptions {
             flag |= qjs::JS_EVAL_FLAG_BACKTRACE_BARRIER;
         }
 
+        if self.compile_only {
+            flag |= qjs::JS_EVAL_FLAG_COMPILE_ONLY;
+        }
+
         flag as i32
     }
 }
@@ -56,6 +62,7 @@ impl Default for EvalOptions {
             global: true,
             strict: true,
             backtrace_barrier: false,
+            compile_only: false,
         }
     }
 }
