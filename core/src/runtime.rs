@@ -1,10 +1,11 @@
-use crate::{get_exception, qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
-use std::{any::Any, ffi::CString, mem, panic};
+use crate::{get_exception, qjs, Ctx, Error, Function, Mut, Ref, Result, Weak, Value};
+use std::{any::Any, ffi::CString, mem, panic, collections::HashSet, hash::{Hash, Hasher}};
 
 #[cfg(feature = "futures")]
 mod async_runtime;
 #[cfg(feature = "futures")]
 pub use async_runtime::*;
+use rquickjs_sys::{JSContext, JSValue};
 #[cfg(feature = "futures")]
 mod async_executor;
 #[cfg(feature = "futures")]
@@ -33,13 +34,38 @@ impl WeakRuntime {
     }
 }
 
+pub struct UncaughtPromiseReject{
+    promise: Value<'static>,
+    reason: Value<'static>
+}
+
+impl Eq for UncaughtPromiseReject {}
+
+impl PartialEq for UncaughtPromiseReject {
+    fn eq(&self, other: &UncaughtPromiseReject) -> bool {
+        unsafe{ self.promise.get_ptr() == other.promise.get_ptr() }
+    }
+}
+
+impl Hash for UncaughtPromiseReject {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        unsafe { self.promise.get_ptr() }.hash(state);
+    }
+}
+
+type InteruptHandler = Option<Box<dyn FnMut()-> bool + 'static>>;
+type UncaughtPromiseRejectionHandler = Option<Box<dyn Fn(&Value) + 'static>>;
+
 /// Opaque book keeping data for rust.
 pub struct Opaque {
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
 
     /// The user provided interrupt handler, if any.
-    pub interrupt_handler: Option<Box<dyn FnMut() -> bool + 'static>>,
+    pub interrupt_handler: InteruptHandler,
+
+    /// The user provided promise rejection handler
+    pub uncaught_promise_rejection_handler: UncaughtPromiseRejectionHandler,
 
     /// Used to ref Runtime from Ctx
     pub runtime: WeakRuntime,
@@ -51,6 +77,8 @@ pub struct Opaque {
     /// Async spawner
     #[cfg(feature = "futures")]
     pub spawner: Option<Spawner>,
+
+    pub uncaught_promise_rejections: HashSet<UncaughtPromiseReject>
 }
 
 impl Opaque {
@@ -63,6 +91,8 @@ impl Opaque {
             registery: HashSet::default(),
             #[cfg(feature = "futures")]
             spawner: Default::default(),
+            uncaught_promise_rejections: HashSet::default(),
+            uncaught_promise_rejection_handler: None
         }
     }
 }
@@ -87,7 +117,16 @@ impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt);
-            let opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            let mut opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+
+            let handler = opaque.uncaught_promise_rejection_handler.take();
+            
+            for rejection in &opaque.uncaught_promise_rejections {
+                if let Some(handler) = &handler {
+                    handler.clone()(&rejection.reason)
+                }
+            }
+
             mem::drop(opaque);
             qjs::JS_FreeRuntime(self.rt)
         }
@@ -215,6 +254,44 @@ impl Runtime {
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
         WeakRuntime(Ref::downgrade(&self.inner))
+    }
+
+    pub fn set_promise_rejection_tracker(&self, handler: UncaughtPromiseRejectionHandler){
+        
+        unsafe extern "C" fn on_rejection(
+            ctx_ptr: *mut JSContext,
+            promise: JSValue,
+            reason: JSValue,
+            is_handled: ::std::os::raw::c_int,
+            opaque: *mut ::std::os::raw::c_void,
+        ) {
+
+            let is_handled = is_handled == 1;
+            let ctx = Ctx::from_ptr(ctx_ptr);
+
+            let opaque = &mut *(opaque as *mut Opaque);
+           
+            let rejection = UncaughtPromiseReject{
+                promise: Value::from_js_value_const(ctx,promise),
+                reason: Value::from_js_value_const(ctx, reason)
+            };
+
+            if is_handled {
+                opaque.uncaught_promise_rejections.remove(&rejection);
+            }else{
+                opaque.uncaught_promise_rejections.insert(rejection);
+            }        
+        }
+
+        let mut guard = self.inner.lock();
+        unsafe {
+            qjs::JS_SetHostPromiseRejectionTracker(
+                guard.rt,
+                Some(on_rejection),
+                qjs::JS_GetRuntimeOpaque(guard.rt),
+            );
+            guard.get_opaque_mut().uncaught_promise_rejection_handler = handler;
+        }
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.
