@@ -1222,6 +1222,14 @@ int js_add_slow(JSContext *ctx, JSValue *sp);
 int js_binary_logic_slow(JSContext *ctx, JSValue *sp, enum OPCodeEnum op);
 #pragma endregion
 
+#pragma region JS Fields
+int JS_DefineGlobalVar(JSContext *ctx, JSAtom prop, int def_flags);
+int JS_DefineGlobalFunction(JSContext *ctx, JSAtom prop, JSValueConst func,
+                            int def_flags);
+JSValue JS_GetGlobalVar(JSContext *ctx, JSAtom prop, BOOL throw_ref_error);
+int JS_SetGlobalVar(JSContext *ctx, JSAtom prop, JSValueConst val, int flag);
+#pragma endregion
+
 #undef kill_dependency
 #undef __exception
 #undef __maybe_unused
