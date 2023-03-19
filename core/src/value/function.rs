@@ -1,7 +1,4 @@
-use crate::{
-    get_exception, handle_exception, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object,
-    ParallelSend, Result, Value,
-};
+use crate::{qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, ParallelSend, Result, Value};
 
 mod args;
 mod as_args;
@@ -45,14 +42,14 @@ impl<'js> Function<'js> {
 
         unsafe {
             let res = qjs::JS_DefinePropertyValue(
-                ctx.ctx,
+                ctx.as_ptr(),
                 func,
                 "length".into_atom(ctx).atom,
                 len.into_js_value(),
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );
             if res < 0 {
-                return Err(get_exception(ctx));
+                return Err(ctx.get_exception());
             }
         };
 
@@ -67,14 +64,14 @@ impl<'js> Function<'js> {
 
         unsafe {
             let res = qjs::JS_DefinePropertyValue(
-                ctx.ctx,
+                ctx.as_ptr(),
                 func,
                 "name".into_atom(ctx).atom,
                 name.into_js_value(),
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );
             if res < 0 {
-                return Err(get_exception(ctx));
+                return Err(ctx.get_exception());
             }
         };
 
@@ -100,13 +97,13 @@ impl<'js> Function<'js> {
         let ctx = self.0.ctx;
         Ok(unsafe {
             let val = qjs::JS_Call(
-                ctx.ctx,
+                ctx.as_ptr(),
                 self.0.as_js_value(),
                 input.this,
                 input.args.len() as _,
                 input.args.as_ptr() as _,
             );
-            let val = handle_exception(ctx, val)?;
+            let val = ctx.handle_exception(val)?;
             Value::from_js_value(ctx, val)
         })
     }
@@ -130,7 +127,7 @@ impl<'js> Function<'js> {
         Ok(unsafe {
             let val = if input.has_this() {
                 qjs::JS_CallConstructor2(
-                    ctx.ctx,
+                    ctx.as_ptr(),
                     self.0.as_js_value(),
                     input.this,
                     input.args.len() as _,
@@ -138,13 +135,13 @@ impl<'js> Function<'js> {
                 )
             } else {
                 qjs::JS_CallConstructor(
-                    ctx.ctx,
+                    ctx.as_ptr(),
                     self.0.as_js_value(),
                     input.args.len() as _,
                     input.args.as_ptr() as _,
                 )
             };
-            let val = handle_exception(ctx, val)?;
+            let val = ctx.handle_exception(val)?;
             Value::from_js_value(ctx, val)
         })
     }
@@ -169,13 +166,13 @@ impl<'js> Function<'js> {
         input.arg(self.clone())?;
         unsafe {
             if qjs::JS_EnqueueJob(
-                ctx.ctx,
+                ctx.as_ptr(),
                 Some(Self::defer_call_job),
                 input.args.len() as _,
                 input.args.as_ptr() as _,
             ) < 0
             {
-                return Err(get_exception(ctx));
+                return Err(ctx.get_exception());
             }
         }
         Ok(())
@@ -194,12 +191,14 @@ impl<'js> Function<'js> {
 
     /// Check that function is a constructor
     pub fn is_constructor(&self) -> bool {
-        0 != unsafe { qjs::JS_IsConstructor(self.0.ctx.ctx, self.0.as_js_value()) }
+        0 != unsafe { qjs::JS_IsConstructor(self.0.ctx.as_ptr(), self.0.as_js_value()) }
     }
 
     /// Mark the function as a constructor
     pub fn set_constructor(&self, flag: bool) {
-        unsafe { qjs::JS_SetConstructorBit(self.0.ctx.ctx, self.0.as_js_value(), i32::from(flag)) };
+        unsafe {
+            qjs::JS_SetConstructorBit(self.0.ctx.as_ptr(), self.0.as_js_value(), i32::from(flag))
+        };
     }
 
     /// Set a function prototype
@@ -211,7 +210,11 @@ impl<'js> Function<'js> {
     /// ```
     pub fn set_prototype(&self, proto: &Object<'js>) {
         unsafe {
-            qjs::JS_SetConstructor(self.0.ctx.ctx, self.0.as_js_value(), proto.0.as_js_value())
+            qjs::JS_SetConstructor(
+                self.0.ctx.as_ptr(),
+                self.0.as_js_value(),
+                proto.0.as_js_value(),
+            )
         };
     }
 
@@ -223,10 +226,11 @@ impl<'js> Function<'js> {
         let value = self.0.as_js_value();
         Ok(unsafe {
             //TODO: can a function not have a prototype?.
-            let proto = handle_exception(
-                ctx,
-                qjs::JS_GetPropertyStr(ctx.ctx, value, "prototype\0".as_ptr() as _),
-            )?;
+            let proto = ctx.handle_exception(qjs::JS_GetPropertyStr(
+                ctx.as_ptr(),
+                value,
+                "prototype\0".as_ptr() as _,
+            ))?;
             if qjs::JS_IsObject(proto) {
                 Object::from_js_value(ctx, proto)
             } else {

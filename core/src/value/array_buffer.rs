@@ -1,4 +1,4 @@
-use crate::{handle_exception, qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
 use std::{
     mem::{size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
@@ -31,14 +31,14 @@ impl<'js> ArrayBuffer<'js> {
 
         Ok(Self(Object(unsafe {
             let val = qjs::JS_NewArrayBuffer(
-                ctx.ctx,
+                ctx.as_ptr(),
                 ptr as _,
                 size as _,
                 Some(drop_raw::<T>),
                 capacity as _,
                 0,
             );
-            handle_exception(ctx, val).map_err(|error| {
+            ctx.handle_exception(val).map_err(|error| {
                 // don't forget to free data when error occurred
                 Vec::from_raw_parts(ptr, capacity, capacity);
                 error
@@ -54,8 +54,8 @@ impl<'js> ArrayBuffer<'js> {
         let size = src.len() * size_of::<T>();
 
         Ok(Self(Object(unsafe {
-            let val = qjs::JS_NewArrayBufferCopy(ctx.ctx, ptr as _, size as _);
-            handle_exception(ctx, val)?;
+            let val = qjs::JS_NewArrayBufferCopy(ctx.as_ptr(), ptr as _, size as _);
+            ctx.handle_exception(val)?;
             Value::from_js_value(ctx, val)
         })))
     }
@@ -72,7 +72,7 @@ impl<'js> ArrayBuffer<'js> {
 
     /// Detach array buffer
     pub fn detach(&mut self) {
-        unsafe { qjs::JS_DetachArrayBuffer(self.0.ctx.ctx, self.0.as_js_value()) }
+        unsafe { qjs::JS_DetachArrayBuffer(self.0.ctx.as_ptr(), self.0.as_js_value()) }
     }
 
     /// Reference to value
@@ -117,7 +117,7 @@ impl<'js> ArrayBuffer<'js> {
         let ctx = val.ctx;
         let val = val.as_js_value();
         let mut size = MaybeUninit::<qjs::size_t>::uninit();
-        let ptr = unsafe { qjs::JS_GetArrayBuffer(ctx.ctx, size.as_mut_ptr(), val) };
+        let ptr = unsafe { qjs::JS_GetArrayBuffer(ctx.as_ptr(), size.as_mut_ptr(), val) };
 
         if ptr.is_null() {
             None

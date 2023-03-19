@@ -119,7 +119,7 @@ impl<T> Persistent<T> {
     {
         let value = val.as_ref().value;
         mem::forget(val);
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
+        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
 
         Persistent::new_raw(rt, value)
     }
@@ -130,7 +130,7 @@ impl<T> Persistent<T> {
         T: Outlive<'js>,
         T::Target: FromJs<'js>,
     {
-        let ctx_runtime_ptr = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
+        let ctx_runtime_ptr = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         if self.rt != ctx_runtime_ptr {
             return Err(Error::UnrelatedRuntime);
         }
@@ -157,7 +157,7 @@ where
         let value = T::Target::from_js(ctx, value)?;
         let value = value.into_js(ctx)?;
         let value = value.into_js_value();
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
+        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
 
         Ok(Self::new_raw(rt, value))
     }

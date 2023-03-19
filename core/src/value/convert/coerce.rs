@@ -1,7 +1,4 @@
-use crate::{
-    get_exception, handle_exception, qjs, Coerced, Ctx, Error, FromJs, Result, StdString, String,
-    Value,
-};
+use crate::{qjs, Coerced, Ctx, Error, FromJs, Result, StdString, String, Value};
 use std::{
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
@@ -37,8 +34,8 @@ impl<T> DerefMut for Coerced<T> {
 impl<'js> FromJs<'js> for Coerced<String<'js>> {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Ok(Coerced(unsafe {
-            let result = qjs::JS_ToString(ctx.ctx, value.as_js_value());
-            handle_exception(ctx, result)?;
+            let result = qjs::JS_ToString(ctx.as_ptr(), value.as_js_value());
+            ctx.handle_exception(result)?;
             // result should be a string now
             // String itself will check for the tag when debug_assertions are enabled
             // but is should always be string
@@ -64,9 +61,9 @@ macro_rules! coerce_impls {
                 fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let mut result = MaybeUninit::uninit();
                     Ok(Coerced(unsafe {
-                        if 0 > qjs::$func(ctx.ctx, result.as_mut_ptr(), value.as_js_value()) {
+                        if 0 > qjs::$func(ctx.as_ptr(), result.as_mut_ptr(), value.as_js_value()) {
                             let type_ = value.type_of();
-                            let error = get_exception(ctx);
+                            let error = ctx.get_exception();
                             return Err(Error::new_from_js_message(type_.as_str(), stringify!($type), error.to_string()));
                         }
                         result.assume_init()
@@ -92,10 +89,10 @@ coerce_impls! {
 impl<'js> FromJs<'js> for Coerced<bool> {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Ok(Coerced(unsafe {
-            let res = qjs::JS_ToBool(ctx.ctx, value.as_js_value());
+            let res = qjs::JS_ToBool(ctx.as_ptr(), value.as_js_value());
             if 0 > res {
                 let type_ = value.type_of();
-                let error = get_exception(ctx);
+                let error = ctx.get_exception();
                 return Err(Error::new_from_js_message(
                     type_.as_str(),
                     stringify!($type),

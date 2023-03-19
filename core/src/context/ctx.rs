@@ -1,6 +1,6 @@
 use crate::{
-    handle_exception, markers::Invariant, qjs, runtime::Opaque, Context, FromJs, Function, Module,
-    Object, Result, Value,
+    markers::Invariant, qjs, runtime::Opaque, Context, FromJs, Function, Module, Object, Result,
+    Value,
 };
 
 #[cfg(feature = "futures")]
@@ -18,6 +18,7 @@ use std::{
     marker::PhantomData,
     mem,
     path::Path,
+    ptr::NonNull,
 };
 
 /// Eval options.
@@ -63,12 +64,17 @@ impl Default for EvalOptions {
 /// Context in use, passed to [`Context::with`].
 #[derive(Clone, Copy, Debug)]
 pub struct Ctx<'js> {
-    pub(crate) ctx: *mut qjs::JSContext,
+    ctx: NonNull<qjs::JSContext>,
     marker: Invariant<'js>,
 }
 
 impl<'js> Ctx<'js> {
-    pub(crate) fn from_ptr(ctx: *mut qjs::JSContext) -> Self {
+    pub(crate) fn as_ptr(&self) -> *mut qjs::JSContext {
+        self.ctx.as_ptr()
+    }
+
+    pub(crate) unsafe fn from_ptr(ctx: *mut qjs::JSContext) -> Self {
+        let ctx = NonNull::new_unchecked(ctx);
         Ctx {
             ctx,
             marker: PhantomData,
@@ -91,8 +97,14 @@ impl<'js> Ctx<'js> {
         let src = source.into();
         let len = src.len();
         let src = CString::new(src)?;
-        let val = qjs::JS_Eval(self.ctx, src.as_ptr(), len as _, file_name.as_ptr(), flag);
-        handle_exception(self, val)
+        let val = qjs::JS_Eval(
+            self.ctx.as_ptr(),
+            src.as_ptr(),
+            len as _,
+            file_name.as_ptr(),
+            flag,
+        );
+        self.handle_exception(val)
     }
 
     /// Evaluate a script in global context.
@@ -152,7 +164,7 @@ impl<'js> Ctx<'js> {
     /// Returns the global object of this context.
     pub fn globals(self) -> Object<'js> {
         unsafe {
-            let v = qjs::JS_GetGlobalObject(self.ctx);
+            let v = qjs::JS_GetGlobalObject(self.ctx.as_ptr());
             Object::from_js_value(self, v)
         }
     }
@@ -162,10 +174,10 @@ impl<'js> Ctx<'js> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
 
         Ok(unsafe {
-            let promise = handle_exception(
-                self,
-                qjs::JS_NewPromiseCapability(self.ctx, funcs.as_mut_ptr() as _),
-            )?;
+            let promise = self.handle_exception(qjs::JS_NewPromiseCapability(
+                self.ctx.as_ptr(),
+                funcs.as_mut_ptr() as _,
+            ))?;
             let (then, catch) = funcs.assume_init();
             (
                 Object::from_js_value(self, promise),
@@ -176,7 +188,7 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
-        let rt = qjs::JS_GetRuntime(self.ctx);
+        let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
         &mut *(qjs::JS_GetRuntimeOpaque(rt) as *mut _)
     }
 

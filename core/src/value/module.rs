@@ -1,7 +1,4 @@
-use crate::{
-    get_exception, handle_exception, qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs,
-    Result, Value,
-};
+use crate::{qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
 use std::{
     ffi::{CStr, CString},
     marker::PhantomData,
@@ -121,7 +118,10 @@ impl<'js> Module<'js> {
     {
         let ctx = self.0.ctx;
         let name = unsafe {
-            Atom::from_atom_val(ctx, qjs::JS_GetModuleName(ctx.ctx, self.as_module_def()))
+            Atom::from_atom_val(
+                ctx,
+                qjs::JS_GetModuleName(ctx.as_ptr(), self.as_module_def()),
+            )
         };
         N::from_atom(name)
     }
@@ -135,7 +135,7 @@ impl<'js> Module<'js> {
         let meta = unsafe {
             Value::from_js_value(
                 ctx,
-                handle_exception(ctx, qjs::JS_GetImportMeta(ctx.ctx, self.as_module_def()))?,
+                ctx.handle_exception(qjs::JS_GetImportMeta(ctx.as_ptr(), self.as_module_def()))?,
             )
         };
         T::from_js(ctx, meta)
@@ -209,7 +209,7 @@ impl<'js> Module<'js> {
         let name = CString::new(name)?;
         let ptr = unsafe {
             qjs::JS_NewCModule(
-                ctx.ctx,
+                ctx.as_ptr(),
                 name.as_ptr(),
                 Some(Module::<Loaded<Native>>::eval_fn::<D>),
             )
@@ -236,7 +236,7 @@ impl<'js> Module<'js> {
         N: Into<Vec<u8>>,
     {
         let name = CString::new(name)?;
-        let ptr = load(ctx.ctx, name.as_ptr());
+        let ptr = load(ctx.as_ptr(), name.as_ptr());
 
         if ptr.is_null() {
             Err(Error::Unknown)
@@ -296,10 +296,12 @@ impl<'js> Module<'js, Loaded<Script>> {
         let value = unsafe {
             Value::from_js_value(
                 ctx,
-                handle_exception(
-                    ctx,
-                    qjs::JS_ReadObject(ctx.ctx, buf.as_ptr(), buf.len() as _, flags),
-                )?,
+                ctx.handle_exception(qjs::JS_ReadObject(
+                    ctx.as_ptr(),
+                    buf.as_ptr(),
+                    buf.len() as _,
+                    flags,
+                ))?,
             )
         };
         Ok(Self(value, PhantomData))
@@ -314,15 +316,20 @@ impl<'js> Module<'js, Loaded<Script>> {
             flags |= qjs::JS_WRITE_OBJ_BSWAP;
         }
         let buf = unsafe {
-            qjs::JS_WriteObject(ctx.ctx, len.as_mut_ptr(), self.0.as_js_value(), flags as _)
+            qjs::JS_WriteObject(
+                ctx.as_ptr(),
+                len.as_mut_ptr(),
+                self.0.as_js_value(),
+                flags as _,
+            )
         };
         if buf.is_null() {
-            return Err(unsafe { get_exception(ctx) });
+            return Err(unsafe { ctx.get_exception() });
         }
         let len = unsafe { len.assume_init() };
         let obj = unsafe { from_raw_parts(buf, len as _) };
         let obj = Vec::from(obj);
-        unsafe { qjs::js_free(ctx.ctx, buf as _) };
+        unsafe { qjs::js_free(ctx.as_ptr(), buf as _) };
         Ok(obj)
     }
 }
@@ -340,11 +347,12 @@ impl<'js> Module<'js, Loaded<Native>> {
         let ctx = self.0.ctx;
         let value = value.into_js(ctx)?;
         let value = unsafe { qjs::JS_DupValue(value.as_js_value()) };
-        if unsafe { qjs::JS_SetModuleExport(ctx.ctx, self.as_module_def(), name.as_ptr(), value) }
-            < 0
+        if unsafe {
+            qjs::JS_SetModuleExport(ctx.as_ptr(), self.as_module_def(), name.as_ptr(), value)
+        } < 0
         {
-            unsafe { qjs::JS_FreeValue(ctx.ctx, value) };
-            return Err(unsafe { get_exception(ctx) });
+            unsafe { qjs::JS_FreeValue(ctx.as_ptr(), value) };
+            return Err(unsafe { ctx.get_exception() });
         }
         Ok(())
     }
@@ -375,8 +383,8 @@ impl<'js, S> Module<'js, Loaded<S>> {
     pub fn eval(self) -> Result<Module<'js, Evaluated>> {
         let ctx = self.0.ctx;
         unsafe {
-            let ret = qjs::JS_EvalFunction(ctx.ctx, qjs::JS_DupValue(self.0.value));
-            handle_exception(ctx, ret)?;
+            let ret = qjs::JS_EvalFunction(ctx.as_ptr(), qjs::JS_DupValue(self.0.value));
+            ctx.handle_exception(ret)?;
         }
         Ok(Module(self.0, PhantomData))
     }
@@ -398,7 +406,7 @@ impl<'js> Module<'js, Created> {
         let ctx = self.0.ctx;
         let name = CString::new(name.as_ref())?;
         unsafe {
-            qjs::JS_AddModuleExport(ctx.ctx, self.as_module_def(), name.as_ptr());
+            qjs::JS_AddModuleExport(ctx.as_ptr(), self.as_module_def(), name.as_ptr());
         }
         Ok(())
     }
@@ -417,10 +425,11 @@ impl<'js> Module<'js> {
         let value = unsafe {
             Value::from_js_value(
                 ctx,
-                handle_exception(
-                    ctx,
-                    qjs::JS_GetModuleExport(ctx.ctx, self.as_module_def(), name.as_ptr()),
-                )?,
+                ctx.handle_exception(qjs::JS_GetModuleExport(
+                    ctx.as_ptr(),
+                    self.as_module_def(),
+                    name.as_ptr(),
+                ))?,
             )
         };
         T::from_js(ctx, value)
@@ -462,7 +471,7 @@ impl<'js> Module<'js> {
         let count = qjs::JS_GetModuleExportEntriesCount(ptr);
         for i in 0..count {
             let atom_name =
-                Atom::from_atom_val(ctx, qjs::JS_GetModuleExportEntryName(ctx.ctx, ptr, i));
+                Atom::from_atom_val(ctx, qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, i));
             println!("{}", atom_name.to_string().unwrap());
         }
     }
@@ -492,7 +501,7 @@ where
         let ctx = self.module.0.ctx;
         let ptr = self.module.as_module_def();
         let atom = unsafe {
-            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.ctx, ptr, self.index);
+            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
             Atom::from_atom_val(ctx, atom_val)
         };
         self.index += 1;
@@ -525,11 +534,11 @@ where
         let ctx = self.module.0.ctx;
         let ptr = self.module.as_module_def();
         let name = unsafe {
-            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.ctx, ptr, self.index);
+            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
             Atom::from_atom_val(ctx, atom_val)
         };
         let value = unsafe {
-            let js_val = qjs::JS_GetModuleExportEntry(ctx.ctx, ptr, self.index);
+            let js_val = qjs::JS_GetModuleExportEntry(ctx.as_ptr(), ptr, self.index);
             Value::from_js_value(ctx, js_val)
         };
         self.index += 1;

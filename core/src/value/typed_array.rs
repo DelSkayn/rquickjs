@@ -1,6 +1,4 @@
-use crate::{
-    handle_exception, qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
-};
+use crate::{qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value};
 use std::{
     convert::TryFrom,
     marker::PhantomData,
@@ -83,7 +81,7 @@ impl<'js, T> TypedArray<'js, T> {
         let ctx = self.0.ctx;
         let value = self.0.as_js_value();
         unsafe {
-            let val = qjs::JS_GetPropertyStr(ctx.ctx, value, b"length\0".as_ptr() as *const _);
+            let val = qjs::JS_GetPropertyStr(ctx.as_ptr(), value, b"length\0".as_ptr() as *const _);
             assert!(qjs::JS_IsInt(val));
             qjs::JS_VALUE_GET_INT(val) as _
         }
@@ -144,8 +142,9 @@ impl<'js, T> TypedArray<'js, T> {
         let ctx = self.0.ctx;
         let val = self.0.as_js_value();
         let buf = unsafe {
-            let val = qjs::JS_GetTypedArrayBuffer(ctx.ctx, val, null_mut(), null_mut(), null_mut());
-            handle_exception(ctx, val)?;
+            let val =
+                qjs::JS_GetTypedArrayBuffer(ctx.as_ptr(), val, null_mut(), null_mut(), null_mut());
+            ctx.handle_exception(val)?;
             Value::from_js_value(ctx, val)
         };
         ArrayBuffer::from_value(buf)
@@ -169,13 +168,13 @@ impl<'js, T> TypedArray<'js, T> {
         let mut stp = MaybeUninit::<qjs::size_t>::uninit();
         let buf = unsafe {
             let val = qjs::JS_GetTypedArrayBuffer(
-                ctx.ctx,
+                ctx.as_ptr(),
                 val,
                 off.as_mut_ptr(),
                 len.as_mut_ptr(),
                 stp.as_mut_ptr(),
             );
-            handle_exception(ctx, val).ok()?;
+            ctx.handle_exception(val).ok()?;
             Value::from_js_value(ctx, val)
         };
         let off = unsafe { off.assume_init() } as usize;
