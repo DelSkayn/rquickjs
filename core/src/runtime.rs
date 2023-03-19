@@ -1,5 +1,5 @@
-use crate::{get_exception, qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
-use std::{any::Any, ffi::CString, mem, panic};
+use crate::{qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
+use std::{any::Any, ffi::CString, mem, panic, ptr::NonNull};
 
 #[cfg(feature = "futures")]
 mod async_runtime;
@@ -68,7 +68,7 @@ impl Opaque {
 }
 
 pub(crate) struct Inner {
-    pub(crate) rt: *mut qjs::JSRuntime,
+    pub(crate) rt: NonNull<qjs::JSRuntime>,
 
     // To keep rt info alive for the entire duration of the lifetime of rt
     #[allow(dead_code)]
@@ -86,10 +86,10 @@ pub(crate) struct Inner {
 impl Drop for Inner {
     fn drop(&mut self) {
         unsafe {
-            let ptr = qjs::JS_GetRuntimeOpaque(self.rt);
+            let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
             let opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
             mem::drop(opaque);
-            qjs::JS_FreeRuntime(self.rt)
+            qjs::JS_FreeRuntime(self.rt.as_ptr())
         }
     }
 }
@@ -98,39 +98,38 @@ impl Inner {
     pub(crate) fn update_stack_top(&self) {
         #[cfg(feature = "parallel")]
         unsafe {
-            qjs::JS_UpdateStackTop(self.rt);
+            qjs::JS_UpdateStackTop(self.rt.as_ptr());
         }
     }
 
     #[cfg(feature = "futures")]
     pub(crate) unsafe fn get_opaque(&self) -> &Opaque {
-        &*(qjs::JS_GetRuntimeOpaque(self.rt) as *const _)
+        &*(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *const _)
     }
 
     pub(crate) unsafe fn get_opaque_mut(&mut self) -> &mut Opaque {
-        &mut *(qjs::JS_GetRuntimeOpaque(self.rt) as *mut _)
+        &mut *(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *mut _)
     }
 
     pub(crate) fn is_job_pending(&self) -> bool {
-        0 != unsafe { qjs::JS_IsJobPending(self.rt) }
+        0 != unsafe { qjs::JS_IsJobPending(self.rt.as_ptr()) }
     }
 
     pub(crate) fn execute_pending_job(&mut self) -> Result<bool> {
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
         self.update_stack_top();
-        let result = unsafe { qjs::JS_ExecutePendingJob(self.rt, ctx_ptr.as_mut_ptr()) };
+        let result = unsafe { qjs::JS_ExecutePendingJob(self.rt.as_ptr(), ctx_ptr.as_mut_ptr()) };
         if result == 0 {
             // no jobs executed
             return Ok(false);
         }
-        let ctx_ptr = unsafe { ctx_ptr.assume_init() };
         if result == 1 {
             // single job executed
             return Ok(true);
         }
         // exception thrown
-        let ctx = Ctx::from_ptr(ctx_ptr);
-        Err(unsafe { get_exception(ctx) })
+        let ctx = unsafe { Ctx::from_ptr(ctx_ptr.assume_init()) };
+        Err(unsafe { ctx.get_exception() })
     }
 }
 
@@ -189,11 +188,9 @@ impl Runtime {
         rt: *mut qjs::JSRuntime,
         #[cfg(feature = "allocator")] allocator: Option<AllocatorHolder>,
     ) -> Result<Self> {
-        if rt.is_null() {
-            return Err(Error::Allocation);
-        }
+        let rt = NonNull::new(rt).ok_or_else(|| Error::Allocation)?;
 
-        unsafe { Self::init_raw(rt) };
+        unsafe { Self::init_raw(rt.as_ptr()) };
 
         let runtime = Runtime {
             inner: Ref::new(Mut::new(Inner {
@@ -207,7 +204,7 @@ impl Runtime {
         };
 
         let opaque = Box::into_raw(Box::new(Opaque::new(&runtime)));
-        unsafe { qjs::JS_SetRuntimeOpaque(rt, opaque as *mut _) };
+        unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
 
         Ok(runtime)
     }
@@ -245,9 +242,9 @@ impl Runtime {
         let mut guard = self.inner.lock();
         unsafe {
             qjs::JS_SetInterruptHandler(
-                guard.rt,
+                guard.rt.as_ptr(),
                 handler.as_ref().map(|_| interrupt_handler_trampoline as _),
-                qjs::JS_GetRuntimeOpaque(guard.rt),
+                qjs::JS_GetRuntimeOpaque(guard.rt.as_ptr()),
             );
             guard.get_opaque_mut().interrupt_handler = handler;
         }
@@ -263,7 +260,7 @@ impl Runtime {
     {
         let mut guard = self.inner.lock();
         let loader = LoaderHolder::new(resolver, loader);
-        loader.set_to_runtime(guard.rt);
+        loader.set_to_runtime(guard.rt.as_ptr());
         guard.loader = Some(loader);
     }
 
@@ -271,7 +268,7 @@ impl Runtime {
     pub fn set_info<S: Into<Vec<u8>>>(&self, info: S) -> Result<()> {
         let mut guard = self.inner.lock();
         let string = CString::new(info)?;
-        unsafe { qjs::JS_SetRuntimeInfo(guard.rt, string.as_ptr()) };
+        unsafe { qjs::JS_SetRuntimeInfo(guard.rt.as_ptr(), string.as_ptr()) };
         guard.info = Some(string);
         Ok(())
     }
@@ -284,7 +281,7 @@ impl Runtime {
     /// as is the case for the "rust-alloc" or "allocator" features.
     pub fn set_memory_limit(&self, limit: usize) {
         let guard = self.inner.lock();
-        unsafe { qjs::JS_SetMemoryLimit(guard.rt, limit as _) };
+        unsafe { qjs::JS_SetMemoryLimit(guard.rt.as_ptr(), limit as _) };
         mem::drop(guard);
     }
 
@@ -293,7 +290,7 @@ impl Runtime {
     /// The default values is 256x1024 bytes.
     pub fn set_max_stack_size(&self, limit: usize) {
         let guard = self.inner.lock();
-        unsafe { qjs::JS_SetMaxStackSize(guard.rt, limit as _) };
+        unsafe { qjs::JS_SetMaxStackSize(guard.rt.as_ptr(), limit as _) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
     }
@@ -301,7 +298,7 @@ impl Runtime {
     /// Set a memory threshold for garbage collection.
     pub fn set_gc_threshold(&self, threshold: usize) {
         let guard = self.inner.lock();
-        unsafe { qjs::JS_SetGCThreshold(guard.rt, threshold as _) };
+        unsafe { qjs::JS_SetGCThreshold(guard.rt.as_ptr(), threshold as _) };
         mem::drop(guard);
     }
 
@@ -313,7 +310,7 @@ impl Runtime {
     /// cyclic references.
     pub fn run_gc(&self) {
         let guard = self.inner.lock();
-        unsafe { qjs::JS_RunGC(guard.rt) };
+        unsafe { qjs::JS_RunGC(guard.rt.as_ptr()) };
         mem::drop(guard);
     }
 
@@ -321,7 +318,7 @@ impl Runtime {
     pub fn memory_usage(&self) -> MemoryUsage {
         let guard = self.inner.lock();
         let mut stats = mem::MaybeUninit::uninit();
-        unsafe { qjs::JS_ComputeMemoryUsage(guard.rt, stats.as_mut_ptr()) };
+        unsafe { qjs::JS_ComputeMemoryUsage(guard.rt.as_ptr(), stats.as_mut_ptr()) };
         mem::drop(guard);
         unsafe { stats.assume_init() }
     }

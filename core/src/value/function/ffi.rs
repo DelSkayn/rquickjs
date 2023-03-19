@@ -1,5 +1,5 @@
 use super::Input;
-use crate::{handle_panic, qjs, ClassId, Ctx, Result, Value};
+use crate::{qjs, ClassId, Ctx, Result, Value};
 use std::{ops::Deref, panic::AssertUnwindSafe, ptr};
 
 static FUNC_CLASS_ID: ClassId = ClassId::new();
@@ -30,7 +30,7 @@ impl<'js> JsFunction<'js> {
     }
 
     pub unsafe fn into_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
-        let obj = qjs::JS_NewObjectClass(ctx.ctx, Self::class_id() as _);
+        let obj = qjs::JS_NewObjectClass(ctx.as_ptr(), Self::class_id() as _);
         qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(self)) as _);
         obj
     }
@@ -72,16 +72,13 @@ impl<'js> JsFunction<'js> {
         _flags: qjs::c_int,
     ) -> qjs::JSValue {
         let ctx = Ctx::from_ptr(ctx);
-        let opaque = &*(qjs::JS_GetOpaque2(ctx.ctx, func, Self::class_id()) as *mut Self);
+        let opaque = &*(qjs::JS_GetOpaque2(ctx.as_ptr(), func, Self::class_id()) as *mut Self);
 
-        handle_panic(
-            ctx.ctx,
-            AssertUnwindSafe(|| {
-                opaque
-                    ._call(ctx.ctx, this, argc, argv)
-                    .unwrap_or_else(|error| error.throw(ctx))
-            }),
-        )
+        ctx.handle_panic(AssertUnwindSafe(|| {
+            opaque
+                ._call(ctx.as_ptr(), this, argc, argv)
+                .unwrap_or_else(|error| error.throw(ctx))
+        }))
     }
 
     unsafe extern "C" fn finalizer(_rt: *mut qjs::JSRuntime, val: qjs::JSValue) {

@@ -1,6 +1,6 @@
 use crate::{
-    get_exception, qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result,
-    Undefined, Value,
+    qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result, Undefined,
+    Value,
 };
 
 impl<'js> Object<'js> {
@@ -39,7 +39,7 @@ impl<'js> Object<'js> {
         let flags = flags | (qjs::JS_PROP_THROW as PropertyFlags);
         unsafe {
             let res = qjs::JS_DefineProperty(
-                ctx.ctx,
+                ctx.as_ptr(),
                 self.0.as_js_value(),
                 key.atom,
                 value.as_js_value(),
@@ -48,7 +48,7 @@ impl<'js> Object<'js> {
                 flags,
             );
             if res < 0 {
-                return Err(get_exception(ctx));
+                return Err(ctx.get_exception());
             }
         }
         Ok(())

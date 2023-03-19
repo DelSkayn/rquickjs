@@ -9,7 +9,7 @@ pub struct CallInput<'js> {
 
 impl<'js> Drop for CallInput<'js> {
     fn drop(&mut self) {
-        let ctx = self.ctx.ctx;
+        let ctx = self.ctx.as_ptr();
         for arg in &self.args {
             unsafe { qjs::JS_FreeValue(ctx, *arg) }
         }
@@ -39,7 +39,7 @@ impl<'js> CallInput<'js> {
         T: IntoJs<'js>,
     {
         let this = this.into_js(self.ctx)?;
-        unsafe { qjs::JS_FreeValue(self.ctx.ctx, self.this) };
+        unsafe { qjs::JS_FreeValue(self.ctx.as_ptr(), self.this) };
         self.this = this.into_js_value();
         Ok(())
     }

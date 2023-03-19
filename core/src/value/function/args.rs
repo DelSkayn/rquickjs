@@ -9,14 +9,14 @@ pub struct Input<'js> {
 
 impl<'js> Input<'js> {
     #[inline]
-    pub fn new_raw(
+    pub unsafe fn new_raw(
         ctx: *mut qjs::JSContext,
         this: qjs::JSValue,
         argc: qjs::c_int,
         argv: *mut qjs::JSValue,
     ) -> Self {
         let ctx = Ctx::from_ptr(ctx);
-        let args = unsafe { slice::from_raw_parts(argv, argc as _) };
+        let args = slice::from_raw_parts(argv, argc as _);
         Self { ctx, this, args }
     }
 

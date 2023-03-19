@@ -223,23 +223,23 @@ impl Error {
     pub(crate) fn throw(&self, ctx: Ctx) -> qjs::JSValue {
         use Error::*;
         match self {
-            Allocation => unsafe { qjs::JS_ThrowOutOfMemory(ctx.ctx) },
+            Allocation => unsafe { qjs::JS_ThrowOutOfMemory(ctx.as_ptr()) },
             InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } | NumArgs { .. } => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowTypeError(ctx.ctx, message.as_ptr()) }
+                unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
             }
             #[cfg(feature = "loader")]
             Resolving { .. } | Loading { .. } => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowReferenceError(ctx.ctx, message.as_ptr()) }
+                unsafe { qjs::JS_ThrowReferenceError(ctx.as_ptr(), message.as_ptr()) }
             }
             Unknown => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowInternalError(ctx.ctx, message.as_ptr()) }
+                unsafe { qjs::JS_ThrowInternalError(ctx.as_ptr(), message.as_ptr()) }
             }
             _ => {
                 let value = self.into_js(ctx).unwrap();
-                unsafe { qjs::JS_Throw(ctx.ctx, value.into_js_value()) }
+                unsafe { qjs::JS_Throw(ctx.as_ptr(), value.into_js_value()) }
             }
         }
     }
@@ -408,7 +408,7 @@ impl<'js> IntoJs<'js> for &Error {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         use Error::*;
         let value = unsafe {
-            Object::from_js_value(ctx, handle_exception(ctx, qjs::JS_NewError(ctx.ctx))?)
+            Object::from_js_value(ctx, ctx.handle_exception(qjs::JS_NewError(ctx.as_ptr()))?)
         };
         match self {
             Exception {
@@ -438,44 +438,43 @@ impl<'js> IntoJs<'js> for &Error {
     }
 }
 
-pub(crate) fn handle_panic<F: FnOnce() -> qjs::JSValue + UnwindSafe>(
-    ctx: *mut qjs::JSContext,
-    f: F,
-) -> qjs::JSValue {
-    unsafe {
-        match panic::catch_unwind(f) {
-            Ok(x) => x,
-            Err(e) => {
-                Ctx::from_ptr(ctx).get_opaque().panic = Some(e);
-                qjs::JS_Throw(ctx, qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
+impl<'js> Ctx<'js> {
+    pub(crate) fn handle_panic<F>(self, f: F) -> qjs::JSValue
+    where
+        F: FnOnce() -> qjs::JSValue + UnwindSafe,
+    {
+        unsafe {
+            match panic::catch_unwind(f) {
+                Ok(x) => x,
+                Err(e) => {
+                    self.get_opaque().panic = Some(e);
+                    qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
+                }
             }
         }
     }
-}
 
-/// Handle possible exceptions in JSValue's and turn them into errors
-/// Will return the JSValue if it is not an exception
-///
-/// # Safety
-/// Assumes to have ownership of the JSValue
-pub(crate) unsafe fn handle_exception<'js>(
-    ctx: Ctx<'js>,
-    js_val: qjs::JSValue,
-) -> Result<qjs::JSValue> {
-    if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
-        Ok(js_val)
-    } else {
-        Err(get_exception(ctx))
-    }
-}
-
-pub(crate) unsafe fn get_exception<'js>(ctx: Ctx<'js>) -> Error {
-    let exception_val = qjs::JS_GetException(ctx.ctx);
-
-    if let Some(x) = ctx.get_opaque().panic.take() {
-        panic::resume_unwind(x);
+    /// Handle possible exceptions in JSValue's and turn them into errors
+    /// Will return the JSValue if it is not an exception
+    ///
+    /// # Safety
+    /// Assumes to have ownership of the JSValue
+    pub(crate) unsafe fn handle_exception(self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
+        if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
+            Ok(js_val)
+        } else {
+            Err(self.get_exception())
+        }
     }
 
-    let exception = Value::from_js_value(ctx, exception_val);
-    Error::from_js(ctx, exception).unwrap()
+    pub(crate) unsafe fn get_exception(self) -> Error {
+        let exception_val = qjs::JS_GetException(self.as_ptr());
+
+        if let Some(x) = self.get_opaque().panic.take() {
+            panic::resume_unwind(x);
+        }
+
+        let exception = Value::from_js_value(self, exception_val);
+        Error::from_js(self, exception).unwrap()
+    }
 }

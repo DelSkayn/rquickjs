@@ -1,7 +1,4 @@
-use crate::{
-    handle_exception, Array, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type,
-    Value,
-};
+use crate::{Array, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type, Value};
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
@@ -59,7 +56,7 @@ where
     //Expections are generally handled when returned from a function
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         unsafe {
-            match handle_exception(ctx, value.into_js_value()) {
+            match ctx.handle_exception(value.into_js_value()) {
                 Ok(val) => T::from_js(ctx, Value::from_js_value(ctx, val)).map(Ok),
                 Err(error) => Ok(Err(error)),
             }

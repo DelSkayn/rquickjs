@@ -1,4 +1,4 @@
-use crate::{handle_exception, qjs, Ctx, Error, Result, String, Value};
+use crate::{qjs, Ctx, Error, Result, String, Value};
 use std::{ffi::CStr, mem, string::String as StdString};
 
 /// An atom is value representing the name of a variable of an objects and can be created
@@ -22,7 +22,7 @@ impl<'js> Atom<'js> {
         // TODO figure out if this can give errors
         // It seems like it could but I have not yet figured out
         // how to detect this.
-        let atom = unsafe { qjs::JS_ValueToAtom(ctx.ctx, val.as_js_value()) };
+        let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val.as_js_value()) };
         Atom { atom, ctx }
     }
 
@@ -31,7 +31,7 @@ impl<'js> Atom<'js> {
         // TODO figure out if this can give errors
         // It seems like it could but I have not yet figured out
         // how to detect this.
-        let atom = unsafe { qjs::JS_NewAtomUInt32(ctx.ctx, val) };
+        let atom = unsafe { qjs::JS_NewAtomUInt32(ctx.as_ptr(), val) };
         Atom { atom, ctx }
     }
 
@@ -40,7 +40,8 @@ impl<'js> Atom<'js> {
         // TODO figure out if this can give errors
         // It seems like it could but I have not yet figured out
         // how to detect this.
-        let atom = unsafe { qjs::JS_ValueToAtom(ctx.ctx, qjs::JS_MKVAL(qjs::JS_TAG_INT, val)) };
+        let atom =
+            unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_INT, val)) };
         Atom { atom, ctx }
     }
 
@@ -50,7 +51,7 @@ impl<'js> Atom<'js> {
         // It seems like it could but I have not yet figured out
         // how to detect this.
         let val = if val { qjs::JS_TRUE } else { qjs::JS_FALSE };
-        let atom = unsafe { qjs::JS_ValueToAtom(ctx.ctx, val) };
+        let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val) };
         Atom { atom, ctx }
     }
 
@@ -59,7 +60,7 @@ impl<'js> Atom<'js> {
         // TODO figure out if this can give errors
         // It seems like it could but I have not yet figured out
         // how to detect this.
-        let atom = unsafe { qjs::JS_ValueToAtom(ctx.ctx, qjs::JS_NewFloat64(val)) };
+        let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_NewFloat64(val)) };
         Atom { atom, ctx }
     }
 
@@ -70,7 +71,7 @@ impl<'js> Atom<'js> {
         // how to detect this.
         unsafe {
             let ptr = name.as_ptr() as *const std::os::raw::c_char;
-            let atom = qjs::JS_NewAtomLen(ctx.ctx, ptr, name.len() as _);
+            let atom = qjs::JS_NewAtomLen(ctx.as_ptr(), ptr, name.len() as _);
             Atom { atom, ctx }
         }
     }
@@ -82,13 +83,13 @@ impl<'js> Atom<'js> {
         impl<'js> Drop for DropStr<'js> {
             fn drop(&mut self) {
                 unsafe {
-                    qjs::JS_FreeCString(self.0.ctx, self.1);
+                    qjs::JS_FreeCString(self.0.as_ptr(), self.1);
                 }
             }
         }
 
         unsafe {
-            let c_str = qjs::JS_AtomToCString(self.ctx.ctx, self.atom);
+            let c_str = qjs::JS_AtomToCString(self.ctx.as_ptr(), self.atom);
             // Ensure the c_string is dropped no matter what happens
             let drop = DropStr(self.ctx, c_str);
             if c_str.is_null() {
@@ -105,8 +106,8 @@ impl<'js> Atom<'js> {
     /// Convert the atom to a javascript string .
     pub fn to_js_string(&self) -> Result<String<'js>> {
         unsafe {
-            let val = qjs::JS_AtomToString(self.ctx.ctx, self.atom);
-            let val = handle_exception(self.ctx, val)?;
+            let val = qjs::JS_AtomToString(self.ctx.as_ptr(), self.atom);
+            let val = self.ctx.handle_exception(val)?;
             Ok(String::from_js_value(self.ctx, val))
         }
     }
@@ -123,7 +124,7 @@ impl<'js> Atom<'js> {
 
 impl<'js> Clone for Atom<'js> {
     fn clone(&self) -> Atom<'js> {
-        let atom = unsafe { qjs::JS_DupAtom(self.ctx.ctx, self.atom) };
+        let atom = unsafe { qjs::JS_DupAtom(self.ctx.as_ptr(), self.atom) };
         Atom {
             atom,
             ctx: self.ctx,
@@ -134,7 +135,7 @@ impl<'js> Clone for Atom<'js> {
 impl<'js> Drop for Atom<'js> {
     fn drop(&mut self) {
         unsafe {
-            qjs::JS_FreeAtom(self.ctx.ctx, self.atom);
+            qjs::JS_FreeAtom(self.ctx.as_ptr(), self.atom);
         }
     }
 }

@@ -1,5 +1,5 @@
 use crate::{qjs, Error, Result, Runtime};
-use std::mem;
+use std::{mem, ptr::NonNull};
 
 mod builder;
 pub use builder::{intrinsic, ContextBuilder, Intrinsic};
@@ -22,14 +22,13 @@ pub trait MultiWith<'js> {
 ///
 /// Can share objects with other contexts of the same runtime.
 pub struct Context {
-    //TODO replace with NotNull?
-    pub(crate) ctx: *mut qjs::JSContext,
+    ctx: NonNull<qjs::JSContext>,
     rt: Runtime,
 }
 
 impl Clone for Context {
     fn clone(&self) -> Context {
-        let ctx = unsafe { qjs::JS_DupContext(self.ctx) };
+        let ctx = unsafe { NonNull::new_unchecked(qjs::JS_DupContext(self.ctx.as_ptr())) };
         let rt = self.rt.clone();
         Self { ctx, rt }
     }
@@ -40,7 +39,7 @@ impl Context {
         let rt = unsafe { &ctx.get_opaque().runtime }
             .try_ref()
             .ok_or(Error::Unknown)?;
-        let ctx = unsafe { qjs::JS_DupContext(ctx.ctx) };
+        let ctx = unsafe { NonNull::new_unchecked(qjs::JS_DupContext(ctx.as_ptr())) };
         Ok(Self { ctx, rt })
     }
 
@@ -56,10 +55,8 @@ impl Context {
     /// [`Context::builder`] or [`Context::full`].
     pub fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
-        let ctx = unsafe { qjs::JS_NewContextRaw(guard.rt) };
-        if ctx.is_null() {
-            return Err(Error::Allocation);
-        }
+        let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
+            .ok_or_else(|| Error::Allocation)?;
         unsafe { I::add_intrinsic(ctx) };
         let res = Context {
             ctx,
@@ -75,10 +72,8 @@ impl Context {
     /// [`Context::custom`] or [`Context::builder`].
     pub fn full(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
-        let ctx = unsafe { qjs::JS_NewContext(guard.rt) };
-        if ctx.is_null() {
-            return Err(Error::Allocation);
-        }
+        let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
+            .ok_or_else(|| Error::Allocation)?;
         let res = Context {
             ctx,
             rt: runtime.clone(),
@@ -97,7 +92,7 @@ impl Context {
     pub fn enable_big_num_ext(&self, enable: bool) {
         let guard = self.rt.inner.lock();
         guard.update_stack_top();
-        unsafe { qjs::JS_EnableBignumExt(self.ctx, i32::from(enable)) }
+        unsafe { qjs::JS_EnableBignumExt(self.ctx.as_ptr(), i32::from(enable)) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard)
     }
@@ -108,7 +103,7 @@ impl Context {
     }
 
     pub(crate) fn get_runtime_ptr(&self) -> *mut qjs::JSRuntime {
-        unsafe { qjs::JS_GetRuntime(self.ctx) }
+        unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) }
     }
 
     /// A entry point for manipulating and using javascript objects and scripts.
@@ -161,7 +156,7 @@ impl Drop for Context {
         let guard = match self.rt.inner.try_lock() {
             Some(x) => x,
             None => {
-                let p = unsafe { &mut *(self.ctx as *const _ as *mut qjs::JSRefCountHeader) };
+                let p = unsafe { &mut *(self.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
                 if p.ref_count <= 1 {
                     // Lock was poisened, this should only happen on a panic.
                     // We should still free the context.
@@ -169,12 +164,12 @@ impl Drop for Context {
                     // following assertion to trigger
                     assert!(std::thread::panicking());
                 }
-                unsafe { qjs::JS_FreeContext(self.ctx) }
+                unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
                 return;
             }
         };
         guard.update_stack_top();
-        unsafe { qjs::JS_FreeContext(self.ctx) }
+        unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
     }

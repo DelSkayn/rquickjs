@@ -57,7 +57,7 @@ impl<'js> Clone for Value<'js> {
 impl<'js> Drop for Value<'js> {
     fn drop(&mut self) {
         unsafe {
-            qjs::JS_FreeValue(self.ctx.ctx, self.value);
+            qjs::JS_FreeValue(self.ctx.as_ptr(), self.value);
         }
     }
 }
@@ -321,19 +321,19 @@ impl<'js> Value<'js> {
     /// Check if the value is an array
     #[inline]
     pub fn is_array(&self) -> bool {
-        0 != unsafe { qjs::JS_IsArray(self.ctx.ctx, self.value) }
+        0 != unsafe { qjs::JS_IsArray(self.ctx.as_ptr(), self.value) }
     }
 
     /// Check if the value is a function
     #[inline]
     pub fn is_function(&self) -> bool {
-        0 != unsafe { qjs::JS_IsFunction(self.ctx.ctx, self.value) }
+        0 != unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) }
     }
 
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
-        0 != unsafe { qjs::JS_IsError(self.ctx.ctx, self.value) }
+        0 != unsafe { qjs::JS_IsError(self.ctx.as_ptr(), self.value) }
     }
 
     /// Reference as value

@@ -1,8 +1,7 @@
 mod refs;
 
 use crate::{
-    handle_exception, qjs, ClassId, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result,
-    Type, Value,
+    qjs, ClassId, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Type, Value,
 };
 use std::{ffi::CString, marker::PhantomData, mem, ops::Deref, ptr};
 
@@ -203,7 +202,7 @@ where
     /// Instantiate the object of class
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
         let val =
-            unsafe { handle_exception(ctx, qjs::JS_NewObjectClass(ctx.ctx, Self::id() as _)) }?;
+            unsafe { ctx.handle_exception(qjs::JS_NewObjectClass(ctx.as_ptr(), Self::id() as _)) }?;
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
         Ok(Self(
@@ -215,10 +214,11 @@ where
     /// Instantiate the object of class with given prototype
     pub fn instance_proto(ctx: Ctx<'js>, value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
         let val = unsafe {
-            handle_exception(
-                ctx,
-                qjs::JS_NewObjectProtoClass(ctx.ctx, proto.0.as_js_value(), Self::id()),
-            )
+            ctx.handle_exception(qjs::JS_NewObjectProtoClass(
+                ctx.as_ptr(),
+                proto.0.as_js_value(),
+                Self::id(),
+            ))
         }?;
         let ptr = Box::into_raw(Box::new(value));
         unsafe { qjs::JS_SetOpaque(val, ptr as _) };
@@ -230,7 +230,7 @@ where
 
     /// Get reference from object
     pub fn try_ref<'r>(ctx: Ctx<'js>, value: &Object<'js>) -> Result<&'r C> {
-        Ok(unsafe { &*Self::try_ptr(ctx.ctx, value.0.as_js_value())? })
+        Ok(unsafe { &*Self::try_ptr(ctx.as_ptr(), value.0.as_js_value())? })
     }
 
     /// Get instance pointer from object
@@ -248,7 +248,7 @@ where
 
     /// Register the class
     pub fn register(ctx: Ctx<'js>) -> Result<()> {
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.ctx) };
+        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         let class_id = Self::id();
         let class_name = CString::new(C::CLASS_NAME)?;
         if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, class_id) } {
@@ -272,7 +272,7 @@ where
         if C::HAS_PROTO {
             let proto = Object::new(ctx)?;
             C::init_proto(ctx, &proto)?;
-            unsafe { qjs::JS_SetClassProto(ctx.ctx, class_id, proto.0.into_js_value()) }
+            unsafe { qjs::JS_SetClassProto(ctx.as_ptr(), class_id, proto.0.into_js_value()) }
         }
         Ok(())
     }
@@ -290,7 +290,7 @@ where
     pub fn prototype(ctx: Ctx<'js>) -> Result<Object<'js>> {
         Ok(Object(unsafe {
             let class_id = Self::id();
-            let proto = qjs::JS_GetClassProto(ctx.ctx, class_id);
+            let proto = qjs::JS_GetClassProto(ctx.as_ptr(), class_id);
             let proto = Value::from_js_value(ctx, proto);
             let type_ = proto.type_of();
             if type_ == Type::Object {
@@ -364,7 +364,8 @@ impl<'js> Object<'js> {
     /// Check the object for instance of
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
     pub fn instance_of<C: ClassDef>(&self) -> bool {
-        let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.ctx, self.0.value, Class::<C>::id()) };
+        let ptr =
+            unsafe { qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0.value, Class::<C>::id()) };
         !ptr.is_null()
     }
 
