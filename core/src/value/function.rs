@@ -664,6 +664,70 @@ mod test {
     }
 
     #[test]
+    fn call_rust_fn_with_this_and_args() {
+        let res: f64 = test_with(|ctx| {
+            let func = Function::new(ctx, |this: This<Object>, a: f64, b: f64| {
+                let x: f64 = this.get("x").unwrap();
+                let y: f64 = this.get("y").unwrap();
+                this.set("r", a * x + b * y).unwrap();
+            })
+            .unwrap();
+            ctx.globals().set("test_fn", func).unwrap();
+            ctx.eval(
+                r#"
+                  let test_obj = { x: 1, y: 2 };
+                  test_fn.call(test_obj, 3, 4);
+                  test_obj.r
+                "#,
+            )
+            .unwrap()
+        });
+        assert_eq!(res, 11.0);
+    }
+
+    #[test]
+    fn apply_rust_fn_with_this_and_args() {
+        let res: f32 = test_with(|ctx| {
+            let func = Function::new(ctx, |this: This<Object>, x: f32, y: f32| {
+                let a: f32 = this.get("a").unwrap();
+                let b: f32 = this.get("b").unwrap();
+                a * x + b * y
+            })
+            .unwrap();
+            ctx.globals().set("test_fn", func).unwrap();
+            ctx.eval(
+                r#"
+                  let test_obj = { a: 1, b: 2 };
+                  test_fn.apply(test_obj, [3, 4])
+                "#,
+            )
+            .unwrap()
+        });
+        assert_eq!(res, 11.0);
+    }
+
+    #[test]
+    fn bind_rust_fn_with_this_and_call_with_args() {
+        let res: f32 = test_with(|ctx| {
+            let func = Function::new(ctx, |this: This<Object>, x: f32, y: f32| {
+                let a: f32 = this.get("a").unwrap();
+                let b: f32 = this.get("b").unwrap();
+                a * x + b * y
+            })
+            .unwrap();
+            ctx.globals().set("test_fn", func).unwrap();
+            ctx.eval(
+                r#"
+                  let test_obj = { a: 1, b: 2 };
+                  test_fn.bind(test_obj)(3, 4)
+                "#,
+            )
+            .unwrap()
+        });
+        assert_eq!(res, 11.0);
+    }
+
+    #[test]
     fn call_rust_fn_with_var_args() {
         let res: Vec<i8> = test_with(|ctx| {
             let func = Function::new(ctx, |args: Rest<i8>| {
