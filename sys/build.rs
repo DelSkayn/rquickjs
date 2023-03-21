@@ -34,7 +34,7 @@ fn main() {
     }
 
     let src_dir = Path::new("c-src");
-    let header_dir = Path::new("c-include");
+    let header_dir = src_dir;
     let patches_dir = Path::new("patches");
 
     let out_dir = env::var("OUT_DIR").expect("No OUT_DIR env var is set by cargo");
