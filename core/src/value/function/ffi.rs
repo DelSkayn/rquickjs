@@ -1,5 +1,5 @@
 use super::Input;
-use crate::{qjs, ClassId, Ctx, Object, Result, Value};
+use crate::{qjs, ClassId, Ctx, Result, Value};
 use std::{ops::Deref, panic::AssertUnwindSafe, ptr};
 
 static FUNC_CLASS_ID: ClassId = ClassId::new();
@@ -30,14 +30,8 @@ impl<'js> JsFunction<'js> {
     }
 
     pub unsafe fn into_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
-        let proto = ctx
-            .globals()
-            .get::<_, Object>("Function")
-            .unwrap()
-            .get::<_, Object>("prototype")
-            .unwrap();
-        let obj =
-            qjs::JS_NewObjectProtoClass(ctx.as_ptr(), proto.as_js_value(), Self::class_id() as _);
+        let proto = qjs::JS_GetFunctionProto(ctx.as_ptr());
+        let obj = qjs::JS_NewObjectProtoClass(ctx.as_ptr(), proto, Self::class_id() as _);
         qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(self)) as _);
         obj
     }
