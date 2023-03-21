@@ -1614,6 +1614,9 @@ extern "C" {
     pub fn JS_GetGlobalObject(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
+    pub fn JS_GetFunctionProto(ctx: *mut JSContext) -> JSValue;
+}
+extern "C" {
     pub fn JS_IsInstanceOf(
         ctx: *mut JSContext,
         val: JSValue,
