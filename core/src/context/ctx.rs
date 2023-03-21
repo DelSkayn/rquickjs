@@ -9,9 +9,6 @@ use std::future::Future;
 #[cfg(feature = "futures")]
 use crate::ParallelSend;
 
-#[cfg(feature = "registery")]
-use crate::RegisteryKey;
-
 use std::{
     ffi::{CStr, CString},
     fs,
@@ -202,48 +199,6 @@ impl<'js> Ctx<'js> {
     {
         let opaque = unsafe { self.get_opaque() };
         opaque.get_spawner().spawn(future);
-    }
-}
-
-#[cfg(feature = "registery")]
-impl<'js> Ctx<'js> {
-    /// Store a value in the registery so references to it can be kept outside the scope of context use.
-    ///
-    /// A registered value can be retrieved from any context belonging to the same runtime.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "registery")))]
-    pub fn register(self, v: Value<'js>) -> RegisteryKey {
-        unsafe {
-            let register = self.get_opaque();
-            let key = RegisteryKey(v.into_js_value());
-            register.registery.insert(key);
-            key
-        }
-    }
-
-    /// Remove a value from the registery.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "registery")))]
-    pub fn deregister(self, k: RegisteryKey) -> Option<Value<'js>> {
-        unsafe {
-            let register = self.get_opaque();
-            if register.registery.remove(&k) {
-                Some(Value::from_js_value(self, k.0))
-            } else {
-                None
-            }
-        }
-    }
-
-    /// Get a value from the registery.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "registery")))]
-    pub fn get_register(self, k: RegisteryKey) -> Option<Value<'js>> {
-        unsafe {
-            let opaque = self.get_opaque();
-            if opaque.registery.contains(&k) {
-                Some(Value::from_js_value_const(self, k.0))
-            } else {
-                None
-            }
-        }
     }
 }
 

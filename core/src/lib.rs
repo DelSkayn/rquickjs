@@ -56,11 +56,6 @@ pub(crate) use class_id::ClassId;
 #[cfg(feature = "classes")]
 pub use class_id::ClassId;
 
-#[cfg(feature = "registery")]
-mod registery_key;
-#[cfg(feature = "registery")]
-pub use registery_key::RegisteryKey;
-
 #[cfg(feature = "classes")]
 mod class;
 #[cfg(feature = "classes")]

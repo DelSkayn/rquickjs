@@ -10,11 +10,6 @@ mod async_executor;
 #[cfg(feature = "futures")]
 pub use self::async_executor::*;
 
-#[cfg(feature = "registery")]
-use crate::RegisteryKey;
-#[cfg(feature = "registery")]
-use fxhash::FxHashSet as HashSet;
-
 pub use qjs::JSMemoryUsage as MemoryUsage;
 
 #[cfg(feature = "allocator")]
@@ -44,10 +39,6 @@ pub struct Opaque {
     /// Used to ref Runtime from Ctx
     pub runtime: WeakRuntime,
 
-    #[cfg(feature = "registery")]
-    /// The registery, used to keep track of which registery values belong to this runtime.
-    pub registery: HashSet<RegisteryKey>,
-
     /// Async spawner
     #[cfg(feature = "futures")]
     pub spawner: Option<Spawner>,
@@ -59,8 +50,6 @@ impl Opaque {
             panic: None,
             interrupt_handler: None,
             runtime: runtime.weak(),
-            #[cfg(feature = "registery")]
-            registery: HashSet::default(),
             #[cfg(feature = "futures")]
             spawner: Default::default(),
         }
