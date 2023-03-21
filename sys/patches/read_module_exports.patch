@@ -1,8 +1,8 @@
 diff --git a/quickjs.c b/quickjs.c
-index 9fe95cd..5ea8a12 100644
+index 5098719..04c9941 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -27161,6 +27161,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
+@@ -27258,6 +27258,40 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
      rt->module_loader_opaque = opaque;
  }
  
@@ -44,10 +44,10 @@ index 9fe95cd..5ea8a12 100644
  static char *js_default_module_normalize_name(JSContext *ctx,
                                                const char *base_name,
 diff --git a/quickjs.h b/quickjs.h
-index 92457a2..4e06dfe 100644
+index c482686..3d6e8c9 100644
 --- a/quickjs.h
 +++ b/quickjs.h
-@@ -1035,6 +1035,14 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
+@@ -1040,6 +1040,14 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
  int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                             const JSCFunctionListEntry *tab, int len);
  

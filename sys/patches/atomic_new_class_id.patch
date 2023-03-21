@@ -1,8 +1,8 @@
 diff --git a/quickjs.c b/quickjs.c
-index 4e6a2c9..f9615be 100644
+index ccf0916..5098719 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -3353,12 +3353,18 @@ static inline BOOL JS_IsEmptyString(JSValueConst v)
+@@ -3371,12 +3371,18 @@ static inline BOOL JS_IsEmptyString(JSValueConst v)
  JSClassID JS_NewClassID(JSClassID *pclass_id)
  {
      JSClassID class_id;

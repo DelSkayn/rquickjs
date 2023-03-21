@@ -1,8 +1,9 @@
-patch = all #hotfix msvc exports parallel
+patch = all #hotfix msvc exports
 
 $(info patch = $(patch))
 
 ifneq ($(filter hotfix all,$(patch)),)
+PATCHES += get_function_proto
 PATCHES += check_stack_overflow
 PATCHES += infinity_handling
 PATCHES += atomic_new_class_id
@@ -30,7 +31,7 @@ diff:
 
 # update patch from unstaged changes
 update.%:
-	@cd quickjs && git diff -w > patches/$*.patch
+	@cd quickjs && git diff -w > ../patches/$*.patch
 
 # reset patches
 reset:
