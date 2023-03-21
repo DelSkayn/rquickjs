@@ -10,10 +10,6 @@ keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
 categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
-[dependencies.fxhash]
-version = "0.2"
-optional = true
-
 [dependencies.phf]
 version = "0.10"
 optional = true
@@ -81,7 +77,7 @@ optional = true
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "exports", "loader", "allocator", "dyn-load", "either", "indexmap", "registery", "classes", "properties", "array-buffer"]
+full = ["chrono", "exports", "loader", "allocator", "dyn-load", "either", "indexmap", "classes", "properties", "array-buffer"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "async-std", "tokio", "smol"]
@@ -92,9 +88,6 @@ bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
 parallel = []
-
-# Enable runtime registery
-registery = ["fxhash"]
 
 # Enable support of reading module exports
 exports = ["rquickjs-sys/exports"]
