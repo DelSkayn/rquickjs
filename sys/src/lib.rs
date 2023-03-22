@@ -13,7 +13,10 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 #[cfg(not(feature = "bindgen"))]
 include!(concat!("bindings/", bindings_env!("TARGET"), ".rs"));
 
-#[cfg(target_pointer_width = "64")]
+#[cfg(all(target_pointer_width = "64", feature = "box64"))]
+include!("inlines/ptr_64_nan_boxing.rs");
+
+#[cfg(all(target_pointer_width = "64", not(feature = "box64")))]
 include!("inlines/ptr_64.rs");
 
 #[cfg(target_pointer_width = "32")]

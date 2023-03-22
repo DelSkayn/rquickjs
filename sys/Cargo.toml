@@ -36,6 +36,8 @@ logging = ["pretty_env_logger"]
 # Special case for updating bundled bindings
 update-bindings = ["bindgen"]
 
+box64 = []
+
 # Enable QuickJS dumps
 dump-bytecode = []
 dump-gc = []

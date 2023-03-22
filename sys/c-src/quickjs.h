@@ -187,7 +187,7 @@ static inline JS_BOOL JS_VALUE_IS_NAN(JSValue v) {
   return tag == (JS_NAN >> 32);
 }
 
-#elif defined(JS_EXPERIMENTAL_BOX64)
+#elif defined(CONFIG_BOX64)
 
 typedef uint64_t JSValue;
 #define JSValueConst JSValue

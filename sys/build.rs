@@ -84,6 +84,10 @@ fn main() {
         ("CONFIG_BIGNUM".into(), None),
     ];
 
+    if cfg!(feature = "box64") {
+        defines.push(("CONFIG_BOX64".into(), None));
+    }
+
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
         && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
     {
