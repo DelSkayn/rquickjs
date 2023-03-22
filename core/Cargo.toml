@@ -179,6 +179,9 @@ compile-tests = []
 # Enable unstable doc-cfg feature (for docs.rs)
 doc-cfg = []
 
+# Enable experimental 64-bit NaN boxing JSValue
+box64 = ["rquickjs-sys/box64"]
+
 [dev-dependencies.futures-rs]
 package = "futures"
 version = "0.3"

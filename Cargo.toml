@@ -177,5 +177,8 @@ compile-tests = ["rquickjs-core/compile-tests"]
 # Enable unstable doc-cfg feature (for docs.rs)
 doc-cfg = ["rquickjs-core/doc-cfg"]
 
+# Enable experimental 64-bit NaN boxing JSValue
+box64 = ["rquickjs-core/box64"]
+
 [package.metadata.docs.rs]
 features = ["full-async", "parallel", "doc-cfg"]
