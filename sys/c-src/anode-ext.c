@@ -1,6 +1,19 @@
 #include "anode-ext.h"
+#include "quickjs-internals.h"
 #include "quickjs.h"
+#include <assert.h>
 #include <stdint.h>
+
+JSFunctionBytecode *anode_get_function_bytecode(JSValue function) {
+  int tag = JS_VALUE_GET_TAG(function);
+  assert(("The input function must be an object", tag == JS_TAG_OBJECT));
+
+  JSObject *obj = JS_VALUE_GET_OBJ(function);
+  assert(("The input function must be a function",
+          obj->hdr.bitfield.class_id == JS_CLASS_BYTECODE_FUNCTION));
+
+  return obj->u.func.function_bytecode;
+}
 
 JSValue anode_js_add_any(JSContext *ctx, JSValue x, JSValue y) {
   if (JS_VALUE_IS_BOTH_INT(x, y)) {

@@ -7,41 +7,60 @@
 #pragma region JSValueManipulations
 // This section defines utility functions that acts the same as QuickJS's
 // macros.
-
-static inline int32_t anode_js_value_get_tag(JSValueConst val) {
+__attribute((always_inline)) static inline int32_t
+anode_js_value_get_tag(JSValueConst val) {
   return JS_VALUE_GET_TAG(val);
 }
 
-static inline int32_t anode_js_value_get_norm_tag(JSValueConst val) {
+__attribute((always_inline)) static inline int32_t
+anode_js_value_get_norm_tag(JSValueConst val) {
   return JS_VALUE_GET_NORM_TAG(val);
 }
 
-static inline int32_t anode_js_value_get_int(JSValueConst val) {
+__attribute((always_inline)) static inline int32_t
+anode_js_value_get_int(JSValueConst val) {
   return JS_VALUE_GET_INT(val);
 }
 
-static inline int32_t anode_js_value_get_bool(JSValueConst val) {
+__attribute((always_inline)) static inline int32_t
+anode_js_value_get_bool(JSValueConst val) {
   return JS_VALUE_GET_BOOL(val);
 }
 
-static inline int32_t anode_js_value_get_float64(JSValueConst val) {
+__attribute((always_inline)) static inline int32_t
+anode_js_value_get_float64(JSValueConst val) {
   return JS_VALUE_GET_FLOAT64(val);
 }
 
-static inline void *anode_js_value_get_ptr(JSValueConst val) {
+__attribute((always_inline)) static inline void *
+anode_js_value_get_ptr(JSValueConst val) {
   return JS_VALUE_GET_PTR(val);
 }
 
-static inline JSValue anode_js_new_int32(int32_t tag, int32_t val) {
+__attribute((always_inline)) static inline JSValue
+anode_js_new_int32(int32_t tag, int32_t val) {
   return JS_MKVAL(tag, val);
 }
 
-static inline JSValue anode_js_new_ptr(int32_t tag, void *ptr) {
+__attribute((always_inline)) static inline JSValue anode_js_new_ptr(int32_t tag,
+                                                                    void *ptr) {
   return JS_MKPTR(tag, ptr);
 }
 
-static inline JSValue anode_js_new_float64(JSContext *ctx, double d) {
+__attribute((always_inline)) static inline JSValue
+anode_js_new_float64(JSContext *ctx, double d) {
   return JS_NewFloat64(ctx, d);
+}
+
+#pragma endregion
+
+#pragma region Function Bytecode
+
+JSFunctionBytecode *anode_get_function_bytecode(JSValueConst function);
+
+__attribute((always_inline)) static inline JSValue
+anode_function_get_cpool_unchecked(JSFunctionBytecode *bc, int32_t ix) {
+  return bc->cpool[ix];
 }
 
 #pragma endregion
