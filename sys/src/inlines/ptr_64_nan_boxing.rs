@@ -2,7 +2,7 @@ pub const JS_NAN_BOXING_OFFSET: u64 = 0xfff8 << 48;
 
 #[inline]
 pub unsafe fn JS_VALUE_GET_TAG(v: JSValue) -> i32 {
-    (v >> 47 & 0xF) as i32
+    ((v as i64) >> 47) as i32
 }
 
 #[inline]
@@ -22,7 +22,7 @@ pub unsafe fn JS_VALUE_GET_PTR(v: JSValue) -> *mut c_void {
 
 #[inline]
 pub const fn JS_MKVAL(tag: i32, val: i32) -> JSValue {
-    ((tag as u64) << 47) | val as u64
+    ((tag as u64) << 47) | (val as u32 as u64)
 }
 
 #[inline]
