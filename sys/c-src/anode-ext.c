@@ -15,6 +15,16 @@ JSFunctionBytecode *anode_get_function_bytecode(JSValue function) {
   return obj->u.func.function_bytecode;
 }
 
+int32_t anode_js_to_bool(JSContext *ctx, JSValue op1) {
+  int32_t res;
+  if ((uint32_t)JS_VALUE_GET_TAG(op1) <= JS_TAG_UNDEFINED) {
+    res = JS_VALUE_GET_INT(op1);
+  } else {
+    res = JS_ToBoolFree(ctx, op1);
+  }
+  return res;
+}
+
 JSValue anode_js_add_any(JSContext *ctx, JSValue x, JSValue y) {
   if (JS_VALUE_IS_BOTH_INT(x, y)) {
     int32_t sum = JS_VALUE_GET_INT(x) + JS_VALUE_GET_INT(y);

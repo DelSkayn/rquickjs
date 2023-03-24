@@ -65,9 +65,36 @@ anode_function_get_cpool_unchecked(JSFunctionBytecode *bc, int32_t ix) {
 
 #pragma endregion
 
+int32_t anode_js_to_bool(JSContext *ctx, JSValueConst val);
+
 JSValue anode_js_add_any(JSContext *ctx, JSValue x, JSValue y);
 JSValue anode_js_sub_any(JSContext *ctx, JSValue x, JSValue y);
 JSValue anode_js_mul_any(JSContext *ctx, JSValue x, JSValue y);
 JSValue anode_js_div_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_mod_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_pow_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_bit_and_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_bit_or_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_bit_xor_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_bit_not_any(JSContext *ctx, JSValue x);
+JSValue anode_js_shift_left_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_shift_right_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_shift_right_arith_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_neg_any(JSContext *ctx, JSValue x);
+JSValue anode_js_plus_any(JSContext *ctx, JSValue x);
+JSValue anode_js_not_any(JSContext *ctx, JSValue x);
+JSValue anode_js_lnot_any(JSContext *ctx, JSValue x);
+JSValue anode_js_typeof_any(JSContext *ctx, JSValue x);
+JSValue anode_js_eq_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_gt_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_ge_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_lt_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_le_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_ne_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_strict_eq_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_strict_ne_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_instance_of_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_in_any(JSContext *ctx, JSValue x, JSValue y);
+JSValue anode_js_is_truthy_any(JSContext *ctx, JSValue x);
 
 #endif

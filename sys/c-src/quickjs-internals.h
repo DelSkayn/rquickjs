@@ -1230,6 +1230,9 @@ JSValue JS_GetGlobalVar(JSContext *ctx, JSAtom prop, BOOL throw_ref_error);
 int JS_SetGlobalVar(JSContext *ctx, JSAtom prop, JSValueConst val, int flag);
 #pragma endregion
 
+static JSValue js_closure(JSContext *ctx, JSValue bfunc,
+                          JSVarRef **cur_var_refs, JSStackFrame *sf);
+
 #undef kill_dependency
 #undef __exception
 #undef __maybe_unused
