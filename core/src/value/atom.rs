@@ -121,6 +121,24 @@ impl<'js> Atom<'js> {
     pub unsafe fn from_atom_val(ctx: Ctx<'js>, val: qjs::JSAtom) -> Self {
         Atom { atom: val, ctx }
     }
+
+    /// Get the raw quickjs atom value.
+    #[doc(hidden)]
+    pub fn as_atom_val(&self) -> qjs::JSAtom {
+        self.atom
+    }
+
+    /// Get the [`std::String`] representation of a raw atom.
+    #[doc(hidden)]
+    pub unsafe fn resolve_raw(ctx: Ctx<'js>, atom: qjs::JSAtom) -> Result<StdString> {
+        Self::from_atom_val(ctx, atom).to_string()
+    }
+
+    /// Get the raw atom value from a [`&str`].
+    #[doc(hidden)]
+    pub fn from_str_raw(ctx: Ctx<'js>, name: &str) -> qjs::JSAtom {
+        Self::from_str(ctx, name).atom
+    }
 }
 
 impl<'js> Clone for Atom<'js> {
