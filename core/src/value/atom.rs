@@ -131,7 +131,10 @@ impl<'js> Atom<'js> {
     /// Get the [`std::String`] representation of a raw atom.
     #[doc(hidden)]
     pub unsafe fn resolve_raw(ctx: Ctx<'js>, atom: qjs::JSAtom) -> Result<StdString> {
-        Self::from_atom_val(ctx, atom).to_string()
+        let atom = Atom::from_atom_val(ctx, atom);
+        let res = atom.to_string()?;
+        mem::forget(atom); // We do not want to free the atom
+        Ok(res)
     }
 
     /// Get the raw atom value from a [`&str`].
