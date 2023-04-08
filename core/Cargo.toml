@@ -73,6 +73,19 @@ optional = true
 version = "1.3"
 optional = true
 
+[dependencies.swc_core]
+version = "0.74.6"
+optional = true
+features = ["ecma_codegen", "base", "common", "ecma_plugin_transform"]
+
+[dependencies.anyhow]
+version = "1.0.70"
+optional = true
+
+[dependencies.derivative]
+version = "2.2.0"
+optional = true
+
 [features]
 default = []
 
@@ -87,7 +100,7 @@ full-async = ["full", "async-std", "tokio", "smol"]
 bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
-parallel = []
+parallel = ["swc_core?/base_concurrent", "swc_core?/common_concurrent"]
 
 # Enable support of reading module exports
 exports = ["rquickjs-sys/exports"]
@@ -152,6 +165,12 @@ dump-shapes = ["rquickjs-sys/dump-shapes"]
 dump-module-resolve = ["rquickjs-sys/dump-module-resolve"]
 dump-promise = ["rquickjs-sys/dump-promise"]
 dump-read-object = ["rquickjs-sys/dump-read-object"]
+
+# Enable SWC support
+swc = ["swc_core"]
+
+# Enable TypeScript support
+typescript = ["swc", "swc_core?/ecma_transforms_typescript", "swc_core?/ecma_parser_typescript", "dep:anyhow", "dep:derivative"]
 
 # Enable compilation tests
 compile-tests = []

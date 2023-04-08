@@ -152,6 +152,9 @@ dump-module-resolve = ["rquickjs-core/dump-module-resolve"]
 dump-promise = ["rquickjs-core/dump-promise"]
 dump-read-object = ["rquickjs-core/dump-read-object"]
 
+# Enable TypeScript support
+typescript = ["rquickjs-core/typescript", "rquickjs-macro/typescript"]
+
 # Enable compilation tests
 compile-tests = ["rquickjs-core/compile-tests"]
 

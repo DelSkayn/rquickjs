@@ -8,6 +8,11 @@ pub use file_resolver::FileResolver;
 mod script_loader;
 pub use script_loader::ScriptLoader;
 
+#[cfg(feature = "typescript")]
+mod typescript_loader;
+#[cfg(feature = "typescript")]
+pub use typescript_loader::TypeScriptLoader;
+
 #[cfg(feature = "dyn-load")]
 mod native_loader;
 #[cfg(feature = "dyn-load")]
@@ -293,6 +298,8 @@ macro_rules! generic_loader {
 
 generic_loader! {
     ScriptLoader: Script,
+    #[cfg(feature = "typescript")]
+    TypeScriptLoader: Script,
     #[cfg(feature = "dyn-load")]
     NativeLoader: Native,
     BuiltinLoader: Script,

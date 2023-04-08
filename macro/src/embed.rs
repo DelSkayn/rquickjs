@@ -24,7 +24,7 @@ pub use attrs::*;
 use crate::{Config, PubVis, TokenStream};
 use ident_case::RenameRule;
 use quote::{format_ident, quote};
-use rquickjs_core::{Compile, Context, FileResolver, Module, Result, Runtime, ScriptLoader};
+use rquickjs_core::{Compile, Context, FileResolver, Module, Result, Runtime};
 use std::path::Path;
 use syn::ItemMod;
 
@@ -93,7 +93,18 @@ impl Embedder {
             resolver.add_pattern(pattern);
         }
 
-        let mut loader = compile.loader(ScriptLoader::default());
+        let mut loader = compile.loader({
+            #[cfg(feature = "typescript")]
+            {
+                use rquickjs_core::TypeScriptLoader;
+                TypeScriptLoader::default()
+            }
+            #[cfg(not(feature = "typescript"))]
+            {
+                use rquickjs_core::ScriptLoader;
+                ScriptLoader::default()
+            }
+        });
 
         for pattern in &patterns {
             if let Some(extension) = Path::new(pattern)

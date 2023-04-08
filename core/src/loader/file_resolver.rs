@@ -117,7 +117,11 @@ impl Default for FileResolver {
     fn default() -> Self {
         Self {
             paths: vec![],
-            patterns: vec!["{}.js".into()],
+            patterns: vec![
+                "{}.js".into(),
+                #[cfg(feature = "typescript")]
+                "{}.ts".into(),
+            ],
         }
     }
 }
