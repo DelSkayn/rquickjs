@@ -157,10 +157,12 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
             let original = patch
                 .original()
                 .and_then(|x| x.split_once('/').map(|(_, b)| b))
+                .or(patch.original())
                 .expect("Cannot find original file name");
             let modified = patch
                 .modified()
                 .and_then(|x| x.split_once('/').map(|(_, b)| b))
+                .or(patch.modified())
                 .expect("Cannot find modified file name");
 
             // for now
