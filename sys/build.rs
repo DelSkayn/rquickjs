@@ -135,7 +135,7 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
         fn next(&mut self) -> Option<Self::Item> {
             let mut range = self.0.len();
             loop {
-                match diffy::Patch::from_str(&self.0[..range]) {
+                match Patch::from_str(&self.0[..range]) {
                     Ok(x) if x.hunks().is_empty() => break None,
                     Err(_) if range < 1 => break None,
                     Ok(x) => {
