@@ -12,6 +12,8 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [build-dependencies]
 cc = "1"
+diffy = "0.3.0"
+newline-converter = "0.3.0"
 
 [build-dependencies.bindgen-rs]
 package = "bindgen"

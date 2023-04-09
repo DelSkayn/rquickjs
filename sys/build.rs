@@ -1,9 +1,7 @@
-use std::{
-    env, fs,
-    io::Write,
-    path::Path,
-    process::{Command, Stdio},
-};
+use std::{env, fs, path::Path};
+
+use diffy::{apply, Patch};
+use newline_converter::dos2unix;
 
 fn main() {
     #[cfg(feature = "logging")]
@@ -129,21 +127,55 @@ fn feature_to_define(name: impl AsRef<str>) -> String {
 }
 
 fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
-    let mut child = Command::new("patch")
-        .arg("-p1")
-        .stdin(Stdio::piped())
-        .current_dir(out_dir)
-        .spawn()
-        .expect("Unable to execute patch, you may need to install it: {}");
-    println!("Appliyng patch {}", patch.as_ref().display());
-    {
-        let patch = fs::read(patch).expect("Unable to read patch");
+    struct Patches<'a>(&'a str);
 
-        let stdin = child.stdin.as_mut().unwrap();
-        stdin.write_all(&patch).expect("Unable to apply patch");
+    // A backtracking attempt to find a valid diff when there are multiple patches in one file (also known as patchset)
+    impl<'a> Iterator for Patches<'a> {
+        type Item = Patch<'a, str>;
+        fn next(&mut self) -> Option<Self::Item> {
+            let mut range = self.0.len();
+            loop {
+                match diffy::Patch::from_str(&self.0[..range]) {
+                    Ok(x) if x.hunks().is_empty() => break None,
+                    Err(_) if range < 1 => break None,
+                    Ok(x) => {
+                        self.0 = &self.0[range..];
+                        break Some(x);
+                    }
+                    Err(_) => range -= 1,
+                }
+            }
+        }
     }
 
-    child.wait_with_output().expect("Unable to apply patch");
+    println!("Appliyng patch {}", patch.as_ref().display());
+    {
+        let out_dir = out_dir.as_ref();
+        let patch = fs::read_to_string(patch).expect("Unable to read patch");
+        let patch = dos2unix(&patch);
+        for patch in Patches(&patch) {
+            let original = patch
+                .original()
+                .and_then(|x| x.split_once('/').map(|(_, b)| b))
+                .expect("Cannot find original file name");
+            let modified = patch
+                .modified()
+                .and_then(|x| x.split_once('/').map(|(_, b)| b))
+                .expect("Cannot find modified file name");
+
+            // for now
+            assert_eq!(original, modified);
+
+            let original =
+                fs::read_to_string(out_dir.join(original)).expect("Unable to read original file");
+            let original = dos2unix(&original);
+            match apply(&original, &patch) {
+                Ok(patched) => fs::write(out_dir.join(modified), patched)
+                    .expect("Unable to write the patched content"),
+                Err(e) => eprintln!("Unable to write the patched content: {}", e),
+            }
+        }
+    }
 }
 
 #[cfg(not(feature = "bindgen"))]
