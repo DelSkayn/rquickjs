@@ -164,6 +164,12 @@ jobs:
             target: aarch64-unknown-linux-musl
             features: full-async
             optimization: false
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: wasm32-wasi
+            features: chrono,exports,loader,allocator,either,indexmap,registery,classes,properties,array-buffer,tokio
+            optimization: false
           # Test features
           - task: features
             os: ubuntu-latest
@@ -294,6 +300,17 @@ jobs:
           echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Setup wasi_sdk
+        if: ${{matrix.target == 'wasm32-wasi'}}
+        run: |
+          # Install wasi_sdk
+          wget https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-20/wasi-sdk-20.0-linux.tar.gz
+          tar xzvf wasi-sdk-20.0-linux.tar.gz
+          # Install wasmtime
+          wget https://github.com/bytecodealliance/wasmtime/releases/download/v8.0.0/wasmtime-v8.0.0-x86_64-linux.tar.xz
+          tar xJvf wasmtime-v8.0.0-x86_64-linux.tar.xz
+          export WASI_SDK=$(realpath ./wasi-sdk-20.0-linux)
+          export CARGO_TARGET_WASM32_WASI_RUNNER=$(realpath ./wasmtime-v8.0.0-x86_64-linux/wasmtime)
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
         with:
