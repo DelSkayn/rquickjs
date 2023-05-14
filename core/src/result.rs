@@ -475,6 +475,6 @@ impl<'js> Ctx<'js> {
         }
 
         let exception = Value::from_js_value(self, exception_val);
-        Error::from_js(self, exception).unwrap()
+        Error::from_js(self, exception).unwrap_or(Error::Unknown)
     }
 }

@@ -250,7 +250,7 @@ where
     pub fn register(ctx: Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         let class_id = Self::id();
-        let class_name = CString::new(C::CLASS_NAME)?;
+        let class_name = CString::new(C::CLASS_NAME).expect("class name has an internal null byte");
         if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, class_id) } {
             let class_def = qjs::JSClassDef {
                 class_name: class_name.as_ptr(),

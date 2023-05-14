@@ -97,9 +97,11 @@ impl<'js> Atom<'js> {
                 // so just incase check it.
                 return Err(Error::Unknown);
             }
-            let res = CStr::from_ptr(c_str).to_str()?.to_string();
+            let bytes = CStr::from_ptr(c_str).to_bytes();
+            // Safety: quickjs should return valid utf8 so this should be safe.
+            let res = std::str::from_utf8_unchecked(bytes);
             mem::drop(drop);
-            Ok(res)
+            Ok(res.to_string())
         }
     }
 
