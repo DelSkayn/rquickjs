@@ -253,7 +253,7 @@ jobs:
           ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
           sudo dpkg --add-architecture ${SYSTEM_ARCH}
           sudo apt-get update -y
-          sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET}
+          sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET} libgcc-s1:${SYSTEM_ARCH}
           echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
       - name: Setup musl-tools
         if: startsWith(matrix.target, 'x86_64-') && endsWith(matrix.target, '-musl')

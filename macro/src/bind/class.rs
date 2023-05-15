@@ -34,10 +34,7 @@ impl BindClass {
     }
 
     pub fn ctor(&mut self) -> &mut BindFn {
-        if self.ctor.is_none() {
-            self.ctor = Some(BindFn::default());
-        }
-        self.ctor.as_mut().unwrap()
+        self.ctor.get_or_insert_with(BindFn::default)
     }
 
     pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
