@@ -1228,6 +1228,11 @@ int JS_DefineGlobalFunction(JSContext *ctx, JSAtom prop, JSValueConst func,
                             int def_flags);
 JSValue JS_GetGlobalVar(JSContext *ctx, JSAtom prop, BOOL throw_ref_error);
 int JS_SetGlobalVar(JSContext *ctx, JSAtom prop, JSValueConst val, int flag);
+JSValue JS_GetPropertyValue(JSContext *ctx, JSValueConst this_obj,
+                            JSValue prop);
+int JS_SetPropertyValue(JSContext *ctx, JSValueConst this_obj, JSValue prop,
+                        JSValue val, int flags);
+
 #pragma endregion
 
 static JSValue js_closure(JSContext *ctx, JSValue bfunc,
