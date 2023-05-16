@@ -1,5 +1,4 @@
 use crate::{qjs, Ctx, Error, Loaded, Module, Result, Script};
-use relative_path::RelativePath;
 use std::{ffi::CStr, ptr};
 
 mod file_resolver;

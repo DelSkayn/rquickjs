@@ -8,9 +8,58 @@ use std::{
 
 use crate::{qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
 
-struct ModuleBuildData {
+pub enum ModuleDataKind {
+    Source(Vec<u8>),
+    Native(for<'js> unsafe fn(ctx: Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>>),
+}
+
+impl ModuleDataKind {
+    unsafe fn define<'js, N: Into<Vec<u8>>>(self, ctx: Ctx<'js>, name: N) -> Result<Module<'js>> {
+        match self {
+            ModuleDataKind::Source(x) => Module::unsafe_define(ctx, name, x),
+            ModuleDataKind::Native(x) => (x)(ctx, name.into()),
+        }
+    }
+}
+
+/// The data required to load a module, either from source or native.
+pub struct ModuleData {
     name: Vec<u8>,
-    source: Vec<u8>,
+    data: ModuleDataKind,
+}
+
+impl ModuleData {
+    /// Create module data for a module loaded from source.
+    pub fn source<N, S>(name: N, source: S) -> Self
+    where
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
+    {
+        ModuleData {
+            name: name.into(),
+            data: ModuleDataKind::Source(source.into()),
+        }
+    }
+
+    /// Create module data for a module loaded from a native rust definition.
+    pub fn native<D, N>(name: N) -> Self
+    where
+        D: ModuleDef,
+        N: Into<Vec<u8>>,
+    {
+        unsafe fn define<'js, D: ModuleDef>(ctx: Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>> {
+            Module::unsafe_define_def::<D, _>(ctx, name)
+        }
+
+        ModuleData {
+            name: name.into(),
+            data: ModuleDataKind::Native(define::<D>),
+        }
+    }
+
+    pub(crate) unsafe fn define<'js>(self, ctx: Ctx<'js>) -> Result<Module<'js>> {
+        self.data.define(ctx, self.name)
+    }
 }
 
 /// A struct for loading multiple modules at once safely.
@@ -22,7 +71,7 @@ struct ModuleBuildData {
 /// This struct allows one to first compile all possible modules and then evaluate them allowing
 /// modules to import eachother.
 pub struct ModuleBuilder {
-    modules: Vec<ModuleBuildData>,
+    modules: Vec<ModuleData>,
 }
 
 impl ModuleBuilder {
@@ -32,34 +81,45 @@ impl ModuleBuilder {
         }
     }
 
-    pub fn compile<N, S>(mut self, name: N, source: S) -> Result<Self>
+    pub fn compile<N, S>(mut self, name: N, source: S) -> Self
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        self.with_compile(name, source)?;
-        Ok(self)
+        self.with_compile(name, source);
+        self
     }
 
-    pub fn with_compile<N, S>(&mut self, name: N, source: S) -> Result<&mut Self>
+    pub fn with_compile<N, S>(&mut self, name: N, source: S) -> &mut Self
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        self.modules.push(ModuleBuildData {
-            name: name.into(),
-            source: source.into(),
-        });
-        Ok(self)
+        self.modules.push(ModuleData::source(name, source));
+        self
+    }
+
+    pub fn native<D, N>(mut self, name: N) -> Self
+    where
+        D: ModuleDef,
+        N: Into<Vec<u8>>,
+    {
+        self.with_native::<D, _>(name);
+        self
+    }
+
+    pub fn with_native<D, N>(&mut self, name: N) -> &mut Self
+    where
+        D: ModuleDef,
+        N: Into<Vec<u8>>,
+    {
+        self.modules.push(ModuleData::native::<D, N>(name));
+        self
     }
 
     pub fn eval<'js>(self, ctx: Ctx<'js>) -> Result<Vec<Module<'js>>> {
         let mut modules = Vec::with_capacity(self.modules.len());
-        for m in self
-            .modules
-            .into_iter()
-            .map(|x| unsafe { Module::unsafe_define(ctx, x.name, x.source) })
-        {
+        for m in self.modules.into_iter().map(|x| unsafe { x.define(ctx) }) {
             modules.push(m?);
         }
 

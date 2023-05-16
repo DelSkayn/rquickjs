@@ -81,7 +81,7 @@ mod allocator;
 pub use allocator::{Allocator, RawMemPtr, RustAllocator};
 
 #[cfg(feature = "loader")]
-mod loader;
+pub mod loader;
 
 /*#[cfg(feature = "loader")]
 pub use loader::{

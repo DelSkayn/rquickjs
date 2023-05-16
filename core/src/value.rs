@@ -15,7 +15,7 @@ mod typed_array;
 
 use crate::{qjs, Ctx, Error, Result};
 
-pub use module::{Module, ModuleBuilder, ModuleDef};
+pub use module::{Module, ModuleBuilder, ModuleData, ModuleDef};
 
 pub use array::Array;
 pub use atom::*;

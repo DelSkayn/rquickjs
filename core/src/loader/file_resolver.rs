@@ -1,4 +1,4 @@
-use crate::{Ctx, Error, Resolver, Result};
+use crate::{loader::Resolver, Ctx, Error, Result};
 use relative_path::{RelativePath, RelativePathBuf};
 
 /// The file module resolver
@@ -97,18 +97,15 @@ impl FileResolver {
                 .map(|_| path.to_relative_path_buf())
         } else {
             // try with known patterns
-            self.patterns
-                .iter()
-                .filter_map(|pattern| {
-                    let name = pattern.replace("{}", path.file_name()?);
-                    let file = path.with_file_name(name);
-                    if is_file(&file) {
-                        Some(file)
-                    } else {
-                        None
-                    }
-                })
-                .next()
+            self.patterns.iter().find_map(|pattern| {
+                let name = pattern.replace("{}", path.file_name()?);
+                let file = path.with_file_name(name);
+                if is_file(&file) {
+                    Some(file)
+                } else {
+                    None
+                }
+            })
         }
     }
 }
@@ -125,13 +122,10 @@ impl Default for FileResolver {
 impl Resolver for FileResolver {
     fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
         let path = if !name.starts_with('.') {
-            self.paths
-                .iter()
-                .filter_map(|path| {
-                    let path = path.join_normalized(name);
-                    self.try_patterns(&path)
-                })
-                .next()
+            self.paths.iter().find_map(|path| {
+                let path = path.join_normalized(name);
+                self.try_patterns(&path)
+            })
         } else {
             let path = RelativePath::new(base);
             let path = if let Some(dir) = path.parent() {
