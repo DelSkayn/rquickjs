@@ -24,7 +24,7 @@ pub use attrs::*;
 use crate::{Config, PubVis, TokenStream};
 use ident_case::RenameRule;
 use quote::{format_ident, quote};
-use rquickjs_core::{Compile, Context, FileResolver, Module, Result, Runtime, ScriptLoader};
+use rquickjs_core::{Context, Module, Result, Runtime};
 use std::path::Path;
 use syn::ItemMod;
 

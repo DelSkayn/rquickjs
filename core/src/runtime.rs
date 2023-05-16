@@ -15,8 +15,8 @@ pub use qjs::JSMemoryUsage as MemoryUsage;
 #[cfg(feature = "allocator")]
 use crate::{allocator::AllocatorHolder, Allocator};
 
-#[cfg(feature = "loader")]
-use crate::{loader::LoaderHolder, Loader, Resolver};
+//#[cfg(feature = "loader")]
+//use crate::{loader::LoaderHolder, Loader, Resolver};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -66,10 +66,9 @@ pub(crate) struct Inner {
     #[cfg(feature = "allocator")]
     #[allow(dead_code)]
     allocator: Option<AllocatorHolder>,
-
-    #[cfg(feature = "loader")]
-    #[allow(dead_code)]
-    loader: Option<LoaderHolder>,
+    //#[cfg(feature = "loader")]
+    //#[allow(dead_code)]
+    //loader: Option<LoaderHolder>,
 }
 
 impl Drop for Inner {
@@ -187,8 +186,8 @@ impl Runtime {
                 info: None,
                 #[cfg(feature = "allocator")]
                 allocator,
-                #[cfg(feature = "loader")]
-                loader: None,
+                //#[cfg(feature = "loader")]
+                //loader: None,
             })),
         };
 
@@ -239,6 +238,7 @@ impl Runtime {
         }
     }
 
+    /*
     /// Set the module loader
     #[cfg(feature = "loader")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -252,6 +252,7 @@ impl Runtime {
         loader.set_to_runtime(guard.rt.as_ptr());
         guard.loader = Some(loader);
     }
+    */
 
     /// Set the info of the runtime
     pub fn set_info<S: Into<Vec<u8>>>(&self, info: S) -> Result<()> {

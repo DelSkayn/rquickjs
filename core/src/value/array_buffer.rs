@@ -51,7 +51,7 @@ impl<'js> ArrayBuffer<'js> {
     pub fn new_copy<T: Copy>(ctx: Ctx<'js>, src: impl AsRef<[T]>) -> Result<Self> {
         let src = src.as_ref();
         let ptr = src.as_ptr();
-        let size = src.len() * size_of::<T>();
+        let size = std::mem::size_of_val(src);
 
         Ok(Self(Object(unsafe {
             let val = qjs::JS_NewArrayBufferCopy(ctx.as_ptr(), ptr as _, size as _);

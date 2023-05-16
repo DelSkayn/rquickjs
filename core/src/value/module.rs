@@ -1,126 +1,288 @@
-use crate::{qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
 use std::{
+    borrow::Cow,
+    collections::HashSet,
     ffi::{CStr, CString},
     marker::PhantomData,
-    mem::MaybeUninit,
-    ptr::null_mut,
-    slice::from_raw_parts,
+    ptr::{self, NonNull},
 };
 
-/// The marker for the module which is created from text source
-pub struct Script;
+use crate::{qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
 
-/// The marker for the module which is created using [`ModuleDef`]
-pub struct Native;
+struct ModuleBuildData {
+    name: Vec<u8>,
+    source: Vec<u8>,
+}
 
-/// The marker for the module which is created but not loaded yet
-pub struct Created;
+/// A struct for loading multiple modules at once safely.
+///
+/// Modules are built in two steps, compile and evaluate.
+/// During evalation a module might import another module, if no such compiled module exist the
+/// evaluation fails.
+///
+/// This struct allows one to first compile all possible modules and then evaluate them allowing
+/// modules to import eachother.
+pub struct ModuleBuilder {
+    modules: Vec<ModuleBuildData>,
+}
 
-/// The marker for the module which is loaded but not evaluated yet
-pub struct Loaded<S = ()>(S);
+impl ModuleBuilder {
+    pub fn new() -> Self {
+        ModuleBuilder {
+            modules: Vec::new(),
+        }
+    }
 
-/// The marker for the module which is already loaded and evaluated
-pub struct Evaluated;
+    pub fn compile<N, S>(mut self, name: N, source: S) -> Result<Self>
+    where
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
+    {
+        self.with_compile(name, source)?;
+        Ok(self)
+    }
+
+    pub fn with_compile<N, S>(&mut self, name: N, source: S) -> Result<&mut Self>
+    where
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
+    {
+        self.modules.push(ModuleBuildData {
+            name: name.into(),
+            source: source.into(),
+        });
+        Ok(self)
+    }
+
+    pub fn eval<'js>(self, ctx: Ctx<'js>) -> Result<Vec<Module<'js>>> {
+        let mut modules = Vec::with_capacity(self.modules.len());
+        for m in self
+            .modules
+            .into_iter()
+            .map(|x| unsafe { Module::unsafe_define(ctx, x.name, x.source) })
+        {
+            modules.push(m?);
+        }
+
+        for m in modules.iter() {
+            // Safety:
+            // This is save usage of the modules since if any fail to evaluate we immediatly return
+            // and drop all modules
+            unsafe { m.eval()? }
+        }
+        // All modules evaluated without error so they are all still alive.
+        Ok(modules)
+    }
+}
+
+impl Default for ModuleBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct Definitions {
+    definitions: HashSet<Cow<'static, CStr>>,
+}
+
+impl Definitions {
+    pub(crate) fn new() -> Self {
+        Definitions {
+            definitions: HashSet::new(),
+        }
+    }
+    pub fn define<N>(&mut self, name: N) -> Result<&mut Self>
+    where
+        N: Into<Vec<u8>>,
+    {
+        self.definitions.insert(Cow::Owned(CString::new(name)?));
+        Ok(self)
+    }
+
+    pub fn define_static(&mut self, name: &'static CStr) -> Result<&mut Self> {
+        self.definitions.insert(Cow::Borrowed(name));
+        Ok(self)
+    }
+
+    pub(crate) unsafe fn apply(self, ctx: Ctx<'_>, module: Module) -> Result<()> {
+        for k in self.definitions {
+            let ptr = match k {
+                Cow::Borrowed(x) => x.as_ptr(),
+                Cow::Owned(x) => x.into_raw(),
+            };
+            let res = unsafe {
+                qjs::JS_AddModuleExport(ctx.as_ptr(), module.as_module_def().as_ptr(), ptr)
+            };
+            if res < 0 {
+                return Err(Error::Allocation);
+            }
+        }
+        Ok(())
+    }
+}
+
+struct Export<'js> {
+    name: CString,
+    value: Value<'js>,
+}
+
+/// A struct used to load the exports of a module.
+///
+/// Used in the `ModuleDef::load`.
+pub struct Exports<'js> {
+    ctx: Ctx<'js>,
+    exports: Vec<Export<'js>>,
+}
+
+impl<'js> Exports<'js> {
+    pub(crate) fn new(ctx: Ctx<'js>) -> Self {
+        Exports {
+            ctx,
+            exports: Vec::new(),
+        }
+    }
+
+    /// Export a new value from the module.
+    pub fn export<N: Into<Vec<u8>>, T: IntoJs<'js>>(
+        &mut self,
+        name: N,
+        value: T,
+    ) -> Result<&mut Self> {
+        let name = CString::new(name.into())?;
+        let ctx = self.ctx;
+        let value = value.into_js(ctx)?;
+        self.export_value(name, value)
+    }
+
+    /// Export a new value from the module.
+    pub fn export_value(&mut self, name: CString, value: Value<'js>) -> Result<&mut Self> {
+        self.exports.push(Export { name, value });
+        Ok(self)
+    }
+
+    pub(crate) unsafe fn apply(self, module: Module) -> Result<()> {
+        for export in self.exports {
+            let name = export.name;
+            let value = export.value;
+
+            let res = unsafe {
+                // Ownership of name is retained
+                // Ownership of value is transfered.
+                qjs::JS_SetModuleExport(
+                    self.ctx.as_ptr(),
+                    module.as_module_def().as_ptr(),
+                    name.as_ref().as_ptr(),
+                    value.into_js_value(),
+                )
+            };
+
+            // previous checks and the fact that we also previously added the export should ensure
+            // that the only error can be an allocation error.
+            if res < 0 {
+                return Err(Error::Allocation);
+            }
+        }
+        Ok(())
+    }
+}
+
+/// A javascript module.
+#[derive(Clone, Copy)]
+pub struct Module<'js> {
+    ctx: Ctx<'js>,
+    /// Module lifetime, behave differently then normal lifetimes.
+    /// A module lifes for the entire lifetime of the runtime,
+    /// So no duplication and
+    module: NonNull<qjs::JSModuleDef>,
+}
 
 /// Module definition trait
 pub trait ModuleDef {
+    fn define(define: &mut Definitions) -> Result<()> {
+        let _ = define;
+        Ok(())
+    }
+
     /// The exports should be added here
-    fn load<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Created>) -> Result<()> {
+    fn export<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
+        let _ = exports;
         Ok(())
-    }
-
-    /// The exports should be set here
-    fn eval<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Loaded<Native>>) -> Result<()> {
-        Ok(())
-    }
-}
-
-macro_rules! module_def_impls {
-    ($($($t:ident)*,)*) => {
-        $(
-            impl<$($t),*> ModuleDef for ($($t,)*)
-            where
-                $($t: ModuleDef,)*
-            {
-                fn load<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Created>) -> Result<()> {
-                    $($t::load(_ctx, _module)?;)*
-                    Ok(())
-                }
-
-                fn eval<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Loaded<Native>>) -> Result<()> {
-                    $($t::eval(_ctx, _module)?;)*
-                    Ok(())
-                }
-            }
-        )*
-    };
-}
-
-module_def_impls! {
-    ,
-    A,
-    A B,
-    A B C,
-    A B C D,
-    A B C D E,
-    A B C D E F,
-    A B C D E F G,
-    A B C D E F G H,
-    A B C D E F G H I,
-    A B C D E F G H I J,
-    A B C D E F G H I J K,
-    A B C D E F G H I J K L,
-    A B C D E F G H I J K L M,
-    A B C D E F G H I J K L M N,
-    A B C D E F G H I J K L M N O,
-    A B C D E F G H I J K L M N O P,
-}
-
-/// Javascript module with certain exports and imports
-#[derive(Debug, PartialEq)]
-pub struct Module<'js, S = Evaluated>(pub(crate) Value<'js>, pub(crate) PhantomData<S>);
-
-impl<'js, S> Clone for Module<'js, S> {
-    fn clone(&self) -> Self {
-        Module(self.0.clone(), PhantomData)
-    }
-}
-
-impl<'js, S> Module<'js, S> {
-    pub(crate) unsafe fn from_module_def(ctx: Ctx<'js>, ptr: *mut qjs::JSModuleDef) -> Self {
-        Self(
-            Value::new_ptr(ctx, qjs::JS_TAG_MODULE, ptr as _),
-            PhantomData,
-        )
-    }
-
-    pub(crate) unsafe fn from_module_def_const(ctx: Ctx<'js>, ptr: *mut qjs::JSModuleDef) -> Self {
-        Self(
-            Value::new_ptr_const(ctx, qjs::JS_TAG_MODULE, ptr as _),
-            PhantomData,
-        )
-    }
-
-    pub(crate) fn as_module_def(&self) -> *mut qjs::JSModuleDef {
-        unsafe { self.0.get_ptr() as _ }
-    }
-
-    pub(crate) fn into_module_def(self) -> *mut qjs::JSModuleDef {
-        unsafe { self.0.into_ptr() as _ }
     }
 }
 
 impl<'js> Module<'js> {
+    pub(crate) fn from_module_def(ctx: Ctx<'js>, def: NonNull<qjs::JSModuleDef>) -> Self {
+        Module { ctx, module: def }
+    }
+
+    pub(crate) fn as_module_def(&self) -> NonNull<qjs::JSModuleDef> {
+        self.module
+    }
+
+    /// Defines a new JS module in the context.
+    ///
+    /// This function doesn't return a module since holding on to unevaluated modules is unsafe.
+    /// If you need to hold onto unsafe modules use the `unsafe_define` functions.
+    ///
+    /// It is unsafe to hold onto unevaluated modules across this call.
+    pub fn define<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<()>
+    where
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
+    {
+        unsafe { Self::unsafe_define(ctx, name, source)? };
+        Ok(())
+    }
+
+    /// Creates a new module from JS source, and evaluates it.
+    ///
+    /// It is unsafe to hold onto unevaluated modules across this call.
+    pub fn instanciate<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
+    where
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
+    {
+        let module = unsafe { Self::unsafe_define(ctx, name, source)? };
+        unsafe { module.eval()? };
+        Ok(module)
+    }
+
+    /// Defines a module in the runtime.
+    ///
+    /// This function doesn't return a module since holding on to unevaluated modules is unsafe.
+    /// If you need to hold onto unsafe modules use the `unsafe_define_def` functions.
+    ///
+    /// It is unsafe to hold onto unevaluated modules across this call.
+    pub fn define_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<()>
+    where
+        N: Into<Vec<u8>>,
+        D: ModuleDef,
+    {
+        unsafe { Self::unsafe_define_def::<D, _>(ctx, name)? };
+        Ok(())
+    }
+
+    /// Defines a module in the runtime and evaluates it.
+    ///
+    /// It is unsafe to hold onto unevaluated modules across this call.
+    pub fn instanciate_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
+    where
+        N: Into<Vec<u8>>,
+        D: ModuleDef,
+    {
+        let module = unsafe { Self::unsafe_define_def::<D, _>(ctx, name)? };
+        unsafe { module.eval()? };
+        Ok(module)
+    }
+
     /// Returns the name of the module
     pub fn name<N>(&self) -> Result<N>
     where
         N: FromAtom<'js>,
     {
-        let ctx = self.0.ctx;
         let name = unsafe {
             Atom::from_atom_val(
-                ctx,
-                qjs::JS_GetModuleName(ctx.as_ptr(), self.as_module_def()),
+                self.ctx,
+                qjs::JS_GetModuleName(self.ctx.as_ptr(), self.as_module_def().as_ptr()),
             )
         };
         N::from_atom(name)
@@ -131,54 +293,28 @@ impl<'js> Module<'js> {
     where
         T: FromJs<'js>,
     {
-        let ctx = self.0.ctx;
         let meta = unsafe {
             Value::from_js_value(
-                ctx,
-                ctx.handle_exception(qjs::JS_GetImportMeta(ctx.as_ptr(), self.as_module_def()))?,
+                self.ctx,
+                self.ctx.handle_exception(qjs::JS_GetImportMeta(
+                    self.ctx.as_ptr(),
+                    self.as_module_def().as_ptr(),
+                ))?,
             )
         };
-        T::from_js(ctx, meta)
+        T::from_js(self.ctx, meta)
     }
-}
 
-/// Helper macro to provide module init function
-///
-/// ```
-/// use rquickjs::{ModuleDef, module_init};
-///
-/// struct MyModule;
-/// impl ModuleDef for MyModule {}
-///
-/// module_init!(MyModule);
-/// // or
-/// module_init!(js_init_my_module: MyModule);
-/// ```
-#[macro_export]
-macro_rules! module_init {
-    ($type:ty) => {
-        $crate::module_init!(js_init_module: $type);
-    };
-
-    ($name:ident: $type:ty) => {
-        #[no_mangle]
-        pub unsafe extern "C" fn $name(
-            ctx: *mut $crate::qjs::JSContext,
-            module_name: *const $crate::qjs::c_char,
-        ) -> *mut $crate::qjs::JSModuleDef {
-            $crate::Module::init_raw::<$type>(ctx, module_name)
-        }
-    };
-}
-
-/// The raw module load function (`js_module_init`)
-pub type ModuleLoadFn =
-    unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
-
-impl<'js> Module<'js> {
-    /// Create module from JS source
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js, Loaded<Script>>>
+    /// Creates a new module from JS source but doesnt evaluates the module.
+    ///
+    /// # Safety
+    /// It is unsafe to use an unevaluated for anything other then evaluating it with
+    /// `Module::eval`.
+    ///
+    /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
+    /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
+    /// behaviour to use any unevaluated modules.
+    pub unsafe fn unsafe_define<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
@@ -186,175 +322,45 @@ impl<'js> Module<'js> {
         let name = CString::new(name)?;
         let flag =
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
-        Ok(Module(
-            unsafe {
-                let value = Value::from_js_value_const(
-                    ctx,
-                    ctx.eval_raw(source, name.as_c_str(), flag as _)?,
-                );
-                debug_assert!(value.is_module());
-                value
-            },
-            PhantomData,
-        ))
+
+        let module = unsafe { ctx.eval_raw(source, name.as_c_str(), flag as i32)? };
+        let module = ctx.handle_exception(module)?;
+        debug_assert_eq!(qjs::JS_TAG_MODULE, unsafe { qjs::JS_VALUE_GET_TAG(module) });
+        let module = qjs::JS_VALUE_GET_PTR(module).cast::<qjs::JSModuleDef>();
+        // Quickjs should throw an exception on allocation errors
+        // So this should always be non-null.
+        let module = NonNull::new(module).unwrap();
+
+        Ok(Module { ctx, module })
     }
 
-    /// Create native JS module using [`ModuleDef`]
-    #[allow(clippy::new_ret_no_self)]
-    pub fn new_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js, Loaded<Native>>>
-    where
-        D: ModuleDef,
-        N: Into<Vec<u8>>,
-    {
-        let name = CString::new(name)?;
-        let ptr = unsafe {
-            qjs::JS_NewCModule(
-                ctx.as_ptr(),
-                name.as_ptr(),
-                Some(Module::<Loaded<Native>>::eval_fn::<D>),
-            )
-        };
-        if ptr.is_null() {
-            return Err(Error::Allocation);
-        }
-        let module = unsafe { Module::<Created>::from_module_def_const(ctx, ptr) };
-        D::load(ctx, &module)?;
-        Ok(Module(module.0, PhantomData))
-    }
-
-    /// Create native JS module by calling init function (like `js_module_init`)
+    /// Creates a new module from JS source but doesnt evaluates the module.
     ///
     /// # Safety
-    /// The `load` function should not crash. But it can throw exception and return null pointer in that case.
-    #[allow(clippy::new_ret_no_self)]
-    pub unsafe fn new_raw<N>(
-        ctx: Ctx<'js>,
-        name: N,
-        load: ModuleLoadFn,
-    ) -> Result<Module<'js, Loaded<Native>>>
+    /// It is unsafe to use an unevaluated for anything other then evaluating it with
+    /// `Module::eval`.
+    ///
+    /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
+    /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
+    /// behaviour to use any unevaluated modules.
+    pub unsafe fn unsafe_define_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
+        D: ModuleDef,
     {
         let name = CString::new(name)?;
-        let ptr = load(ctx.as_ptr(), name.as_ptr());
 
-        if ptr.is_null() {
-            Err(Error::Unknown)
-        } else {
-            Ok(Module::from_module_def(ctx, ptr))
-        }
-    }
+        let mut defs = Definitions::new();
+        D::define(&mut defs)?;
 
-    /// The function for loading native JS module
-    ///
-    /// # Safety
-    /// This function should only be called from `js_module_init` function.
-    pub unsafe extern "C" fn init_raw<D>(
-        ctx: *mut qjs::JSContext,
-        name: *const qjs::c_char,
-    ) -> *mut qjs::JSModuleDef
-    where
-        D: ModuleDef,
-    {
-        Context::init_raw(ctx);
-        let ctx = Ctx::from_ptr(ctx);
-        let name = CStr::from_ptr(name);
-        match Self::_init::<D>(ctx, name) {
-            Ok(module) => module.into_module_def(),
-            Err(error) => {
-                error.throw(ctx);
-                null_mut() as _
-            }
-        }
-    }
+        let ptr =
+            unsafe { qjs::JS_NewCModule(ctx.as_ptr(), name.as_ptr(), Some(Self::eval_fn::<D>)) };
 
-    fn _init<D>(ctx: Ctx<'js>, name: &CStr) -> Result<Module<'js, Loaded>>
-    where
-        D: ModuleDef,
-    {
-        let name = name.to_str()?;
-        Ok(Module::new_def::<D, _>(ctx, name)?.into_loaded())
-    }
-}
-
-impl<'js> Module<'js, Loaded<Script>> {
-    /// Load module from bytecode
-    pub fn read_object<B: AsRef<[u8]>>(ctx: Ctx<'js>, buf: B) -> Result<Self> {
-        Self::read_object_raw(ctx, buf.as_ref(), qjs::JS_READ_OBJ_BYTECODE as _)
-    }
-
-    /// Load module from bytecode (static const)
-    pub fn read_object_const(ctx: Ctx<'js>, buf: &'static [u8]) -> Result<Self> {
-        Self::read_object_raw(
-            ctx,
-            buf,
-            (qjs::JS_READ_OBJ_BYTECODE | qjs::JS_READ_OBJ_ROM_DATA) as _,
-        )
-    }
-
-    fn read_object_raw(ctx: Ctx<'js>, buf: &[u8], flags: qjs::c_int) -> Result<Self> {
-        let value = unsafe {
-            Value::from_js_value(
-                ctx,
-                ctx.handle_exception(qjs::JS_ReadObject(
-                    ctx.as_ptr(),
-                    buf.as_ptr(),
-                    buf.len() as _,
-                    flags,
-                ))?,
-            )
-        };
-        Ok(Self(value, PhantomData))
-    }
-
-    /// Write bytecode of loaded module
-    pub fn write_object(&self, byte_swap: bool) -> Result<Vec<u8>> {
-        let ctx = self.0.ctx;
-        let mut len = MaybeUninit::uninit();
-        let mut flags = qjs::JS_WRITE_OBJ_BYTECODE;
-        if byte_swap {
-            flags |= qjs::JS_WRITE_OBJ_BSWAP;
-        }
-        let buf = unsafe {
-            qjs::JS_WriteObject(
-                ctx.as_ptr(),
-                len.as_mut_ptr(),
-                self.0.as_js_value(),
-                flags as _,
-            )
-        };
-        if buf.is_null() {
-            return Err(unsafe { ctx.get_exception() });
-        }
-        let len = unsafe { len.assume_init() };
-        let obj = unsafe { from_raw_parts(buf, len as _) };
-        let obj = Vec::from(obj);
-        unsafe { qjs::js_free(ctx.as_ptr(), buf as _) };
-        Ok(obj)
-    }
-}
-
-impl<'js> Module<'js, Loaded<Native>> {
-    /// Set exported entry by name
-    ///
-    /// NOTE: Exported entries should be added before module instantiating using [Module::add].
-    pub fn set<N, T>(&self, name: N, value: T) -> Result<()>
-    where
-        N: AsRef<str>,
-        T: IntoJs<'js>,
-    {
-        let name = CString::new(name.as_ref())?;
-        let ctx = self.0.ctx;
-        let value = value.into_js(ctx)?;
-        let value = unsafe { qjs::JS_DupValue(value.as_js_value()) };
-        if unsafe {
-            qjs::JS_SetModuleExport(ctx.as_ptr(), self.as_module_def(), name.as_ptr(), value)
-        } < 0
-        {
-            unsafe { qjs::JS_FreeValue(ctx.as_ptr(), value) };
-            return Err(unsafe { ctx.get_exception() });
-        }
-        Ok(())
+        let ptr = NonNull::new(ptr).ok_or(Error::Allocation)?;
+        let module = Module::from_module_def(ctx, ptr);
+        // Safety: Safe because this is a newly created
+        unsafe { defs.apply(ctx, module)? };
+        Ok(module)
     }
 
     unsafe extern "C" fn eval_fn<D>(
@@ -365,8 +371,12 @@ impl<'js> Module<'js, Loaded<Native>> {
         D: ModuleDef,
     {
         let ctx = Ctx::from_ptr(ctx);
-        let module = Self::from_module_def_const(ctx, ptr);
-        match D::eval(ctx, &module) {
+        // Should never be null
+        debug_assert_ne!(ptr, ptr::null_mut());
+        let ptr = NonNull::new_unchecked(ptr);
+        let module = Self::from_module_def(ctx, ptr);
+        let mut exports = Exports::new(ctx);
+        match D::export(ctx, &mut exports).and_then(|_| exports.apply(module)) {
             Ok(_) => 0,
             Err(error) => {
                 error.throw(ctx);
@@ -374,39 +384,23 @@ impl<'js> Module<'js, Loaded<Native>> {
             }
         }
     }
-}
 
-impl<'js, S> Module<'js, Loaded<S>> {
-    /// Evaluate a loaded module
+    /// Evaluates an unevaluated module.
     ///
-    /// To get access to module exports it should be evaluated first, in particular when you create module manually via [`Module::new`].
-    pub fn eval(self) -> Result<Module<'js, Evaluated>> {
-        let ctx = self.0.ctx;
-        unsafe {
-            let ret = qjs::JS_EvalFunction(ctx.as_ptr(), qjs::JS_DupValue(self.0.value));
-            ctx.handle_exception(ret)?;
-        }
-        Ok(Module(self.0, PhantomData))
-    }
-
-    /// Cast the specific loaded module to generic one
-    pub fn into_loaded(self) -> Module<'js, Loaded> {
-        Module(self.0, PhantomData)
-    }
-}
-
-impl<'js> Module<'js, Created> {
-    /// Add entry to module exports
+    /// # Safety
+    /// This function should only be called on unevaluated modules.
     ///
-    /// NOTE: Added entries should be set after module instantiating using [Module::set].
-    pub fn add<N>(&self, name: N) -> Result<()>
-    where
-        N: AsRef<str>,
-    {
-        let ctx = self.0.ctx;
-        let name = CString::new(name.as_ref())?;
+    /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
+    /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
+    /// behaviour to use any unevaluated modules.
+    ///
+    /// Prefer the use of either `ModuleBuilder` or `Module::new`.
+    pub unsafe fn eval(self) -> Result<()> {
         unsafe {
-            qjs::JS_AddModuleExport(ctx.as_ptr(), self.as_module_def(), name.as_ptr());
+            let value = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.module.as_ptr().cast());
+            // JS_EvalFunction `free's` the module so we should dup first
+            let ret = qjs::JS_EvalFunction(self.ctx.as_ptr(), qjs::JS_DupValue(value));
+            self.ctx.handle_exception(ret)?;
         }
         Ok(())
     }
@@ -420,30 +414,29 @@ impl<'js> Module<'js> {
         N: AsRef<str>,
         T: FromJs<'js>,
     {
-        let ctx = self.0.ctx;
         let name = CString::new(name.as_ref())?;
         let value = unsafe {
             Value::from_js_value(
-                ctx,
-                ctx.handle_exception(qjs::JS_GetModuleExport(
-                    ctx.as_ptr(),
-                    self.as_module_def(),
+                self.ctx,
+                self.ctx.handle_exception(qjs::JS_GetModuleExport(
+                    self.ctx.as_ptr(),
+                    self.as_module_def().as_ptr(),
                     name.as_ptr(),
                 ))?,
             )
         };
-        T::from_js(ctx, value)
+        T::from_js(self.ctx, value)
     }
 
     /// Returns a iterator over the exported names of the module export.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
-    pub fn names<N>(&self) -> ExportNamesIter<'js, N>
+    pub fn names<N>(self) -> ExportNamesIter<'js, N>
     where
         N: FromAtom<'js>,
     {
         ExportNamesIter {
-            module: self.clone(),
-            count: unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def()) },
+            module: self,
+            count: unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def().as_ptr()) },
             index: 0,
             marker: PhantomData,
         }
@@ -451,14 +444,14 @@ impl<'js> Module<'js> {
 
     /// Returns a iterator over the items the module export.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
-    pub fn entries<N, T>(&self) -> ExportEntriesIter<'js, N, T>
+    pub fn entries<N, T>(self) -> ExportEntriesIter<'js, N, T>
     where
         N: FromAtom<'js>,
         T: FromJs<'js>,
     {
         ExportEntriesIter {
-            module: self.clone(),
-            count: unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def()) },
+            module: self,
+            count: unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def().as_ptr()) },
             index: 0,
             marker: PhantomData,
         }
@@ -466,12 +459,13 @@ impl<'js> Module<'js> {
 
     #[doc(hidden)]
     pub unsafe fn dump_exports(&self) {
-        let ctx = self.0.ctx;
-        let ptr = self.as_module_def();
+        let ptr = self.as_module_def().as_ptr();
         let count = qjs::JS_GetModuleExportEntriesCount(ptr);
         for i in 0..count {
-            let atom_name =
-                Atom::from_atom_val(ctx, qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, i));
+            let atom_name = Atom::from_atom_val(
+                self.ctx,
+                qjs::JS_GetModuleExportEntryName(self.ctx.as_ptr(), ptr, i),
+            );
             println!("{}", atom_name.to_string().unwrap());
         }
     }
@@ -498,8 +492,8 @@ where
         if self.index == self.count {
             return None;
         }
-        let ctx = self.module.0.ctx;
-        let ptr = self.module.as_module_def();
+        let ctx = self.module.ctx;
+        let ptr = self.module.as_module_def().as_ptr();
         let atom = unsafe {
             let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
             Atom::from_atom_val(ctx, atom_val)
@@ -531,8 +525,8 @@ where
         if self.index == self.count {
             return None;
         }
-        let ctx = self.module.0.ctx;
-        let ptr = self.module.as_module_def();
+        let ctx = self.module.ctx;
+        let ptr = self.module.as_module_def().as_ptr();
         let name = unsafe {
             let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
             Atom::from_atom_val(ctx, atom_val)
@@ -554,10 +548,13 @@ mod test {
     pub struct RustModule;
 
     impl ModuleDef for RustModule {
-        fn load<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Created>) -> Result<()> {
+        fn define(define: &mut Definitions) -> Result<()> {
+            define.define_static(CStr::from_bytes_with_nul(b"hello\0")?)?;
             Ok(())
         }
-        fn eval<'js>(_ctx: Ctx<'js>, _module: &Module<'js, Loaded<Native>>) -> Result<()> {
+
+        fn export<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
+            exports.export("hello", "world".to_string())?;
             Ok(())
         }
     }
@@ -565,7 +562,37 @@ mod test {
     #[test]
     fn from_rust_def() {
         test_with(|ctx| {
-            Module::new_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            Module::define_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+        })
+    }
+
+    #[test]
+    fn from_rust_def_eval() {
+        test_with(|ctx| {
+            Module::instanciate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+        })
+    }
+
+    #[test]
+    fn import_native() {
+        test_with(|ctx| {
+            Module::define_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            ctx.compile(
+                "test",
+                r#"
+                import { hello } from "rust_mod";
+
+                globalThis.hello = hello;
+            "#,
+            )
+            .unwrap();
+            let text = ctx
+                .globals()
+                .get::<_, String>("hello")
+                .unwrap()
+                .to_string()
+                .unwrap();
+            assert_eq!(text.as_str(), "world");
         })
     }
 

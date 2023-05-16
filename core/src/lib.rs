@@ -83,14 +83,15 @@ pub use allocator::{Allocator, RawMemPtr, RustAllocator};
 #[cfg(feature = "loader")]
 mod loader;
 
-#[cfg(feature = "loader")]
+/*#[cfg(feature = "loader")]
 pub use loader::{
     BuiltinLoader, BuiltinResolver, Bundle, Compile, FileResolver, HasByteCode, Loader,
     ModuleLoader, Resolver, ScriptLoader,
 };
+*/
 
-#[cfg(feature = "dyn-load")]
-pub use loader::NativeLoader;
+//#[cfg(feature = "dyn-load")]
+//pub use loader::NativeLoader;
 
 #[cfg(test)]
 pub(crate) fn test_with<F, R>(func: F) -> R
