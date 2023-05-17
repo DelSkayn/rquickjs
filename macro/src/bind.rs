@@ -160,10 +160,10 @@ macro_rules! item_impl {
                     )*
                 }
             }
-            pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+            pub fn expand(&self, name: &str, cfg: &Config, is_module: bool) -> TokenStream {
                 match self {
                     $(
-                        Self::$name(value) => value.expand(name, cfg),
+                        Self::$name(value) => value.expand(name, cfg,is_module),
                     )*
                 }
             }

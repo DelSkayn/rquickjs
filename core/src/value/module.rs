@@ -8,7 +8,36 @@ use std::{
     slice,
 };
 
-use crate::{qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
+use crate::{qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
+
+/// Helper macro to provide module init function.
+/// Use for exporting module definitions to be loaded as part of a dynamic library.
+/// ```
+/// use rquickjs::{ModuleDef, module_init};
+///
+/// struct MyModule;
+/// impl ModuleDef for MyModule {}
+///
+/// module_init!(MyModule);
+/// // or
+/// module_init!(js_init_my_module: MyModule);
+/// ```
+#[macro_export]
+macro_rules! module_init {
+    ($type:ty) => {
+        $crate::module_init!(js_init_module: $type);
+    };
+
+    ($name:ident: $type:ty) => {
+        #[no_mangle]
+        pub unsafe extern "C" fn $name(
+            ctx: *mut $crate::qjs::JSContext,
+            module_name: *const $crate::qjs::c_char,
+        ) -> *mut $crate::qjs::JSModuleDef {
+            $crate::Module::init_raw::<$type>(ctx, module_name)
+        }
+    };
+}
 
 /// The raw module load function (`js_module_init`)
 pub type ModuleLoadFn =
@@ -428,6 +457,30 @@ impl<'js> Module<'js> {
     pub fn write_object_be(&self) -> Result<Vec<u8>> {
         let swap = cfg!(target_endian = "little");
         self.write_object(swap)
+    }
+
+    /// A function for loading a rust module from C.
+    ///
+    /// # Safety
+    /// This cfunction should only be called when the module is loaded as part of a dynamicly
+    /// loaded library.
+    pub unsafe extern "C" fn init_raw<D>(
+        ctx: *mut qjs::JSContext,
+        name: *const qjs::c_char,
+    ) -> *mut qjs::JSModuleDef
+    where
+        D: ModuleDef,
+    {
+        Context::init_raw(ctx);
+        let ctx = Ctx::from_ptr(ctx);
+        let name = CStr::from_ptr(name).to_bytes();
+        match Self::unsafe_define_def::<D, _>(ctx, name) {
+            Ok(module) => module.as_module_def().as_ptr(),
+            Err(error) => {
+                error.throw(ctx);
+                ptr::null_mut()
+            }
+        }
     }
 
     /// Write object bytecode for the module.

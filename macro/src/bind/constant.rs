@@ -23,11 +23,15 @@ impl BindConst {
         }
     }
 
-    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+    pub fn expand(&self, name: &str, cfg: &Config, is_module: bool) -> TokenStream {
         let exports_var = &cfg.exports_var;
         let pure = self.expand_pure(cfg);
 
-        quote! { #exports_var.export(#name, #pure)?; }
+        if is_module {
+            quote! { #exports_var.export(#name, #pure)?; }
+        } else {
+            quote! { #exports_var.set(#name, #pure)?; }
+        }
     }
 
     pub fn expand_pure(&self, _cfg: &Config) -> TokenStream {
@@ -133,13 +137,13 @@ mod test {
             struct Constants;
 
             impl rquickjs::ModuleDef for Constants {
-                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
-                    exports.add("pi")?;
+                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
+                    defines.define("pi")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
-                    exports.set("pi", PI)?;
+                fn evaluate<'js>(_ctx: rquickjs::Ctx<'js>, exports: &mut rquickjs::Exports<'js>) -> rquickjs::Result<()>{
+                    exports.export("pi", PI)?;
                     Ok(())
                 }
             }

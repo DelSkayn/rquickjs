@@ -1,6 +1,6 @@
 use super::{AttrMod, BindItems, Binder};
 use crate::{Config, TokenStream};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::ItemMod;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -20,22 +20,33 @@ impl BindMod {
     }
 
     pub fn module_impl(&self, cfg: &Config) -> TokenStream {
-        let exports_list = self.items.iter().map(|(name, bind)| bind.expand(name, cfg));
+        let exports_list = self
+            .items
+            .iter()
+            .map(|(name, bind)| bind.expand(name, cfg, true));
 
         quote! { #(#exports_list)* }
     }
 
     pub fn object_init(&self, _name: &str, cfg: &Config) -> TokenStream {
-        let exports_list = self.items.iter().map(|(name, bind)| bind.expand(name, cfg));
+        let exports_list = self
+            .items
+            .iter()
+            .map(|(name, bind)| bind.expand(name, cfg, false));
         quote! { #(#exports_list)* }
     }
 
-    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+    pub fn expand(&self, name: &str, cfg: &Config, is_module: bool) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
         let exports_var = &cfg.exports_var;
         let bindings = self.object_init(name, cfg);
+        let export_fun = if is_module {
+            format_ident!("export")
+        } else {
+            format_ident!("set")
+        };
         quote! {
-            #exports_var.export(#name, {
+            #exports_var.#export_fun(#name, {
                let #exports_var = #lib_crate::Object::new(_ctx)?;
                 #bindings
                 #exports_var
@@ -102,12 +113,12 @@ mod test {
             struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
-                fn define<'js>(exports: &mut rquickjs::Definition) -> rquickjs::Result<()>{
-                    exports.add("lib")?;
+                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
+                    defines.define("lib")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &mut Exports<'js>) -> rquickjs::Result<()>{
+                fn evaluate<'js>(_ctx: rquickjs::Ctx<'js>, exports: &mut rquickjs::Exports<'js>) -> rquickjs::Result<()>{
                     exports.export("lib", {
                         let exports = rquickjs::Object::new(_ctx)?;
                         exports.set("N", lib::N)?;
@@ -183,15 +194,15 @@ mod test {
             struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
-                fn load<'js>(exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
-                    exports.add("N")?;
-                    exports.add("doit")?;
+                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
+                    defines.define("N")?;
+                    defines.define("doit")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
-                    exports.set("N", lib::N)?;
-                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                fn evaluate<'js>(_ctx: rquickjs::Ctx<'js>, exports: &mut rquickjs::Exports<'js>) -> rquickjs::Result<()>{
+                    exports.export("N", lib::N)?;
+                    exports.export("doit", rquickjs::Func::new("doit", lib::doit))?;
                     Ok(())
                 }
             }
@@ -212,15 +223,15 @@ mod test {
             struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
-                fn load<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Created>) -> rquickjs::Result<()>{
-                    exports.add("N")?;
-                    exports.add("doit")?;
+                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
+                    defines.define("N")?;
+                    defines.define("doit")?;
                     Ok(())
                 }
 
-                fn eval<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Module<'js, rquickjs::Loaded<rquickjs::Native>>) -> rquickjs::Result<()>{
-                    exports.set("N", lib::N)?;
-                    exports.set("doit", rquickjs::Func::new("doit", lib::doit))?;
+                fn evaluate<'js>(_ctx: rquickjs::Ctx<'js>, exports: &mut rquickjs::Exports<'js>) -> rquickjs::Result<()>{
+                    exports.export("N", lib::N)?;
+                    exports.export("doit", rquickjs::Func::new("doit", lib::doit))?;
                     Ok(())
                 }
             }
