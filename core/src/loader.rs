@@ -17,10 +17,18 @@ pub use builtin_loader::BuiltinLoader;
 mod module_loader;
 pub use module_loader::ModuleLoader;
 
+mod compile;
+pub use compile::Compile;
+
 #[cfg(feature = "dyn-load")]
 mod native_loader;
 #[cfg(feature = "dyn-load")]
 pub use native_loader::NativeLoader;
+
+mod bundle;
+#[cfg(feature = "phf")]
+pub use bundle::PhfBundleData;
+pub use bundle::{Bundle, HasByteCode, ScaBundleData};
 
 pub mod util;
 
@@ -158,6 +166,161 @@ impl LoaderHolder {
         Self::load(loader, ctx, name).unwrap_or_else(|error| {
             error.throw(ctx);
             ptr::null_mut()
+        })
+    }
+}
+
+macro_rules! loader_impls {
+    ($($t:ident)*) => {
+        loader_impls!(@sub @mark $($t)*);
+    };
+    (@sub $($lead:ident)* @mark $head:ident $($rest:ident)*) => {
+        loader_impls!(@impl $($lead)*);
+        loader_impls!(@sub $($lead)* $head @mark $($rest)*);
+    };
+    (@sub $($lead:ident)* @mark) => {
+        loader_impls!(@impl $($lead)*);
+    };
+    (@impl $($t:ident)*) => {
+            impl<$($t,)*> Resolver for ($($t,)*)
+            where
+                $($t: Resolver,)*
+            {
+                #[allow(non_snake_case)]
+                #[allow(unused_mut)]
+                fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+                    let mut messages = Vec::<std::string::String>::new();
+                    let ($($t,)*) = self;
+                    $(
+                        match $t.resolve(_ctx, base, name) {
+                            // Still could try the next resolver
+                            Err($crate::Error::Resolving { message, .. }) => {
+                                message.map(|message| messages.push(message));
+                            },
+                            result => return result,
+                        }
+                    )*
+                    // Unable to resolve module name
+                    Err(if messages.is_empty() {
+                        $crate::Error::new_resolving(base, name)
+                    } else {
+                        $crate::Error::new_resolving_message(base, name, messages.join("\n"))
+                    })
+                }
+            }
+
+            impl< $($t,)*> $crate::loader::Loader for ($($t,)*)
+            where
+                $($t: $crate::loader::Loader,)*
+            {
+                #[allow(non_snake_case)]
+                #[allow(unused_mut)]
+                fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
+                    let mut messages = Vec::<std::string::String>::new();
+                    let ($($t,)*) = self;
+                    $(
+                        match $t.load(_ctx, name) {
+                            // Still could try the next loader
+                            Err($crate::Error::Loading { message, .. }) => {
+                                message.map(|message| messages.push(message));
+                            },
+                            result => return result,
+                        }
+                    )*
+                    // Unable to load module
+                    Err(if messages.is_empty() {
+                        $crate::Error::new_loading(name)
+                    } else {
+                        $crate::Error::new_loading_message(name, messages.join("\n"))
+                    })
+                }
+            }
+    };
+}
+loader_impls!(A B C D E F G H);
+
+#[cfg(test)]
+mod test {
+    use crate::{Context, Ctx, Error, ModuleData, Result, Runtime};
+
+    use super::{Loader, Resolver};
+
+    struct TestResolver;
+
+    impl Resolver for TestResolver {
+        fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+            if base == "loader" && name == "test" {
+                Ok(name.into())
+            } else {
+                Err(Error::new_resolving_message(
+                    base,
+                    name,
+                    "unable to resolve",
+                ))
+            }
+        }
+    }
+
+    struct TestLoader;
+
+    impl Loader for TestLoader {
+        fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
+            if name == "test" {
+                Ok(ModuleData::source(
+                    "test",
+                    r#"
+                      export const n = 123;
+                      export const s = "abc";
+                    "#,
+                ))
+            } else {
+                Err(Error::new_loading_message(name, "unable to load"))
+            }
+        }
+    }
+
+    #[test]
+    fn custom_loader() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(TestResolver, TestLoader);
+        ctx.with(|ctx| {
+            let _module = ctx
+                .compile(
+                    "loader",
+                    r#"
+                      import { n, s } from "test";
+                      export default [n, s];
+                    "#,
+                )
+                .unwrap();
+        })
+    }
+
+    #[test]
+    #[should_panic(expected = "Unable to resolve")]
+    fn resolving_error() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(TestResolver, TestLoader);
+        ctx.with(|ctx| {
+            let _ = ctx
+                .compile(
+                    "loader",
+                    r#"
+                      import { n, s } from "test_";
+                    "#,
+                )
+                .map_err(|error| {
+                    println!("{error:?}");
+                    // TODO: Error::Resolving
+                    if let Error::Exception { message, .. } = error {
+                        message
+                    } else {
+                        panic!();
+                    }
+                })
+                .expect("Unable to resolve");
         })
     }
 }

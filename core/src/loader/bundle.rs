@@ -1,5 +1,5 @@
-use super::resolve_simple;
-use crate::{Ctx, Error, Loaded, Loader, Module, Resolver, Result, Script};
+use super::{util::resolve_simple, Loader, Resolver};
+use crate::{Ctx, Error, ModuleData, Result};
 use std::ops::Deref;
 
 /// The module data which contains bytecode
@@ -61,26 +61,26 @@ impl<D> Resolver for Bundle<PhfBundleData<D>> {
     }
 }
 
-impl<D> Loader<Script> for Bundle<ScaBundleData<D>>
+impl<D> Loader for Bundle<ScaBundleData<D>>
 where
     D: HasByteCode<'static>,
 {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded<Script>>> {
+    fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
         self.iter()
             .find(|(module_name, _)| *module_name == name)
+            .map(|(_, bytecode)| unsafe { ModuleData::bytecode(name, bytecode.get_bytecode()) })
             .ok_or_else(|| Error::new_loading(name))
-            .and_then(|(_, bytecode)| Module::read_object_const(ctx, bytecode.get_bytecode()))
     }
 }
 
 #[cfg(feature = "phf")]
-impl<D> Loader<Script> for Bundle<PhfBundleData<D>>
+impl<D> Loader for Bundle<PhfBundleData<D>>
 where
     D: HasByteCode<'static>,
 {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded<Script>>> {
+    fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
         self.get(name)
+            .map(|bytecode| unsafe { ModuleData::bytecode(name, bytecode.get_bytecode()) })
             .ok_or_else(|| Error::new_loading(name))
-            .and_then(|bytecode| Module::read_object_const(ctx, bytecode.get_bytecode()))
     }
 }

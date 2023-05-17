@@ -27,7 +27,7 @@ impl BindConst {
         let exports_var = &cfg.exports_var;
         let pure = self.expand_pure(cfg);
 
-        quote! { #exports_var.set(#name, #pure)?; }
+        quote! { #exports_var.export(#name, #pure)?; }
     }
 
     pub fn expand_pure(&self, _cfg: &Config) -> TokenStream {

@@ -1,10 +1,11 @@
-use super::resolve_simple;
-use crate::{Ctx, Loaded, Loader, Lock, Module, Mut, Ref, Resolver, Result, Script};
+use crate::{Ctx, Lock, ModuleData, Mut, Ref, Result};
 use std::{
     collections::{hash_map::Iter as HashMapIter, HashMap},
     iter::{ExactSizeIterator, FusedIterator},
     ops::{Deref, DerefMut},
 };
+
+use super::{util::resolve_simple, Loader, Resolver};
 
 /// Modules compiling data
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -43,7 +44,7 @@ impl Compile {
     }
 
     /// Create compiling loader by wrapping other script loader
-    pub fn loader<L: Loader<Script>>(&self, loader: L) -> Compile<L> {
+    pub fn loader<L: Loader>(&self, loader: L) -> Compile<L> {
         Compile {
             data: self.data.clone(),
             inner: loader,
@@ -112,7 +113,7 @@ pub struct CompiledBytecodes<'i>(Lock<'i, CompileData>);
 
 impl<'i, 'r: 'i> IntoIterator for &'r CompiledBytecodes<'i> {
     type IntoIter = CompiledBytecodesIter<'i>;
-    type Item = (&'i str, &'i [u8]);
+    type Item = (&'i str, &'i ModuleData);
     fn into_iter(self) -> Self::IntoIter {
         CompiledBytecodesIter {
             data: &self.0,
@@ -130,16 +131,17 @@ pub struct CompiledBytecodesIter<'r> {
 }
 
 impl<'i> Iterator for CompiledBytecodesIter<'i> {
-    type Item = (&'i str, &'i [u8]);
+    type Item = (&'i str, &'i ModuleData);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let CompileData { modules, bytecodes } = &self.data;
-        if self.index < bytecodes.len() {
-            let (path, data) = &bytecodes[self.index];
+        let CompileData {
+            modules,
+            module_data,
+        } = &self.data;
+        if self.index < module_data.len() {
+            let (path, data) = &module_data[self.index];
             self.index += 1;
-            modules
-                .get(path.as_str())
-                .map(|name| (name.as_str(), data.as_ref()))
+            modules.get(path.as_str()).map(|name| (name.as_str(), data))
         } else {
             None
         }
@@ -153,7 +155,7 @@ impl<'i> Iterator for CompiledBytecodesIter<'i> {
 
 impl<'i> ExactSizeIterator for CompiledBytecodesIter<'i> {
     fn len(&self) -> usize {
-        self.data.bytecodes.len() - self.index
+        self.data.module_data.len() - self.index
     }
 }
 
@@ -164,7 +166,7 @@ struct CompileData {
     // { module_path: internal_name }
     modules: HashMap<String, String>,
     // [ (module_path, module_bytecode) ]
-    bytecodes: Vec<(String, Vec<u8>)>,
+    module_data: Vec<(String, ModuleData)>,
 }
 
 impl<R> Resolver for Compile<R>
@@ -180,17 +182,17 @@ where
     }
 }
 
-impl<L> Loader<Script> for Compile<L>
+impl<L> Loader for Compile<L>
 where
-    L: Loader<Script>,
+    L: Loader,
 {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Script>>> {
-        self.inner.load(ctx, path).and_then(|module| {
+    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
+        self.inner.load(ctx, path).map(|module| {
             self.data
                 .lock()
-                .bytecodes
-                .push((path.into(), module.write_object(false)?));
-            Ok(module)
+                .module_data
+                .push((path.into(), module.clone()));
+            module
         })
     }
 }

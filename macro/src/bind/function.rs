@@ -57,7 +57,7 @@ impl BindFn {
         } else {
             bindings
         };
-        quote! { #exports_var.set(#name, #lib_crate::Func::new(#func_name, #bindings))?; }
+        quote! { #exports_var.export(#name, #lib_crate::Func::new(#func_name, #bindings))?; }
     }
 }
 

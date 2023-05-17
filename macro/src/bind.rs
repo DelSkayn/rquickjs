@@ -332,6 +332,7 @@ impl Binder {
 
         let lib_crate = &self.config.lib_crate;
         let exports = &self.config.exports_var;
+        let defines = &self.config.define_var;
 
         let bind_vis = public.as_ref().map(PubVis::override_tokens);
 
@@ -395,12 +396,12 @@ impl Binder {
 
                 bindings.push(quote! {
                     impl #lib_crate::ModuleDef for #ident {
-                        fn load<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &#lib_crate::Module<'js, #lib_crate::Created>) -> #lib_crate::Result<()> {
+                        fn define(#defines: &mut #lib_crate::Definitions) -> #lib_crate::Result<()> {
                             #mod_decl
                             Ok(())
                         }
 
-                        fn eval<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &#lib_crate::Module<'js, #lib_crate::Loaded<#lib_crate::Native>>) -> #lib_crate::Result<()> {
+                        fn evaluate<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &mut #lib_crate::Exports<'js>) -> #lib_crate::Result<()> {
                             #mod_impl
                             Ok(())
                         }

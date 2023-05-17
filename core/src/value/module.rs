@@ -62,6 +62,21 @@ impl ModuleData {
         }
     }
 
+    /// Create module data for a module loaded from source.
+    ///
+    /// # Safety
+    /// User must ensure that the bytecode is valid quickjs bytecode.
+    pub unsafe fn bytecode<N, S>(name: N, bytecode: S) -> Self
+    where
+        N: Into<Vec<u8>>,
+        S: Into<Vec<u8>>,
+    {
+        ModuleData {
+            name: name.into(),
+            data: ModuleDataKind::ByteCode(bytecode.into()),
+        }
+    }
+
     /// Create module data for a module loaded from a native rust definition.
     pub fn native<D, N>(name: N) -> Self
     where
@@ -301,7 +316,7 @@ pub trait ModuleDef {
     }
 
     /// The exports should be added here
-    fn export<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
+    fn evaluate<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
         let _ = exports;
         Ok(())
     }
@@ -512,7 +527,7 @@ impl<'js> Module<'js> {
         let ptr = NonNull::new_unchecked(ptr);
         let module = Self::from_module_def(ctx, ptr);
         let mut exports = Exports::new(ctx);
-        match D::export(ctx, &mut exports).and_then(|_| exports.apply(module)) {
+        match D::evaluate(ctx, &mut exports).and_then(|_| exports.apply(module)) {
             Ok(_) => 0,
             Err(error) => {
                 error.throw(ctx);
@@ -689,7 +704,7 @@ mod test {
             Ok(())
         }
 
-        fn export<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
+        fn evaluate<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
             exports.export("hello", "world".to_string())?;
             Ok(())
         }
