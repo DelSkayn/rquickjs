@@ -40,7 +40,7 @@
 //! [`std::alloc::Allocator`] trait and can be plugged on [`Runtime`] creation via
 //! [`Runtime::new_with_alloc`]. - `rust-alloc` forces using Rust's global allocator by default
 //! instead of libc's one. - `loader` adds support for custom ES6 modules resolvers and loaders.
-//! The resolvers and loaders should implements [`Resolver`] and [`Loader`] traits respectively and
+//! The resolvers and loaders should implements [`Resolver`](loader::Resolver) and [Loader](loader::Loader) traits respectively and
 //! can be plugged in already existing [`Runtime`] before loading modules via
 //! [`Runtime::set_loader`]. The resolvers and loaders can be easily combined via tuples. When the
 //! previous resolver or loader failed the next one will be applied. - `dyn-load` adds support for

@@ -16,7 +16,7 @@ mod typed_array;
 use crate::{qjs, Ctx, Error, Result};
 
 pub use module::{
-    Declarations, Exports, Module, ModuleBuilder, ModuleData, ModuleDef, ModuleLoadFn,
+    Declarations, Exports, Module, ModuleData, ModuleDef, ModuleLoadFn, ModulesBuilder,
 };
 
 pub use array::Array;
@@ -260,13 +260,6 @@ impl<'js> Value<'js> {
     #[inline]
     pub(crate) unsafe fn get_ptr(&self) -> *mut qjs::c_void {
         qjs::JS_VALUE_GET_PTR(self.value)
-    }
-
-    #[inline]
-    pub(crate) unsafe fn into_ptr(self) -> *mut qjs::c_void {
-        let ptr = self.get_ptr();
-        mem::forget(self);
-        ptr
     }
 
     /// Check if the value is a bool

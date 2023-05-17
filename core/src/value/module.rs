@@ -70,7 +70,7 @@ impl fmt::Debug for ModuleDataKind {
             ModuleDataKind::ByteCode(ref x) => {
                 f.debug_tuple("ModuleDataKind::ByteCode").field(x).finish()
             }
-            ModuleDataKind::Native(ref x) => f
+            ModuleDataKind::Native(_) => f
                 .debug_tuple("ModuleDataKind::ByteCode")
                 .field(&"<native function>")
                 .finish(),
@@ -163,6 +163,12 @@ impl ModuleData {
     }
 
     /// Declare the module defined in the ModuleData.
+    pub fn declare<'js>(self, ctx: Ctx<'js>) -> Result<()> {
+        unsafe { self.unsafe_declare(ctx)? };
+        Ok(())
+    }
+
+    /// Declare the module defined in the ModuleData.
     ///
     /// # Safety
     /// This method returns an unevaluated module.
@@ -175,32 +181,35 @@ impl ModuleData {
 
 /// A struct for loading multiple modules at once safely.
 ///
-/// Modules are built in two steps, compile and evaluate. During evalation a module might import
-/// another module, if no such compiled module exist the evaluation fails.
+/// Modules are built in two steps, declare and evaluate. During evalation a module might import
+/// another module, if no such declared module exist the evaluation fails.
 ///
-/// This struct allows one to first compile all possible modules and then evaluate them allowing
+/// This struct allows one to first declare all possible modules and then evaluate them allowing
 /// modules to import eachother.
-pub struct ModuleBuilder {
+///
+/// Only use if you need to aquire the module objects after. Otherwise, it is easier to use the
+/// other safe methods on the [`Module`] struct like [`Module::instantiate`]
+pub struct ModulesBuilder {
     modules: Vec<ModuleData>,
 }
 
-impl ModuleBuilder {
+impl ModulesBuilder {
     pub fn new() -> Self {
-        ModuleBuilder {
+        ModulesBuilder {
             modules: Vec::new(),
         }
     }
 
-    pub fn compile<N, S>(mut self, name: N, source: S) -> Self
+    pub fn source<N, S>(mut self, name: N, source: S) -> Self
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        self.with_compile(name, source);
+        self.with_source(name, source);
         self
     }
 
-    pub fn with_compile<N, S>(&mut self, name: N, source: S) -> &mut Self
+    pub fn with_source<N, S>(&mut self, name: N, source: S) -> &mut Self
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
@@ -247,7 +256,7 @@ impl ModuleBuilder {
     }
 }
 
-impl Default for ModuleBuilder {
+impl Default for ModulesBuilder {
     fn default() -> Self {
         Self::new()
     }
@@ -364,12 +373,28 @@ impl<'js> Exports<'js> {
 }
 
 /// A javascript module.
+///
+/// # Safety
+/// In quickjs javascript modules are loaded in two steps. First a module is declared, the runtime
+/// is made aware of its existance, given a name, and its exports are defined.
+///
+/// Then after declaration the module is evaluated, the module's exports are actually given a
+/// value.
+///
+/// Quickjs handles module lifetime differently then other javascript values. Modules live, once
+/// evaluated, for the entire lifetime of the runtime. However before they are evaluated they can
+/// be removed at any point.
+///
+/// Specifically all unavaluated modules are removed if any module generates an error during either
+/// declaration or evaluation. As a result while it is possible to acquire a unevaluated module, it
+/// is unsafe to hold onto such a module and any function which returns such an unevaluated modules
+/// is marked as unsafe.
 #[derive(Clone, Copy)]
 pub struct Module<'js> {
     ctx: Ctx<'js>,
     /// Module lifetime, behave differently then normal lifetimes.
-    /// A module lifes for the entire lifetime of the runtime,
-    /// So no duplication and
+    /// A module lifes for the entire lifetime of the runtime, so we don't need to keep track of
+    /// reference counts.
     module: NonNull<qjs::JSModuleDef>,
 }
 
@@ -396,10 +421,10 @@ impl<'js> Module<'js> {
         self.module
     }
 
-    /// Defines a new JS module in the context.
+    /// Declares a new JS module in the context.
     ///
     /// This function doesn't return a module since holding on to unevaluated modules is unsafe.
-    /// If you need to hold onto unsafe modules use the [`Module::unsafe_define`] functions.
+    /// If you need to hold onto unsafe modules use the [`Module::unsafe_declare`] functions.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
     pub fn declare<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<()>
@@ -424,12 +449,13 @@ impl<'js> Module<'js> {
         Ok(module)
     }
 
-    /// Defines a module in the runtime.
+    /// Declare a module in the runtime.
     ///
     /// This function doesn't return a module since holding on to unevaluated modules is unsafe.
-    /// If you need to hold onto unsafe modules use the [`Module::unsafe_define_def`] functions.
+    /// If you need to hold onto unsafe modules use the [`Module::unsafe_declare_def`] functions.
     ///
-    /// It is unsafe to hold onto unevaluated modules across this call.
+    /// It is unsound to hold onto an unavaluated module across any call to this function which
+    /// returns an error.
     pub fn declare_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<()>
     where
         N: Into<Vec<u8>>,
@@ -439,9 +465,10 @@ impl<'js> Module<'js> {
         Ok(())
     }
 
-    /// Defines a module in the runtime and evaluates it.
+    /// Declares a module in the runtime and evaluates it.
     ///
-    /// It is unsafe to hold onto unevaluated modules across this call.
+    /// It is unsound to hold onto an unavaluated module across any call to this function which
+    /// returns an error.
     pub fn instantiate_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
@@ -498,7 +525,7 @@ impl<'js> Module<'js> {
     /// A function for loading a rust module from C.
     ///
     /// # Safety
-    /// This cfunction should only be called when the module is loaded as part of a dynamicly
+    /// This function should only be called when the module is loaded as part of a dynamically
     /// loaded library.
     pub unsafe extern "C" fn init_raw<D>(
         ctx: *mut qjs::JSContext,
@@ -551,9 +578,12 @@ impl<'js> Module<'js> {
     /// It is unsafe to use an unevaluated for anything other then evaluating it with
     /// `Module::eval`.
     ///
-    /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
+    /// Quickjs frees all unevaluated modules if any error happens while declaring or evaluating a
     /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
     /// behaviour to use any unevaluated modules.
+    ///
+    /// It is unsound to hold onto an unavaluated module across any call to this function which
+    /// returns an error.
     pub unsafe fn unsafe_declare<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
@@ -580,9 +610,12 @@ impl<'js> Module<'js> {
     /// It is unsafe to use an unevaluated for anything other then evaluating it with
     /// `Module::eval`.
     ///
-    /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
+    /// Quickjs frees all unevaluated modules if any error happens while declaring or evaluating a
     /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
     /// behaviour to use any unevaluated modules.
+    ///
+    /// It is unsound to hold onto an unavaluated module across any call to this function which
+    /// returns an error.
     pub unsafe fn unsafe_declare_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
@@ -630,11 +663,14 @@ impl<'js> Module<'js> {
     /// # Safety
     /// This function should only be called on unevaluated modules.
     ///
-    /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
+    /// Quickjs frees all unevaluated modules if any error happens while declaring or evaluating a
     /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
     /// behaviour to use any unevaluated modules.
     ///
     /// Prefer the use of either `ModuleBuilder` or `Module::new`.
+    ///
+    /// It is unsound to hold onto an unavaluated module across any call to this function which
+    /// returns an error.
     pub unsafe fn eval(self) -> Result<()> {
         unsafe {
             let value = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.module.as_ptr().cast());
