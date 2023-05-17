@@ -14,6 +14,14 @@ pub use script_loader::ScriptLoader;
 mod builtin_loader;
 pub use builtin_loader::BuiltinLoader;
 
+mod module_loader;
+pub use module_loader::ModuleLoader;
+
+#[cfg(feature = "dyn-load")]
+mod native_loader;
+#[cfg(feature = "dyn-load")]
+pub use native_loader::NativeLoader;
+
 pub mod util;
 
 /// Module resolver interface

@@ -90,9 +90,6 @@ pub use loader::{
 };
 */
 
-//#[cfg(feature = "dyn-load")]
-//pub use loader::NativeLoader;
-
 #[cfg(test)]
 pub(crate) fn test_with<F, R>(func: F) -> R
 where

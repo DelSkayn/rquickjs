@@ -3,14 +3,27 @@ use std::{
     collections::HashSet,
     ffi::{CStr, CString},
     marker::PhantomData,
+    mem::MaybeUninit,
     ptr::{self, NonNull},
+    slice,
 };
 
 use crate::{qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
 
+/// The raw module load function (`js_module_init`)
+pub type ModuleLoadFn =
+    unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
+
+#[derive(Clone, Debug)]
 pub enum ModuleDataKind {
+    /// Module source text,
     Source(Vec<u8>),
+    /// A function which loads a module from rust.
     Native(for<'js> unsafe fn(ctx: Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>>),
+    /// A raw loading function, used for loading from dynamic libraries.
+    Raw(ModuleLoadFn),
+    /// A raw loading function, used for loading from dynamic libraries.
+    ByteCode(Vec<u8>),
 }
 
 impl ModuleDataKind {
@@ -18,11 +31,19 @@ impl ModuleDataKind {
         match self {
             ModuleDataKind::Source(x) => Module::unsafe_define(ctx, name, x),
             ModuleDataKind::Native(x) => (x)(ctx, name.into()),
+            ModuleDataKind::Raw(x) => {
+                let name = CString::new(name)?;
+                let ptr = (x)(ctx.as_ptr(), name.as_ptr().cast());
+                let ptr = NonNull::new(ptr).ok_or(Error::Unknown)?;
+                Ok(Module::from_module_def(ctx, ptr))
+            }
+            ModuleDataKind::ByteCode(_) => todo!(),
         }
     }
 }
 
 /// The data required to load a module, either from source or native.
+#[derive(Clone, Debug)]
 pub struct ModuleData {
     name: Vec<u8>,
     data: ModuleDataKind,
@@ -54,6 +75,23 @@ impl ModuleData {
         ModuleData {
             name: name.into(),
             data: ModuleDataKind::Native(define::<D>),
+        }
+    }
+
+    /// Create module data for a module loaded from a native rust definition.
+    ///
+    /// # Safety
+    /// User must ensure that load_fn behaves like a loader function.
+    ///
+    /// The function must take a context and a c string without taking ownership of either valeus
+    /// and return a pointer to `qjs::JSModuleDef`, or a null pointer if there was some error.
+    pub unsafe fn raw<N>(name: N, load_fn: ModuleLoadFn) -> Self
+    where
+        N: Into<Vec<u8>>,
+    {
+        ModuleData {
+            name: name.into(),
+            data: ModuleDataKind::Raw(load_fn),
         }
     }
 
@@ -363,6 +401,44 @@ impl<'js> Module<'js> {
             )
         };
         T::from_js(self.ctx, meta)
+    }
+
+    /// Write object bytecode for the module in little endian format.
+    pub fn write_object_le(&self) -> Result<Vec<u8>> {
+        let swap = cfg!(target_endian = "big");
+        self.write_object(swap)
+    }
+
+    /// Write object bytecode for the module in big endian format.
+    pub fn write_object_be(&self) -> Result<Vec<u8>> {
+        let swap = cfg!(target_endian = "little");
+        self.write_object(swap)
+    }
+
+    /// Write object bytecode for the module.
+    ///
+    /// `swap_endianess` swaps the endianness of the bytecode, if true, from native to the other
+    /// kind. Use if the bytecode is ment for a target with a different endianness than the
+    /// current.
+    pub fn write_object(&self, swap_endianess: bool) -> Result<Vec<u8>> {
+        let ctx = self.ctx;
+        let mut len = MaybeUninit::uninit();
+        // TODO: Allow inclusion of other flags?
+        let mut flags = qjs::JS_WRITE_OBJ_BYTECODE;
+        if swap_endianess {
+            flags |= qjs::JS_WRITE_OBJ_BSWAP;
+        }
+        let value = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.module.as_ptr().cast());
+        let buf =
+            unsafe { qjs::JS_WriteObject(ctx.as_ptr(), len.as_mut_ptr(), value, flags as i32) };
+        if buf.is_null() {
+            return Err(unsafe { ctx.get_exception() });
+        }
+        let len = unsafe { len.assume_init() };
+        let obj = unsafe { slice::from_raw_parts(buf, len as _) };
+        let obj = Vec::from(obj);
+        unsafe { qjs::js_free(ctx.as_ptr(), buf as _) };
+        Ok(obj)
     }
 
     /// Creates a new module from JS source but doesnt evaluates the module.
