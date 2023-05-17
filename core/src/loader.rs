@@ -1,3 +1,5 @@
+//! Loaders and resolvers for loading JS modules.
+
 use std::{ffi::CStr, ptr};
 
 use crate::{qjs, Ctx, ModuleData, Result};

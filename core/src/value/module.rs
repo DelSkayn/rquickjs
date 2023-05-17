@@ -262,6 +262,9 @@ impl Default for ModulesBuilder {
     }
 }
 
+/// Module declarations.
+///
+/// Struct used in the [`ModuleDef`] trait for declaring module exports.
 pub struct Declarations {
     declarations: HashSet<Cow<'static, CStr>>,
 }
