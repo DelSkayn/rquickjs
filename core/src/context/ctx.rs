@@ -154,7 +154,7 @@ impl<'js> Ctx<'js> {
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        Module::instanciate(self, name, source)
+        Module::instantiate(self, name, source)
     }
 
     /// Returns the global object of this context.

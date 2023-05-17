@@ -2,6 +2,7 @@ use std::{
     borrow::Cow,
     collections::HashSet,
     ffi::{CStr, CString},
+    fmt,
     marker::PhantomData,
     mem::MaybeUninit,
     ptr::{self, NonNull},
@@ -43,7 +44,7 @@ macro_rules! module_init {
 pub type ModuleLoadFn =
     unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum ModuleDataKind {
     /// Module source text,
     Source(Vec<u8>),
@@ -51,8 +52,30 @@ pub enum ModuleDataKind {
     Native(for<'js> unsafe fn(ctx: Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>>),
     /// A raw loading function, used for loading from dynamic libraries.
     Raw(ModuleLoadFn),
-    /// A raw loading function, used for loading from dynamic libraries.
+    /// Module object bytecode.
     ByteCode(Vec<u8>),
+}
+
+// Debug could not be derived on stable because the fn only implemented it for a specifc lifetime
+// <'js> not a general one.
+//
+// Remove when stable.
+impl fmt::Debug for ModuleDataKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            ModuleDataKind::Source(ref x) => {
+                f.debug_tuple("ModuleDataKind::Source").field(x).finish()
+            }
+            ModuleDataKind::Raw(ref x) => f.debug_tuple("ModuleDataKind::Raw").field(x).finish(),
+            ModuleDataKind::ByteCode(ref x) => {
+                f.debug_tuple("ModuleDataKind::ByteCode").field(x).finish()
+            }
+            ModuleDataKind::Native(ref x) => f
+                .debug_tuple("ModuleDataKind::ByteCode")
+                .field(&"<native function>")
+                .finish(),
+        }
+    }
 }
 
 impl ModuleDataKind {
@@ -232,6 +255,8 @@ impl Definitions {
             definitions: HashSet::new(),
         }
     }
+
+    /// Define a new export in a module.
     pub fn define<N>(&mut self, name: N) -> Result<&mut Self>
     where
         N: Into<Vec<u8>>,
@@ -240,6 +265,9 @@ impl Definitions {
         Ok(self)
     }
 
+    /// Define a new export in a module using a static CStr.
+    ///
+    /// This method is can be used to avoid some allocation in the case that the name is static.
     pub fn define_static(&mut self, name: &'static CStr) -> Result<&mut Self> {
         self.definitions.insert(Cow::Borrowed(name));
         Ok(self)
@@ -363,7 +391,7 @@ impl<'js> Module<'js> {
     /// Defines a new JS module in the context.
     ///
     /// This function doesn't return a module since holding on to unevaluated modules is unsafe.
-    /// If you need to hold onto unsafe modules use the `unsafe_define` functions.
+    /// If you need to hold onto unsafe modules use the [`Module::unsafe_define`] functions.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
     pub fn define<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<()>
@@ -378,7 +406,7 @@ impl<'js> Module<'js> {
     /// Creates a new module from JS source, and evaluates it.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
-    pub fn instanciate<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
+    pub fn instantiate<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
@@ -391,7 +419,7 @@ impl<'js> Module<'js> {
     /// Defines a module in the runtime.
     ///
     /// This function doesn't return a module since holding on to unevaluated modules is unsafe.
-    /// If you need to hold onto unsafe modules use the `unsafe_define_def` functions.
+    /// If you need to hold onto unsafe modules use the [`Module::unsafe_define_def`] functions.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
     pub fn define_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<()>
@@ -406,7 +434,7 @@ impl<'js> Module<'js> {
     /// Defines a module in the runtime and evaluates it.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
-    pub fn instanciate_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
+    pub fn instantiate_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         D: ModuleDef,
@@ -773,7 +801,7 @@ mod test {
     #[test]
     fn from_rust_def_eval() {
         test_with(|ctx| {
-            Module::instanciate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            Module::instantiate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
         })
     }
 
