@@ -149,7 +149,7 @@ impl LoaderHolder {
         Ok(opaque
             .loader
             .load(ctx, name)?
-            .define(ctx)?
+            .unsafe_declare(ctx)?
             .as_module_def()
             .as_ptr())
     }

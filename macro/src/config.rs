@@ -5,7 +5,7 @@ use syn::Ident;
 pub struct Config {
     pub lib_crate: Ident,
     pub bind_attr: Ident,
-    pub define_var: Ident,
+    pub declare_var: Ident,
     pub exports_var: Ident,
 }
 
@@ -19,7 +19,7 @@ impl Default for Config {
         Self {
             lib_crate: format_ident!("{}", lib_crate),
             bind_attr: format_ident!("quickjs"),
-            define_var: format_ident!("defines"),
+            declare_var: format_ident!("declares"),
             exports_var: format_ident!("exports"),
         }
     }

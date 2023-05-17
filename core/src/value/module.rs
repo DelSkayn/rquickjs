@@ -59,7 +59,7 @@ pub enum ModuleDataKind {
 // Debug could not be derived on stable because the fn only implemented it for a specifc lifetime
 // <'js> not a general one.
 //
-// Remove when stable.
+// Remove when stable has cought up to nightly..
 impl fmt::Debug for ModuleDataKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
@@ -79,9 +79,9 @@ impl fmt::Debug for ModuleDataKind {
 }
 
 impl ModuleDataKind {
-    unsafe fn define<'js, N: Into<Vec<u8>>>(self, ctx: Ctx<'js>, name: N) -> Result<Module<'js>> {
+    unsafe fn declare<'js, N: Into<Vec<u8>>>(self, ctx: Ctx<'js>, name: N) -> Result<Module<'js>> {
         match self {
-            ModuleDataKind::Source(x) => Module::unsafe_define(ctx, name, x),
+            ModuleDataKind::Source(x) => Module::unsafe_declare(ctx, name, x),
             ModuleDataKind::Native(x) => (x)(ctx, name.into()),
             ModuleDataKind::Raw(x) => {
                 let name = CString::new(name)?;
@@ -136,7 +136,7 @@ impl ModuleData {
         N: Into<Vec<u8>>,
     {
         unsafe fn define<'js, D: ModuleDef>(ctx: Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>> {
-            Module::unsafe_define_def::<D, _>(ctx, name)
+            Module::unsafe_declare_def::<D, _>(ctx, name)
         }
 
         ModuleData {
@@ -162,16 +162,21 @@ impl ModuleData {
         }
     }
 
-    pub(crate) unsafe fn define<'js>(self, ctx: Ctx<'js>) -> Result<Module<'js>> {
-        self.data.define(ctx, self.name)
+    /// Declare the module defined in the ModuleData.
+    ///
+    /// # Safety
+    /// This method returns an unevaluated module.
+    /// It is UB to hold unto unevaluated modules across any call to  a module function which can
+    /// invalidate unevaluated modules and returned an error.
+    pub unsafe fn unsafe_declare<'js>(self, ctx: Ctx<'js>) -> Result<Module<'js>> {
+        self.data.declare(ctx, self.name)
     }
 }
 
 /// A struct for loading multiple modules at once safely.
 ///
-/// Modules are built in two steps, compile and evaluate.
-/// During evalation a module might import another module, if no such compiled module exist the
-/// evaluation fails.
+/// Modules are built in two steps, compile and evaluate. During evalation a module might import
+/// another module, if no such compiled module exist the evaluation fails.
 ///
 /// This struct allows one to first compile all possible modules and then evaluate them allowing
 /// modules to import eachother.
@@ -224,14 +229,17 @@ impl ModuleBuilder {
 
     pub fn eval<'js>(self, ctx: Ctx<'js>) -> Result<Vec<Module<'js>>> {
         let mut modules = Vec::with_capacity(self.modules.len());
-        for m in self.modules.into_iter().map(|x| unsafe { x.define(ctx) }) {
+        for m in self
+            .modules
+            .into_iter()
+            .map(|x| unsafe { x.unsafe_declare(ctx) })
+        {
             modules.push(m?);
         }
 
         for m in modules.iter() {
-            // Safety:
-            // This is save usage of the modules since if any fail to evaluate we immediatly return
-            // and drop all modules
+            // Safety: This is save usage of the modules since if any fail to evaluate we
+            // immediatly return and drop all modules
             unsafe { m.eval()? }
         }
         // All modules evaluated without error so they are all still alive.
@@ -245,36 +253,36 @@ impl Default for ModuleBuilder {
     }
 }
 
-pub struct Definitions {
-    definitions: HashSet<Cow<'static, CStr>>,
+pub struct Declarations {
+    declarations: HashSet<Cow<'static, CStr>>,
 }
 
-impl Definitions {
+impl Declarations {
     pub(crate) fn new() -> Self {
-        Definitions {
-            definitions: HashSet::new(),
+        Declarations {
+            declarations: HashSet::new(),
         }
     }
 
     /// Define a new export in a module.
-    pub fn define<N>(&mut self, name: N) -> Result<&mut Self>
+    pub fn declare<N>(&mut self, name: N) -> Result<&mut Self>
     where
         N: Into<Vec<u8>>,
     {
-        self.definitions.insert(Cow::Owned(CString::new(name)?));
+        self.declarations.insert(Cow::Owned(CString::new(name)?));
         Ok(self)
     }
 
     /// Define a new export in a module using a static CStr.
     ///
     /// This method is can be used to avoid some allocation in the case that the name is static.
-    pub fn define_static(&mut self, name: &'static CStr) -> Result<&mut Self> {
-        self.definitions.insert(Cow::Borrowed(name));
+    pub fn declare_static(&mut self, name: &'static CStr) -> Result<&mut Self> {
+        self.declarations.insert(Cow::Borrowed(name));
         Ok(self)
     }
 
     pub(crate) unsafe fn apply(self, ctx: Ctx<'_>, module: Module) -> Result<()> {
-        for k in self.definitions {
+        for k in self.declarations {
             let ptr = match k {
                 Cow::Borrowed(x) => x.as_ptr(),
                 Cow::Owned(x) => x.into_raw(),
@@ -367,8 +375,8 @@ pub struct Module<'js> {
 
 /// Module definition trait
 pub trait ModuleDef {
-    fn define(define: &mut Definitions) -> Result<()> {
-        let _ = define;
+    fn declare(declare: &mut Declarations) -> Result<()> {
+        let _ = declare;
         Ok(())
     }
 
@@ -394,12 +402,12 @@ impl<'js> Module<'js> {
     /// If you need to hold onto unsafe modules use the [`Module::unsafe_define`] functions.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
-    pub fn define<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<()>
+    pub fn declare<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<()>
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        unsafe { Self::unsafe_define(ctx, name, source)? };
+        unsafe { Self::unsafe_declare(ctx, name, source)? };
         Ok(())
     }
 
@@ -411,7 +419,7 @@ impl<'js> Module<'js> {
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        let module = unsafe { Self::unsafe_define(ctx, name, source)? };
+        let module = unsafe { Self::unsafe_declare(ctx, name, source)? };
         unsafe { module.eval()? };
         Ok(module)
     }
@@ -422,12 +430,12 @@ impl<'js> Module<'js> {
     /// If you need to hold onto unsafe modules use the [`Module::unsafe_define_def`] functions.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
-    pub fn define_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<()>
+    pub fn declare_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<()>
     where
         N: Into<Vec<u8>>,
         D: ModuleDef,
     {
-        unsafe { Self::unsafe_define_def::<D, _>(ctx, name)? };
+        unsafe { Self::unsafe_declare_def::<D, _>(ctx, name)? };
         Ok(())
     }
 
@@ -439,7 +447,7 @@ impl<'js> Module<'js> {
         N: Into<Vec<u8>>,
         D: ModuleDef,
     {
-        let module = unsafe { Self::unsafe_define_def::<D, _>(ctx, name)? };
+        let module = unsafe { Self::unsafe_declare_def::<D, _>(ctx, name)? };
         unsafe { module.eval()? };
         Ok(module)
     }
@@ -502,7 +510,7 @@ impl<'js> Module<'js> {
         Context::init_raw(ctx);
         let ctx = Ctx::from_ptr(ctx);
         let name = CStr::from_ptr(name).to_bytes();
-        match Self::unsafe_define_def::<D, _>(ctx, name) {
+        match Self::unsafe_declare_def::<D, _>(ctx, name) {
             Ok(module) => module.as_module_def().as_ptr(),
             Err(error) => {
                 error.throw(ctx);
@@ -546,7 +554,7 @@ impl<'js> Module<'js> {
     /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
     /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
     /// behaviour to use any unevaluated modules.
-    pub unsafe fn unsafe_define<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
+    pub unsafe fn unsafe_declare<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
@@ -575,15 +583,15 @@ impl<'js> Module<'js> {
     /// Quickjs frees all unevaluated modules if any error happens while compiling or evaluating a
     /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
     /// behaviour to use any unevaluated modules.
-    pub unsafe fn unsafe_define_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
+    pub unsafe fn unsafe_declare_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         D: ModuleDef,
     {
         let name = CString::new(name)?;
 
-        let mut defs = Definitions::new();
-        D::define(&mut defs)?;
+        let mut defs = Declarations::new();
+        D::declare(&mut defs)?;
 
         let ptr =
             unsafe { qjs::JS_NewCModule(ctx.as_ptr(), name.as_ptr(), Some(Self::eval_fn::<D>)) };
@@ -780,8 +788,8 @@ mod test {
     pub struct RustModule;
 
     impl ModuleDef for RustModule {
-        fn define(define: &mut Definitions) -> Result<()> {
-            define.define_static(CStr::from_bytes_with_nul(b"hello\0")?)?;
+        fn declare(define: &mut Declarations) -> Result<()> {
+            define.declare_static(CStr::from_bytes_with_nul(b"hello\0")?)?;
             Ok(())
         }
 
@@ -794,7 +802,7 @@ mod test {
     #[test]
     fn from_rust_def() {
         test_with(|ctx| {
-            Module::define_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            Module::declare_def::<RustModule, _>(ctx, "rust_mod").unwrap();
         })
     }
 
@@ -808,7 +816,7 @@ mod test {
     #[test]
     fn import_native() {
         test_with(|ctx| {
-            Module::define_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            Module::declare_def::<RustModule, _>(ctx, "rust_mod").unwrap();
             ctx.compile(
                 "test",
                 r#"

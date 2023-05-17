@@ -137,8 +137,8 @@ mod test {
             struct Constants;
 
             impl rquickjs::ModuleDef for Constants {
-                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
-                    defines.define("pi")?;
+                fn declare(declares: &mut rquickjs::Declarations) -> rquickjs::Result<()>{
+                    declares.declare("pi")?;
                     Ok(())
                 }
 

@@ -16,7 +16,7 @@ mod typed_array;
 use crate::{qjs, Ctx, Error, Result};
 
 pub use module::{
-    Definitions, Exports, Module, ModuleBuilder, ModuleData, ModuleDef, ModuleLoadFn,
+    Declarations, Exports, Module, ModuleBuilder, ModuleData, ModuleDef, ModuleLoadFn,
 };
 
 pub use array::Array;

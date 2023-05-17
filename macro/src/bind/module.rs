@@ -10,11 +10,11 @@ pub struct BindMod {
 
 impl BindMod {
     pub fn module_decl(&self, cfg: &Config) -> TokenStream {
-        let define_var = &cfg.define_var;
+        let declare_var = &cfg.declare_var;
         let exports_list = self
             .items
             .keys()
-            .map(|name| quote! { #define_var.define(#name)?; });
+            .map(|name| quote! { #declare_var.declare(#name)?; });
 
         quote! { #(#exports_list)* }
     }
@@ -113,8 +113,8 @@ mod test {
             struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
-                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
-                    defines.define("lib")?;
+                fn declare(declares: &mut rquickjs::Declarations) -> rquickjs::Result<()>{
+                    declares.declare("lib")?;
                     Ok(())
                 }
 
@@ -194,9 +194,9 @@ mod test {
             struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
-                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
-                    defines.define("N")?;
-                    defines.define("doit")?;
+                fn declare(declares: &mut rquickjs::Declarations) -> rquickjs::Result<()>{
+                    declares.declare("N")?;
+                    declares.declare("doit")?;
                     Ok(())
                 }
 
@@ -223,9 +223,9 @@ mod test {
             struct Lib;
 
             impl rquickjs::ModuleDef for Lib {
-                fn define(defines: &mut rquickjs::Definitions) -> rquickjs::Result<()>{
-                    defines.define("N")?;
-                    defines.define("doit")?;
+                fn declare(declares: &mut rquickjs::Declarations) -> rquickjs::Result<()>{
+                    declares.declare("N")?;
+                    declares.declare("doit")?;
                     Ok(())
                 }
 

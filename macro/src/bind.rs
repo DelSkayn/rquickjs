@@ -332,7 +332,7 @@ impl Binder {
 
         let lib_crate = &self.config.lib_crate;
         let exports = &self.config.exports_var;
-        let defines = &self.config.define_var;
+        let declares = &self.config.declare_var;
 
         let bind_vis = public.as_ref().map(PubVis::override_tokens);
 
@@ -396,7 +396,7 @@ impl Binder {
 
                 bindings.push(quote! {
                     impl #lib_crate::ModuleDef for #ident {
-                        fn define(#defines: &mut #lib_crate::Definitions) -> #lib_crate::Result<()> {
+                        fn declare(#declares: &mut #lib_crate::Declarations) -> #lib_crate::Result<()> {
                             #mod_decl
                             Ok(())
                         }
