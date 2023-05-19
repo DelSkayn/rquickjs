@@ -89,6 +89,9 @@ pub use loader::{
     ModuleLoader, Resolver, ScriptLoader,
 };
 
+#[cfg(all(feature = "loader", feature = "typescript"))]
+pub use loader::TypeScriptLoader;
+
 #[cfg(feature = "dyn-load")]
 pub use loader::NativeLoader;
 
