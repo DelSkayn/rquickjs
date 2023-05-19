@@ -53,7 +53,7 @@ pub enum ModuleDataKind {
     /// A raw loading function, used for loading from dynamic libraries.
     Raw(ModuleLoadFn),
     /// Module object bytecode.
-    ByteCode(Vec<u8>),
+    ByteCode(Cow<'static, [u8]>),
 }
 
 // Debug could not be derived on stable because the fn only implemented it for a specifc lifetime
@@ -89,7 +89,7 @@ impl ModuleDataKind {
                 let ptr = NonNull::new(ptr).ok_or(Error::Unknown)?;
                 Ok(Module::from_module_def(ctx, ptr))
             }
-            ModuleDataKind::ByteCode(_) => todo!(),
+            ModuleDataKind::ByteCode(x) => Module::unsafe_declare_read_object(ctx, x.as_ref()),
         }
     }
 }
@@ -125,7 +125,7 @@ impl ModuleData {
     {
         ModuleData {
             name: name.into(),
-            data: ModuleDataKind::ByteCode(bytecode.into()),
+            data: ModuleDataKind::ByteCode(Cow::Owned(bytecode.into())),
         }
     }
 
@@ -162,9 +162,16 @@ impl ModuleData {
         }
     }
 
+    /// Returns the kind of moduledata.
+    pub fn kind(&self) -> &ModuleDataKind {
+        &self.data
+    }
+
     /// Declare the module defined in the ModuleData.
     pub fn declare<'js>(self, ctx: Ctx<'js>) -> Result<()> {
-        unsafe { self.unsafe_declare(ctx)? };
+        unsafe {
+            let _ = self.unsafe_declare(ctx)?;
+        }
         Ok(())
     }
 
@@ -393,6 +400,7 @@ impl<'js> Exports<'js> {
 /// is unsafe to hold onto such a module and any function which returns such an unevaluated modules
 /// is marked as unsafe.
 #[derive(Clone, Copy)]
+#[must_use = "if access to the module object is not required, prefer to only declare a module"]
 pub struct Module<'js> {
     ctx: Ctx<'js>,
     /// Module lifetime, behave differently then normal lifetimes.
@@ -435,7 +443,9 @@ impl<'js> Module<'js> {
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        unsafe { Self::unsafe_declare(ctx, name, source)? };
+        unsafe {
+            let _ = Self::unsafe_declare(ctx, name, source)?;
+        }
         Ok(())
     }
 
@@ -464,7 +474,9 @@ impl<'js> Module<'js> {
         N: Into<Vec<u8>>,
         D: ModuleDef,
     {
-        unsafe { Self::unsafe_declare_def::<D, _>(ctx, name)? };
+        unsafe {
+            let _ = Self::unsafe_declare_def::<D, _>(ctx, name)?;
+        }
         Ok(())
     }
 
@@ -575,11 +587,54 @@ impl<'js> Module<'js> {
         Ok(obj)
     }
 
+    /// Read object bytecode and declare it as a module.
+    pub fn declare_read_object(ctx: Ctx<'js>, bytes: &[u8]) -> Result<()> {
+        unsafe {
+            let _ = Self::unsafe_declare_read_object(ctx, bytes)?;
+        }
+        Ok(())
+    }
+
+    /// Read object bytecode and declare it as a module and then evaluate it.
+    pub fn instantiate_read_object(ctx: Ctx<'js>, bytes: &[u8]) -> Result<Module<'js>> {
+        let module = unsafe { Self::unsafe_declare_read_object(ctx, bytes)? };
+        unsafe {
+            module.eval()?;
+        }
+        Ok(module)
+    }
+
+    /// Read object bytecode and declare it as a module.
+    ///
+    /// # Safety
+    ///
+    /// Quickjs frees all unevaluated modules if any error happens while declaring or evaluating a
+    /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
+    /// behaviour to use any unevaluated modules.
+    ///
+    /// It is unsound to hold onto an unavaluated module across any call to this function which
+    /// returns an error.
+    pub unsafe fn unsafe_declare_read_object(ctx: Ctx<'js>, bytes: &[u8]) -> Result<Module<'js>> {
+        let module = unsafe {
+            qjs::JS_ReadObject(
+                ctx.as_ptr(),
+                bytes.as_ptr(),
+                bytes.len() as _,
+                (qjs::JS_READ_OBJ_BYTECODE | qjs::JS_READ_OBJ_ROM_DATA) as i32,
+            )
+        };
+        let module = ctx.handle_exception(module)?;
+        debug_assert_eq!(qjs::JS_TAG_MODULE, unsafe { qjs::JS_VALUE_GET_TAG(module) });
+        let module = qjs::JS_VALUE_GET_PTR(module).cast::<qjs::JSModuleDef>();
+        // Quickjs should throw an exception on allocation errors
+        // So this should always be non-null.
+        let module = NonNull::new(module).unwrap();
+        Ok(Module { ctx, module })
+    }
+
     /// Creates a new module from JS source but doesnt evaluates the module.
     ///
     /// # Safety
-    /// It is unsafe to use an unevaluated for anything other then evaluating it with
-    /// `Module::eval`.
     ///
     /// Quickjs frees all unevaluated modules if any error happens while declaring or evaluating a
     /// module. If any call to either `Module::new` or `Module::eval` fails it is undefined
@@ -848,7 +903,7 @@ mod test {
     #[test]
     fn from_rust_def_eval() {
         test_with(|ctx| {
-            Module::instantiate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            let _ = Module::instantiate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
         })
     }
 
@@ -856,15 +911,16 @@ mod test {
     fn import_native() {
         test_with(|ctx| {
             Module::declare_def::<RustModule, _>(ctx, "rust_mod").unwrap();
-            ctx.compile(
-                "test",
-                r#"
+            let _ = ctx
+                .compile(
+                    "test",
+                    r#"
                 import { hello } from "rust_mod";
 
                 globalThis.hello = hello;
             "#,
-            )
-            .unwrap();
+                )
+                .unwrap();
             let text = ctx
                 .globals()
                 .get::<_, String>("hello")

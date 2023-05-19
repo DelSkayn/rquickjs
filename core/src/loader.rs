@@ -2,7 +2,7 @@
 
 use std::{ffi::CStr, ptr};
 
-use crate::{qjs, Ctx, ModuleData, Result};
+use crate::{qjs, Ctx, Module, ModuleData, Result};
 
 mod builtin_resolver;
 pub use builtin_resolver::BuiltinResolver;
@@ -66,9 +66,32 @@ pub trait Loader {
     fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<ModuleData>;
 }
 
+/// The Raw Module loader interface.
+///
+/// When implementing a module loader prefer the to implement [`Loader`] instead.
+/// All struct which implement [`Loader`] will automatically implement this trait.
+///
+/// # Safety
+/// Implementors must ensure that all module declaration and evaluation errors are returned from
+/// this function.
+pub unsafe trait RawLoader {
+    /// Load module by name, should return an unevaluted module.
+    ///
+    /// # Safety
+    /// Callers must ensure that the module returned by this function is not used after an module
+    /// declaration or evaluation failed.
+    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>>;
+}
+
+unsafe impl<T: Loader> RawLoader for T {
+    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
+        self.load(ctx, name)?.unsafe_declare(ctx)
+    }
+}
+
 struct LoaderOpaque {
     resolver: Box<dyn Resolver>,
-    loader: Box<dyn Loader>,
+    loader: Box<dyn RawLoader>,
 }
 
 #[repr(transparent)]
@@ -84,7 +107,7 @@ impl LoaderHolder {
     pub fn new<R, L>(resolver: R, loader: L) -> Self
     where
         R: Resolver + 'static,
-        L: Loader + 'static,
+        L: RawLoader + 'static,
     {
         Self(Box::into_raw(Box::new(LoaderOpaque {
             resolver: Box::new(resolver),
@@ -148,12 +171,7 @@ impl LoaderHolder {
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
 
-        Ok(opaque
-            .loader
-            .load(ctx, name)?
-            .unsafe_declare(ctx)?
-            .as_module_def()
-            .as_ptr())
+        Ok(opaque.loader.raw_load(ctx, name)?.as_module_def().as_ptr())
     }
 
     unsafe extern "C" fn load_raw(

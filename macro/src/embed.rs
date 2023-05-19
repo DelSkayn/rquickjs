@@ -24,7 +24,10 @@ pub use attrs::*;
 use crate::{Config, PubVis, TokenStream};
 use ident_case::RenameRule;
 use quote::{format_ident, quote};
-use rquickjs_core::{Context, Module, Result, Runtime};
+use rquickjs_core::{
+    loader::{Compile, FileResolver, ScriptLoader},
+    Context, Module, Result, Runtime,
+};
 use std::path::Path;
 use syn::ItemMod;
 
@@ -117,7 +120,7 @@ impl Embedder {
                 .join("");
 
             ctx.with(|ctx| {
-                let _ = Module::new(ctx, "<main>", source)?;
+                Module::declare(ctx, "<main>", source)?;
                 Ok(())
             })
         })() {
@@ -162,7 +165,7 @@ impl Embedder {
             quote! { (#name, #data) }
         });
         quote! {
-            : #lib_crate::Bundle<&'static [(&'static str, &'static [u8])]> = #lib_crate::Bundle(&[#(#entries),*])
+            : #lib_crate::loader::Bundle<&'static [(&'static str, &'static [u8])]> = #lib_crate::loader::Bundle(&[#(#entries),*])
         }
     }
 
@@ -177,7 +180,7 @@ impl Embedder {
             quote! { (#name, #data) }
         });
         quote! {
-            : #lib_crate::Bundle<&'static #lib_crate::phf::Map<&'static str, &'static [u8]>> = #lib_crate::Bundle(&#lib_crate::phf::Map {
+            : #lib_crate::loader::Bundle<&'static #lib_crate::phf::Map<&'static str, &'static [u8]>> = #lib_crate::loader::Bundle(&#lib_crate::phf::Map {
                 key: #key,
                 disps: #lib_crate::phf::Slice::Static(&[#(#disps),*]),
                 entries: #lib_crate::phf::Slice::Static(&[#(#entries),*]),
@@ -190,14 +193,14 @@ impl Embedder {
 mod test {
     test_cases! {
         static_const_array { test, path = "." } { mod my_module {} } {
-            static MY_MODULE: rquickjs::Bundle<&'static [(&'static str, &'static [u8])]> = rquickjs::Bundle(&[
+            static MY_MODULE: rquickjs::loader::Bundle<&'static [(&'static str, &'static [u8])]> = rquickjs::Bundle(&[
                 ("my_module", &[0u8, 1u8, 2u8, 3u8])
             ]);
         };
 
         #[cfg(feature = "phf")]
         perfect_hash_map { test, perfect, path = "." } { mod my_module {} } {
-            static MY_MODULE: rquickjs::Bundle<&'static rquickjs::phf::Map<&'static str, &'static [u8]>> = rquickjs::Bundle(&rquickjs::phf::Map {
+            static MY_MODULE: rquickjs::loader::Bundle<&'static rquickjs::phf::Map<&'static str, &'static [u8]>> = rquickjs::Bundle(&rquickjs::phf::Map {
                 key: 12913932095322966823u64,
                 disps: rquickjs::phf::Slice::Static(&[
                     (0u32 , 0u32)

@@ -1,11 +1,12 @@
-use crate::{Ctx, Lock, ModuleData, Mut, Ref, Result};
+use crate::{
+    loader::{util::resolve_simple, Loader, RawLoader, Resolver},
+    Ctx, Lock, Module, ModuleDataKind, Mut, Ref, Result,
+};
 use std::{
     collections::{hash_map::Iter as HashMapIter, HashMap},
     iter::{ExactSizeIterator, FusedIterator},
     ops::{Deref, DerefMut},
 };
-
-use super::{util::resolve_simple, Loader, Resolver};
 
 /// Modules compiling data
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -113,7 +114,7 @@ pub struct CompiledBytecodes<'i>(Lock<'i, CompileData>);
 
 impl<'i, 'r: 'i> IntoIterator for &'r CompiledBytecodes<'i> {
     type IntoIter = CompiledBytecodesIter<'i>;
-    type Item = (&'i str, &'i ModuleData);
+    type Item = (&'i str, &'i [u8]);
     fn into_iter(self) -> Self::IntoIter {
         CompiledBytecodesIter {
             data: &self.0,
@@ -131,17 +132,16 @@ pub struct CompiledBytecodesIter<'r> {
 }
 
 impl<'i> Iterator for CompiledBytecodesIter<'i> {
-    type Item = (&'i str, &'i ModuleData);
+    type Item = (&'i str, &'i [u8]);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let CompileData {
-            modules,
-            module_data,
-        } = &self.data;
-        if self.index < module_data.len() {
-            let (path, data) = &module_data[self.index];
+        let CompileData { modules, bytecodes } = &self.data;
+        if self.index < bytecodes.len() {
+            let (path, data) = &bytecodes[self.index];
             self.index += 1;
-            modules.get(path.as_str()).map(|name| (name.as_str(), data))
+            modules
+                .get(path.as_str())
+                .map(|name| (name.as_str(), data.as_ref()))
         } else {
             None
         }
@@ -155,7 +155,7 @@ impl<'i> Iterator for CompiledBytecodesIter<'i> {
 
 impl<'i> ExactSizeIterator for CompiledBytecodesIter<'i> {
     fn len(&self) -> usize {
-        self.data.module_data.len() - self.index
+        self.data.bytecodes.len() - self.index
     }
 }
 
@@ -166,7 +166,7 @@ struct CompileData {
     // { module_path: internal_name }
     modules: HashMap<String, String>,
     // [ (module_path, module_bytecode) ]
-    module_data: Vec<(String, ModuleData)>,
+    bytecodes: Vec<(String, Vec<u8>)>,
 }
 
 impl<R> Resolver for Compile<R>
@@ -182,17 +182,20 @@ where
     }
 }
 
-impl<L> Loader for Compile<L>
+unsafe impl<L> RawLoader for Compile<L>
 where
     L: Loader,
 {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
-        self.inner.load(ctx, path).map(|module| {
-            self.data
-                .lock()
-                .module_data
-                .push((path.into(), module.clone()));
-            module
-        })
+    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js>> {
+        let data = self.inner.load(ctx, path)?;
+        assert!(
+            matches!(data.kind(), ModuleDataKind::Source(_) | ModuleDataKind::ByteCode(_)) ,
+            "can't compile native modules, loader `{}` returned a native module, but `Compile` can only handle modules loaded from source or bytecode",
+            std::any::type_name::<L>()
+        );
+        let module = data.unsafe_declare(ctx)?;
+        let data = module.write_object(false)?;
+        self.data.lock().bytecodes.push((path.into(), data));
+        Ok(module)
     }
 }

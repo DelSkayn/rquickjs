@@ -47,7 +47,7 @@ mod bind;
 mod config;
 mod context;
 mod derive;
-//mod embed;
+mod embed;
 mod shim;
 mod utils;
 
@@ -62,7 +62,7 @@ use bind::*;
 use config::*;
 use context::*;
 use derive::*;
-//use embed::*;
+use embed::*;
 use shim::*;
 use utils::*;
 
@@ -493,7 +493,7 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     output.into()
 }
 
-/*
+/**
 An attribute to convert scripts modules into builtins
 
 # Supported attributes
@@ -526,6 +526,7 @@ ctx.with(|ctx| {
     "#).unwrap();
 });
 ```
+*/
 
 #[proc_macro_error]
 #[proc_macro_attribute]
@@ -540,7 +541,6 @@ pub fn embed(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let output = embedder.expand(attr, item);
     output.into()
 }
- */
 
 /**
 A macro to derive [`HasRefs`](rquickjs_core::HasRefs)

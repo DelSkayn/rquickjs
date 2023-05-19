@@ -1,5 +1,5 @@
 #[cfg(feature = "loader")]
-use crate::loader::{Loader, LoaderHolder, Resolver};
+use crate::loader::{LoaderHolder, RawLoader, Resolver};
 use crate::{qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
 use std::{any::Any, ffi::CString, mem, panic, ptr::NonNull};
 
@@ -246,7 +246,7 @@ impl Runtime {
     pub fn set_loader<R, L>(&self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
-        L: Loader + 'static,
+        L: RawLoader + 'static,
     {
         let mut guard = self.inner.lock();
         let loader = LoaderHolder::new(resolver, loader);
