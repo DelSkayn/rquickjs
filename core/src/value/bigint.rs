@@ -1,4 +1,8 @@
-use crate::{qjs, Ctx, Error, Result, Value};
+use crate::{qjs, Coerced, Ctx, Error, FromJs, Result, String, Value};
+use std::string::String as StdString;
+
+#[cfg(feature = "bigint")]
+use num_bigint::BigInt as NumBigInt;
 
 /// Rust representation of a javascript big int.
 #[derive(Debug, Clone, PartialEq)]
@@ -31,6 +35,15 @@ impl<'js> BigInt<'js> {
     }
 }
 
+#[cfg(feature = "bigint")]
+impl<'js> BigInt<'js> {
+    pub fn to_num_bigint(self) -> Result<NumBigInt> {
+        let str = Coerced::<StdString>::from_js(self.0.ctx, self.0)?.0;
+        // Quickjs should always return a valid radix 10 digit.
+        NumBigInt::parse_bytes(str.as_bytes(), 10).ok_or(Error::Unknown)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::*;
@@ -39,6 +52,8 @@ mod test {
         test_with(|ctx| {
             let s: BigInt = ctx.eval(format!("{}n", i64::MAX)).unwrap();
             assert_eq!(s.to_i64().unwrap(), i64::MAX);
+            let s: BigInt = ctx.eval(format!("{}n", i64::MIN)).unwrap();
+            assert_eq!(s.to_i64().unwrap(), i64::MIN);
         })
     }
 
@@ -54,6 +69,18 @@ mod test {
                 }}
             }}",
                     i64::MAX
+                ))
+                .unwrap();
+            func.call::<_, ()>((bigint,)).unwrap();
+            let bigint = BigInt::from_i64(ctx, i64::MIN).unwrap();
+            let func: Function = ctx
+                .eval(format!(
+                    "x => {{
+                if( x != {}n){{
+                    throw 'error'
+                }}
+            }}",
+                    i64::MIN
                 ))
                 .unwrap();
             func.call::<_, ()>((bigint,)).unwrap();

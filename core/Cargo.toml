@@ -73,6 +73,10 @@ optional = true
 version = "1.3"
 optional = true
 
+[dependencies.num-bigint]
+version = "0.4.3"
+optional = true
+
 [features]
 default = []
 
@@ -125,6 +129,8 @@ async-std = ["futures", "async-std-rs"]
 
 # Enable Smol async runtime support
 smol = ["futures", "smol-rs"]
+
+bigint = ["num-bigint"]
 
 # Max number of function args
 max-args-7 = []
@@ -184,3 +190,4 @@ trybuild = "1.0.23"
 
 [package.metadata.docs.rs]
 features = ["full-async", "doc-cfg"]
+
