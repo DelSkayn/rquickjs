@@ -85,7 +85,8 @@ pub unsafe trait RawLoader {
 
 unsafe impl<T: Loader> RawLoader for T {
     unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
-        self.load(ctx, name)?.unsafe_declare(ctx)
+        let res = self.load(ctx, name)?.unsafe_declare(ctx)?;
+        Ok(res)
     }
 }
 

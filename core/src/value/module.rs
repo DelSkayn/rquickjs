@@ -121,11 +121,11 @@ impl ModuleData {
     pub unsafe fn bytecode<N, S>(name: N, bytecode: S) -> Self
     where
         N: Into<Vec<u8>>,
-        S: Into<Vec<u8>>,
+        S: Into<Cow<'static, [u8]>>,
     {
         ModuleData {
             name: name.into(),
-            data: ModuleDataKind::ByteCode(Cow::Owned(bytecode.into())),
+            data: ModuleDataKind::ByteCode(bytecode.into()),
         }
     }
 

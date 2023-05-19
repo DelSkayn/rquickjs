@@ -21,11 +21,13 @@ macro_rules! test_cases {
 mod attrs;
 pub use attrs::*;
 
+mod loader;
+
 use crate::{Config, PubVis, TokenStream};
 use ident_case::RenameRule;
 use quote::{format_ident, quote};
 use rquickjs_core::{
-    loader::{Compile, FileResolver, ScriptLoader},
+    loader::{FileResolver, ScriptLoader},
     Context, Module, Result, Runtime,
 };
 use std::path::Path;
@@ -86,7 +88,7 @@ impl Embedder {
         }
         let public = public.as_ref().map(PubVis::override_tokens);
 
-        let compile = Compile::new();
+        let compile = loader::Embed::new();
 
         let mut resolver = compile.resolver(FileResolver::default());
         for path in &paths {
