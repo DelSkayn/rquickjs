@@ -38,7 +38,7 @@ impl BindFn {
         name.into()
     }
 
-    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+    pub fn expand(&self, name: &str, cfg: &Config, is_module: bool) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
         let exports_var = &cfg.exports_var;
         let bindings = self
@@ -57,7 +57,11 @@ impl BindFn {
         } else {
             bindings
         };
-        quote! { #exports_var.set(#name, #lib_crate::Func::new(#func_name, #bindings))?; }
+        if is_module {
+            quote! { #exports_var.export(#name, #lib_crate::Func::new(#func_name, #bindings))?; }
+        } else {
+            quote! { #exports_var.set(#name, #lib_crate::Func::new(#func_name, #bindings))?; }
+        }
     }
 }
 

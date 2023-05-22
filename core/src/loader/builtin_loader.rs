@@ -1,4 +1,4 @@
-use crate::{Ctx, Error, Loaded, Loader, Module, Result, Script};
+use crate::{loader::Loader, Ctx, Error, ModuleData, Result};
 use std::collections::HashMap;
 
 /// The builtin script module loader
@@ -29,10 +29,10 @@ impl BuiltinLoader {
     }
 }
 
-impl Loader<Script> for BuiltinLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Script>>> {
+impl Loader for BuiltinLoader {
+    fn load<'js>(&mut self, _ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
         match self.modules.remove(path) {
-            Some(source) => Module::new(ctx, path, source),
+            Some(source) => Ok(ModuleData::source(path, source)),
             _ => Err(Error::new_loading(path)),
         }
     }

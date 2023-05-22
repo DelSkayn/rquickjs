@@ -27,6 +27,16 @@ pub mod phf {
     pub use phf::*;
 }
 
+/// Short macro to define a cstring literal.
+///
+/// Make sure the string does not contain interal null characters or it will end early.
+#[macro_export]
+macro_rules! cstr {
+    ($str:tt) => {
+        std::ffi::CStr::from_bytes_until_nul(concat!($str, "\0").as_bytes()).unwrap()
+    };
+}
+
 mod markers;
 pub use markers::ParallelSend;
 mod result;
@@ -81,16 +91,14 @@ mod allocator;
 pub use allocator::{Allocator, RawMemPtr, RustAllocator};
 
 #[cfg(feature = "loader")]
-mod loader;
+pub mod loader;
 
-#[cfg(feature = "loader")]
+/*#[cfg(feature = "loader")]
 pub use loader::{
     BuiltinLoader, BuiltinResolver, Bundle, Compile, FileResolver, HasByteCode, Loader,
     ModuleLoader, Resolver, ScriptLoader,
 };
-
-#[cfg(feature = "dyn-load")]
-pub use loader::NativeLoader;
+*/
 
 #[cfg(test)]
 pub(crate) fn test_with<F, R>(func: F) -> R

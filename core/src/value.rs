@@ -15,9 +15,10 @@ mod typed_array;
 
 use crate::{qjs, Ctx, Error, Result};
 
-pub use module::{Created, Evaluated, Loaded, Module, ModuleDef, ModuleLoadFn, Native, Script};
-#[cfg(feature = "exports")]
-pub use module::{ExportEntriesIter, ExportNamesIter};
+pub use module::{
+    Declarations, Exports, Module, ModuleData, ModuleDataKind, ModuleDef, ModuleLoadFn,
+    ModulesBuilder,
+};
 
 pub use array::Array;
 pub use atom::*;
@@ -38,7 +39,7 @@ pub use typed_array::TypedArray;
 #[cfg(feature = "futures")]
 pub use function::Async;
 
-use std::{fmt, marker::PhantomData, mem, ops::Deref, result::Result as StdResult, str};
+use std::{fmt, mem, ops::Deref, result::Result as StdResult, str};
 
 /// Any javascript value
 pub struct Value<'js> {
@@ -260,13 +261,6 @@ impl<'js> Value<'js> {
     #[inline]
     pub(crate) unsafe fn get_ptr(&self) -> *mut qjs::c_void {
         qjs::JS_VALUE_GET_PTR(self.value)
-    }
-
-    #[inline]
-    pub(crate) unsafe fn into_ptr(self) -> *mut qjs::c_void {
-        let ptr = self.get_ptr();
-        mem::forget(self);
-        ptr
     }
 
     /// Check if the value is a bool
@@ -573,15 +567,12 @@ macro_rules! sub_types {
     (@wrap $type:ident $val:expr) => { $type($val) };
 }
 
-type EvaluatedModule<'js> = Module<'js, Evaluated>;
-
 sub_types! {
     String as_string ref_string into_string from_string,
     Symbol as_symbol ref_symbol into_symbol from_symbol,
     Object as_object ref_object into_object from_object,
     Array as_array ref_array into_array from_array,
     Function as_function ref_function into_function from_function,
-    Module as_module ref_module into_module from_module,
     BigInt as_big_int ref_big_int into_big_int from_big_int,
 }
 

@@ -115,7 +115,7 @@ impl<'js> Ctx<'js> {
         source: S,
         options: EvalOptions,
     ) -> Result<V> {
-        let file_name = unsafe { CStr::from_bytes_with_nul_unchecked(b"eval_script\0") };
+        let file_name = cstr!("eval_script");
 
         V::from_js(self, unsafe {
             let val = self.eval_raw(source, file_name, options.to_flag())?;
@@ -154,8 +154,7 @@ impl<'js> Ctx<'js> {
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
     {
-        let module = Module::new(self, name, source)?;
-        module.eval()
+        Module::evaluate(self, name, source)
     }
 
     /// Returns the global object of this context.

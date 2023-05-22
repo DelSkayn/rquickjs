@@ -1,3 +1,5 @@
+#[cfg(feature = "loader")]
+use crate::loader::{LoaderHolder, RawLoader, Resolver};
 use crate::{qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
 use std::{any::Any, ffi::CString, mem, panic, ptr::NonNull};
 
@@ -15,8 +17,8 @@ pub use qjs::JSMemoryUsage as MemoryUsage;
 #[cfg(feature = "allocator")]
 use crate::{allocator::AllocatorHolder, Allocator};
 
-#[cfg(feature = "loader")]
-use crate::{loader::LoaderHolder, Loader, Resolver};
+//#[cfg(feature = "loader")]
+//use crate::{loader::LoaderHolder, Loader, Resolver};
 
 #[derive(Clone)]
 #[repr(transparent)]
@@ -66,7 +68,6 @@ pub(crate) struct Inner {
     #[cfg(feature = "allocator")]
     #[allow(dead_code)]
     allocator: Option<AllocatorHolder>,
-
     #[cfg(feature = "loader")]
     #[allow(dead_code)]
     loader: Option<LoaderHolder>,
@@ -245,7 +246,7 @@ impl Runtime {
     pub fn set_loader<R, L>(&self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
-        L: Loader + 'static,
+        L: RawLoader + 'static,
     {
         let mut guard = self.inner.lock();
         let loader = LoaderHolder::new(resolver, loader);

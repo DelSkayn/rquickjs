@@ -2,7 +2,7 @@ use crate::{qjs, Ctx, FromJs, IntoJs, Object, StdResult, StdString, Type, Value}
 
 use std::{
     error::Error as StdError,
-    ffi::{CString, NulError},
+    ffi::{CString, FromBytesWithNulError, NulError},
     fmt::{Display, Formatter, Result as FmtResult},
     io::Error as IoError,
     ops::Range,
@@ -22,9 +22,14 @@ pub enum Error {
     /// Could not allocate memory
     /// This is generally only triggered when out of memory.
     Allocation,
+    /// A module defined two exported values with the same name.
+    DuplicateExports,
     /// Found a string with a internal null byte while converting
     /// to C string.
     InvalidString(NulError),
+    /// Found a string with a internal null byte while converting
+    /// to C string.
+    InvalidCStr(FromBytesWithNulError),
     /// String from rquickjs was not UTF-8
     Utf8(Utf8Error),
     /// An io error
@@ -253,8 +258,15 @@ impl Display for Error {
 
         match self {
             Allocation => "Allocation failed while creating object".fmt(f)?,
+            DuplicateExports => {
+                "Tried to export two values with the same name from one module".fmt(f)?
+            }
             InvalidString(error) => {
                 "String contained internal null bytes: ".fmt(f)?;
+                error.fmt(f)?;
+            }
+            InvalidCStr(error) => {
+                "CStr didn't end in a null byte: ".fmt(f)?;
                 error.fmt(f)?;
             }
             Utf8(error) => {
@@ -378,6 +390,7 @@ macro_rules! from_impls {
 
 from_impls! {
     NulError => InvalidString,
+    FromBytesWithNulError => InvalidCStr,
     Utf8Error => Utf8,
     IoError => Io,
 }

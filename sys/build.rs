@@ -224,6 +224,6 @@ where
         fs::create_dir_all(&dest_dir).unwrap();
 
         let dest_file = format!("{}.rs", target);
-        fs::copy(&bindings_file, dest_dir.join(&dest_file)).unwrap();
+        fs::copy(&bindings_file, dest_dir.join(dest_file)).unwrap();
     }
 }

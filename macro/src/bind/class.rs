@@ -37,7 +37,7 @@ impl BindClass {
         self.ctor.get_or_insert_with(BindFn::default)
     }
 
-    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+    pub fn expand(&self, name: &str, cfg: &Config, is_module: bool) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
         let exports_var = &cfg.exports_var;
         let src = &self.src;
@@ -45,16 +45,19 @@ impl BindClass {
         let proto_list = self
             .proto_items
             .iter()
-            .map(|(name, bind)| bind.expand(name, cfg))
+            .map(|(name, bind)| bind.expand(name, cfg, false))
             .collect::<Vec<_>>();
 
         let static_list = self
             .items
             .iter()
-            .map(|(name, bind)| bind.expand(name, cfg))
+            .map(|(name, bind)| bind.expand(name, cfg, false))
             .collect::<Vec<_>>();
 
-        let ctor_func = self.ctor.as_ref().map(|func| func.expand(name, cfg));
+        let ctor_func = self
+            .ctor
+            .as_ref()
+            .map(|func| func.expand(name, cfg, is_module));
 
         let mut extras = quote! {};
 

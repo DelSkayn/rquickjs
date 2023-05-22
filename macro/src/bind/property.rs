@@ -82,9 +82,14 @@ impl BindProp {
         }
     }
 
-    pub fn expand(&self, name: &str, cfg: &Config) -> TokenStream {
+    pub fn expand(&self, name: &str, cfg: &Config, is_module: bool) -> TokenStream {
         let lib_crate = &cfg.lib_crate;
         let exports_var = &cfg.exports_var;
+
+        if is_module {
+            error!("A module can't export properties, for prop: '{}'", name);
+            return quote! {};
+        }
 
         let mut value = match (&self.get, &self.set, &self.val) {
             (Some(get), Some(set), _) => {

@@ -526,8 +526,8 @@ ctx.with(|ctx| {
     "#).unwrap();
 });
 ```
+*/
 
- */
 #[proc_macro_error]
 #[proc_macro_attribute]
 pub fn embed(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {

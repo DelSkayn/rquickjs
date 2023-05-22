@@ -1,6 +1,8 @@
 use rquickjs::{
-    BuiltinLoader, BuiltinResolver, Context, FileResolver, Func, ModuleLoader, NativeLoader,
-    Runtime, ScriptLoader,
+    loader::{
+        BuiltinLoader, BuiltinResolver, FileResolver, ModuleLoader, NativeLoader, ScriptLoader,
+    },
+    Context, Func, Runtime,
 };
 
 mod bundle;
@@ -36,51 +38,55 @@ fn main() {
         global.set("print", Func::new("print", print)).unwrap();
 
         println!("import script module");
-        ctx.compile(
-            "test",
-            r#"
+        let _ = ctx
+            .compile(
+                "test",
+                r#"
 import { n, s, f } from "script_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
 "#,
-        )
-        .unwrap();
+            )
+            .unwrap();
 
         println!("import native module");
-        ctx.compile(
-            "test",
-            r#"
+        let _ = ctx
+            .compile(
+                "test",
+                r#"
 import { n, s, f } from "native_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
                 "#,
-        )
-        .unwrap();
+            )
+            .unwrap();
 
         println!("import bundled script module");
-        ctx.compile(
-            "test",
-            r#"
+        let _ = ctx
+            .compile(
+                "test",
+                r#"
 import { n, s, f } from "bundle/script_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
 "#,
-        )
-        .unwrap();
+            )
+            .unwrap();
 
         println!("import bundled native module");
-        ctx.compile(
-            "test",
-            r#"
+        let _ = ctx
+            .compile(
+                "test",
+                r#"
 import { n, s, f } from "bundle/native_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
 "#,
-        )
-        .unwrap();
+            )
+            .unwrap();
     });
 }

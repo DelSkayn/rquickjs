@@ -1,20 +1,17 @@
-use crate::{qjs, Ctx, Error, Loaded, Module, Result, Script};
-use relative_path::RelativePath;
+//! Loaders and resolvers for loading JS modules.
+
 use std::{ffi::CStr, ptr};
+
+use crate::{qjs, Ctx, Module, ModuleData, Result};
+
+mod builtin_resolver;
+pub use builtin_resolver::BuiltinResolver;
 
 mod file_resolver;
 pub use file_resolver::FileResolver;
 
 mod script_loader;
 pub use script_loader::ScriptLoader;
-
-#[cfg(feature = "dyn-load")]
-mod native_loader;
-#[cfg(feature = "dyn-load")]
-pub use native_loader::NativeLoader;
-
-mod builtin_resolver;
-pub use builtin_resolver::BuiltinResolver;
 
 mod builtin_loader;
 pub use builtin_loader::BuiltinLoader;
@@ -25,10 +22,17 @@ pub use module_loader::ModuleLoader;
 mod compile;
 pub use compile::Compile;
 
+#[cfg(feature = "dyn-load")]
+mod native_loader;
+#[cfg(feature = "dyn-load")]
+pub use native_loader::NativeLoader;
+
 mod bundle;
 #[cfg(feature = "phf")]
 pub use bundle::PhfBundleData;
 pub use bundle::{Bundle, HasByteCode, ScaBundleData};
+
+pub mod util;
 
 /// Module resolver interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -57,14 +61,38 @@ pub trait Resolver {
 
 /// Module loader interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-pub trait Loader<S = ()> {
+pub trait Loader {
     /// Load module by name
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded<S>>>;
+    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<ModuleData>;
+}
+
+/// The Raw Module loader interface.
+///
+/// When implementing a module loader prefer the to implement [`Loader`] instead.
+/// All struct which implement [`Loader`] will automatically implement this trait.
+///
+/// # Safety
+/// Implementors must ensure that all module declaration and evaluation errors are returned from
+/// this function.
+pub unsafe trait RawLoader {
+    /// Load module by name, should return an unevaluted module.
+    ///
+    /// # Safety
+    /// Callers must ensure that the module returned by this function is not used after an module
+    /// declaration or evaluation failed.
+    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>>;
+}
+
+unsafe impl<T: Loader> RawLoader for T {
+    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
+        let res = self.load(ctx, name)?.unsafe_declare(ctx)?;
+        Ok(res)
+    }
 }
 
 struct LoaderOpaque {
     resolver: Box<dyn Resolver>,
-    loader: Box<dyn Loader>,
+    loader: Box<dyn RawLoader>,
 }
 
 #[repr(transparent)]
@@ -80,7 +108,7 @@ impl LoaderHolder {
     pub fn new<R, L>(resolver: R, loader: L) -> Self
     where
         R: Resolver + 'static,
-        L: Loader + 'static,
+        L: RawLoader + 'static,
     {
         Self(Box::into_raw(Box::new(LoaderOpaque {
             resolver: Box::new(resolver),
@@ -137,14 +165,14 @@ impl LoaderHolder {
     }
 
     #[inline]
-    fn load<'js>(
+    unsafe fn load<'js>(
         opaque: &mut LoaderOpaque,
         ctx: Ctx<'js>,
         name: &CStr,
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
 
-        Ok(opaque.loader.load(ctx, name)?.into_module_def())
+        Ok(opaque.loader.raw_load(ctx, name)?.as_module_def().as_ptr())
     }
 
     unsafe extern "C" fn load_raw(
@@ -163,42 +191,31 @@ impl LoaderHolder {
     }
 }
 
-fn resolve_simple(base: &str, name: &str) -> String {
-    if name.starts_with('.') {
-        let path = RelativePath::new(base);
-        if let Some(dir) = path.parent() {
-            return dir.join_normalized(name).to_string();
-        }
-    }
-    name.into()
-}
-
-fn check_extensions(name: &str, extensions: &[String]) -> bool {
-    let path = RelativePath::new(name);
-    path.extension()
-        .map(|extension| {
-            extensions
-                .iter()
-                .any(|known_extension| known_extension == extension)
-        })
-        .unwrap_or(false)
-}
-
 macro_rules! loader_impls {
-    ($($($t:ident)*,)*) => {
-        $(
+    ($($t:ident)*) => {
+        loader_impls!(@sub @mark $($t)*);
+    };
+    (@sub $($lead:ident)* @mark $head:ident $($rest:ident)*) => {
+        loader_impls!(@impl $($lead)*);
+        loader_impls!(@sub $($lead)* $head @mark $($rest)*);
+    };
+    (@sub $($lead:ident)* @mark) => {
+        loader_impls!(@impl $($lead)*);
+    };
+    (@impl $($t:ident)*) => {
             impl<$($t,)*> Resolver for ($($t,)*)
             where
                 $($t: Resolver,)*
             {
                 #[allow(non_snake_case)]
-                fn resolve<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
-                    let mut messages = Vec::new();
+                #[allow(unused_mut)]
+                fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+                    let mut messages = Vec::<std::string::String>::new();
                     let ($($t,)*) = self;
                     $(
-                        match $t.resolve(ctx, base, name) {
+                        match $t.resolve(_ctx, base, name) {
                             // Still could try the next resolver
-                            Err(Error::Resolving { message, .. }) => {
+                            Err($crate::Error::Resolving { message, .. }) => {
                                 message.map(|message| messages.push(message));
                             },
                             result => return result,
@@ -206,25 +223,26 @@ macro_rules! loader_impls {
                     )*
                     // Unable to resolve module name
                     Err(if messages.is_empty() {
-                        Error::new_resolving(base, name)
+                        $crate::Error::new_resolving(base, name)
                     } else {
-                        Error::new_resolving_message(base, name, messages.join("\n"))
+                        $crate::Error::new_resolving_message(base, name, messages.join("\n"))
                     })
                 }
             }
 
-            impl<S, $($t,)*> Loader<S> for ($($t,)*)
+            impl< $($t,)*> $crate::loader::Loader for ($($t,)*)
             where
-                $($t: Loader<S>,)*
+                $($t: $crate::loader::Loader,)*
             {
                 #[allow(non_snake_case)]
-                fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded<S>>> {
-                    let mut messages = Vec::new();
+                #[allow(unused_mut)]
+                fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
+                    let mut messages = Vec::<std::string::String>::new();
                     let ($($t,)*) = self;
                     $(
-                        match $t.load(ctx, name) {
+                        match $t.load(_ctx, name) {
                             // Still could try the next loader
-                            Err(Error::Loading { message, .. }) => {
+                            Err($crate::Error::Loading { message, .. }) => {
                                 message.map(|message| messages.push(message));
                             },
                             result => return result,
@@ -232,87 +250,26 @@ macro_rules! loader_impls {
                     )*
                     // Unable to load module
                     Err(if messages.is_empty() {
-                        Error::new_loading(name)
+                        $crate::Error::new_loading(name)
                     } else {
-                        Error::new_loading_message(name, messages.join("\n"))
+                        $crate::Error::new_loading_message(name, messages.join("\n"))
                     })
                 }
             }
-        )*
     };
 }
-
-loader_impls! {
-    A,
-    A B,
-    A B C,
-    A B C D,
-    A B C D E,
-    A B C D E F,
-    A B C D E F G,
-    A B C D E F G H,
-}
-
-/// The helper macro to impl [`Loader`] traits for generic module kind.
-///
-/// ```ignore
-/// generic_loader! {
-///     // Without bounds and metas
-///     // The `Loader<Script>` trait should be implemented for `MyScriptLoader`
-///     MyScriptLoader: Script,
-///
-///     // With bounds and metas
-///     // The `Loader<Native>` trait should be implemented for `MyModuleLoader<T>`
-///     /// My loader doc comment
-///     #[cfg(feature = "my-module-loader")]
-///     MyModuleLoader<T>: Native {
-///         T: Loader<Native>,
-///     },
-/// }
-/// ```
-#[macro_export]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-macro_rules! generic_loader {
-    ($($(#[$meta:meta])* $type:ident $(<$($param:ident),*>)*: $kind:ident $({ $($bound:tt)* })*,)*) => {
-        $(
-            $(#[$meta])*
-            impl $(<$($param),*>)* $crate::Loader for $type $(<$($param),*>)*
-            $(where $($bound)*)*
-            {
-                fn load<'js>(
-                    &mut self,
-                    ctx: $crate::Ctx<'js>,
-                    name: &str,
-                ) -> $crate::Result<$crate::Module<'js, $crate::Loaded>> {
-                    $crate::Loader::<$crate::$kind>::load(self, ctx, name).map(|module| module.into_loaded())
-                }
-            }
-        )*
-    };
-}
-
-generic_loader! {
-    ScriptLoader: Script,
-    #[cfg(feature = "dyn-load")]
-    NativeLoader: Native,
-    BuiltinLoader: Script,
-    ModuleLoader: Native,
-    Bundle<L>: Script {
-        Self: Loader<Script>,
-    },
-    Compile<L>: Script {
-        L: Loader<Script>,
-    },
-}
+loader_impls!(A B C D E F G H);
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{Context, Ctx, Error, ModuleData, Result, Runtime};
+
+    use super::{Loader, Resolver};
 
     struct TestResolver;
 
     impl Resolver for TestResolver {
-        fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<StdString> {
+        fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
             if base == "loader" && name == "test" {
                 Ok(name.into())
             } else {
@@ -328,17 +285,15 @@ mod test {
     struct TestLoader;
 
     impl Loader for TestLoader {
-        fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js, Loaded>> {
+        fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
             if name == "test" {
-                Ok(Module::new(
-                    ctx,
+                Ok(ModuleData::source(
                     "test",
                     r#"
                       export const n = 123;
                       export const s = "abc";
                     "#,
-                )?
-                .into_loaded())
+                ))
             } else {
                 Err(Error::new_loading_message(name, "unable to load"))
             }
