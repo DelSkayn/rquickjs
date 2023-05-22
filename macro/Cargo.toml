@@ -31,11 +31,11 @@ features = ["full"]
 
 [dependencies.phf_shared]
 version = "0.10"
-#optional = true
+optional = true
 
 [dependencies.phf_generator]
 version = "0.10"
-#optional = true
+optional = true
 
 [dependencies.rquickjs-core]
 path = "../core"
@@ -55,4 +55,4 @@ version = "1"
 features = ["attributes"]
 
 [features]
-phf = [] #["phf_shared", "phf_generator"]
+phf = ["phf_shared", "phf_generator"]

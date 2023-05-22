@@ -30,12 +30,14 @@ pub use native_loader::NativeLoader;
 pub mod bundle;
 
 #[cfg(feature = "phf")]
+/// The type of bundle that the [`embed!`] macro returns
 pub type Bundle = bundle::Bundle<bundle::PhfBundleData<&'static [u8]>>;
 
 #[cfg(not(feature = "phf"))]
+/// The type of bundle that the [`embed!`] macro returns
 pub type Bundle = bundle::Bundle<bundle::ScaBundleData<&'static [u8]>>;
 
-pub mod util;
+mod util;
 
 /// Module resolver interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
