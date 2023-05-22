@@ -452,7 +452,7 @@ impl<'js> Module<'js> {
     /// Creates a new module from JS source, and evaluates it.
     ///
     /// It is unsafe to hold onto unevaluated modules across this call.
-    pub fn instantiate<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
+    pub fn evaluate<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
@@ -484,7 +484,7 @@ impl<'js> Module<'js> {
     ///
     /// It is unsound to hold onto an unavaluated module across any call to this function which
     /// returns an error.
-    pub fn instantiate_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
+    pub fn evaluate_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         D: ModuleDef,
@@ -903,7 +903,7 @@ mod test {
     #[test]
     fn from_rust_def_eval() {
         test_with(|ctx| {
-            let _ = Module::instantiate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            let _ = Module::evaluate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
         })
     }
 

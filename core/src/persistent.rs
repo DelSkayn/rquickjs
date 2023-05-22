@@ -1,5 +1,6 @@
 use crate::{
-    qjs, Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
+    qjs, Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Module, Object, Result, String,
+    Symbol, Value,
 };
 use std::{
     cell::Cell,

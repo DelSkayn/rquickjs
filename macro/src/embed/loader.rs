@@ -1,5 +1,5 @@
 use std::{
-    collections::{hash_map::Iter as HashMapIter, HashMap},
+    collections::HashMap,
     iter::{ExactSizeIterator, FusedIterator},
     ops::{Deref, DerefMut},
     sync::{Arc, Mutex, MutexGuard},
@@ -121,7 +121,7 @@ impl<R> Resolver for Embed<R>
 where
     R: Resolver,
 {
-    fn resolve<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve(&mut self, ctx: Ctx, base: &str, name: &str) -> Result<String> {
         // Ignore base because it is always the same.
         self.inner.resolve(ctx, base, name).map(|path| {
             let name = resolve_simple(base, name);
