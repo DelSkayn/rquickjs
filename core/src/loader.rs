@@ -27,10 +27,13 @@ mod native_loader;
 #[cfg(feature = "dyn-load")]
 pub use native_loader::NativeLoader;
 
-mod bundle;
+pub mod bundle;
+
 #[cfg(feature = "phf")]
-pub use bundle::PhfBundleData;
-pub use bundle::{Bundle, HasByteCode, ScaBundleData};
+pub type Bundle = bundle::Bundle<bundle::PhfBundleData<&'static [u8]>>;
+
+#[cfg(not(feature = "phf"))]
+pub type Bundle = bundle::Bundle<bundle::ScaBundleData<&'static [u8]>>;
 
 pub mod util;
 

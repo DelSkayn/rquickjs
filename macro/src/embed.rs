@@ -1,216 +1,165 @@
-#[cfg(test)]
-macro_rules! test_cases {
-    ($($(#[$m:meta])* $c:ident { $($a:tt)* } { $($s:tt)* } { $($d:tt)* };)*) => {
-        $(
-            $(#[$m])*
-            #[test]
-            fn $c() {
-                let embedder = crate::Embedder::new(crate::Config::default());
-                let attrs: crate::AttributeArgs = syn::parse_quote! { $($a)* };
-                let attrs = darling::FromMeta::from_list(&*attrs).unwrap();
-                let input = syn::parse_quote! { $($s)* };
-                let output = embedder.expand(attrs, input);
-                let actual = quote::quote! { #output };
-                let expected = quote::quote! { $($d)* };
-                assert_eq_tokens!(actual, expected);
-            }
-        )*
-    };
-}
-
-mod attrs;
-pub use attrs::*;
-
-mod loader;
-
-use crate::{Config, PubVis, TokenStream};
-use ident_case::RenameRule;
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use rquickjs_core::{
-    loader::{FileResolver, ScriptLoader},
-    Context, Module, Result, Runtime,
+use rquickjs_core::{Context, Module, Result, Runtime};
+use syn::{
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    LitStr, Token,
 };
-use std::path::Path;
-use syn::ItemMod;
 
-#[cfg(feature = "phf")]
-use {phf_shared::PhfHash, std::hash::Hasher};
-
-pub struct Entry<N, D> {
-    name: N,
-    data: D,
+pub struct EmbedModule {
+    pub path: LitStr,
+    pub name: Option<(Token![:], LitStr)>,
 }
 
-#[cfg(feature = "phf")]
-impl<N, D> PhfHash for Entry<N, D>
-where
-    N: PhfHash,
-{
-    fn phf_hash<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
-        self.name.phf_hash(state)
-    }
-}
-
-pub struct Embedder {
-    config: Config,
-}
-
-impl Embedder {
-    pub fn new(config: Config) -> Self {
-        Self { config }
-    }
-
-    pub fn expand(&self, attrs: AttrEmbed, item: ItemMod) -> TokenStream {
-        #[cfg(feature = "phf")]
-        let phf_map = attrs.phf_map;
-
-        let AttrEmbed {
-            ident,
-            paths,
-            patterns,
-            mut names,
-            test,
-            public,
-            ..
-        } = attrs;
-
-        let ident = ident.unwrap_or_else(|| {
-            format_ident!(
-                "{}",
-                RenameRule::ScreamingSnakeCase.apply_to_variant(item.ident.to_string())
-            )
-        });
-        if names.is_empty() {
-            names.push(item.ident.to_string());
-        }
-        let public = public.as_ref().map(PubVis::override_tokens);
-
-        let compile = loader::Embed::new();
-
-        let mut resolver = compile.resolver(FileResolver::default());
-        for path in &paths {
-            resolver.add_path(path);
-        }
-        for pattern in &patterns {
-            resolver.add_pattern(pattern);
-        }
-
-        let mut loader = compile.loader(ScriptLoader::default());
-
-        for pattern in &patterns {
-            if let Some(extension) = Path::new(pattern)
-                .extension()
-                .and_then(|extension| extension.to_str())
-            {
-                loader.add_extension(extension);
-            }
-        }
-
-        if let Err(error) = (|| -> Result<()> {
-            let rt = Runtime::new()?;
-            let ctx = Context::full(&rt)?;
-
-            rt.set_loader(resolver, loader);
-
-            let source = names
-                .iter()
-                .map(|name| format!("import '{name}';"))
-                .collect::<Vec<_>>()
-                .join("");
-
-            ctx.with(|ctx| {
-                Module::declare(ctx, "<main>", source)?;
-                Ok(())
-            })
-        })() {
-            error!(ident, "Error when embedding JS modules: {}", error);
-            return quote!();
-        }
-
-        let entries = compile
-            .bytecodes()
-            .into_iter()
-            .map(|(name, data)| {
-                let name = name.to_string();
-                let data = if test {
-                    quote! { &[0u8, 1u8, 2u8, 3u8] }
-                } else {
-                    quote! { &[#(#data),*] }
-                };
-                Entry { name, data }
-            })
-            .collect::<Vec<_>>();
-
-        let content = {
-            #[cfg(feature = "phf")]
-            if phf_map {
-                self.build_phf(&entries)
-            } else {
-                self.build_sca(&entries)
-            }
-
-            #[cfg(not(feature = "phf"))]
-            self.build_sca(&entries)
+impl Parse for EmbedModule {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let path = input.parse::<LitStr>()?;
+        let name = if input.peek(Token![:]) {
+            let colon = input.parse()?;
+            let name = input.parse()?;
+            Some((colon, name))
+        } else {
+            None
         };
 
-        quote! {
-            #public static #ident #content;
-        }
+        Ok(EmbedModule { path, name })
+    }
+}
+
+pub struct EmbedModules(pub Punctuated<EmbedModule, Token![,]>);
+
+impl Parse for EmbedModules {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let res = input.parse_terminated::<_, Token![,]>(EmbedModule::parse)?;
+        Ok(EmbedModules(res))
+    }
+}
+
+pub fn embed(modules: EmbedModules) -> TokenStream {
+    let mut files = Vec::new();
+    for f in modules.0.into_iter() {
+        let path = f.path.value();
+        let source = match std::fs::read_to_string(&path) {
+            Ok(x) => x,
+            Err(e) => {
+                error!(
+                    f.path,
+                    "Error loading embedded js module from path `{}`: {}", path, e
+                );
+                continue;
+            }
+        };
+        files.push((f.name.map(|x| x.1.value()).unwrap_or(path), source));
     }
 
-    fn build_sca(&self, entries: &[Entry<String, TokenStream>]) -> TokenStream {
-        let lib_crate = &self.config.lib_crate;
-        let entries = entries.iter().map(|Entry { name, data }| {
-            quote! { (#name, #data) }
-        });
-        quote! {
-            : #lib_crate::loader::Bundle<&'static [(&'static str, &'static [u8])]> = #lib_crate::loader::Bundle(&[#(#entries),*])
-        }
-    }
+    let res = (|| -> Result<Vec<(String, Vec<u8>)>> {
+        let rt = Runtime::new()?;
+        let ctx = Context::full(&rt)?;
 
-    #[cfg(feature = "phf")]
-    fn build_phf(&self, entries: &[Entry<String, TokenStream>]) -> TokenStream {
-        let lib_crate = &self.config.lib_crate;
-        let state = phf_generator::generate_hash(entries);
-        let key = state.key;
-        let disps = state.disps.iter().map(|&(d1, d2)| quote!((#d1, #d2)));
-        let entries = state.map.iter().map(|&index| {
-            let Entry { name, data } = &entries[index];
-            quote! { (#name, #data) }
-        });
-        quote! {
-            : #lib_crate::loader::Bundle<&'static #lib_crate::phf::Map<&'static str, &'static [u8]>> = #lib_crate::loader::Bundle(&#lib_crate::phf::Map {
-                key: #key,
-                disps: #lib_crate::phf::Slice::Static(&[#(#disps),*]),
-                entries: #lib_crate::phf::Slice::Static(&[#(#entries),*]),
-            })
+        let mut modules = Vec::new();
+
+        ctx.with(|ctx| -> Result<()> {
+            for f in files.into_iter() {
+                let bc =
+                    unsafe { Module::unsafe_declare(ctx, f.0.clone(), f.1)?.write_object(false)? };
+                modules.push((f.0, bc));
+            }
+            Ok(())
+        })?;
+        Ok(modules)
+    })();
+
+    let res = match res {
+        Ok(x) => x,
+        Err(e) => {
+            error!("Error compiling embedded js module: {}", e);
+            return quote!();
         }
+    };
+
+    let res = to_entries(res.into_iter());
+
+    expand(&res)
+}
+
+fn to_entries(modules: impl Iterator<Item = (String, Vec<u8>)>) -> Vec<(String, TokenStream)> {
+    modules
+        .map(|(name, data)| (name, quote! { &[#(#data),*] }))
+        .collect::<Vec<_>>()
+}
+
+#[cfg(feature = "phf")]
+pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
+    let keys = modules.iter().map(|(x, _)| x.clone()).collect::<Vec<_>>();
+
+    let state = phf_generator::generate_hash(&keys);
+
+    let key = state.key;
+    let disps = state.disps.iter().map(|&(d1, d2)| quote!((#d1, #d2)));
+    let entries = state.map.iter().map(|&idx| {
+        let key = &modules[idx].0;
+        let value = &modules[idx].1;
+        quote!((#key, #value))
+    });
+
+    let lib_crate = super::config::lib_crate();
+    let lib_crate = format_ident!("{}", lib_crate);
+    quote! {
+        #lib_crate::loader::bundle::Bundle(& #lib_crate::phf::Map{
+            key: #key,
+            disps: &[#(#disps),*],
+            entries: &[#(#entries),*],
+        })
+    }
+}
+
+#[cfg(not(feature = "phf"))]
+pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
+    let lib_crate = super::config::lib_crate();
+    let lib_crate = format_ident!("{}", lib_crate);
+    let entries = modules.iter().map(|(name, data)| {
+        quote! { (#name,#data)}
+    });
+    quote! {
+        #lib_crate::loader::bundle::Bundle(&[#(#entries),*])
     }
 }
 
 #[cfg(test)]
 mod test {
-    test_cases! {
-        static_const_array { test, path = "." } { mod my_module {} } {
-            static MY_MODULE: rquickjs::loader::Bundle<&'static [(&'static str, &'static [u8])]> = rquickjs::loader::Bundle(&[
-                ("my_module", &[0u8, 1u8, 2u8, 3u8])
-            ]);
-        };
+    use super::{expand, to_entries};
+    use quote::quote;
 
-        #[cfg(feature = "phf")]
-        perfect_hash_map { test, perfect, path = "." } { mod my_module {} } {
-            static MY_MODULE: rquickjs::loader::Bundle<&'static rquickjs::phf::Map<&'static str, &'static [u8]>> = rquickjs::loader::Bundle(&rquickjs::phf::Map {
+    #[cfg(feature = "phf")]
+    #[test]
+    fn test_expand() {
+        let data = vec![("test_module".to_string(), vec![1u8, 2, 3, 4])];
+        let test_data = to_entries(data.into_iter());
+        let tokens = expand(&test_data);
+        let expected = quote! {
+            rquickjs::loader::bundle::Bundle(&rquickjs::phf::Map{
                 key: 12913932095322966823u64,
-                disps: rquickjs::phf::Slice::Static(&[
-                    (0u32 , 0u32)
-                ]),
-                entries: rquickjs::phf::Slice::Static(&[
-                    ("my_module", &[0u8, 1u8, 2u8, 3u8])
-                ]),
-            });
+                disps: &[(0u32,0u32)],
+                entries: &[
+                    ("test_module", &[1u8, 2u8, 3u8,4u8])
+                ],
+            })
         };
+        assert_eq_tokens!(tokens, expected);
+    }
+
+    #[cfg(not(feature = "phf"))]
+    #[test]
+    fn test_expand() {
+        let data = vec![("test_module".to_string(), vec![1u8, 2, 3, 4])];
+        let test_data = to_entries(data.into_iter());
+        let tokens = expand(&test_data);
+        let expected = quote! {
+            rquickjs::loader::bundle::Bundle(&[
+                ("test_module", &[1u8, 2u8, 3u8,4u8])
+            ])
+        };
+        assert_eq_tokens!(tokens, expected);
     }
 }

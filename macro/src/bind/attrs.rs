@@ -1,4 +1,9 @@
-use crate::{AttributeArgs, Config, Ident, Parenthesized, PubVis};
+use crate::{
+    config::Config,
+    shim::{AttributeArgs, Parenthesized},
+    utils::PubVis,
+    Ident,
+};
 use darling::{util::Override, FromMeta};
 use syn::{parse2, AttrStyle, Attribute, Path};
 

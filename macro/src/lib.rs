@@ -51,20 +51,15 @@ mod embed;
 mod shim;
 mod utils;
 
+use bind::{AttrItem, Binder};
 use darling::{FromDeriveInput, FromMeta};
+use derive::{DataType, FromJs, HasRefs, IntoJs};
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro_error::proc_macro_error;
+use shim::AttributeArgs;
 use syn::parse_macro_input;
 
 use proc_macro2::{Ident, TokenStream};
-
-use bind::*;
-use config::*;
-use context::*;
-use derive::*;
-use embed::*;
-use shim::*;
-use utils::*;
 
 /**
 An attribute to generate bindings easy
@@ -494,31 +489,24 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 }
 
 /**
-An attribute to convert scripts modules into builtins
+ An macro to bundle modules loaded from source.
 
-# Supported attributes
-
-Attribute                  | Description
--------------------------- | --------------------------
-__`ident = "MyModule"`__   | The name of target unit struct to export
-__`public`__, __`public = "self/super/crate"`__ | Makes the target unit struct visible
-__`path = "search-path"`__ | Add a paths where modules can be found
-__`name = "module-name"`__ | The name of module to embed
-__`perfect`__              | Use perfect hash map for embedded modules (`feature = "phf"`)
-__`crate = "rquickjs"`__   | Allows rename `rquickjs` crate
-
-# Examples
-
+ # Examples
 ```
-# use rquickjs::{embed, Runtime, Context, Module};
+# use rquickjs::{embed, Runtime, Context, Module, loader::Bundle};
 
-#[embed(path = "../examples/module-loader")]
-mod script_module {}
+static BUNDLE: Bundle = embed!{
+    // Load file `../examples/module-loader/script_module.js" and name it `script_module`
+    "../examples/module-loader/script_module.js": "script_module",
+    // Load file `../examples/module-loader/script_module.js" and name it
+    // `../examples/module-loader/script_module.js`
+    "../examples/module-loader/script_module.js"
+};
 
 let rt = Runtime::new().unwrap();
 let ctx = Context::full(&rt).unwrap();
 
-rt.set_loader(SCRIPT_MODULE, SCRIPT_MODULE);
+rt.set_loader(BUNDLE, BUNDLE);
 
 ctx.with(|ctx| {
     ctx.compile("script", r#"
@@ -527,19 +515,11 @@ ctx.with(|ctx| {
 });
 ```
 */
-
 #[proc_macro_error]
-#[proc_macro_attribute]
-pub fn embed(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
-    let attr: AttributeArgs = parse_macro_input!(attr);
-    let item = parse_macro_input!(item);
-
-    let attr = AttrEmbed::from_list(&attr).unwrap_or_else(|error| {
-        abort!("{}", error);
-    });
-    let embedder = Embedder::new(attr.config());
-    let output = embedder.expand(attr, item);
-    output.into()
+#[proc_macro]
+pub fn embed(item: TokenStream1) -> TokenStream1 {
+    let embed_modules: embed::EmbedModules = parse_macro_input!(item);
+    embed::embed(embed_modules).into()
 }
 
 /**

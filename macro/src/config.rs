@@ -9,7 +9,7 @@ pub struct Config {
     pub exports_var: Ident,
 }
 
-fn lib_crate() -> String {
+pub fn lib_crate() -> String {
     env!("CARGO_PKG_NAME").replace("-macro", "")
 }
 

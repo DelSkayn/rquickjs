@@ -1,5 +1,5 @@
-use super::{AttrFn, BindProp, Binder};
-use crate::{Config, Ident, Source, TokenStream};
+use super::{attrs::AttrFn, BindProp, Binder};
+use crate::{config::Config, context::Source, Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{Attribute, FnArg, ImplItemMethod, ItemFn, Pat, Signature, Visibility};
 

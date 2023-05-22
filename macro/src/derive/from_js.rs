@@ -1,5 +1,5 @@
 use super::{DataField, DataType, DataVariant, EnumRepr};
-use crate::{Config, Ident, TokenStream};
+use crate::{config::Config, Ident, TokenStream};
 use darling::ast::{Data, Fields, Style};
 use quote::quote;
 use std::collections::HashMap;

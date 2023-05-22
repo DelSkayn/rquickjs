@@ -180,13 +180,13 @@ where
     C: ClassDef,
 {
     /// Get an integer class identifier
-    #[inline(always)]
+    #[inline]
     pub(crate) fn id() -> qjs::JSClassID {
         C::class_id().get()
     }
 
     /// Wrap constructor of class
-    #[inline(always)]
+    #[inline]
     pub fn constructor<F>(func: F) -> Constructor<C, F> {
         Constructor(func, PhantomData)
     }
