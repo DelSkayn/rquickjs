@@ -36,7 +36,7 @@ impl Default for NativeLoader {
         #[cfg(target_family = "windows")]
         loader.add_extension("dll");
 
-        #[cfg(all(target_family = "unix"))]
+        #[cfg(target_family = "unix")]
         loader.add_extension("so");
 
         #[cfg(target_vendor = "apple")]

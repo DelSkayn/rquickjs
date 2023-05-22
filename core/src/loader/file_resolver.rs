@@ -65,7 +65,7 @@ impl FileResolver {
         #[cfg(target_vendor = "apple")]
         self.add_pattern("{}.dylib").add_pattern("lib{}.dylib");
 
-        #[cfg(all(target_family = "unix"))]
+        #[cfg(target_family = "unix")]
         self.add_pattern("{}.so").add_pattern("lib{}.so");
 
         self
