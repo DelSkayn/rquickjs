@@ -7,6 +7,8 @@ use syn::{parse_macro_input, AttributeArgs, Item};
 mod class;
 use class::{impl_enum, impl_struct};
 
+mod method;
+
 enum Error {
     Syn(syn::Error),
     Darling(darling::Error),
@@ -47,10 +49,38 @@ pub fn jsclass(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
         Item::Enum(enum_) => impl_enum(attr, enum_)
             .unwrap_or_else(Error::into_stream)
             .into(),
-        unsupported => {
-            syn::Error::new_spanned(unsupported, "#[jsclass] only supports structs and enums.")
+        unsupported => syn::Error::new_spanned(
+            unsupported,
+            "#[jsclass] can only be used on `struct` declarations.",
+        )
+        .into_compile_error()
+        .into(),
+    }
+}
+
+#[proc_macro_error]
+#[proc_macro_attribute]
+pub fn jsmethods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let item = parse_macro_input!(item as Item);
+    match item {
+        Item::Impl(item) => {
+            if item.trait_.is_some() {
+                return syn::Error::new_spanned(
+                    item,
+                    "#[jsmethods] cannot be used on trait implementations.",
+                )
                 .into_compile_error()
+                .into();
+            }
+            method::expand(item)
+                .unwrap_or_else(Error::into_stream)
                 .into()
         }
+        unsupported => syn::Error::new_spanned(
+            unsupported,
+            "#[jsmethods] can only be used on `impl` declarations.",
+        )
+        .into_compile_error()
+        .into(),
     }
 }
