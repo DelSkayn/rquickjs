@@ -3,11 +3,13 @@ use std::{
     collections::HashSet,
     ffi::{CStr, CString},
     fmt,
-    marker::PhantomData,
     mem::MaybeUninit,
     ptr::{self, NonNull},
     slice,
 };
+
+#[cfg(feature = "exports")]
+use std::marker::PhantomData;
 
 use crate::{qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Value};
 
