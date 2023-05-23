@@ -57,7 +57,7 @@ impl<'js> Array<'js> {
         let val = val.into_js(ctx)?.into_js_value();
         unsafe {
             if 0 > qjs::JS_SetPropertyUint32(ctx.as_ptr(), obj, idx as _, val) {
-                return Err(ctx.get_exception());
+                return Err(self.ctx.raise_exception());
             }
         }
         Ok(())

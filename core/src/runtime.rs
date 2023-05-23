@@ -1,7 +1,7 @@
 #[cfg(feature = "loader")]
 use crate::loader::{LoaderHolder, RawLoader, Resolver};
-use crate::{qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
-use std::{any::Any, ffi::CString, mem, panic, ptr::NonNull};
+use crate::{qjs, Context, Ctx, Error, Function, Mut, Ref, Result, Weak};
+use std::{any::Any, ffi::CString, mem, panic, ptr::NonNull, result::Result as StdResult};
 
 #[cfg(feature = "futures")]
 mod async_runtime;
@@ -84,6 +84,12 @@ impl Drop for Inner {
     }
 }
 
+/// A error raised from running a pending job
+/// Contains the context from which the error was raised.
+///
+/// Use `Ctx::catch` to retrieve the error.
+pub struct JobException(pub Context);
+
 impl Inner {
     pub(crate) fn update_stack_top(&self) {
         #[cfg(feature = "parallel")]
@@ -105,7 +111,7 @@ impl Inner {
         0 != unsafe { qjs::JS_IsJobPending(self.rt.as_ptr()) }
     }
 
-    pub(crate) fn execute_pending_job(&mut self) -> Result<bool> {
+    pub(crate) fn execute_pending_job(&mut self) -> StdResult<bool, JobException> {
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
         self.update_stack_top();
         let result = unsafe { qjs::JS_ExecutePendingJob(self.rt.as_ptr(), ctx_ptr.as_mut_ptr()) };
@@ -119,7 +125,7 @@ impl Inner {
         }
         // exception thrown
         let ctx = unsafe { Ctx::from_ptr(ctx_ptr.assume_init()) };
-        Err(unsafe { ctx.get_exception() })
+        Err(JobException(Context::from_ctx(ctx)))
     }
 }
 
@@ -325,7 +331,7 @@ impl Runtime {
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     #[inline]
-    pub fn execute_pending_job(&self) -> Result<bool> {
+    pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
         self.inner.lock().execute_pending_job()
     }
 }

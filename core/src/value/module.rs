@@ -580,7 +580,7 @@ impl<'js> Module<'js> {
         let buf =
             unsafe { qjs::JS_WriteObject(ctx.as_ptr(), len.as_mut_ptr(), value, flags as i32) };
         if buf.is_null() {
-            return Err(unsafe { ctx.get_exception() });
+            return Err(unsafe { ctx.raise_exception() });
         }
         let len = unsafe { len.assume_init() };
         let obj = unsafe { slice::from_raw_parts(buf, len as _) };

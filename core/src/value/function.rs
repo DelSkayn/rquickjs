@@ -49,7 +49,7 @@ impl<'js> Function<'js> {
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );
             if res < 0 {
-                return Err(ctx.get_exception());
+                return Err(self.ctx.raise_exception());
             }
         };
 
@@ -71,7 +71,7 @@ impl<'js> Function<'js> {
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );
             if res < 0 {
-                return Err(ctx.get_exception());
+                return Err(ctx.raise_exception());
             }
         };
 
@@ -172,7 +172,7 @@ impl<'js> Function<'js> {
                 input.args.as_ptr() as _,
             ) < 0
             {
-                return Err(ctx.get_exception());
+                return Err(ctx.raise_exception());
             }
         }
         Ok(())

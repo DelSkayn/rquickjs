@@ -1,6 +1,6 @@
 use crate::{
-    markers::Invariant, qjs, runtime::Opaque, Context, FromJs, Function, Module, Object, Result,
-    Value,
+    markers::Invariant, qjs, runtime::Opaque, Context, Error, FromJs, Function, Module, Object,
+    Result, Value,
 };
 
 #[cfg(feature = "futures")]
@@ -163,6 +163,24 @@ impl<'js> Ctx<'js> {
             let v = qjs::JS_GetGlobalObject(self.ctx.as_ptr());
             Object::from_js_value(self, v)
         }
+    }
+
+    /// Returns the current exception, if there is no exception `null` is returned.
+    pub fn catch(self) -> Value<'js> {
+        unsafe {
+            let v = qjs::JS_GetException(self.ctx.as_ptr());
+            Value::from_js_value(self, v)
+        }
+    }
+
+    /// Throws a javascript value as a new exception.
+    /// Always returns Err(Error::Exception), use with `?` operator to easily raise exceptions.
+    pub fn throw(self, value: Value<'js>) -> Result<()> {
+        unsafe {
+            let v = value.into_js_value();
+            qjs::JS_Throw(self.ctx.as_ptr(), v);
+        }
+        return Err(Error::Exception);
     }
 
     /// Creates promise and resolving functions.

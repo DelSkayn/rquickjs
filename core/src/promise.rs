@@ -122,7 +122,7 @@ impl<T> PromiseTask<T> {
         let then = Persistent::save(ctx, then);
         let catch = Persistent::save(ctx, catch);
 
-        let context = Context::from_ctx(ctx)?;
+        let context = Context::from_ctx(ctx);
 
         Ok((
             Self {

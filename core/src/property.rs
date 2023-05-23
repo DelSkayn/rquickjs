@@ -48,7 +48,7 @@ impl<'js> Object<'js> {
                 flags,
             );
             if res < 0 {
-                return Err(ctx.get_exception());
+                return Err(self.0.ctx.raise_exception());
             }
         }
         Ok(())

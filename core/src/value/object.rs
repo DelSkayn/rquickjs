@@ -104,7 +104,7 @@ impl<'js> Object<'js> {
         unsafe {
             let res = qjs::JS_HasProperty(self.0.ctx.as_ptr(), self.0.as_js_value(), atom.atom);
             if res < 0 {
-                return Err(self.0.ctx.get_exception());
+                return Err(self.0.ctx.raise_exception());
             }
             Ok(res == 1)
         }
@@ -122,7 +122,7 @@ impl<'js> Object<'js> {
                 val.into_js_value(),
             ) < 0
             {
-                return Err(self.0.ctx.get_exception());
+                return Err(self.0.ctx.raise_exception());
             }
         }
         Ok(())
@@ -139,7 +139,7 @@ impl<'js> Object<'js> {
                 qjs::JS_PROP_THROW as _,
             ) < 0
             {
-                return Err(self.0.ctx.get_exception());
+                return Err(self.0.ctx.raise_exception());
             }
         }
         Ok(())
@@ -219,7 +219,7 @@ impl<'js> Object<'js> {
                 self.0.as_js_value(),
                 proto.0.as_js_value(),
             ) {
-                Err(self.0.ctx.get_exception())
+                Err(self.0.ctx.raise_exception())
             } else {
                 Ok(())
             }
@@ -329,7 +329,7 @@ impl<'js> IterState<'js> {
                 flags,
             ) < 0
             {
-                return Err(ctx.get_exception());
+                return Err(ctx.raise_exception());
             }
             let enums = enums.assume_init();
             let count = count.assume_init();
