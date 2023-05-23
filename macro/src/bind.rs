@@ -16,14 +16,6 @@ macro_rules! test_cases {
         )*
     };
 }
-
-mod attrs;
-mod class;
-mod constant;
-mod function;
-mod module;
-mod property;
-
 use crate::{config::Config, context::Source, utils::PubVis, Ident, TokenStream};
 use darling::FromMeta;
 use fnv::FnvBuildHasher;
@@ -32,6 +24,13 @@ use indexmap::IndexMap;
 use quote::{format_ident, quote};
 use std::{convert::TryFrom, mem::replace};
 use syn::{spanned::Spanned, Attribute, ImplItem, Item, Visibility};
+
+mod attrs;
+mod class;
+mod constant;
+mod function;
+mod module;
+mod property;
 
 pub use attrs::AttrItem;
 

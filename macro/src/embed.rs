@@ -7,6 +7,7 @@ use syn::{
     LitStr, Token,
 };
 
+/// A line of embedded modules.
 pub struct EmbedModule {
     pub path: LitStr,
     pub name: Option<(Token![:], LitStr)>,
@@ -27,6 +28,7 @@ impl Parse for EmbedModule {
     }
 }
 
+/// The parsing struct for embedded modules.
 pub struct EmbedModules(pub Punctuated<EmbedModule, Token![,]>);
 
 impl Parse for EmbedModules {
@@ -36,6 +38,7 @@ impl Parse for EmbedModules {
     }
 }
 
+/// Implementation of the macro
 pub fn embed(modules: EmbedModules) -> TokenStream {
     let mut files = Vec::new();
     for f in modules.0.into_iter() {
@@ -128,7 +131,7 @@ pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
 
 #[cfg(test)]
 mod test {
-    use super::{expand, to_entries};
+    use super::{expand, to_entries, EmbedModules};
     use quote::quote;
 
     #[cfg(feature = "phf")]
@@ -161,5 +164,23 @@ mod test {
             ])
         };
         assert_eq_tokens!(tokens, expected);
+    }
+
+    #[test]
+    fn parse() {
+        let data = quote! {
+            "Hello world": "foo",
+            "bar"
+        };
+        let mods = syn::parse2::<EmbedModules>(data).unwrap();
+        assert_eq!(mods.0.len(), 2);
+        let mut iter = mods.0.iter();
+        let a = iter.next().unwrap();
+        assert_eq!(a.path.value(), "Hello world");
+        assert_eq!(a.name.as_ref().unwrap().1.value(), "foo");
+        let b = iter.next().unwrap();
+        assert_eq!(b.path.value(), "bar");
+        assert!(b.name.is_none());
+        assert!(iter.next().is_none());
     }
 }
