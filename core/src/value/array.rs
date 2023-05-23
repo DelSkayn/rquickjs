@@ -1,8 +1,10 @@
-use crate::{qjs, Ctx, Error, FromIteratorJs, FromJs, IntoJs, Object, Result, Value};
+use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
 };
+
+use super::convert::FromIteratorJs;
 
 /// Rust representation of a javascript object optimized as an array.
 ///

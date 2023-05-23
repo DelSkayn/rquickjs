@@ -70,7 +70,7 @@ pub trait IntoJs<'js> {
 
 /// Trait for converting values to atoms.
 pub trait IntoAtom<'js> {
-    fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js>;
+    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>>;
 }
 
 /// The Rust's [`Iterator`] trait extension which works with [`Ctx`]

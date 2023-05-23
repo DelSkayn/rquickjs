@@ -1,9 +1,9 @@
-use crate::{qjs, Ctx, Object, StdResult, StdString, Type};
+use crate::{qjs, Context, Ctx, Object, StdResult, StdString, Type};
 
 use std::{
     error::Error as StdError,
     ffi::{CString, FromBytesWithNulError, NulError},
-    fmt::{Display, Formatter, Result as FmtResult},
+    fmt::{self, Display, Formatter, Result as FmtResult},
     io::Error as IoError,
     ops::Range,
     panic,
@@ -258,7 +258,10 @@ impl Error {
                             panic!("generated error while throwing error: {}", e);
                         }
                     }
-                    return qjs::JS_Throw(ctx.as_ptr(), obj.into_js_value());
+                    std::mem::drop(obj);
+                    todo!()
+                    //let js_val = (obj).into_js_value();
+                    //return qjs::JS_Throw(ctx.as_ptr(), js_val);
                 }
             }
         }
@@ -389,6 +392,29 @@ from_impls! {
 impl From<FromUtf8Error> for Error {
     fn from(error: FromUtf8Error) -> Self {
         Error::Utf8(error.utf8_error())
+    }
+}
+
+/// A error raised from running a pending job
+/// Contains the context from which the error was raised.
+///
+/// Use `Ctx::catch` to retrieve the error.
+#[derive(Clone)]
+pub struct JobException(pub Context);
+
+impl fmt::Debug for JobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_tuple("JobException")
+            .field(&"TODO: Context")
+            .finish()
+    }
+}
+
+impl Display for JobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "Job raised an exception")?;
+        // TODO print the error?
+        Ok(())
     }
 }
 

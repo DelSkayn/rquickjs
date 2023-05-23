@@ -18,61 +18,61 @@ pub struct Atom<'js> {
 
 impl<'js> Atom<'js> {
     /// Create a atom from a javascript value.
-    pub fn from_value(ctx: Ctx<'js>, val: &Value<'js>) -> Atom<'js> {
-        // TODO figure out if this can give errors
-        // It seems like it could but I have not yet figured out
-        // how to detect this.
+    pub fn from_value(ctx: Ctx<'js>, val: &Value<'js>) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val.as_js_value()) };
-        Atom { atom, ctx }
+        if atom == qjs::JS_ATOM_NULL {
+            return Err(Error::Exception);
+        }
+        Ok(Atom { atom, ctx })
     }
 
     /// Create a atom from a u32
-    pub fn from_u32(ctx: Ctx<'js>, val: u32) -> Atom<'js> {
-        // TODO figure out if this can give errors
-        // It seems like it could but I have not yet figured out
-        // how to detect this.
+    pub fn from_u32(ctx: Ctx<'js>, val: u32) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_NewAtomUInt32(ctx.as_ptr(), val) };
-        Atom { atom, ctx }
+        if atom == qjs::JS_ATOM_NULL {
+            return Err(Error::Exception);
+        }
+        Ok(Atom { atom, ctx })
     }
 
     /// Create a atom from an i32 via value
-    pub fn from_i32(ctx: Ctx<'js>, val: i32) -> Atom<'js> {
-        // TODO figure out if this can give errors
-        // It seems like it could but I have not yet figured out
-        // how to detect this.
+    pub fn from_i32(ctx: Ctx<'js>, val: i32) -> Result<Atom<'js>> {
         let atom =
             unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_INT, val)) };
-        Atom { atom, ctx }
+        if atom == qjs::JS_ATOM_NULL {
+            return Err(Error::Exception);
+        }
+        Ok(Atom { atom, ctx })
     }
 
     /// Create a atom from a bool via value
-    pub fn from_bool(ctx: Ctx<'js>, val: bool) -> Atom<'js> {
-        // TODO figure out if this can give errors
-        // It seems like it could but I have not yet figured out
-        // how to detect this.
+    pub fn from_bool(ctx: Ctx<'js>, val: bool) -> Result<Atom<'js>> {
         let val = if val { qjs::JS_TRUE } else { qjs::JS_FALSE };
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val) };
-        Atom { atom, ctx }
+        if atom == qjs::JS_ATOM_NULL {
+            return Err(Error::Exception);
+        }
+        Ok(Atom { atom, ctx })
     }
 
     /// Create a atom from a f64 via value
-    pub fn from_f64(ctx: Ctx<'js>, val: f64) -> Atom<'js> {
-        // TODO figure out if this can give errors
-        // It seems like it could but I have not yet figured out
-        // how to detect this.
+    pub fn from_f64(ctx: Ctx<'js>, val: f64) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_NewFloat64(val)) };
-        Atom { atom, ctx }
+        if atom == qjs::JS_ATOM_NULL {
+            return Err(Error::Exception);
+        }
+        Ok(Atom { atom, ctx })
     }
 
     /// Create a atom from a rust string
-    pub fn from_str(ctx: Ctx<'js>, name: &str) -> Atom<'js> {
-        // TODO figure out if this can give errors
-        // It seems like it could but I have not yet figured out
-        // how to detect this.
+    pub fn from_str(ctx: Ctx<'js>, name: &str) -> Result<Atom<'js>> {
         unsafe {
             let ptr = name.as_ptr() as *const std::os::raw::c_char;
             let atom = qjs::JS_NewAtomLen(ctx.as_ptr(), ptr, name.len() as _);
-            Atom { atom, ctx }
+            if atom == qjs::JS_ATOM_NULL {
+                return Err(Error::Exception);
+            }
+            Ok(Atom { atom, ctx })
         }
     }
 

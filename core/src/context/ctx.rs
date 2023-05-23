@@ -180,7 +180,7 @@ impl<'js> Ctx<'js> {
             let v = value.into_js_value();
             qjs::JS_Throw(self.ctx.as_ptr(), v);
         }
-        return Err(Error::Exception);
+        Err(Error::Exception)
     }
 
     /// Creates promise and resolving functions.

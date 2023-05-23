@@ -340,8 +340,7 @@ mod test {
                 .map_err(|error| {
                     println!("{error:?}");
                     // TODO: Error::Resolving
-                    if let Error::Exception { message, .. } = error {
-                        message
+                    if let Error::Exception = error {
                     } else {
                         panic!();
                     }

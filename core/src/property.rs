@@ -34,7 +34,7 @@ impl<'js> Object<'js> {
         V: AsProperty<'js, P>,
     {
         let ctx = self.0.ctx;
-        let key = key.into_atom(ctx);
+        let key = key.into_atom(ctx)?;
         let (flags, value, getter, setter) = prop.config(ctx)?;
         let flags = flags | (qjs::JS_PROP_THROW as PropertyFlags);
         unsafe {

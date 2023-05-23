@@ -1,6 +1,6 @@
 #[cfg(feature = "loader")]
 use crate::loader::{LoaderHolder, RawLoader, Resolver};
-use crate::{qjs, Context, Ctx, Error, Function, Mut, Ref, Result, Weak};
+use crate::{qjs, result::JobException, Context, Ctx, Error, Function, Mut, Ref, Result, Weak};
 use std::{any::Any, ffi::CString, mem, panic, ptr::NonNull, result::Result as StdResult};
 
 #[cfg(feature = "futures")]
@@ -83,12 +83,6 @@ impl Drop for Inner {
         }
     }
 }
-
-/// A error raised from running a pending job
-/// Contains the context from which the error was raised.
-///
-/// Use `Ctx::catch` to retrieve the error.
-pub struct JobException(pub Context);
 
 impl Inner {
     pub(crate) fn update_stack_top(&self) {

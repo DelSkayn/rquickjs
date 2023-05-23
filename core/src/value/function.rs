@@ -38,13 +38,14 @@ impl<'js> Function<'js> {
     pub fn set_length(&self, len: usize) -> Result<()> {
         let ctx = self.0.ctx;
         let func = self.0.as_js_value();
+        let atom = "length".into_atom(ctx)?;
         let len = len.into_js(ctx)?;
 
         unsafe {
             let res = qjs::JS_DefinePropertyValue(
                 ctx.as_ptr(),
                 func,
-                "length".into_atom(ctx).atom,
+                atom.atom,
                 len.into_js_value(),
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );
@@ -60,13 +61,14 @@ impl<'js> Function<'js> {
     pub fn set_name<S: AsRef<str>>(&self, name: S) -> Result<()> {
         let ctx = self.0.ctx;
         let func = self.0.as_js_value();
+        let name_atom = "name".into_atom(ctx)?;
         let name = name.as_ref().into_js(ctx)?;
 
         unsafe {
             let res = qjs::JS_DefinePropertyValue(
                 ctx.as_ptr(),
                 func,
-                "name".into_atom(ctx).atom,
+                name_atom.atom,
                 name.into_js_value(),
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );
