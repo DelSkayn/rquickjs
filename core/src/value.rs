@@ -2,6 +2,7 @@ mod array;
 mod atom;
 mod bigint;
 mod convert;
+mod exception;
 mod function;
 mod module;
 mod object;
@@ -19,6 +20,7 @@ pub use array::Array;
 pub use atom::Atom;
 pub use bigint::BigInt;
 pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
+pub use exception::Exception;
 pub use function::{
     AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
 };
