@@ -1,5 +1,5 @@
-use super::{BindConst, BindFn1};
-use crate::{Config, TokenStream};
+use super::{function::BindFn1, BindConst};
+use crate::{config::Config, TokenStream};
 use quote::quote;
 use syn::spanned::Spanned;
 

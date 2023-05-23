@@ -1,5 +1,5 @@
-use super::{AttrMod, BindItems, Binder};
-use crate::{Config, TokenStream};
+use super::{attrs::AttrMod, BindItems, Binder};
+use crate::{config::Config, TokenStream};
 use quote::{format_ident, quote};
 use syn::ItemMod;
 

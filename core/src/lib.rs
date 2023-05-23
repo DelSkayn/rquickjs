@@ -29,7 +29,7 @@ pub mod phf {
 
 /// Short macro to define a cstring literal.
 ///
-/// Make sure the string does not contain interal null characters or it will end early.
+/// Make sure the string does not contain internal null characters or it will end early.
 #[macro_export]
 macro_rules! cstr {
     ($str:tt) => {

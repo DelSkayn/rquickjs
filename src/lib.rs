@@ -100,24 +100,32 @@
 //! - `dump-promise`
 //! - `dump-read-object`
 
+#![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
+
 pub use rquickjs_core::*;
 
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
 #[cfg(feature = "macro")]
 pub use rquickjs_macro::{bind, embed, FromJs, HasRefs, IntoJs, IntoJsByRef};
 
 // The following imports needed to linking docs
 
 #[cfg(feature = "either")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "either")))]
 extern crate either_rs as either;
 
 #[cfg(feature = "indexmap")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "indexmap")))]
 extern crate indexmap_rs as indexmap;
 
 #[cfg(feature = "async-std")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "async-std")))]
 extern crate async_std_rs as async_std;
 
 #[cfg(feature = "tokio")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "tokio")))]
 extern crate tokio_rs as tokio;
 
 #[cfg(feature = "smol")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "smol")))]
 extern crate smol_rs as smol;

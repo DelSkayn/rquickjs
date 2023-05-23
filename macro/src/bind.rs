@@ -4,7 +4,7 @@ macro_rules! test_cases {
         $(
             #[test]
             fn $c() {
-                let mut binder = crate::Binder::new(crate::Config::default());
+                let mut binder = crate::Binder::new(crate::config::Config::default());
                 let attrs: crate::AttributeArgs = syn::parse_quote! { $($a)* };
                 let attrs = darling::FromMeta::from_list(&*attrs).unwrap();
                 let input = syn::parse_quote! { $($s)* };
@@ -16,15 +16,7 @@ macro_rules! test_cases {
         )*
     };
 }
-
-mod attrs;
-mod class;
-mod constant;
-mod function;
-mod module;
-mod property;
-
-use crate::{Config, Ident, PubVis, Source, TokenStream};
+use crate::{config::Config, context::Source, utils::PubVis, Ident, TokenStream};
 use darling::FromMeta;
 use fnv::FnvBuildHasher;
 use ident_case::RenameRule;
@@ -33,14 +25,19 @@ use quote::{format_ident, quote};
 use std::{convert::TryFrom, mem::replace};
 use syn::{spanned::Spanned, Attribute, ImplItem, Item, Visibility};
 
-use attrs::*;
-use class::*;
-use constant::*;
-use function::*;
-use module::*;
-use property::*;
+mod attrs;
+mod class;
+mod constant;
+mod function;
+mod module;
+mod property;
 
 pub use attrs::AttrItem;
+
+use self::{
+    attrs::get_attrs, class::BindClass, constant::BindConst, function::BindFn, module::BindMod,
+    property::BindProp,
+};
 
 pub type Map<K, V> = IndexMap<K, V, FnvBuildHasher>;
 

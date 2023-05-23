@@ -27,12 +27,17 @@ mod native_loader;
 #[cfg(feature = "dyn-load")]
 pub use native_loader::NativeLoader;
 
-mod bundle;
-#[cfg(feature = "phf")]
-pub use bundle::PhfBundleData;
-pub use bundle::{Bundle, HasByteCode, ScaBundleData};
+pub mod bundle;
 
-pub mod util;
+#[cfg(feature = "phf")]
+/// The type of bundle that the [`embed!`] macro returns
+pub type Bundle = bundle::Bundle<bundle::PhfBundleData<&'static [u8]>>;
+
+#[cfg(not(feature = "phf"))]
+/// The type of bundle that the [`embed!`] macro returns
+pub type Bundle = bundle::Bundle<bundle::ScaBundleData<&'static [u8]>>;
+
+mod util;
 
 /// Module resolver interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]

@@ -1,5 +1,9 @@
-use super::{AttrData, AttrField, AttrImpl, BindFn, BindFn1, BindItems, BindProp, Binder};
-use crate::{Config, Ident, Source, TokenStream};
+use super::{
+    attrs::{AttrData, AttrField, AttrImpl},
+    function::BindFn1,
+    BindFn, BindItems, BindProp, Binder,
+};
+use crate::{config::Config, context::Source, Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{parse_quote, spanned::Spanned, Field, Fields, ItemEnum, ItemImpl, ItemStruct, Type};
 

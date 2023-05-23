@@ -1,5 +1,5 @@
 use super::{DataField, DataType};
-use crate::{Config, Ident, TokenStream};
+use crate::{config::Config, Ident, TokenStream};
 use darling::ast::{Data, Fields, Style};
 use quote::{format_ident, quote};
 use syn::{parse_quote, Index};

@@ -1,5 +1,5 @@
-use super::{AttrVar, BindProp, Binder};
-use crate::{Config, Ident, Source, TokenStream};
+use super::{attrs::AttrVar, BindProp, Binder};
+use crate::{config::Config, context::Source, Ident, TokenStream};
 use quote::quote;
 use syn::{Attribute, ImplItemConst, ItemConst, Visibility};
 
