@@ -165,7 +165,21 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Returns the current exception, if there is no exception `null` is returned.
+    /// Returns the last raised javascript exception, if there is no exception the javascript value `null` is returned.
+    ///
+    /// # Usage
+    /// ```
+    /// # use rquickjs::{Error, Context, Runtime};
+    /// # let rt = Runtime::new().unwrap();
+    /// # let ctx = Context::full(&rt).unwrap();
+    /// # ctx.with(|ctx|{
+    /// if let Err(Error::Exception) = ctx.eval::<(),_>("throw 3"){
+    ///     assert_eq!(ctx.catch().as_int(),Some(3));
+    /// # }else{
+    /// #    panic!()
+    /// }
+    /// # });
+    /// ```
     pub fn catch(self) -> Value<'js> {
         unsafe {
             let v = qjs::JS_GetException(self.ctx.as_ptr());
@@ -174,7 +188,7 @@ impl<'js> Ctx<'js> {
     }
 
     /// Throws a javascript value as a new exception.
-    /// Always returns Err(Error::Exception), use with `?` operator to easily raise exceptions.
+    /// Always returns `Err(Error::Exception)`, use with `?` operator to easily raise exceptions.
     pub fn throw(self, value: Value<'js>) -> Result<()> {
         unsafe {
             let v = value.into_js_value();

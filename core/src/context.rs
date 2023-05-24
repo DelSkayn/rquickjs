@@ -35,6 +35,7 @@ impl Clone for Context {
 }
 
 impl Context {
+    /// Recreate the Context object from [`Ctx`].
     pub fn from_ctx<'js>(ctx: Ctx<'js>) -> Self {
         let rt = unsafe { &ctx.get_opaque().runtime }
             .try_ref()

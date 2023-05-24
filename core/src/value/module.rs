@@ -46,6 +46,7 @@ macro_rules! module_init {
 pub type ModuleLoadFn =
     unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
 
+/// An enum containing all possible ways to declare an module.
 #[derive(Clone)]
 pub enum ModuleDataKind {
     /// Module source text,

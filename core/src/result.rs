@@ -38,7 +38,7 @@ pub enum Error {
     /// An io error
     Io(IoError),
     /// An exception raised by quickjs itself.
-    /// The actual javascript value can be retrieved by calling `Ctx::catch`.
+    /// The actual javascript value can be retrieved by calling [`Ctx::catch`].
     ///
     /// When returned from a callback the javascript will continue to unwind with the current
     /// error.
@@ -424,6 +424,8 @@ impl<'js> Display for CaughtError<'js> {
 impl<'js> StdError for CaughtError<'js> {}
 
 impl<'js> CaughtError<'js> {
+    /// Create a `CaughtError` from an [`Error`], retrieving the error value from `Ctx` if there
+    /// was one.
     pub fn from_error(ctx: Ctx<'js>, error: Error) -> Self {
         if let Error::Exception = error {
             let value = ctx.catch();
@@ -461,16 +463,33 @@ impl<'js> CaughtError<'js> {
         }
     }
 
+    /// Returns whether self is of variant `CaughtError::Exception`.
     pub fn is_exception(&self) -> bool {
         matches!(self, CaughtError::Exception(_))
     }
 
-    pub fn is_throw_error(&self) -> bool {
+    /// Returns whether self is of variant `CaughtError::Exception` or `CaughtError::Value`.
+    pub fn is_js_error(&self) -> bool {
         matches!(self, CaughtError::Exception(_) | CaughtError::Value(_))
     }
 }
 
 /// Extension trait to easily turn results with [`Error`] into results with [`CaughtError`]
+/// # Usage
+/// ```
+/// # use rquickjs::{Error, Context, Runtime, CaughtError};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx|{
+/// use rquickjs::CatchResultExt;
+///
+/// if let Err(CaughtError::Value(err)) = ctx.eval::<(),_>("throw 3").catch(ctx){
+///     assert_eq!(err.as_int(),Some(3));
+/// # }else{
+/// #    panic!()
+/// }
+/// # });
+/// ```
 pub trait CatchResultExt<'js, T> {
     fn catch(self, ctx: Ctx<'js>) -> CaughtResult<'js, T>;
 }
@@ -482,6 +501,9 @@ impl<'js, T> CatchResultExt<'js, T> for Result<T> {
 }
 
 /// Extension trait to easily turn results with [`CaughtError`] into results with [`Error`]
+///
+/// Calling throw on a `CaughtError` will set the current error to the one contained in
+/// `CaughtError` if such a value exists and then turn `CaughtError` into `Error`.
 pub trait ThrowResultExt<'js, T> {
     fn throw(self, ctx: Ctx<'js>) -> Result<T>;
 }
