@@ -84,8 +84,8 @@ impl<'js> Exception<'js> {
             .map(|x| x.0)
     }
 
-    /// Sets the exception as the current error an returns `Err(Error::Exception)`
-    pub fn throw(self) -> Result<()> {
+    /// Sets the exception as the current error an returns `Error::Exception`
+    pub fn throw(self) -> Error {
         self.0.ctx.throw(self.0.into_value())
     }
 }

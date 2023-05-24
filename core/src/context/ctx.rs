@@ -188,13 +188,13 @@ impl<'js> Ctx<'js> {
     }
 
     /// Throws a javascript value as a new exception.
-    /// Always returns `Err(Error::Exception)`, use with `?` operator to easily raise exceptions.
-    pub fn throw(self, value: Value<'js>) -> Result<()> {
+    /// Always returns `Error::Exception`;
+    pub fn throw(self, value: Value<'js>) -> Error {
         unsafe {
             let v = value.into_js_value();
             qjs::JS_Throw(self.ctx.as_ptr(), v);
         }
-        Err(Error::Exception)
+        Error::Exception
     }
 
     /// Creates promise and resolving functions.

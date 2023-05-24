@@ -452,14 +452,8 @@ impl<'js> CaughtError<'js> {
     pub fn throw(self, ctx: Ctx<'js>) -> Error {
         match self {
             CaughtError::Error(e) => e,
-            CaughtError::Exception(ex) => {
-                ctx.throw(ex.into_value()).ok();
-                Error::Exception
-            }
-            CaughtError::Value(ex) => {
-                ctx.throw(ex).ok();
-                Error::Exception
-            }
+            CaughtError::Exception(ex) => ctx.throw(ex.into_value()),
+            CaughtError::Value(ex) => ctx.throw(ex),
         }
     }
 
