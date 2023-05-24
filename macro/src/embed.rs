@@ -9,14 +9,14 @@ use syn::{
 
 /// A line of embedded modules.
 pub struct EmbedModule {
-    pub path: LitStr,
-    pub name: Option<(Token![:], LitStr)>,
+    pub name: LitStr,
+    pub path: Option<(Token![:], LitStr)>,
 }
 
 impl Parse for EmbedModule {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let path = input.parse::<LitStr>()?;
-        let name = if input.peek(Token![:]) {
+        let name = input.parse::<LitStr>()?;
+        let path = if input.peek(Token![:]) {
             let colon = input.parse()?;
             let name = input.parse()?;
             Some((colon, name))
@@ -42,18 +42,22 @@ impl Parse for EmbedModules {
 pub fn embed(modules: EmbedModules) -> TokenStream {
     let mut files = Vec::new();
     for f in modules.0.into_iter() {
-        let path = f.path.value();
+        let path = f
+            .path
+            .as_ref()
+            .map(|x| x.1.value())
+            .unwrap_or_else(|| f.name.value());
         let source = match std::fs::read_to_string(&path) {
             Ok(x) => x,
             Err(e) => {
                 error!(
-                    f.path,
+                    f.name,
                     "Error loading embedded js module from path `{}`: {}", path, e
                 );
                 continue;
             }
         };
-        files.push((f.name.map(|x| x.1.value()).unwrap_or(path), source));
+        files.push((f.name.value(), source));
     }
 
     let res = (|| -> Result<Vec<(String, Vec<u8>)>> {
@@ -176,11 +180,11 @@ mod test {
         assert_eq!(mods.0.len(), 2);
         let mut iter = mods.0.iter();
         let a = iter.next().unwrap();
-        assert_eq!(a.path.value(), "Hello world");
-        assert_eq!(a.name.as_ref().unwrap().1.value(), "foo");
+        assert_eq!(a.name.value(), "Hello world");
+        assert_eq!(a.path.as_ref().unwrap().1.value(), "foo");
         let b = iter.next().unwrap();
-        assert_eq!(b.path.value(), "bar");
-        assert!(b.name.is_none());
+        assert_eq!(b.name.value(), "bar");
+        assert!(b.path.is_none());
         assert!(iter.next().is_none());
     }
 }
