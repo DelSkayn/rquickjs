@@ -45,7 +45,7 @@ impl<'js> Exception<'js> {
     }
 
     /// Creates a new exception with a give message.
-    pub fn from_message<M>(ctx: Ctx<'js>, message: &str) -> Result<Self> {
+    pub fn from_message(ctx: Ctx<'js>, message: &str) -> Result<Self> {
         let obj = unsafe {
             let value = ctx.handle_exception(qjs::JS_NewError(ctx.as_ptr()))?;
             Value::from_js_value(ctx, value)
