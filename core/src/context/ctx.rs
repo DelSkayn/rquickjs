@@ -468,7 +468,7 @@ mod test {
     #[test]
     #[should_panic(expected = "'foo' is not defined")]
     fn eval_with_options_strict_sloppy_code() {
-        use crate::{context::EvalOptions, CatchResultExt, Context, Runtime};
+        use crate::{CatchResultExt, Context, EvalOptions, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
