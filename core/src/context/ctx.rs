@@ -89,6 +89,19 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Create a new `Ctx` from a raw pointer
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that the pointer and lifetime are valid.
+    pub unsafe fn _from_ptr(ctx: *mut qjs::JSContext) -> Self {
+        Self::from_ptr(ctx)
+    }
+
+    pub fn _as_ptr(&self) -> *mut qjs::JSContext {
+        self.ctx
+    }
+
     pub(crate) unsafe fn eval_raw<S: Into<Vec<u8>>>(
         self,
         source: S,
