@@ -497,7 +497,7 @@ pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 
 static BUNDLE: Bundle = embed!{
     // Load file `../examples/module-loader/script_module.js" and name it `script_module`
-    "../examples/module-loader/script_module.js": "script_module",
+    "script_module": "../examples/module-loader/script_module.js",
     // Load file `../examples/module-loader/script_module.js" and name it
     // `../examples/module-loader/script_module.js`
     "../examples/module-loader/script_module.js"
