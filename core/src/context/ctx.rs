@@ -219,8 +219,8 @@ impl<'js> Ctx<'js> {
     }
 }
 
+#[cfg(test)]
 mod test {
-    use crate::CatchResultExt;
 
     #[cfg(feature = "exports")]
     #[test]
@@ -265,7 +265,7 @@ mod test {
     #[test]
     #[should_panic(expected = "'foo' is not defined")]
     fn eval_with_sloppy_code() {
-        use crate::{Context, Runtime};
+        use crate::{CatchResultExt, Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
@@ -317,7 +317,7 @@ mod test {
     #[test]
     #[should_panic(expected = "'foo' is not defined")]
     fn eval_with_options_strict_sloppy_code() {
-        use crate::{Context, EvalOptions, Runtime};
+        use crate::{CatchResultExt, Context, EvalOptions, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();

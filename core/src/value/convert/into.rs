@@ -494,6 +494,7 @@ impl<'js, Tz: chrono::TimeZone> IntoJs<'js> for chrono::DateTime<Tz> {
     }
 }
 
+#[cfg(test)]
 mod test {
     #[test]
     fn system_time_to_js() {

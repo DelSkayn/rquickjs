@@ -381,6 +381,7 @@ chrono_from_js_impls! {
     Local;
 }
 
+#[cfg(test)]
 mod test {
     #[test]
     fn js_to_system_time() {
