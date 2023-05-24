@@ -259,12 +259,10 @@ mod test {
     )]
     fn exception() {
         test_with(|ctx| {
-            let val = ctx.eval::<(), _>("bla?#@!@ ");
+            let val = ctx.eval::<(), _>("bla?#@!@ ").catch(ctx);
             if let Err(e) = val {
                 assert!(e.is_exception());
                 panic!("{}", e);
-            } else {
-                panic!();
             }
         });
     }

@@ -269,8 +269,9 @@ mod test {
 
             let _: () = obj.get("key").unwrap();
 
-            if let Err(Error::Exception { message, .. }) = obj.set("key", "") {
-                assert_eq!(message, "'key' is read-only");
+            if let Err(Error::Exception) = obj.set("key", "") {
+                let exception = Exception::from_js(ctx, ctx.catch()).unwrap();
+                assert_eq!(exception.message().as_deref(), Some("'key' is read-only"));
             } else {
                 panic!("Should fail");
             }
@@ -286,8 +287,9 @@ mod test {
             let s: StdString = obj.get("key").unwrap();
             assert_eq!(s, "str");
 
-            if let Err(Error::Exception { message, .. }) = obj.set("key", "") {
-                assert_eq!(message, "'key' is read-only");
+            if let Err(Error::Exception) = obj.set("key", "") {
+                let exception = Exception::from_js(ctx, ctx.catch()).unwrap();
+                assert_eq!(exception.message().as_deref(), Some("'key' is read-only"));
             } else {
                 panic!("Should fail");
             }
@@ -312,6 +314,7 @@ mod test {
             let obj = Object::new(ctx).unwrap();
             obj.prop("key", Property::from("str")).unwrap();
             obj.set("key", "text")
+                .catch(ctx)
                 .map_err(|error| panic!("{}", error))
                 .unwrap();
         });
@@ -333,6 +336,7 @@ mod test {
             let obj = Object::new(ctx).unwrap();
             obj.prop("key", Property::from("str")).unwrap();
             obj.prop("key", Property::from(39))
+                .catch(ctx)
                 .map_err(|error| panic!("{}", error))
                 .unwrap();
         });
@@ -384,8 +388,12 @@ mod test {
             let s: StdString = obj.get("key").unwrap();
             assert_eq!(s, "str");
 
-            if let Err(Error::Exception { message, .. }) = obj.set("key", "") {
-                assert_eq!(message, "no setter for property");
+            if let Err(Error::Exception) = obj.set("key", "") {
+                let exception = Exception::from_js(ctx, ctx.catch()).unwrap();
+                assert_eq!(
+                    exception.message().as_deref(),
+                    Some("no setter for property")
+                );
             } else {
                 panic!("Should fail");
             }

@@ -220,6 +220,8 @@ impl<'js> Ctx<'js> {
 }
 
 mod test {
+    use crate::CatchResultExt;
+
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
@@ -279,6 +281,7 @@ mod test {
                     test()
                 "#,
                 )
+                .catch(ctx)
                 .unwrap();
         })
     }
@@ -334,6 +337,7 @@ mod test {
                         ..Default::default()
                     },
                 )
+                .catch(ctx)
                 .unwrap();
         })
     }

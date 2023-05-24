@@ -367,8 +367,9 @@ mod test {
                 .eval("() => { throw new Error('unimplemented'); }")
                 .unwrap();
 
-            if let Err(Error::Exception { message, .. }) = f.call::<_, ()>(()) {
-                assert_eq!(message, "unimplemented");
+            if let Err(Error::Exception) = f.call::<_, ()>(()) {
+                let exception = Exception::from_js(ctx, ctx.catch()).unwrap();
+                assert_eq!(exception.message().as_deref(), Some("unimplemented"));
             } else {
                 panic!("Should throws");
             }

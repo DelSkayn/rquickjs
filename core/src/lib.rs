@@ -40,7 +40,7 @@ macro_rules! cstr {
 mod markers;
 pub use markers::ParallelSend;
 mod result;
-pub use result::{Error, Result};
+pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 mod safe_ref;
 pub(crate) use safe_ref::*;
 mod runtime;
