@@ -58,7 +58,7 @@ where
             move |ctx: Ctx<'js>, error: Value<'js>| {
                 let mut state = state.lock();
                 // First call raise_exception to continue panicking if there is a panic.
-                let res = ctx.raise_exception();
+                ctx.raise_exception();
                 // Throw the error again.
                 state.resolve(Err(ctx.throw(error)));
             }
