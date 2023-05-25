@@ -44,14 +44,14 @@ pub use result::{Error, Result};
 mod safe_ref;
 pub(crate) use safe_ref::*;
 mod runtime;
-#[cfg(feature = "async-std")]
-pub use runtime::AsyncStd;
-#[cfg(all(feature = "smol", feature = "parallel"))]
-pub use runtime::Smol;
-#[cfg(feature = "tokio")]
-pub use runtime::Tokio;
-#[cfg(feature = "futures")]
-pub use runtime::{Executor, ExecutorSpawner, Idle};
+//#[cfg(feature = "async-std")]
+//pub use runtime::AsyncStd;
+//#[cfg(all(feature = "smol", feature = "parallel"))]
+//pub use runtime::Smol;
+//#[cfg(feature = "tokio")]
+//pub use runtime::Tokio;
+//#[cfg(feature = "futures")]
+//pub use runtime::{Executor, ExecutorSpawner, Idle};
 pub use runtime::{MemoryUsage, Runtime};
 mod context;
 pub use context::{intrinsic, Context, ContextBuilder, Ctx, EvalOptions, Intrinsic, MultiWith};

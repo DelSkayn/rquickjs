@@ -188,17 +188,19 @@ impl<'js> Ctx<'js> {
         &mut *(qjs::JS_GetRuntimeOpaque(rt) as *mut _)
     }
 
+    /*
     /// Spawn future using configured async runtime
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub fn spawn<F, T>(&self, future: F)
     where
-        F: Future<Output = T> + ParallelSend + 'static,
-        T: ParallelSend + 'static,
+        F: Future<Output = T> + ParallelSend + 'js,
+        T: ParallelSend,
     {
         let opaque = unsafe { self.get_opaque() };
         opaque.get_spawner().spawn(future);
     }
+    */
 }
 
 mod test {

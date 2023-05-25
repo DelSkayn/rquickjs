@@ -40,10 +40,9 @@ pub struct Opaque {
 
     /// Used to ref Runtime from Ctx
     pub runtime: WeakRuntime,
-
-    /// Async spawner
-    #[cfg(feature = "futures")]
-    pub spawner: Option<Spawner>,
+    // Async spawner
+    //#[cfg(feature = "futures")]
+    //pub spawner: Option<Spawner>,
 }
 
 impl Opaque {
@@ -52,8 +51,8 @@ impl Opaque {
             panic: None,
             interrupt_handler: None,
             runtime: runtime.weak(),
-            #[cfg(feature = "futures")]
-            spawner: Default::default(),
+            //#[cfg(feature = "futures")]
+            //spawner: Default::default(),
         }
     }
 }

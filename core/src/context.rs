@@ -1,5 +1,9 @@
 use crate::{qjs, Error, Result, Runtime};
-use std::{mem, ptr::NonNull};
+use std::{
+    future::{Future, IntoFuture},
+    mem,
+    ptr::NonNull,
+};
 
 mod builder;
 pub use builder::{intrinsic, ContextBuilder, Intrinsic};
@@ -128,6 +132,7 @@ impl Context {
             result
         }
 
+        /*
         #[cfg(feature = "futures")]
         {
             let (spawn_pending_jobs, result) = {
@@ -143,6 +148,20 @@ impl Context {
             }
             result
         }
+        */
+        todo!()
+    }
+
+    #[cfg(feature = "futures")]
+    pub async fn async_with<F, Fut, R>(&self, f: F) -> R
+    where
+        F: FnOnce(Ctx) -> Fut,
+        Fut: Future<Output = R>,
+    {
+        let guard = self.rt.inner.async_lock().await;
+        guard.update_stack_top();
+        let ctx = Ctx::new(self);
+        f(ctx).await
     }
 
     pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
