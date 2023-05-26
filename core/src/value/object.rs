@@ -87,7 +87,7 @@ impl<'js> Object<'js> {
 
     /// Get a new value
     pub fn get<K: IntoAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
-        let atom = k.into_atom(self.0.ctx);
+        let atom = k.into_atom(self.0.ctx)?;
         V::from_js(self.0.ctx, unsafe {
             let val = qjs::JS_GetProperty(self.0.ctx.as_ptr(), self.0.as_js_value(), atom.atom);
             let val = self.0.ctx.handle_exception(val)?;
@@ -100,11 +100,11 @@ impl<'js> Object<'js> {
     where
         K: IntoAtom<'js>,
     {
-        let atom = k.into_atom(self.0.ctx);
+        let atom = k.into_atom(self.0.ctx)?;
         unsafe {
             let res = qjs::JS_HasProperty(self.0.ctx.as_ptr(), self.0.as_js_value(), atom.atom);
             if res < 0 {
-                return Err(self.0.ctx.get_exception());
+                return Err(self.0.ctx.raise_exception());
             }
             Ok(res == 1)
         }
@@ -112,7 +112,7 @@ impl<'js> Object<'js> {
 
     /// Set a member of an object to a certain value
     pub fn set<K: IntoAtom<'js>, V: IntoJs<'js>>(&self, key: K, value: V) -> Result<()> {
-        let atom = key.into_atom(self.0.ctx);
+        let atom = key.into_atom(self.0.ctx)?;
         let val = value.into_js(self.0.ctx)?;
         unsafe {
             if qjs::JS_SetProperty(
@@ -122,7 +122,7 @@ impl<'js> Object<'js> {
                 val.into_js_value(),
             ) < 0
             {
-                return Err(self.0.ctx.get_exception());
+                return Err(self.0.ctx.raise_exception());
             }
         }
         Ok(())
@@ -130,7 +130,7 @@ impl<'js> Object<'js> {
 
     /// Remove a member of an object
     pub fn remove<K: IntoAtom<'js>>(&self, key: K) -> Result<()> {
-        let atom = key.into_atom(self.0.ctx);
+        let atom = key.into_atom(self.0.ctx)?;
         unsafe {
             if qjs::JS_DeleteProperty(
                 self.0.ctx.as_ptr(),
@@ -139,7 +139,7 @@ impl<'js> Object<'js> {
                 qjs::JS_PROP_THROW as _,
             ) < 0
             {
-                return Err(self.0.ctx.get_exception());
+                return Err(self.0.ctx.raise_exception());
             }
         }
         Ok(())
@@ -219,7 +219,7 @@ impl<'js> Object<'js> {
                 self.0.as_js_value(),
                 proto.0.as_js_value(),
             ) {
-                Err(self.0.ctx.get_exception())
+                Err(self.0.ctx.raise_exception())
             } else {
                 Ok(())
             }
@@ -329,7 +329,7 @@ impl<'js> IterState<'js> {
                 flags,
             ) < 0
             {
-                return Err(ctx.get_exception());
+                return Err(ctx.raise_exception());
             }
             let enums = enums.assume_init();
             let count = count.assume_init();
@@ -664,7 +664,7 @@ where
     {
         let object = Object::new(ctx)?;
         for (key, value) in iter {
-            let key = key.into_atom(ctx);
+            let key = key.into_atom(ctx)?;
             let value = value.into_js(ctx)?;
             object.set(key, value)?;
         }

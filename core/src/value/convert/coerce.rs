@@ -1,4 +1,4 @@
-use crate::{qjs, Coerced, Ctx, Error, FromJs, Result, StdString, String, Value};
+use crate::{qjs, Coerced, Ctx, FromJs, Result, StdString, String, Value};
 use std::{
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
@@ -62,9 +62,7 @@ macro_rules! coerce_impls {
                     let mut result = MaybeUninit::uninit();
                     Ok(Coerced(unsafe {
                         if 0 > qjs::$func(ctx.as_ptr(), result.as_mut_ptr(), value.as_js_value()) {
-                            let type_ = value.type_of();
-                            let error = ctx.get_exception();
-                            return Err(Error::new_from_js_message(type_.as_str(), stringify!($type), error.to_string()));
+                            return Err(ctx.raise_exception());
                         }
                         result.assume_init()
                     }))
@@ -91,13 +89,7 @@ impl<'js> FromJs<'js> for Coerced<bool> {
         Ok(Coerced(unsafe {
             let res = qjs::JS_ToBool(ctx.as_ptr(), value.as_js_value());
             if 0 > res {
-                let type_ = value.type_of();
-                let error = ctx.get_exception();
-                return Err(Error::new_from_js_message(
-                    type_.as_str(),
-                    stringify!($type),
-                    error.to_string(),
-                ));
+                return Err(ctx.raise_exception());
             }
             res == 1
         }))

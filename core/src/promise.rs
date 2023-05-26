@@ -1,6 +1,6 @@
 use crate::{
-    Context, Ctx, Error, FromJs, Func, Function, IntoJs, Mut, Object, ParallelSend, Persistent,
-    Ref, Result, This, Value,
+    Context, Ctx, FromJs, Func, Function, IntoJs, Mut, Object, ParallelSend, Persistent, Ref,
+    Result, This, Value,
 };
 use pin_project_lite::pin_project;
 use std::{
@@ -55,9 +55,12 @@ where
         });
         let on_err = Func::new("onError", {
             let state = state.clone();
-            move |error: Error| {
+            move |ctx: Ctx<'js>, error: Value<'js>| {
                 let mut state = state.lock();
-                state.resolve(Err(error));
+                // First call raise_exception to continue panicking if there is a panic.
+                ctx.raise_exception();
+                // Throw the error again.
+                state.resolve(Err(ctx.throw(error)));
             }
         });
         then.call((This(obj), on_ok, on_err))?;
@@ -122,7 +125,7 @@ impl<T> PromiseTask<T> {
         let then = Persistent::save(ctx, then);
         let catch = Persistent::save(ctx, catch);
 
-        let context = Context::from_ctx(ctx)?;
+        let context = Context::from_ctx(ctx);
 
         Ok((
             Self {
@@ -148,11 +151,11 @@ where
             Poll::Ready(value) => {
                 self.context.with(|ctx| match value.into_js(ctx) {
                     Ok(value) => resolve(ctx, self.then.clone().restore(ctx).unwrap(), value),
-                    Err(error) => resolve(
-                        ctx,
-                        self.catch.clone().restore(ctx).unwrap(),
-                        error.into_js(ctx).unwrap(),
-                    ),
+                    Err(error) => {
+                        let func = self.catch.clone().restore(ctx).unwrap();
+                        let error = unsafe { Value::from_js_value(ctx, error.throw(ctx)) };
+                        resolve(ctx, func, error)
+                    }
                 });
                 Poll::Ready(())
             }

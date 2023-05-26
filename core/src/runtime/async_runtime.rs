@@ -132,9 +132,11 @@ impl Runtime {
                 // Task was executed successfully
                 Ok(true) => (),
                 // Task was failed with exception
-                Err(error) => {
-                    eprintln!("Error when pending job executing: {error}");
-                }
+                Err(error) => error.0.with(|ctx| {
+                    let ex = ctx.catch();
+                    // TODO print better info.
+                    eprintln!("Exception raised by pending job: {ex:?}");
+                }),
             }
             futures_lite::future::yield_now().await;
         }

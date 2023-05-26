@@ -35,12 +35,13 @@ impl Clone for Context {
 }
 
 impl Context {
-    pub fn from_ctx<'js>(ctx: Ctx<'js>) -> Result<Self> {
+    /// Recreate the Context object from [`Ctx`].
+    pub fn from_ctx<'js>(ctx: Ctx<'js>) -> Self {
         let rt = unsafe { &ctx.get_opaque().runtime }
             .try_ref()
-            .ok_or(Error::Unknown)?;
+            .expect("runtime dropped before all contexts where destroyed");
         let ctx = unsafe { NonNull::new_unchecked(qjs::JS_DupContext(ctx.as_ptr())) };
-        Ok(Self { ctx, rt })
+        Self { ctx, rt }
     }
 
     /// Creates a base context with only the required functions registered.
@@ -259,12 +260,10 @@ mod test {
     )]
     fn exception() {
         test_with(|ctx| {
-            let val = ctx.eval::<(), _>("bla?#@!@ ");
+            let val = ctx.eval::<(), _>("bla?#@!@ ").catch(ctx);
             if let Err(e) = val {
                 assert!(e.is_exception());
                 panic!("{}", e);
-            } else {
-                panic!();
             }
         });
     }

@@ -2,6 +2,7 @@ mod array;
 mod atom;
 mod bigint;
 mod convert;
+mod exception;
 mod function;
 mod module;
 mod object;
@@ -15,17 +16,17 @@ mod typed_array;
 
 use crate::{qjs, Ctx, Error, Result};
 
+pub use array::Array;
+pub use atom::Atom;
+pub use bigint::BigInt;
+pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
+pub use exception::Exception;
+pub use function::{
+    AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
+};
 pub use module::{
     Declarations, Exports, Module, ModuleData, ModuleDataKind, ModuleDef, ModuleLoadFn,
     ModulesBuilder,
-};
-
-pub use array::Array;
-pub use atom::*;
-pub use bigint::BigInt;
-pub use convert::*;
-pub use function::{
-    AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
 };
 pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
@@ -553,7 +554,7 @@ macro_rules! sub_types {
             }
 
             impl<'js> IntoAtom<'js> for sub_types!(@type $type) {
-                fn into_atom(self, ctx: Ctx<'js>) -> Atom<'js> {
+                fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
                     Atom::from_value(ctx, &self.0)
                 }
             }

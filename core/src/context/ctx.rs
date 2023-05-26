@@ -1,6 +1,6 @@
 use crate::{
-    markers::Invariant, qjs, runtime::Opaque, Context, FromJs, Function, Module, Object, Result,
-    Value,
+    markers::Invariant, qjs, runtime::Opaque, Context, Error, FromJs, Function, Module, Object,
+    Result, Value,
 };
 
 #[cfg(feature = "futures")]
@@ -165,6 +165,38 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Returns the last raised javascript exception, if there is no exception the javascript value `null` is returned.
+    ///
+    /// # Usage
+    /// ```
+    /// # use rquickjs::{Error, Context, Runtime};
+    /// # let rt = Runtime::new().unwrap();
+    /// # let ctx = Context::full(&rt).unwrap();
+    /// # ctx.with(|ctx|{
+    /// if let Err(Error::Exception) = ctx.eval::<(),_>("throw 3"){
+    ///     assert_eq!(ctx.catch().as_int(),Some(3));
+    /// # }else{
+    /// #    panic!()
+    /// }
+    /// # });
+    /// ```
+    pub fn catch(self) -> Value<'js> {
+        unsafe {
+            let v = qjs::JS_GetException(self.ctx.as_ptr());
+            Value::from_js_value(self, v)
+        }
+    }
+
+    /// Throws a javascript value as a new exception.
+    /// Always returns `Error::Exception`;
+    pub fn throw(self, value: Value<'js>) -> Error {
+        unsafe {
+            let v = value.into_js_value();
+            qjs::JS_Throw(self.ctx.as_ptr(), v);
+        }
+        Error::Exception
+    }
+
     /// Creates promise and resolving functions.
     pub fn promise(self) -> Result<(Object<'js>, Function<'js>, Function<'js>)> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
@@ -201,7 +233,9 @@ impl<'js> Ctx<'js> {
     }
 }
 
+#[cfg(test)]
 mod test {
+
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
@@ -245,7 +279,7 @@ mod test {
     #[test]
     #[should_panic(expected = "'foo' is not defined")]
     fn eval_with_sloppy_code() {
-        use crate::{Context, Runtime};
+        use crate::{CatchResultExt, Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
@@ -261,6 +295,7 @@ mod test {
                     test()
                 "#,
                 )
+                .catch(ctx)
                 .unwrap();
         })
     }
@@ -296,7 +331,7 @@ mod test {
     #[test]
     #[should_panic(expected = "'foo' is not defined")]
     fn eval_with_options_strict_sloppy_code() {
-        use crate::{Context, EvalOptions, Runtime};
+        use crate::{CatchResultExt, Context, EvalOptions, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
@@ -316,6 +351,7 @@ mod test {
                         ..Default::default()
                     },
                 )
+                .catch(ctx)
                 .unwrap();
         })
     }

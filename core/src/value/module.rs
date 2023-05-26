@@ -46,6 +46,7 @@ macro_rules! module_init {
 pub type ModuleLoadFn =
     unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
 
+/// An enum containing all possible ways to declare an module.
 #[derive(Clone)]
 pub enum ModuleDataKind {
     /// Module source text,
@@ -580,7 +581,7 @@ impl<'js> Module<'js> {
         let buf =
             unsafe { qjs::JS_WriteObject(ctx.as_ptr(), len.as_mut_ptr(), value, flags as i32) };
         if buf.is_null() {
-            return Err(unsafe { ctx.get_exception() });
+            return Err(ctx.raise_exception());
         }
         let len = unsafe { len.assume_init() };
         let obj = unsafe { slice::from_raw_parts(buf, len as _) };

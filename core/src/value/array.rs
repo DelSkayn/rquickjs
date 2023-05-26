@@ -1,8 +1,10 @@
-use crate::{qjs, Ctx, Error, FromIteratorJs, FromJs, IntoJs, Object, Result, Value};
+use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
 };
+
+use super::convert::FromIteratorJs;
 
 /// Rust representation of a javascript object optimized as an array.
 ///
@@ -57,7 +59,7 @@ impl<'js> Array<'js> {
         let val = val.into_js(ctx)?.into_js_value();
         unsafe {
             if 0 > qjs::JS_SetPropertyUint32(ctx.as_ptr(), obj, idx as _, val) {
-                return Err(ctx.get_exception());
+                return Err(self.ctx.raise_exception());
             }
         }
         Ok(())
