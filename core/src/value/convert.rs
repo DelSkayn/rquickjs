@@ -1,3 +1,5 @@
+//! Utilites for converting to and from javascript values.
+
 use crate::{Atom, Ctx, Result, Value};
 
 mod atom;

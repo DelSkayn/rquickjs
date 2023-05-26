@@ -39,7 +39,7 @@ impl<'js> String<'js> {
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{prelude::*, *};
     #[test]
     fn from_javascript() {
         test_with(|ctx| {

@@ -1,3 +1,5 @@
+//! JS functions and rust callbacks.
+
 use crate::{qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, ParallelSend, Result, Value};
 
 mod args;
@@ -269,7 +271,7 @@ impl<'js> Function<'js> {
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{prelude::*, *};
     use approx::assert_abs_diff_eq as assert_approx_eq;
 
     #[test]

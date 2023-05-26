@@ -1,3 +1,5 @@
+//! Quickjs runtime related types.
+
 #[cfg(feature = "loader")]
 use crate::loader::{LoaderHolder, RawLoader, Resolver};
 use crate::{qjs, result::JobException, Context, Ctx, Error, Function, Mut, Ref, Result, Weak};
@@ -15,11 +17,12 @@ pub use self::async_executor::*;
 pub use qjs::JSMemoryUsage as MemoryUsage;
 
 #[cfg(feature = "allocator")]
-use crate::{allocator::AllocatorHolder, Allocator};
+use crate::allocator::{Allocator, AllocatorHolder};
 
 //#[cfg(feature = "loader")]
 //use crate::{loader::LoaderHolder, Loader, Resolver};
 
+/// A weak handle to the runtime.
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct WeakRuntime(Weak<Mut<Inner>>);
@@ -31,7 +34,7 @@ impl WeakRuntime {
 }
 
 /// Opaque book keeping data for rust.
-pub struct Opaque {
+pub(crate) struct Opaque {
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
 
@@ -147,7 +150,7 @@ impl Runtime {
             )
         }
         #[cfg(feature = "rust-alloc")]
-        Self::new_with_alloc(crate::RustAllocator)
+        Self::new_with_alloc(crate::allocator::RustAllocator)
     }
 
     #[cfg(feature = "allocator")]

@@ -239,7 +239,7 @@ mod test {
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
-        use crate::{intrinsic, Context, Function, Runtime};
+        use crate::{context::intrinsic, Context, Function, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
@@ -302,7 +302,7 @@ mod test {
 
     #[test]
     fn eval_with_options_no_strict_sloppy_code() {
-        use crate::{Context, EvalOptions, Runtime};
+        use crate::{context::EvalOptions, Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
@@ -331,7 +331,7 @@ mod test {
     #[test]
     #[should_panic(expected = "'foo' is not defined")]
     fn eval_with_options_strict_sloppy_code() {
-        use crate::{CatchResultExt, Context, EvalOptions, Runtime};
+        use crate::{context::EvalOptions, CatchResultExt, Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();

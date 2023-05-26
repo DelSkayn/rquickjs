@@ -1,3 +1,5 @@
+//! Types for loading and handling JS modules.
+
 use std::{
     borrow::Cow,
     collections::HashSet,

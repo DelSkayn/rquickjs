@@ -331,7 +331,7 @@ fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
 
     let get_time_fn: crate::Function = value.get("getTime")?;
 
-    get_time_fn.call((crate::This(value),))
+    get_time_fn.call((crate::function::This(value),))
 }
 
 impl<'js> FromJs<'js> for SystemTime {

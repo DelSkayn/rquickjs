@@ -43,23 +43,20 @@ mod result;
 pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 mod safe_ref;
 pub(crate) use safe_ref::*;
-mod runtime;
-#[cfg(feature = "async-std")]
-pub use runtime::AsyncStd;
-#[cfg(all(feature = "smol", feature = "parallel"))]
-pub use runtime::Smol;
-#[cfg(feature = "tokio")]
-pub use runtime::Tokio;
-#[cfg(feature = "futures")]
-pub use runtime::{Executor, ExecutorSpawner, Idle};
-pub use runtime::{MemoryUsage, Runtime};
-mod context;
-pub use context::{intrinsic, Context, ContextBuilder, Ctx, EvalOptions, Intrinsic, MultiWith};
-mod value;
-pub use value::*;
+pub mod runtime;
+pub use runtime::Runtime;
+pub mod context;
+pub use context::{Context, Ctx};
 mod persistent;
-pub use persistent::{Outlive, Persistent};
+mod value;
+pub use persistent::Persistent;
+pub use value::{
+    convert, function, module, object, Array, Atom, BigInt, Exception, FromAtom, FromJs, Function,
+    IntoAtom, IntoJs, Module, Object, String, Symbol, Type, Undefined, Value,
+};
 
+#[cfg(feature = "array-buffer")]
+pub use value::{ArrayBuffer, TypedArray};
 mod class_id;
 #[cfg(not(feature = "classes"))]
 pub(crate) use class_id::ClassId;
@@ -67,31 +64,35 @@ pub(crate) use class_id::ClassId;
 pub use class_id::ClassId;
 
 #[cfg(feature = "classes")]
-mod class;
+pub mod class;
 #[cfg(feature = "classes")]
-pub use class::{Class, ClassDef, Constructor, HasRefs, RefsMarker, WithProto};
-
-#[cfg(feature = "properties")]
-mod property;
-#[cfg(feature = "properties")]
-pub use property::{Accessor, AsProperty, Property};
+pub use class::Class;
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
 #[cfg(feature = "futures")]
 mod promise;
 
-#[cfg(feature = "futures")]
-pub use promise::{Promise, Promised};
-
 #[cfg(feature = "allocator")]
-mod allocator;
-
-#[cfg(feature = "allocator")]
-pub use allocator::{Allocator, RawMemPtr, RustAllocator};
+pub mod allocator;
 
 #[cfg(feature = "loader")]
 pub mod loader;
+
+pub mod prelude {
+    //! A group of often used types.
+    pub use crate::{
+        context::MultiWith,
+        convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs},
+        function::{AsArguments, Func, MutFn, OnceFn, Rest, This},
+        result::{CatchResultExt, ThrowResultExt},
+    };
+    #[cfg(feature = "futures")]
+    pub use crate::{
+        function::Async,
+        promise::{Promise, Promised},
+    };
+}
 
 /*#[cfg(feature = "loader")]
 pub use loader::{

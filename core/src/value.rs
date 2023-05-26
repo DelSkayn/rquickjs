@@ -1,11 +1,11 @@
 mod array;
 mod atom;
 mod bigint;
-mod convert;
+pub mod convert;
 mod exception;
-mod function;
-mod module;
-mod object;
+pub mod function;
+pub mod module;
+pub mod object;
 mod string;
 mod symbol;
 
@@ -24,10 +24,7 @@ pub use exception::Exception;
 pub use function::{
     AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
 };
-pub use module::{
-    Declarations, Exports, Module, ModuleData, ModuleDataKind, ModuleDef, ModuleLoadFn,
-    ModulesBuilder,
-};
+pub use module::Module;
 pub use object::{Filter, Object, ObjectDef};
 pub use string::String;
 pub use symbol::Symbol;
@@ -352,7 +349,7 @@ impl<'js> AsRef<Value<'js>> for Value<'js> {
 macro_rules! type_impls {
     // type: name => tag
     ($($type:ident: $name:ident => $tag:ident,)*) => {
-        /// The type of value
+        /// The type of Javascript value
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[repr(i32)]
         pub enum Type {

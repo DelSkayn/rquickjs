@@ -1,6 +1,6 @@
 use crate::{
-    qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result, Undefined,
-    Value,
+    function::AsFunction, qjs, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result,
+    Undefined, Value,
 };
 
 impl<'js> Object<'js> {
@@ -259,7 +259,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{object::*, *};
 
     #[test]
     fn property_with_undefined() {
@@ -358,7 +358,7 @@ mod test {
             let obj = Object::new(ctx).unwrap();
             obj.prop("key", Property::from("str")).unwrap();
             let keys: Vec<StdString> = obj
-                .own_keys(Filter::new().string())
+                .own_keys(object::Filter::new().string())
                 .collect::<Result<_>>()
                 .unwrap();
             assert_eq!(keys.len(), 1);

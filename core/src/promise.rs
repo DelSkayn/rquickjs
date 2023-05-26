@@ -1,6 +1,7 @@
 use crate::{
-    Context, Ctx, FromJs, Func, Function, IntoJs, Mut, Object, ParallelSend, Persistent, Ref,
-    Result, This, Value,
+    function::{Func, This},
+    Context, Ctx, FromJs, Function, IntoJs, Mut, Object, ParallelSend, Persistent, Ref, Result,
+    Value,
 };
 use pin_project_lite::pin_project;
 use std::{
@@ -172,7 +173,7 @@ fn resolve<'js>(_ctx: Ctx<'js>, func: Function<'js>, value: Value<'js>) {
 
 #[cfg(all(test, any(feature = "async-std", feature = "tokio")))]
 mod test {
-    use crate::*;
+    use crate::{prelude::*, runtime, Context, Function, Runtime, Value};
     use futures_rs::prelude::*;
 
     macro_rules! test_cases {
@@ -208,7 +209,7 @@ mod test {
                             let rt = Runtime::new().unwrap();
                             let $ctx = Context::full(&rt).unwrap();
 
-                            rt.spawn_executor(Tokio);
+                            rt.spawn_executor(runtime::Tokio);
 
                             $($content)*
 
@@ -234,7 +235,7 @@ mod test {
                         let rt = Runtime::new().unwrap();
                         let $ctx = Context::full(&rt).unwrap();
 
-                        rt.spawn_executor(AsyncStd);
+                        rt.spawn_executor(runtime::AsyncStd);
 
                         $($content)*
 
