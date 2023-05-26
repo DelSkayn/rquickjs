@@ -1,16 +1,12 @@
 #[cfg(feature = "loader")]
 use crate::loader::{LoaderHolder, RawLoader, Resolver};
 use crate::{qjs, Ctx, Error, Function, Mut, Ref, Result, Weak};
-use std::{any::Any, ffi::CString, mem, panic, ptr::NonNull};
+use std::{any::Any, ffi::CString, marker::PhantomData, mem, panic, ptr::NonNull};
 
 #[cfg(feature = "futures")]
 mod async_runtime;
 #[cfg(feature = "futures")]
 pub use async_runtime::*;
-#[cfg(feature = "futures")]
-mod async_executor;
-#[cfg(feature = "futures")]
-pub use self::async_executor::*;
 
 pub use qjs::JSMemoryUsage as MemoryUsage;
 
@@ -31,7 +27,7 @@ impl WeakRuntime {
 }
 
 /// Opaque book keeping data for rust.
-pub struct Opaque {
+pub struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
 
@@ -41,18 +37,21 @@ pub struct Opaque {
     /// Used to ref Runtime from Ctx
     pub runtime: WeakRuntime,
     // Async spawner
-    //#[cfg(feature = "futures")]
-    //pub spawner: Option<Spawner>,
+    #[cfg(feature = "futures")]
+    pub pending: Pending<'js>,
+
+    marker: PhantomData<&'js ()>,
 }
 
-impl Opaque {
+impl<'js> Opaque<'js> {
     fn new(runtime: &Runtime) -> Self {
         Opaque {
             panic: None,
             interrupt_handler: None,
             runtime: runtime.weak(),
-            //#[cfg(feature = "futures")]
-            //spawner: Default::default(),
+            #[cfg(feature = "futures")]
+            pending: Pending::new(),
+            marker: PhantomData,
         }
     }
 }

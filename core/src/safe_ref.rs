@@ -1,25 +1,14 @@
-#[cfg(not(any(feature = "parallel", feature = "tokio", feature = "async-std")))]
+#[cfg(all(not(feature = "parallel"), not(feature = "futures")))]
 mod base;
-#[cfg(not(any(feature = "parallel", feature = "tokio", feature = "async-std")))]
+#[cfg(not(any(feature = "parallel", feature = "futures")))]
 pub use base::*;
 
-#[cfg(all(not(feature = "tokio"), feature = "async-std"))]
-mod future_async;
-#[cfg(all(not(feature = "tokio"), feature = "async-std"))]
-pub use future_async::*;
-
-#[cfg(feature = "tokio")]
-mod future_tokio;
-#[cfg(feature = "tokio")]
-pub use future_tokio::*;
-
-#[cfg(all(
-    feature = "parallel",
-    not(any(feature = "tokio", feature = "async-std"))
-))]
+#[cfg(all(feature = "parallel", not(feature = "futures")))]
 mod parallel;
-#[cfg(all(
-    feature = "parallel",
-    not(any(feature = "tokio", feature = "async-std"))
-))]
+#[cfg(all(feature = "parallel", not(feature = "futures")))]
 pub use parallel::*;
+
+#[cfg(feature = "futures")]
+mod future;
+#[cfg(feature = "futures")]
+pub use future::*;

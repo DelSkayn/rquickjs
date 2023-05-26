@@ -37,8 +37,7 @@ macro_rules! cstr {
     };
 }
 
-mod markers;
-pub use markers::ParallelSend;
+pub mod markers;
 mod result;
 pub use result::{Error, Result};
 mod safe_ref;
@@ -54,6 +53,8 @@ mod runtime;
 //pub use runtime::{Executor, ExecutorSpawner, Idle};
 pub use runtime::{MemoryUsage, Runtime};
 mod context;
+#[cfg(feature = "futures")]
+pub use context::AsyncContext;
 pub use context::{intrinsic, Context, ContextBuilder, Ctx, EvalOptions, Intrinsic, MultiWith};
 mod value;
 pub use value::*;

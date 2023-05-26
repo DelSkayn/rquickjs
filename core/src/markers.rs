@@ -4,7 +4,19 @@ use std::marker::PhantomData;
 // Can be used to pin a lifetime so that all functions which use
 // that lifetime can only us that single lifetime and not one which
 // is variant over that lifetime
-pub type Invariant<'inv> = PhantomData<&'inv mut &'inv fn(&'inv ()) -> &'inv ()>;
+/// A marker struct which marks a lifetime as invariant.
+#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug, Default)]
+pub struct Invariant<'inv>(PhantomData<&'inv mut &'inv fn(&'inv ()) -> &'inv ()>);
+
+impl<'inv> Invariant<'inv> {
+    pub fn new() -> Self {
+        Invariant(PhantomData)
+    }
+
+    pub fn new_ref<T>(_v: &'inv T) -> Self {
+        Invariant(PhantomData)
+    }
+}
 
 /// The marker trait which requires [`Send`] when `"parallel"` feature is used
 #[cfg(not(feature = "parallel"))]

@@ -1,6 +1,6 @@
 use crate::{
-    qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result, Undefined,
-    Value,
+    markers::ParallelSend, qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, Result,
+    Undefined, Value,
 };
 
 impl<'js> Object<'js> {

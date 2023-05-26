@@ -1,4 +1,6 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, ParallelSend, Result, Value};
+use crate::{
+    markers::ParallelSend, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result, Value,
+};
 
 mod args;
 mod as_args;
@@ -22,7 +24,7 @@ pub struct Function<'js>(pub(crate) Value<'js>);
 impl<'js> Function<'js> {
     pub fn new<F, A, R>(ctx: Ctx<'js>, func: F) -> Result<Self>
     where
-        F: AsFunction<'js, A, R> + ParallelSend + 'static,
+        F: AsFunction<'js, A, R> + ParallelSend + 'js,
     {
         let func = JsFunction::new(move |input: &Input<'js>| func.call(input));
         let func = unsafe {

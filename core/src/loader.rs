@@ -19,8 +19,8 @@ pub use builtin_loader::BuiltinLoader;
 mod module_loader;
 pub use module_loader::ModuleLoader;
 
-mod compile;
-pub use compile::Compile;
+//mod compile;
+//pub use compile::Compile;
 
 #[cfg(feature = "dyn-load")]
 mod native_loader;

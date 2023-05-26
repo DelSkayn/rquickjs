@@ -1,70 +1,64 @@
-use crate::{qjs, Error, Result, Runtime};
-use std::{future::Future, mem, ptr::NonNull};
+use std::{
+    future::Future,
+    mem,
+    pin::{pin, Pin},
+    ptr::NonNull,
+    task::{Context, Poll},
+};
 
-mod builder;
-pub use builder::{intrinsic, ContextBuilder, Intrinsic};
-mod ctx;
-pub use ctx::{Ctx, EvalOptions};
-mod multi_with_impl;
+use crate::{
+    intrinsic, qjs, runtime::Inner, ContextBuilder, Ctx, Error, Intrinsic, Result, Runtime,
+};
 
-#[cfg(feature = "futures")]
-mod future;
-#[cfg(feature = "futures")]
-pub use future::AsyncContext;
-
-#[cfg(feature = "futures")]
-#[macro_export]
-macro_rules! async_with{
-    ($context:expr => |$ctx:ident|{ $($t:tt)* }) => {
-        unsafe{
-        $context.unsafe_async_with(|ctx| async move {
-               let _pin = ();
-                let invariant = $crate::markers::Invariant::new_ref(&_pin);
-                let _lifetime_constrainer;
-                if false {
-                    struct KeepTillScopeDrop<'a, 'inv>(&'a $crate::markers::Invariant<'inv>);
-                    impl<'a, 'inv> Drop for KeepTillScopeDrop<'a, 'inv> {
-                        fn drop(&mut self) {}
-                    }
-                    _lifetime_constrainer = KeepTillScopeDrop(&invariant);
-                }
-                let $ctx = $crate::Ctx::from_ptr_invariant(ctx,invariant);
-                {
-                $($t)*
-                }
-        })
-        }
-    };
+pub(crate) struct WithFuture<'js, F> {
+    pub future: Pin<&'js mut F>,
+    pub runtime: &'js mut Inner,
 }
 
-/// A trait for using multiple contexts at the same time.
-pub trait MultiWith<'js> {
-    type Arg;
+impl<'js, F> Future for WithFuture<'js, F>
+where
+    F: Future,
+{
+    type Output = F::Output;
 
-    /// Use multiple contexts together.
-    ///
-    /// # Panic
-    /// This function will panic if any of the contexts are of seperate runtimes.
-    fn with<R, F: FnOnce(Self::Arg) -> R>(self, f: F) -> R;
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let res = self.future.as_mut().poll(cx);
+
+        loop {
+            match self.runtime.execute_pending_job() {
+                Ok(true) => {}
+                Ok(false) => break,
+                Err(_) => {
+                    // TODO do something here.
+                }
+            }
+        }
+
+        while let Poll::Ready(true) = {
+            let this = &mut pin!(unsafe { self.runtime.get_opaque_mut() }.pending.poll());
+            Future::poll(Pin::new(this), cx)
+        } {}
+        res
+    }
 }
 
 /// A single execution context with its own global variables and stack.
 ///
 /// Can share objects with other contexts of the same runtime.
-pub struct Context {
+pub struct AsyncContext {
     ctx: NonNull<qjs::JSContext>,
     rt: Runtime,
 }
 
-impl Clone for Context {
-    fn clone(&self) -> Context {
+impl Clone for AsyncContext {
+    fn clone(&self) -> AsyncContext {
         let ctx = unsafe { NonNull::new_unchecked(qjs::JS_DupContext(self.ctx.as_ptr())) };
         let rt = self.rt.clone();
         Self { ctx, rt }
     }
 }
 
-impl Context {
+impl AsyncContext {
     pub fn from_ctx<'js>(ctx: Ctx<'js>) -> Result<Self> {
         let rt = unsafe { &ctx.get_opaque().runtime }
             .try_ref()
@@ -76,19 +70,19 @@ impl Context {
     /// Creates a base context with only the required functions registered.
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Context::full`].
-    pub fn base(runtime: &Runtime) -> Result<Self> {
-        Self::custom::<intrinsic::Base>(runtime)
+    pub async fn base(runtime: &Runtime) -> Result<Self> {
+        Self::custom::<intrinsic::Base>(runtime).await
     }
 
     /// Creates a context with only the required intrinsics registered.
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Context::full`].
-    pub fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock();
+    pub async fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
+        let guard = runtime.inner.async_lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
         unsafe { I::add_intrinsic(ctx) };
-        let res = Context {
+        let res = AsyncContext {
             ctx,
             rt: runtime.clone(),
         };
@@ -100,11 +94,11 @@ impl Context {
     /// Creates a context with all standart available intrinsics registered.
     /// If precise controll is required of which functions are available use
     /// [`Context::custom`] or [`Context::builder`].
-    pub fn full(runtime: &Runtime) -> Result<Self> {
-        let guard = runtime.inner.lock();
+    pub async fn full(runtime: &Runtime) -> Result<Self> {
+        let guard = runtime.inner.async_lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
-        let res = Context {
+        let res = AsyncContext {
             ctx,
             rt: runtime.clone(),
         };
@@ -119,8 +113,8 @@ impl Context {
         ContextBuilder::default()
     }
 
-    pub fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.rt.inner.lock();
+    pub async fn enable_big_num_ext(&self, enable: bool) {
+        let guard = self.rt.inner.async_lock().await;
         guard.update_stack_top();
         unsafe { qjs::JS_EnableBignumExt(self.ctx.as_ptr(), i32::from(enable)) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
@@ -136,24 +130,6 @@ impl Context {
         unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) }
     }
 
-    /// A entry point for manipulating and using javascript objects and scripts.
-    /// The api is structured this way to avoid repeated locking the runtime when ever
-    /// any function is called. This way the runtime is locked once before executing the callback.
-    /// Furthermore, this way it is impossible to use values from different runtimes in this
-    /// context which would otherwise be undefined behaviour.
-    ///
-    ///
-    /// This is the only way to get a [`Ctx`] object.
-    pub fn with<F, R>(&self, f: F) -> R
-    where
-        F: FnOnce(Ctx) -> R,
-    {
-        let guard = self.rt.inner.lock();
-        guard.update_stack_top();
-        let ctx = Ctx::new(self);
-        f(ctx)
-    }
-
     #[cfg(feature = "futures")]
     pub async unsafe fn unsafe_async_with<F, Fut, R>(&self, f: F) -> R
     where
@@ -163,7 +139,7 @@ impl Context {
         let mut guard = self.rt.inner.async_lock().await;
         guard.update_stack_top();
         let future = std::pin::pin!(f(self.ctx));
-        future::WithFuture {
+        WithFuture {
             future,
             runtime: &mut *guard,
         }
@@ -175,7 +151,7 @@ impl Context {
     }
 }
 
-impl Drop for Context {
+impl Drop for AsyncContext {
     fn drop(&mut self) {
         //TODO
         let guard = match self.rt.inner.try_lock() {
@@ -203,12 +179,12 @@ impl Drop for Context {
 // Since the reference to runtime is behind a Arc this object is send
 //
 #[cfg(feature = "parallel")]
-unsafe impl Send for Context {}
+unsafe impl Send for AsyncContext {}
 
 // Since all functions lock the global runtime lock access is synchronized so
 // this object is sync
 #[cfg(feature = "parallel")]
-unsafe impl Sync for Context {}
+unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]
 mod test {

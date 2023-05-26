@@ -6,14 +6,9 @@ use crate::{
 #[cfg(feature = "futures")]
 use std::future::Future;
 
-#[cfg(feature = "futures")]
-use crate::ParallelSend;
-
 use std::{
     ffi::{CStr, CString},
-    fs,
-    marker::PhantomData,
-    mem,
+    fs, mem,
     path::Path,
     ptr::NonNull,
 };
@@ -62,8 +57,10 @@ impl Default for EvalOptions {
 #[derive(Clone, Copy, Debug)]
 pub struct Ctx<'js> {
     ctx: NonNull<qjs::JSContext>,
-    marker: Invariant<'js>,
+    _marker: Invariant<'js>,
 }
+
+unsafe impl Send for Ctx<'_> {}
 
 impl<'js> Ctx<'js> {
     pub(crate) fn as_ptr(&self) -> *mut qjs::JSContext {
@@ -74,14 +71,29 @@ impl<'js> Ctx<'js> {
         let ctx = NonNull::new_unchecked(ctx);
         Ctx {
             ctx,
-            marker: PhantomData,
+            _marker: Invariant::new(),
+        }
+    }
+
+    /// Create a Ctx object from a context pointer and an invariant object.
+    ///
+    /// # Safety
+    /// User must ensure that the invariant does not overlap with any other Ctx lifetimes of other
+    /// runtimes and that 'js does not outlife the lifetime of a lock on the runtime.
+    pub unsafe fn from_ptr_invariant(
+        ctx: NonNull<qjs::JSContext>,
+        invariant: Invariant<'js>,
+    ) -> Self {
+        Ctx {
+            ctx,
+            _marker: invariant,
         }
     }
 
     pub(crate) fn new(ctx: &'js Context) -> Self {
         Ctx {
             ctx: ctx.ctx,
-            marker: PhantomData,
+            _marker: Invariant::new(),
         }
     }
 
@@ -183,24 +195,25 @@ impl<'js> Ctx<'js> {
         })
     }
 
-    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
+    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque<'js> {
         let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
         &mut *(qjs::JS_GetRuntimeOpaque(rt) as *mut _)
     }
 
-    /*
-    /// Spawn future using configured async runtime
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-    pub fn spawn<F, T>(&self, future: F)
+    pub fn spawn<F>(self, future: F)
     where
-        F: Future<Output = T> + ParallelSend + 'js,
-        T: ParallelSend,
+        F: Future<Output = ()> + 'js,
     {
-        let opaque = unsafe { self.get_opaque() };
-        opaque.get_spawner().spawn(future);
+        unsafe { self.get_opaque() }.pending.push(future)
     }
-    */
+
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub async fn poll(self) -> bool {
+        unsafe { self.get_opaque() }.pending.poll().await
+    }
 }
 
 mod test {
