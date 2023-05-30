@@ -100,7 +100,10 @@ impl Context {
     where
         F: FnOnce(Ctx) -> R,
     {
-        todo!()
+        let guard = self.rt.inner.lock();
+        guard.update_stack_top();
+        let ctx = Ctx::new(self);
+        f(ctx)
     }
 
     pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {

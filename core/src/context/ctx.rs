@@ -1,8 +1,6 @@
 use std::{
     ffi::{CStr, CString},
-    fs,
-    marker::PhantomData,
-    mem,
+    fs, mem,
     path::Path,
     ptr::NonNull,
 };
@@ -67,6 +65,13 @@ pub struct Ctx<'js> {
 }
 
 impl<'js> Ctx<'js> {
+    pub unsafe fn from_ptr_invariant(ctx: NonNull<qjs::JSContext>, inv: Invariant<'js>) -> Self {
+        Ctx {
+            ctx,
+            marker: Invariant::new(),
+        }
+    }
+
     pub(crate) fn as_ptr(&self) -> *mut qjs::JSContext {
         self.ctx.as_ptr()
     }
@@ -75,21 +80,14 @@ impl<'js> Ctx<'js> {
         let ctx = NonNull::new_unchecked(ctx);
         Ctx {
             ctx,
-            marker: PhantomData,
+            marker: Invariant::new(),
         }
     }
 
     pub(crate) fn new(ctx: &'js Context) -> Self {
         Ctx {
             ctx: ctx.ctx,
-            marker: PhantomData,
-        }
-    }
-
-    pub(crate) fn new_async(ctx: &'js AsyncContext) -> Self {
-        Ctx {
-            ctx: ctx.ctx,
-            marker: PhantomData,
+            marker: Invariant::new(),
         }
     }
 
