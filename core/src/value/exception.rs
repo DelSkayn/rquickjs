@@ -1,8 +1,8 @@
 use std::{fmt, ops::Deref};
 
-use crate::{qjs, Coerced, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{convert::Coerced, qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
 
-/// A javascript error
+/// A javascript instance of Error
 ///
 /// Will turn into a error when converted to javascript but won't autmatically be thrown.
 #[repr(transparent)]

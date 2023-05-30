@@ -1,4 +1,7 @@
-use crate::{qjs, Ctx, Error, FromJs, Opt, Rest, Result, This, Value};
+use crate::{
+    function::{Opt, Rest, This},
+    qjs, Ctx, Error, FromJs, Result, Value,
+};
 use std::{ops::Range, slice};
 
 pub struct Input<'js> {

@@ -1,4 +1,4 @@
-use crate::{loader::Loader, Ctx, Error, ModuleData, Result};
+use crate::{loader::Loader, module::ModuleData, Ctx, Error, Result};
 use std::collections::HashMap;
 
 /// The builtin script module loader

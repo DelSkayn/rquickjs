@@ -1,9 +1,10 @@
-use crate::{Allocator, RawMemPtr};
 use std::{
     alloc::{alloc, dealloc, realloc, Layout},
     mem::size_of,
     ptr::null_mut,
 };
+
+use super::{Allocator, RawMemPtr};
 
 #[cfg(target_pointer_width = "32")]
 const ALLOC_ALIGN: usize = 4;

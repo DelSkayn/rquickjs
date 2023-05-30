@@ -1,12 +1,19 @@
+//! Module for types dealing with JS objects.
+
 use crate::{
-    qjs, Array, Atom, Ctx, Error, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs,
-    Result, Value,
+    convert::FromIteratorJs, qjs, Array, Atom, Ctx, Error, FromAtom, FromJs, Function, IntoAtom,
+    IntoJs, Result, Value,
 };
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
     mem,
 };
+
+#[cfg(feature = "properties")]
+mod property;
+#[cfg(feature = "properties")]
+pub use property::{Accessor, AsProperty, Property};
 
 /// The helper trait to define objects
 pub trait ObjectDef {
@@ -674,7 +681,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{prelude::*, *};
 
     #[test]
     fn from_javascript() {

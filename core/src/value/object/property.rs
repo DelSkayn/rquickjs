@@ -1,13 +1,13 @@
 use crate::{
-    qjs, AsFunction, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result, Undefined,
-    Value,
+    function::AsFunction, qjs, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result,
+    Undefined, Value,
 };
 
 impl<'js> Object<'js> {
     /// Define a property of an object
     ///
     /// ```
-    /// # use rquickjs::{Runtime, Context, Object, Property, Accessor};
+    /// # use rquickjs::{Runtime, Context, Object, object::{Property, Accessor}};
     /// # let rt = Runtime::new().unwrap();
     /// # let ctx = Context::full(&rt).unwrap();
     /// # ctx.with(|ctx| {
@@ -259,7 +259,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{object::*, *};
 
     #[test]
     fn property_with_undefined() {
@@ -358,7 +358,7 @@ mod test {
             let obj = Object::new(ctx).unwrap();
             obj.prop("key", Property::from("str")).unwrap();
             let keys: Vec<StdString> = obj
-                .own_keys(Filter::new().string())
+                .own_keys(object::Filter::new().string())
                 .collect::<Result<_>>()
                 .unwrap();
             assert_eq!(keys.len(), 1);

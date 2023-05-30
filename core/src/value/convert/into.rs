@@ -1,5 +1,5 @@
 use crate::{
-    Array, Ctx, Error, Function, IntoAtom, IntoJs, IteratorJs, Object, Result, StdResult,
+    convert::IteratorJs, Array, Ctx, Error, Function, IntoAtom, IntoJs, Object, Result, StdResult,
     StdString, String, Value,
 };
 use std::{

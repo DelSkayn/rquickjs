@@ -392,13 +392,13 @@ impl Binder {
                 };
 
                 bindings.push(quote! {
-                    impl #lib_crate::ModuleDef for #ident {
-                        fn declare(#declares: &mut #lib_crate::Declarations) -> #lib_crate::Result<()> {
+                    impl #lib_crate::module::ModuleDef for #ident {
+                        fn declare(#declares: &mut #lib_crate::module::Declarations) -> #lib_crate::Result<()> {
                             #mod_decl
                             Ok(())
                         }
 
-                        fn evaluate<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &mut #lib_crate::Exports<'js>) -> #lib_crate::Result<()> {
+                        fn evaluate<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &mut #lib_crate::module::Exports<'js>) -> #lib_crate::Result<()> {
                             #mod_impl
                             Ok(())
                         }
@@ -412,7 +412,7 @@ impl Binder {
                 let obj_init = def.object_init(&name, &self.config);
 
                 bindings.push(quote! {
-                    impl #lib_crate::ObjectDef for #ident {
+                    impl #lib_crate::object::ObjectDef for #ident {
                         fn init<'js>(_ctx: #lib_crate::Ctx<'js>, #exports: &#lib_crate::Object<'js>) -> #lib_crate::Result<()> {
                             #obj_init
                             Ok(())

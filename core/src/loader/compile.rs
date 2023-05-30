@@ -1,6 +1,7 @@
 use crate::{
     loader::{util::resolve_simple, Loader, RawLoader, Resolver},
-    Ctx, Lock, Module, ModuleDataKind, Mut, Ref, Result,
+    module::ModuleDataKind,
+    Ctx, Lock, Module, Mut, Ref, Result,
 };
 use std::{
     collections::{hash_map::Iter as HashMapIter, HashMap},

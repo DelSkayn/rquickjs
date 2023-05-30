@@ -1,14 +1,16 @@
 use super::{FromInput, Input};
 use crate::{
-    Ctx, Error, FromJs, Function, IntoJs, Method, MutFn, OnceFn, ParallelSend, Result, This, Value,
+    function::{Method, MutFn, OnceFn, This},
+    markers::ParallelSend,
+    Ctx, Error, FromJs, Function, IntoJs, Result, Value,
 };
 use std::ops::Range;
 
 #[cfg(feature = "classes")]
-use crate::{Class, ClassDef, Constructor};
+use crate::class::{Class, ClassDef, Constructor};
 
 #[cfg(feature = "futures")]
-use crate::{Async, Promised};
+use crate::{function::Async, promise::Promised};
 #[cfg(feature = "futures")]
 use std::future::Future;
 

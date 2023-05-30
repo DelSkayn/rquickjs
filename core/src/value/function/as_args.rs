@@ -1,4 +1,7 @@
-use crate::{qjs, Ctx, FromJs, Function, IntoJs, Opt, Rest, Result, This};
+use crate::{
+    function::{Opt, Rest, This},
+    qjs, Ctx, FromJs, Function, IntoJs, Result,
+};
 
 /// The input for function call
 pub struct CallInput<'js> {

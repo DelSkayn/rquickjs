@@ -78,8 +78,8 @@ Attribute                         | Description
 --------------------------------- | ---------------------------
 __`ident = "MyModule"`__          | The name of target unit struct to export
 __`public`__, __`public = "self/super/crate"`__ | Makes the target unit struct visible
-__`module`__                      | Adds the [`ModuleDef`](rquickjs_core::ModuleDef) impl to use bindings as ES6 module
-__`object`__                      | Adds the [`ObjectDef`](rquickjs_core::ObjectDef) impl for attaching bindings to an object
+__`module`__                      | Adds the [`ModuleDef`](rquickjs_core::module::ModuleDef) impl to use bindings as ES6 module
+__`object`__                      | Adds the [`ObjectDef`](rquickjs_core::object::ObjectDef) impl for attaching bindings to an object
 __`init`__, __`init = "js_module_init"`__     | Adds the `js_module_init` function (in particular for creating dynamically loadable modules or static libraries to use from `C`)
 __`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
 
@@ -135,7 +135,7 @@ __`skip`__                | Skips exporting this data type
 __`hide`__                | Do not output this data type (bindings only)
 
 The following traits will be implemented for data type:
-- [`ClassDef`](rquickjs_core::ClassDef)
+- [`ClassDef`](rquickjs_core::class::ClassDef)
 - [`IntoJs`](rquickjs_core::IntoJs)
 - [`FromJs`](rquickjs_core::FromJs) if `cloneable` attribute is present
 
@@ -300,7 +300,7 @@ ctx.with(|ctx| {
 ```
 # #[async_std::main]
 # async fn main() {
-use rquickjs::{Runtime, Context, Promise, bind, AsyncStd};
+use rquickjs::{Runtime, Context, promise::Promise, bind, runtime::AsyncStd};
 
 #[bind(object)]
 pub async fn sleep(msecs: u64) {
@@ -523,7 +523,7 @@ pub fn embed(item: TokenStream1) -> TokenStream1 {
 }
 
 /**
-A macro to derive [`HasRefs`](rquickjs_core::HasRefs)
+A macro to derive [`HasRefs`](rquickjs_core::module::HasRefs)
 
 # Supported attributes
 

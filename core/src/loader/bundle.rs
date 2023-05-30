@@ -1,7 +1,7 @@
 //! Utilites for embedding JS modules.
 
 use super::{util::resolve_simple, Loader, Resolver};
-use crate::{Ctx, Error, ModuleData, Result};
+use crate::{module::ModuleData, Ctx, Error, Result};
 use std::ops::Deref;
 
 /// The module data which contains bytecode

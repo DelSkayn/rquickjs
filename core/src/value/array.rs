@@ -190,6 +190,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use convert::IteratorJs;
+
     use crate::*;
     #[test]
     fn from_javascript() {

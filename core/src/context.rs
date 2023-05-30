@@ -1,3 +1,5 @@
+//! JS Contexts related types.
+
 use crate::{qjs, Error, Result, Runtime};
 use std::{mem, ptr::NonNull};
 

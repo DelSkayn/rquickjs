@@ -2,7 +2,7 @@
 
 use std::{ffi::CStr, ptr};
 
-use crate::{qjs, Ctx, Module, ModuleData, Result};
+use crate::{module::ModuleData, qjs, Ctx, Module, Result};
 
 mod builtin_resolver;
 pub use builtin_resolver::BuiltinResolver;
@@ -267,7 +267,7 @@ loader_impls!(A B C D E F G H);
 
 #[cfg(test)]
 mod test {
-    use crate::{Context, Ctx, Error, ModuleData, Result, Runtime};
+    use crate::{module::ModuleData, Context, Ctx, Error, Result, Runtime};
 
     use super::{Loader, Resolver};
 

@@ -1,4 +1,7 @@
-use crate::{Ctx, Error, ModuleData, ModuleDef, Result};
+use crate::{
+    module::{ModuleData, ModuleDef},
+    Ctx, Error, Result,
+};
 use std::{collections::HashMap, fmt::Debug};
 
 use super::Loader;

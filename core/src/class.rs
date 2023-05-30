@@ -1,7 +1,10 @@
+//! JS Class related functionality.
+
 mod refs;
 
 use crate::{
-    qjs, ClassId, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Type, Value,
+    persistent::Outlive, qjs, value::Object, ClassId, Ctx, Error, FromJs, Function, IntoJs, Result,
+    Type, Value,
 };
 use std::{ffi::CString, marker::PhantomData, mem, ops::Deref, ptr};
 
@@ -17,7 +20,7 @@ pub use refs::{HasRefs, RefsMarker};
 /// NOTE: Usually no need implements this trait manually. Instead you can use [`class_def`](crate::class_def) macro or [`bind`](attr.bind.html) attribute to export classes to JS in easy way.
 ///
 /// ```
-/// # use rquickjs::{ClassId, ClassDef, FromJs, IntoJs, Ctx, Object, Result, Value, RefsMarker};
+/// # use rquickjs::{ClassId, class::{ClassDef, RefsMarker}, FromJs, IntoJs, Ctx, Object, Result, Value};
 /// #[derive(Clone)]
 /// struct MyClass;
 ///
@@ -437,7 +440,7 @@ where
 /// The macro to simplify class definition.
 ///
 /// ```
-/// # use rquickjs::{class_def, Method, Func};
+/// # use rquickjs::{class_def, function::{Method, Func}};
 /// #
 /// struct TestClass;
 ///
@@ -496,7 +499,7 @@ macro_rules! class_def {
     };
 
     (@parse ~ $($rest:tt)*) => {
-        $crate::class_def!{@mark this marker $crate::HasRefs::mark_refs(this, marker);}
+        $crate::class_def!{@mark this marker $crate::class::HasRefs::mark_refs(this, marker);}
         $crate::class_def!{@parse $($rest)*}
     };
 
@@ -520,14 +523,14 @@ macro_rules! class_def {
 
     (@mark $self:ident $marker:ident $($body:tt)*) => {
         const HAS_REFS: bool = true;
-        fn mark_refs(&self, $marker: &$crate::RefsMarker) {
+        fn mark_refs(&self, $marker: &$crate::class::RefsMarker) {
             let $self = self;
             $($body)*
         }
     };
 
     (@decl $name:ident $($body:tt)*) => {
-        impl $crate::ClassDef for $name {
+        impl $crate::class::ClassDef for $name {
             const CLASS_NAME: &'static str = stringify!($name);
 
             fn class_id() -> &'static $crate::ClassId {
@@ -540,13 +543,13 @@ macro_rules! class_def {
 
         impl<'js> $crate::IntoJs<'js> for $name {
             fn into_js(self, ctx: $crate::Ctx<'js>) -> $crate::Result<$crate::Value<'js>> {
-                <$name as $crate::ClassDef>::into_js_obj(self, ctx)
+                <$name as $crate::class::ClassDef>::into_js_obj(self, ctx)
             }
         }
 
         impl<'js> $crate::FromJs<'js> for &'js $name {
             fn from_js(ctx: $crate::Ctx<'js>, value: $crate::Value<'js>) -> $crate::Result<Self> {
-                <$name as $crate::ClassDef>::from_js_ref(ctx, value)
+                <$name as $crate::class::ClassDef>::from_js_ref(ctx, value)
             }
         }
     };
@@ -556,6 +559,7 @@ macro_rules! class_def {
 mod test {
     use crate::*;
     use approx::assert_abs_diff_eq as assert_approx_eq;
+    use function::{Func, Method};
 
     #[test]
     fn class_basics() {
@@ -734,6 +738,8 @@ mod test {
     }
 
     mod internal_refs {
+        use crate::class::{HasRefs, RefsMarker};
+
         use super::*;
         use std::{cell::RefCell, collections::HashSet};
 
