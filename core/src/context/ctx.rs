@@ -1,6 +1,6 @@
 use crate::{
-    markers::Invariant, qjs, runtime::Opaque, Context, Error, FromJs, Function, Module, Object,
-    Result, Value,
+    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, Module,
+    Object, Result, Value,
 };
 
 #[cfg(feature = "futures")]
@@ -215,7 +215,7 @@ impl<'js> Ctx<'js> {
         })
     }
 
-    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
+    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque<'js> {
         let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
         &mut *(qjs::JS_GetRuntimeOpaque(rt) as *mut _)
     }
@@ -228,8 +228,7 @@ impl<'js> Ctx<'js> {
         F: Future<Output = T> + ParallelSend + 'static,
         T: ParallelSend + 'static,
     {
-        let opaque = unsafe { self.get_opaque() };
-        opaque.get_spawner().spawn(future);
+        todo!()
     }
 }
 

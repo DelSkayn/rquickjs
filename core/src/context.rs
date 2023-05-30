@@ -1,6 +1,6 @@
 //! JS Contexts related types.
 
-use crate::{qjs, Error, Result, Runtime};
+use crate::{qjs, runtime::raw::RawRuntime, Error, Result, Runtime};
 use std::{mem, ptr::NonNull};
 
 mod builder;
@@ -37,13 +37,8 @@ impl Clone for Context {
 }
 
 impl Context {
-    /// Recreate the Context object from [`Ctx`].
-    pub fn from_ctx<'js>(ctx: Ctx<'js>) -> Self {
-        let rt = unsafe { &ctx.get_opaque().runtime }
-            .try_ref()
-            .expect("runtime dropped before all contexts where destroyed");
-        let ctx = unsafe { NonNull::new_unchecked(qjs::JS_DupContext(ctx.as_ptr())) };
-        Self { ctx, rt }
+    pub(crate) fn from_raw(ctx: NonNull<qjs::JSContext>, rt: Runtime) -> Self {
+        Context { ctx, rt }
     }
 
     /// Creates a base context with only the required functions registered.
@@ -121,35 +116,11 @@ impl Context {
     where
         F: FnOnce(Ctx) -> R,
     {
-        #[cfg(not(feature = "futures"))]
-        {
-            let guard = self.rt.inner.lock();
-            guard.update_stack_top();
-            let ctx = Ctx::new(self);
-            let result = f(ctx);
-            mem::drop(guard);
-            result
-        }
-
-        #[cfg(feature = "futures")]
-        {
-            let (spawn_pending_jobs, result) = {
-                let guard = self.rt.inner.lock();
-                guard.update_stack_top();
-                let ctx = Ctx::new(self);
-                let result = f(ctx);
-                (guard.has_spawner() && guard.is_job_pending(), result)
-            };
-            #[cfg(feature = "futures")]
-            if spawn_pending_jobs {
-                self.rt.spawn_pending_jobs();
-            }
-            result
-        }
+        todo!()
     }
 
     pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
-        Runtime::init_raw(qjs::JS_GetRuntime(ctx));
+        RawRuntime::init_raw(qjs::JS_GetRuntime(ctx));
     }
 }
 
