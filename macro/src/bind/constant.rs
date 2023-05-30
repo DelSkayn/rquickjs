@@ -120,7 +120,7 @@ mod test {
 
             struct Math;
 
-            impl rquickjs::ObjectDef for Math {
+            impl rquickjs::object::ObjectDef for Math {
                 fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()>{
                     exports.set("PI" , PI)?;
                     Ok(())
@@ -136,13 +136,13 @@ mod test {
 
             struct Constants;
 
-            impl rquickjs::ModuleDef for Constants {
-                fn declare(declares: &mut rquickjs::Declarations) -> rquickjs::Result<()>{
+            impl rquickjs::module::ModuleDef for Constants {
+                fn declare(declares: &mut rquickjs::module::Declarations) -> rquickjs::Result<()>{
                     declares.declare("pi")?;
                     Ok(())
                 }
 
-                fn evaluate<'js>(_ctx: rquickjs::Ctx<'js>, exports: &mut rquickjs::Exports<'js>) -> rquickjs::Result<()>{
+                fn evaluate<'js>(_ctx: rquickjs::Ctx<'js>, exports: &mut rquickjs::module::Exports<'js>) -> rquickjs::Result<()>{
                     exports.export("pi", PI)?;
                     Ok(())
                 }

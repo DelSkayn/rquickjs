@@ -18,7 +18,7 @@ use crate::{qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs, Result, Va
 /// Helper macro to provide module init function.
 /// Use for exporting module definitions to be loaded as part of a dynamic library.
 /// ```
-/// use rquickjs::{ModuleDef, module_init};
+/// use rquickjs::{module::ModuleDef, module_init};
 ///
 /// struct MyModule;
 /// impl ModuleDef for MyModule {}

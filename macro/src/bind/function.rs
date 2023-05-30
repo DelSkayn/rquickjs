@@ -58,9 +58,9 @@ impl BindFn {
             bindings
         };
         if is_module {
-            quote! { #exports_var.export(#name, #lib_crate::Func::new(#func_name, #bindings))?; }
+            quote! { #exports_var.export(#name, #lib_crate::function::Func::new(#func_name, #bindings))?; }
         } else {
-            quote! { #exports_var.set(#name, #lib_crate::Func::new(#func_name, #bindings))?; }
+            quote! { #exports_var.set(#name, #lib_crate::function::Func::new(#func_name, #bindings))?; }
         }
     }
 }
@@ -93,12 +93,12 @@ impl BindFn1 {
 
         let path = &self.src;
         let bind = if self.method {
-            quote! { #lib_crate::Method(#path) }
+            quote! { #lib_crate::function::Method(#path) }
         } else {
             quote! { #path }
         };
         let bind = if self.async_ {
-            quote! { #lib_crate::Async(#bind) }
+            quote! { #lib_crate::function::Async(#bind) }
         } else {
             bind
         };
@@ -237,7 +237,7 @@ mod test {
         no_args_no_return { test } {
             fn doit() {}
         } {
-            exports.set("doit", rquickjs::Func::new("doit", doit))?;
+            exports.set("doit", rquickjs::function::Func::new("doit", doit))?;
         };
 
         overloaded_function { test } {
@@ -251,7 +251,7 @@ mod test {
                 pub fn sum(a: i32, b: i32) -> i32 { a + b }
             }
         } {
-            exports.set("calc", rquickjs::Func::new("calc", (calc::one, calc::inc, calc::sum)))?;
+            exports.set("calc", rquickjs::function::Func::new("calc", (calc::one, calc::inc, calc::sum)))?;
         };
 
         sync_function_object_export { object } {
@@ -265,9 +265,9 @@ mod test {
 
             struct Add2;
 
-            impl rquickjs::ObjectDef for Add2 {
+            impl rquickjs::object::ObjectDef for Add2 {
                 fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.set("add2", rquickjs::Func::new("add2", add2))?;
+                    exports.set("add2", rquickjs::function::Func::new("add2", add2))?;
                     Ok(())
                 }
             }
@@ -280,9 +280,9 @@ mod test {
 
             struct Fetch;
 
-            impl rquickjs::ObjectDef for Fetch {
+            impl rquickjs::object::ObjectDef for Fetch {
                 fn init<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.set("fetch", rquickjs::Func::new("fetch", rquickjs::Async(fetch)))?;
+                    exports.set("fetch", rquickjs::function::Func::new("fetch", rquickjs::function::Async(fetch)))?;
                     Ok(())
                 }
             }

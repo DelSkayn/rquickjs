@@ -173,7 +173,11 @@ fn resolve<'js>(_ctx: Ctx<'js>, func: Function<'js>, value: Value<'js>) {
 
 #[cfg(all(test, any(feature = "async-std", feature = "tokio")))]
 mod test {
-    use crate::{prelude::*, runtime, Context, Function, Runtime, Value};
+    use crate::{
+        prelude::*,
+        runtime::{self, Tokio},
+        Context, Function, Runtime, Value,
+    };
     use futures_rs::prelude::*;
 
     macro_rules! test_cases {

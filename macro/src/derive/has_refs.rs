@@ -18,7 +18,8 @@ impl HasRefs {
         let ident = &input.ident;
         let impl_params = input.impl_params(false);
         let type_name = input.type_name();
-        let where_clause = input.where_clause(Some(parse_quote!(T: #lib_crate::HasRefs)), None);
+        let where_clause =
+            input.where_clause(Some(parse_quote!(T: #lib_crate::class::HasRefs)), None);
 
         use Data::*;
         let body = match &input.data {
@@ -42,8 +43,8 @@ impl HasRefs {
         };
 
         quote! {
-            impl #impl_params #lib_crate::HasRefs for #type_name #where_clause {
-                fn mark_refs(&self, _marker: &#lib_crate::RefsMarker) {
+            impl #impl_params #lib_crate::class::HasRefs for #type_name #where_clause {
+                fn mark_refs(&self, _marker: &#lib_crate::class::RefsMarker) {
                     #body
                 }
             }
@@ -88,13 +89,13 @@ impl HasRefs {
                     };
                     quote! {
                         #ident::#variant { #(#field_idents,)* #rest } => {
-                            #(#lib_crate::HasRefs::mark_refs(#field_idents, _marker);)*
+                            #(#lib_crate::class::HasRefs::mark_refs(#field_idents, _marker);)*
                         }
                     }
                 } else {
                     // struct
                     quote! {
-                        #(#lib_crate::HasRefs::mark_refs(&self.#field_idents, _marker);)*
+                        #(#lib_crate::class::HasRefs::mark_refs(&self.#field_idents, _marker);)*
                     }
                 }
             }
@@ -118,7 +119,7 @@ impl HasRefs {
 
                     quote! {
                         #ident::#variant(#(#field_patterns),*) => {
-                            #(#lib_crate::HasRefs::mark_refs(#field_aliases, _marker);)*
+                            #(#lib_crate::class::HasRefs::mark_refs(#field_aliases, _marker);)*
                         }
                     }
                 } else {
@@ -131,7 +132,7 @@ impl HasRefs {
                         .map(|(index, _)| Index::from(index));
 
                     quote! {
-                        #(#lib_crate::HasRefs::mark_refs(&self.#field_indexes, _marker);)*
+                        #(#lib_crate::class::HasRefs::mark_refs(&self.#field_indexes, _marker);)*
                     }
                 }
             }
@@ -152,10 +153,10 @@ mod test {
                 text: String,
             }
         } {
-            impl rquickjs::HasRefs for Data {
-                fn mark_refs(&self, _marker: &rquickjs::RefsMarker) {
-                    rquickjs::HasRefs::mark_refs(&self.lists, _marker);
-                    rquickjs::HasRefs::mark_refs(&self.func, _marker);
+            impl rquickjs::class::HasRefs for Data {
+                fn mark_refs(&self, _marker: &rquickjs::class::RefsMarker) {
+                    rquickjs::class::HasRefs::mark_refs(&self.lists, _marker);
+                    rquickjs::class::HasRefs::mark_refs(&self.func, _marker);
                 }
             }
         };
@@ -175,14 +176,14 @@ mod test {
                 Text(String),
             }
         } {
-            impl rquickjs::HasRefs for Data {
-                fn mark_refs(&self, _marker: &rquickjs::RefsMarker) {
+            impl rquickjs::class::HasRefs for Data {
+                fn mark_refs(&self, _marker: &rquickjs::class::RefsMarker) {
                     match self {
                         Data::Lists(_0) => {
-                            rquickjs::HasRefs::mark_refs(_0, _marker);
+                            rquickjs::class::HasRefs::mark_refs(_0, _marker);
                         }
                         Data::Func { func, .. } => {
-                            rquickjs::HasRefs::mark_refs(func, _marker);
+                            rquickjs::class::HasRefs::mark_refs(func, _marker);
                         }
                         Data::Flag(_) => { }
                         Data::Text(_) => { }

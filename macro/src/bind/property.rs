@@ -95,19 +95,19 @@ impl BindProp {
             (Some(get), Some(set), _) => {
                 let get = get.expand_pure(cfg);
                 let set = set.expand_pure(cfg);
-                quote! { #lib_crate::Accessor::new(#get, #set) }
+                quote! { #lib_crate::object::Accessor::new(#get, #set) }
             }
             (Some(get), _, _) => {
                 let get = get.expand_pure(cfg);
-                quote! { #lib_crate::Accessor::new_get(#get) }
+                quote! { #lib_crate::object::Accessor::new_get(#get) }
             }
             (_, Some(set), _) => {
                 let set = set.expand_pure(cfg);
-                quote! { #lib_crate::Accessor::new_set(#set) }
+                quote! { #lib_crate::object::Accessor::new_set(#set) }
             }
             (_, _, Some(val)) => {
                 let val = val.expand_pure(cfg);
-                quote! { #lib_crate::Property::from(#val) }
+                quote! { #lib_crate::object::Property::from(#val) }
             }
             _ => {
                 error!("Misconfigured property '{}'", name);

@@ -71,7 +71,7 @@ pub use class::Class;
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
 #[cfg(feature = "futures")]
-mod promise;
+pub mod promise;
 
 #[cfg(feature = "allocator")]
 pub mod allocator;

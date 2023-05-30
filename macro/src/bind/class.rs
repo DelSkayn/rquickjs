@@ -91,8 +91,8 @@ impl BindClass {
             extras.extend(quote! {
                 const HAS_REFS: bool = true;
 
-                fn mark_refs(&self, marker: &#lib_crate::RefsMarker) {
-                    #lib_crate::HasRefs::mark_refs(self, marker);
+                fn mark_refs(&self, marker: &#lib_crate::class::RefsMarker) {
+                    #lib_crate::class::HasRefs::mark_refs(self, marker);
                 }
             })
         }
@@ -100,13 +100,13 @@ impl BindClass {
         let mut converts = quote! {
             impl<'js> #lib_crate::IntoJs<'js> for #src {
                 fn into_js(self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>> {
-                    <#src as #lib_crate::ClassDef>::into_js_obj(self, ctx)
+                    <#src as #lib_crate::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> #lib_crate::FromJs<'js> for &'js #src {
                 fn from_js(ctx: #lib_crate::Ctx<'js>, value: #lib_crate::Value<'js>) -> #lib_crate::Result<Self> {
-                    <#src as #lib_crate::ClassDef>::from_js_ref(ctx, value)
+                    <#src as #lib_crate::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
         };
@@ -115,26 +115,26 @@ impl BindClass {
             converts.extend(quote! {
                 impl<'js> #lib_crate::IntoJs<'js> for &#src {
                     fn into_js(self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>> {
-                        #lib_crate::ClassDef::into_js_obj(self.clone(), ctx)
+                        #lib_crate::class::ClassDef::into_js_obj(self.clone(), ctx)
                     }
                 }
 
                 impl<'js> #lib_crate::IntoJs<'js> for &mut #src {
                     fn into_js(self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>> {
-                        #lib_crate::ClassDef::into_js_obj(self.clone(), ctx)
+                        #lib_crate::class::ClassDef::into_js_obj(self.clone(), ctx)
                     }
                 }
 
                 impl<'js> #lib_crate::FromJs<'js> for #src {
                     fn from_js(ctx: #lib_crate::Ctx<'js>, value: #lib_crate::Value<'js>) -> #lib_crate::Result<Self> {
-                        #lib_crate::ClassDef::from_js_obj(ctx, value)
+                        #lib_crate::class::ClassDef::from_js_obj(ctx, value)
                     }
                 }
             });
         }
 
         quote! {
-            impl #lib_crate::ClassDef for #src {
+            impl #lib_crate::class::ClassDef for #src {
                 const CLASS_NAME: &'static str = #name;
 
                 fn class_id() -> &'static #lib_crate::ClassId {
@@ -409,7 +409,7 @@ mod test {
                 impl Test {}
             }
         } {
-            impl rquickjs::ClassDef for test::Test {
+            impl rquickjs::class::ClassDef for test::Test {
                 const CLASS_NAME: &'static str = "Test";
 
                 fn class_id() -> &'static rquickjs::ClassId {
@@ -420,13 +420,13 @@ mod test {
 
             impl<'js> rquickjs::IntoJs<'js> for test::Test {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    <test::Test as rquickjs::ClassDef>::into_js_obj(self, ctx)
+                    <test::Test as rquickjs::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for &'js test::Test {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    <test::Test as rquickjs::ClassDef>::from_js_ref(ctx, value)
+                    <test::Test as rquickjs::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
 
@@ -442,7 +442,7 @@ mod test {
                 }
             }
         } {
-            impl rquickjs::ClassDef for test::Test {
+            impl rquickjs::class::ClassDef for test::Test {
                 const CLASS_NAME: &'static str = "Test";
 
                 fn class_id() -> &'static rquickjs::ClassId {
@@ -453,27 +453,27 @@ mod test {
                 const HAS_PROTO: bool = true;
 
                 fn init_proto<'js >(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.prop("a", rquickjs::Accessor::new({
+                    exports.prop("a", rquickjs::object::Accessor::new({
                         fn get_a(self_: &test::Test) -> String {
                             self_.a
                         }
-                        rquickjs::Method(get_a)
+                        rquickjs::function::Method(get_a)
                     }, {
                         fn set_a(self_: &mut test::Test, val: String) {
                             self_.a = val;
                         }
-                        rquickjs::Method(set_a)
+                        rquickjs::function::Method(set_a)
                     }))?;
-                    exports.prop("b", rquickjs::Accessor::new({
+                    exports.prop("b", rquickjs::object::Accessor::new({
                         fn get_b(self_: &test::Test) -> f64 {
                             self_.b
                         }
-                        rquickjs::Method(get_b)
+                        rquickjs::function::Method(get_b)
                     }, {
                         fn set_b(self_: &mut test::Test, val: f64) {
                             self_.b = val;
                         }
-                        rquickjs::Method(set_b)
+                        rquickjs::function::Method(set_b)
                     }))?;
                     Ok (())
                 }
@@ -481,13 +481,13 @@ mod test {
 
             impl<'js> rquickjs::IntoJs<'js> for test::Test {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    <test::Test as rquickjs::ClassDef>::into_js_obj(self, ctx)
+                    <test::Test as rquickjs::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for &'js test::Test {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    <test::Test as rquickjs::ClassDef>::from_js_ref(ctx, value)
+                    <test::Test as rquickjs::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
 
@@ -505,7 +505,7 @@ mod test {
                 }
             }
         } {
-            impl rquickjs::ClassDef for test::Node {
+            impl rquickjs::class::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
                 fn class_id() -> &'static rquickjs::ClassId {
@@ -516,40 +516,40 @@ mod test {
                 const HAS_PROTO: bool = true;
 
                 fn init_proto<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.set("len", rquickjs::Func::new("len", rquickjs::Method(test::Node::len)))?;
-                    exports.set("add", rquickjs::Func::new("add", rquickjs::Method(test::Node::add)))?;
-                    exports.set("run", rquickjs::Func::new("run", rquickjs::Async(rquickjs::Method(test::Node::run))))?;
+                    exports.set("len", rquickjs::function::Func::new("len", rquickjs::function::Method(test::Node::len)))?;
+                    exports.set("add", rquickjs::function::Func::new("add", rquickjs::function::Method(test::Node::add)))?;
+                    exports.set("run", rquickjs::function::Func::new("run", rquickjs::function::Async(rquickjs::function::Method(test::Node::run))))?;
                     Ok(())
                 }
             }
 
             impl<'js> rquickjs::IntoJs<'js> for test::Node {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    <test::Node as rquickjs::ClassDef>::into_js_obj(self, ctx)
+                    <test::Node as rquickjs::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for &'js test::Node {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    <test::Node as rquickjs::ClassDef>::from_js_ref(ctx, value)
+                    <test::Node as rquickjs::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
 
             impl<'js> rquickjs::IntoJs<'js> for &test::Node {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    rquickjs::ClassDef::into_js_obj(self.clone(), ctx)
+                    rquickjs::class::ClassDef::into_js_obj(self.clone(), ctx)
                 }
             }
 
             impl<'js> rquickjs::IntoJs<'js> for &mut test::Node {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    rquickjs::ClassDef::into_js_obj(self.clone(), ctx)
+                    rquickjs::class::ClassDef::into_js_obj(self.clone(), ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for test::Node {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    rquickjs::ClassDef::from_js_obj(ctx, value)
+                    rquickjs::class::ClassDef::from_js_obj(ctx, value)
                 }
             }
 
@@ -578,7 +578,7 @@ mod test {
                 }
             }
         } {
-            impl rquickjs::ClassDef for test::Node {
+            impl rquickjs::class::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
                 fn class_id() -> &'static rquickjs::ClassId {
@@ -589,10 +589,10 @@ mod test {
                 const HAS_PROTO: bool = true;
 
                 fn init_proto<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.prop("children", rquickjs::Property::from(test::Node::HAS_CHILDREN))?;
-                    exports.prop("parent", rquickjs::Accessor::new(
-                        rquickjs::Method(test::Node::parent),
-                        rquickjs::Method(test::Node::set_parent)
+                    exports.prop("children", rquickjs::object::Property::from(test::Node::HAS_CHILDREN))?;
+                    exports.prop("parent", rquickjs::object::Accessor::new(
+                        rquickjs::function::Method(test::Node::parent),
+                        rquickjs::function::Method(test::Node::set_parent)
                     ).enumerable())?;
                     Ok(())
                 }
@@ -600,21 +600,21 @@ mod test {
                 const HAS_STATIC: bool = true;
 
                 fn init_static<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
-                    exports.prop("children", rquickjs::Property::from(test::Node::MAX_CHILDREN).configurable())?;
-                    exports.prop("root", rquickjs::Accessor::new_get(test::Node::get_root))?;
+                    exports.prop("children", rquickjs::object::Property::from(test::Node::MAX_CHILDREN).configurable())?;
+                    exports.prop("root", rquickjs::object::Accessor::new_get(test::Node::get_root))?;
                     Ok(())
                 }
             }
 
             impl<'js> rquickjs::IntoJs<'js> for test::Node {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    <test::Node as rquickjs::ClassDef>::into_js_obj(self, ctx)
+                    <test::Node as rquickjs::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for &'js test::Node {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    <test::Node as rquickjs::ClassDef>::from_js_ref(ctx, value)
+                    <test::Node as rquickjs::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
 
@@ -630,7 +630,7 @@ mod test {
                 }
             }
         } {
-            impl rquickjs::ClassDef for test::Node {
+            impl rquickjs::class::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
                 fn class_id() -> &'static rquickjs::ClassId {
@@ -641,19 +641,19 @@ mod test {
 
             impl<'js> rquickjs::IntoJs<'js> for test::Node {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    <test::Node as rquickjs::ClassDef>::into_js_obj(self, ctx)
+                    <test::Node as rquickjs::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for &'js test::Node {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    <test::Node as rquickjs::ClassDef>::from_js_ref(ctx, value)
+                    <test::Node as rquickjs::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
 
             rquickjs::Class::<test::Node>::register(_ctx)?;
 
-            exports.set("Node", rquickjs::Func::new("Node", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
+            exports.set("Node", rquickjs::function::Func::new("Node", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
         };
 
         class_with_static { test } {
@@ -667,7 +667,7 @@ mod test {
                 }
             }
         } {
-            impl rquickjs::ClassDef for test::Node {
+            impl rquickjs::class::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
                 fn class_id() -> &'static rquickjs::ClassId {
@@ -679,26 +679,26 @@ mod test {
 
                 fn init_static<'js>(_ctx: rquickjs::Ctx<'js>, exports: &rquickjs::Object<'js>) -> rquickjs::Result<()> {
                     exports.set("TAG", test::Node::TAG)?;
-                    exports.set("mix", rquickjs::Func::new("mix", test::Node::mix))?;
+                    exports.set("mix", rquickjs::function::Func::new("mix", test::Node::mix))?;
                     Ok(())
                 }
             }
 
             impl<'js> rquickjs::IntoJs<'js> for test::Node {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    <test::Node as rquickjs::ClassDef>::into_js_obj(self, ctx)
+                    <test::Node as rquickjs::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for &'js test::Node {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    <test::Node as rquickjs::ClassDef>::from_js_ref(ctx, value)
+                    <test::Node as rquickjs::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
 
             rquickjs::Class::<test::Node>::register(_ctx)?;
 
-            exports.set("Node", rquickjs::Func::new("Node", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
+            exports.set("Node", rquickjs::function::Func::new("Node", rquickjs::Class::<test::Node>::constructor(test::Node::new)))?;
         };
 
         class_with_internal_refs { test } {
@@ -708,7 +708,7 @@ mod test {
                 pub struct Node;
             }
         } {
-            impl rquickjs::ClassDef for test::Node {
+            impl rquickjs::class::ClassDef for test::Node {
                 const CLASS_NAME: &'static str = "Node";
 
                 fn class_id() -> &'static rquickjs::ClassId {
@@ -718,20 +718,20 @@ mod test {
 
                 const HAS_REFS: bool = true;
 
-                fn mark_refs(&self, marker: &rquickjs::RefsMarker) {
-                    rquickjs::HasRefs::mark_refs(self, marker);
+                fn mark_refs(&self, marker: &rquickjs::class::RefsMarker) {
+                    rquickjs::class::HasRefs::mark_refs(self, marker);
                 }
             }
 
             impl<'js> rquickjs::IntoJs<'js> for test::Node {
                 fn into_js(self, ctx: rquickjs::Ctx<'js>) -> rquickjs::Result<rquickjs::Value<'js>> {
-                    <test::Node as rquickjs::ClassDef>::into_js_obj(self, ctx)
+                    <test::Node as rquickjs::class::ClassDef>::into_js_obj(self, ctx)
                 }
             }
 
             impl<'js> rquickjs::FromJs<'js> for &'js test::Node {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    <test::Node as rquickjs::ClassDef>::from_js_ref(ctx, value)
+                    <test::Node as rquickjs::class::ClassDef>::from_js_ref(ctx, value)
                 }
             }
 

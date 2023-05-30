@@ -1,8 +1,9 @@
 use rquickjs::{
+    function::Func,
     loader::{
         BuiltinLoader, BuiltinResolver, FileResolver, ModuleLoader, NativeLoader, ScriptLoader,
     },
-    Context, Func, Runtime,
+    Context, Runtime,
 };
 
 mod bundle;

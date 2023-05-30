@@ -20,7 +20,7 @@ pub use refs::{HasRefs, RefsMarker};
 /// NOTE: Usually no need implements this trait manually. Instead you can use [`class_def`](crate::class_def) macro or [`bind`](attr.bind.html) attribute to export classes to JS in easy way.
 ///
 /// ```
-/// # use rquickjs::{ClassId, ClassDef, FromJs, IntoJs, Ctx, Object, Result, Value, RefsMarker};
+/// # use rquickjs::{ClassId, class::{ClassDef, RefsMarker}, FromJs, IntoJs, Ctx, Object, Result, Value};
 /// #[derive(Clone)]
 /// struct MyClass;
 ///
@@ -440,7 +440,7 @@ where
 /// The macro to simplify class definition.
 ///
 /// ```
-/// # use rquickjs::{class_def, Method, Func};
+/// # use rquickjs::{class_def, function::{Method, Func}};
 /// #
 /// struct TestClass;
 ///
