@@ -46,11 +46,11 @@ impl Runtime {
         })
     }
 
-    #[cfg(feature = "allocator")]
     /// Create a new runtime using specified allocator
     ///
     /// Will generally only fail if not enough memory was available.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
+    #[cfg(feature = "allocator")]
     pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
@@ -107,26 +107,25 @@ impl Runtime {
     /// Note that is a Noop when a custom allocator is being used,
     /// as is the case for the "rust-alloc" or "allocator" features.
     pub fn set_memory_limit(&self, limit: usize) {
-        let guard = self.inner.lock();
-        unsafe { qjs::JS_SetMemoryLimit(guard.rt.as_ptr(), limit as _) };
-        mem::drop(guard);
+        unsafe {
+            self.inner.lock().set_memory_limit(limit);
+        }
     }
 
     /// Set a limit on the max size of stack the runtime will use.
     ///
     /// The default values is 256x1024 bytes.
     pub fn set_max_stack_size(&self, limit: usize) {
-        let guard = self.inner.lock();
-        unsafe { qjs::JS_SetMaxStackSize(guard.rt.as_ptr(), limit as _) };
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard);
+        unsafe {
+            self.inner.lock().set_max_stack_size(limit);
+        }
     }
 
     /// Set a memory threshold for garbage collection.
     pub fn set_gc_threshold(&self, threshold: usize) {
-        let guard = self.inner.lock();
-        unsafe { qjs::JS_SetGCThreshold(guard.rt.as_ptr(), threshold as _) };
-        mem::drop(guard);
+        unsafe {
+            self.inner.lock().set_gc_threshold(threshold);
+        }
     }
 
     /// Manually run the garbage collection.
@@ -136,18 +135,14 @@ impl Runtime {
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub fn run_gc(&self) {
-        let guard = self.inner.lock();
-        unsafe { qjs::JS_RunGC(guard.rt.as_ptr()) };
-        mem::drop(guard);
+        unsafe {
+            self.inner.lock().run_gc();
+        }
     }
 
     /// Get memory usage stats
     pub fn memory_usage(&self) -> MemoryUsage {
-        let guard = self.inner.lock();
-        let mut stats = mem::MaybeUninit::uninit();
-        unsafe { qjs::JS_ComputeMemoryUsage(guard.rt.as_ptr(), stats.as_mut_ptr()) };
-        mem::drop(guard);
-        unsafe { stats.assume_init() }
+        unsafe { self.inner.lock().memory_usage() }
     }
 
     /// Test for pending jobs

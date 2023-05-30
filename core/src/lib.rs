@@ -6,15 +6,6 @@
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
-#[cfg(feature = "async-std")]
-extern crate async_std_rs as async_std;
-
-#[cfg(feature = "tokio")]
-extern crate tokio_rs as tokio;
-
-#[cfg(feature = "smol")]
-extern crate smol_rs as smol;
-
 //#[doc(hidden)]
 pub mod qjs {
     //! Native low-level bindings
