@@ -9,6 +9,8 @@ use crate::allocator::{Allocator, AllocatorHolder};
 use crate::loader::{LoaderHolder, RawLoader, Resolver};
 use crate::{qjs, Function};
 
+use super::spawner::Spawner;
+
 /// Opaque book keeping data for rust.
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
@@ -16,6 +18,9 @@ pub(crate) struct Opaque<'js> {
 
     /// The user provided interrupt handler, if any.
     pub interrupt_handler: Option<Box<dyn FnMut() -> bool + 'static>>,
+
+    #[cfg(feature = "futures")]
+    pub spawner: Option<Spawner<'js>>,
 
     _marker: PhantomData<&'js ()>,
 }
@@ -25,8 +30,27 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: None,
             interrupt_handler: None,
+            #[cfg(feature = "futures")]
+            spawner: None,
             _marker: PhantomData,
         }
+    }
+
+    #[cfg(feature = "futures")]
+    pub fn with_spawner() -> Self {
+        Opaque {
+            panic: None,
+            interrupt_handler: None,
+            #[cfg(feature = "futures")]
+            spawner: Some(Spawner::new()),
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn spawner(&mut self) -> &mut Spawner<'js> {
+        self.spawner
+            .as_mut()
+            .expect("tried to use async function in non async runtime")
     }
 }
 

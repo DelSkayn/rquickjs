@@ -32,7 +32,7 @@ impl AsyncRuntime {
     /// # Features
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new() -> Result<Self> {
-        let opaque = Opaque::new();
+        let opaque = Opaque::with_spawner();
         let rt = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
         Ok(Self {
             inner: Ref::new(Mutex::new(rt)),
@@ -48,7 +48,7 @@ impl AsyncRuntime {
     where
         A: Allocator + 'static,
     {
-        let opaque = Opaque::new();
+        let opaque = Opaque::with_spawner();
         let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
             .ok_or(Error::Allocation)?;
         Ok(Self {

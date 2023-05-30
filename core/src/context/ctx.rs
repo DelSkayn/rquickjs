@@ -231,12 +231,11 @@ impl<'js> Ctx<'js> {
     /// Spawn future using configured async runtime
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-    pub fn spawn<F, T>(&self, future: F)
+    pub fn spawn<F>(&self, future: F)
     where
-        F: Future<Output = T> + 'js,
-        T: ParallelSend + 'js,
+        F: Future<Output = ()> + 'js,
     {
-        todo!()
+        unsafe { self.get_opaque().spawner().push(future) }
     }
 }
 
