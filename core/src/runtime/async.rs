@@ -21,7 +21,7 @@ pub struct AsyncWeakRuntime(Weak<Mutex<RawRuntime>>);
 
 #[derive(Clone)]
 pub struct AsyncRuntime {
-    inner: Ref<Mutex<RawRuntime>>,
+    pub(crate) inner: Ref<Mutex<RawRuntime>>,
 }
 
 impl AsyncRuntime {

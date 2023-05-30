@@ -1,14 +1,3 @@
-use crate::{
-    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, Module,
-    Object, Result, Value,
-};
-
-#[cfg(feature = "futures")]
-use std::future::Future;
-
-#[cfg(feature = "futures")]
-use crate::ParallelSend;
-
 use std::{
     ffi::{CStr, CString},
     fs,
@@ -16,6 +5,18 @@ use std::{
     mem,
     path::Path,
     ptr::NonNull,
+};
+
+#[cfg(feature = "futures")]
+use std::future::Future;
+
+#[cfg(feature = "futures")]
+use super::AsyncContext;
+#[cfg(feature = "futures")]
+use crate::ParallelSend;
+use crate::{
+    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, Module,
+    Object, Result, Value,
 };
 
 /// Eval options.
@@ -79,6 +80,13 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) fn new(ctx: &'js Context) -> Self {
+        Ctx {
+            ctx: ctx.ctx,
+            marker: PhantomData,
+        }
+    }
+
+    pub(crate) fn new_async(ctx: &'js AsyncContext) -> Self {
         Ctx {
             ctx: ctx.ctx,
             marker: PhantomData,
@@ -225,8 +233,8 @@ impl<'js> Ctx<'js> {
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub fn spawn<F, T>(&self, future: F)
     where
-        F: Future<Output = T> + ParallelSend + 'static,
-        T: ParallelSend + 'static,
+        F: Future<Output = T> + 'js,
+        T: ParallelSend + 'js,
     {
         todo!()
     }
