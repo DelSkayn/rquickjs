@@ -30,12 +30,12 @@ where
             let res = self.future.as_mut().poll(cx);
 
             loop {
-                let fut = pin!(self.runtime.get_opaque_mut().spawner().drive());
-                if let Poll::Ready(true) = fut.poll(cx) {
+                if let Ok(true) = self.runtime.execute_pending_job() {
                     continue;
                 }
 
-                if let Ok(true) = self.runtime.execute_pending_job() {
+                let fut = pin!(self.runtime.get_opaque_mut().spawner().drive());
+                if let Poll::Ready(true) = fut.poll(cx) {
                     continue;
                 }
 

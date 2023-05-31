@@ -1,16 +1,29 @@
-use std::{future::Future, pin::Pin, task::Poll};
+use std::{
+    future::Future,
+    pin::{pin, Pin},
+    task::{ready, Wake},
+    task::{Poll, Waker},
+};
+
+use async_lock::futures::{Lock, LockArc};
+
+use crate::AsyncRuntime;
+
+use super::{raw::RawRuntime, AsyncWeakRuntime};
 
 /// A structure to hold futures spawned inside the runtime.
 ///
 /// TODO: change future lookup in poll from O(n) to O(1).
 pub struct Spawner<'js> {
     futures: Vec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
+    wakeup: Vec<Waker>,
 }
 
 impl<'js> Spawner<'js> {
     pub fn new() -> Self {
         Spawner {
             futures: Vec::new(),
+            wakeup: Vec::new(),
         }
     }
 
@@ -18,7 +31,12 @@ impl<'js> Spawner<'js> {
     where
         F: Future<Output = ()> + 'js,
     {
+        self.wakeup.drain(..).for_each(Waker::wake);
         self.futures.push(Box::pin(f))
+    }
+
+    pub fn listen(&mut self, wake: Waker) {
+        self.wakeup.push(wake);
     }
 
     pub fn drive<'a>(&'a mut self) -> SpawnFuture<'a, 'js> {
@@ -27,6 +45,12 @@ impl<'js> Spawner<'js> {
 
     pub fn is_empty(&mut self) -> bool {
         self.futures.is_empty()
+    }
+}
+
+impl Drop for Spawner<'_> {
+    fn drop(&mut self) {
+        self.wakeup.drain(..).for_each(Waker::wake)
     }
 }
 
@@ -56,6 +80,132 @@ impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
                 Poll::Ready(true)
             }
             None => Poll::Pending,
+        }
+    }
+}
+
+enum DriveFutureState {
+    Initial,
+    Lock {
+        lock_future: Lock<'static, RawRuntime>,
+        // Here to ensure the lock remains valid.
+        _runtime: AsyncRuntime,
+    },
+}
+
+pub struct DriveFuture {
+    rt: AsyncWeakRuntime,
+    state: DriveFutureState,
+}
+
+#[cfg(feature = "parallel")]
+unsafe impl Send for DriveFuture {}
+#[cfg(feature = "parallel")]
+unsafe impl Sync for DriveFuture {}
+
+impl DriveFuture {
+    pub(crate) fn new(rt: AsyncWeakRuntime) -> Self {
+        Self {
+            rt,
+            state: DriveFutureState::Initial,
+        }
+    }
+}
+
+impl Future for DriveFuture {
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        loop {
+            let mut lock = match self.state {
+                DriveFutureState::Initial => {
+                    let Some(_runtime) = self.rt.try_ref() else {
+                        return Poll::Ready(())
+                    };
+
+                    // Dirty hack to get a owned lock,
+                    // We know the lock will remain alive and won't be moved since it is inside a
+                    // arc like structure and we keep it alive in the lock.
+                    let lock_future = unsafe { std::mem::transmute(_runtime.inner.lock()) };
+                    self.state = DriveFutureState::Lock {
+                        lock_future,
+                        _runtime,
+                    };
+                    continue;
+                }
+                DriveFutureState::Lock {
+                    ref mut lock_future,
+                    ..
+                } => {
+                    ready!(Pin::new(lock_future).poll(cx))
+                }
+            };
+
+            lock.update_stack_top();
+
+            unsafe { lock.get_opaque_mut() }
+                .spawner()
+                .listen(cx.waker().clone());
+
+            loop {
+                // TODO: Handle error.
+                if let Ok(true) = lock.execute_pending_job() {
+                    continue;
+                }
+
+                let drive = pin!(unsafe { lock.get_opaque_mut() }.spawner().drive());
+
+                // TODO: Handle error.
+                match drive.poll(cx) {
+                    Poll::Pending => {
+                        // Execute pending jobs to ensure we don't dead lock when waiting on
+                        // quickjs futures.
+                        while let Ok(true) = lock.execute_pending_job() {}
+                        self.state = DriveFutureState::Initial;
+                        return Poll::Pending;
+                    }
+                    Poll::Ready(false) => {}
+                    Poll::Ready(true) => {
+                        continue;
+                    }
+                }
+
+                break;
+            }
+
+            self.state = DriveFutureState::Initial;
+            return Poll::Pending;
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    fn drive() {
+        let rt = if cfg!(feature = "parallel") {
+            tokio::runtime::Builder::new_multi_thread()
+        } else {
+            tokio::runtime::Builder::new_current_thread()
+        }
+        .enable_all()
+        .build()
+        .unwrap();
+
+        #[cfg(feature = "parallel")]
+        {
+            rt.block_on(async {
+                let rt = crate::AsyncRuntime::new().unwrap();
+                let ctx = crate::AsyncContext::full(&rt).await.unwrap();
+            })
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            let set = tokio::task::LocalSet::new();
+            set.block_on(&rt, async {
+                let rt = crate::AsyncRuntime::new().unwrap();
+                let ctx = crate::AsyncContext::full(&rt).await.unwrap();
+            })
         }
     }
 }

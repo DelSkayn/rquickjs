@@ -15,11 +15,18 @@ use crate::{
 
 use super::{
     raw::{Opaque, RawRuntime},
+    spawner::DriveFuture,
     MemoryUsage,
 };
 
 #[derive(Clone)]
 pub struct AsyncWeakRuntime(Weak<Mutex<RawRuntime>>);
+
+impl AsyncWeakRuntime {
+    pub fn try_ref(&self) -> Option<AsyncRuntime> {
+        self.0.upgrade().map(|inner| AsyncRuntime { inner })
+    }
+}
 
 /// Asynchronous Quickjs runtime, entry point of the library.
 #[derive(Clone)]
@@ -172,28 +179,27 @@ impl AsyncRuntime {
     #[inline]
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.inner.lock().await;
+        lock.update_stack_top();
 
-        if unsafe { lock.get_opaque_mut() }.spawner().drive().await {
-            return Ok(true);
-        }
-
-        lock.execute_pending_job().map_err(|e| {
+        let job_res = lock.execute_pending_job().map_err(|e| {
             let ptr =
                 NonNull::new(e).expect("executing pending job returned a null context on error");
             AsyncJobException(AsyncContext::from_raw(ptr, self.clone()))
-        })
+        })?;
+        if job_res {
+            return Ok(true);
+        }
+
+        Ok(unsafe { lock.get_opaque_mut() }.spawner().drive().await)
     }
 
     /// Run all futures and jobs in the runtime until all are finished.
     #[inline]
     pub async fn idle(&self) {
         let mut lock = self.inner.lock().await;
+        lock.update_stack_top();
 
         loop {
-            if unsafe { lock.get_opaque_mut() }.spawner().drive().await {
-                continue;
-            }
-
             match lock.execute_pending_job().map_err(|e| {
                 let ptr = NonNull::new(e)
                     .expect("executing pending job returned a null context on error");
@@ -211,8 +217,86 @@ impl AsyncRuntime {
                     }
                 }
                 Ok(true) => continue,
-                Ok(false) => break,
+                Ok(false) => {}
             }
+
+            if unsafe { lock.get_opaque_mut() }.spawner().drive().await {
+                continue;
+            }
+
+            break;
         }
     }
+
+    /// Returns a future that completes when the runtime is dropped.
+    /// If the future is polled it will drive futures spawned inside the runtime completing them
+    /// even if runtime is currently not in use.
+    pub fn drive(&self) -> DriveFuture {
+        DriveFuture::new(self.weak())
+    }
+}
+
+#[cfg(test)]
+macro_rules! async_test_case {
+    ($name:ident => ($rt:ident,$ctx:ident) { $($t:tt)* }) => {
+    #[test]
+    fn $name() {
+        let rt = if cfg!(feature = "parallel") {
+            tokio::runtime::Builder::new_multi_thread()
+        } else {
+            tokio::runtime::Builder::new_current_thread()
+        }
+        .enable_all()
+        .build()
+        .unwrap();
+
+        #[cfg(feature = "parallel")]
+        {
+            rt.block_on(async {
+                let $rt = crate::AsyncRuntime::new().unwrap();
+                let $ctx = crate::AsyncContext::full(&$rt).await.unwrap();
+
+                $($t)*
+
+            })
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            let set = tokio::task::LocalSet::new();
+            set.block_on(&rt, async {
+                let $rt = crate::AsyncRuntime::new().unwrap();
+                let $ctx = crate::AsyncContext::full(&$rt).await.unwrap();
+
+                $($t)*
+            })
+        }
+    }
+    };
+}
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use crate::*;
+
+    async_test_case!(basic => (_rt,ctx){
+        async_with!(ctx => |ctx|{
+            let res: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(res,2i32);
+        }).await;
+    });
+
+    async_test_case!(sleep_closure => (_rt,ctx){
+
+        let mut a = 1;
+        let a_ref = &mut a;
+
+        async_with!(ctx => |ctx|{
+
+            tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+            *a_ref += 1;
+        }).await;
+        assert_eq!(a,2);
+    });
 }

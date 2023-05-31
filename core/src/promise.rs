@@ -40,7 +40,7 @@ unsafe impl<'js, T> Sync for State<'js, T> {}
 
 impl<'js, T> FromJs<'js> for Promise<'js, T>
 where
-    T: FromJs<'js> + ParallelSend + 'js,
+    T: FromJs<'js> + 'js,
 {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let promise = Object::from_js(ctx, value)?;
@@ -55,7 +55,7 @@ where
 
 impl<'js, T> Future for Promise<'js, T>
 where
-    T: FromJs<'js> + ParallelSend + 'js,
+    T: FromJs<'js> + 'js,
 {
     type Output = Result<T>;
 
@@ -102,7 +102,7 @@ impl<T> From<T> for Promised<T> {
 
 impl<'js, T, R> IntoJs<'js> for Promised<T>
 where
-    T: Future<Output = Result<R>> + ParallelSend + 'js,
+    T: Future<Output = Result<R>> + 'js,
     R: IntoJs<'js> + 'js,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
