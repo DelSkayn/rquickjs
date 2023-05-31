@@ -24,6 +24,10 @@ impl<'js> Spawner<'js> {
     pub fn drive<'a>(&'a mut self) -> SpawnFuture<'a, 'js> {
         SpawnFuture(self)
     }
+
+    pub fn is_empty(&mut self) -> bool {
+        self.futures.is_empty()
+    }
 }
 
 pub struct SpawnFuture<'a, 'js>(&'a mut Spawner<'js>);

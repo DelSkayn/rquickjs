@@ -18,7 +18,7 @@
 //! This library has multiple traits for converting to and from javascript. The [`IntoJs`] trait is
 //! used for taking rust values and turning them into javascript values. The [`FromJs`] is for
 //! converting javascript value to rust. Note that this trait does not automatic coercion but the
-//! [`Coerced`] can be used to convert the values with coercion.
+//! [`Coerced`](convert::Coerced) can be used to convert the values with coercion.
 //!
 //! For values which represent the name of variables or indecies the trait [`IntoAtom`] is
 //! available to convert values to the represention quickjs requires.
@@ -35,28 +35,38 @@
 //!
 //! ## Advanced
 //!
-//! The following features may be enabled to get an extra functionality: - `allocator` adds support
-//! for custom allocators for [`Runtime`]. The allocators should implements
-//! [`std::alloc::Allocator`] trait and can be plugged on [`Runtime`] creation via
-//! [`Runtime::new_with_alloc`]. - `rust-alloc` forces using Rust's global allocator by default
-//! instead of libc's one. - `loader` adds support for custom ES6 modules resolvers and loaders.
-//! The resolvers and loaders should implements [`Resolver`](loader::Resolver) and [Loader](loader::Loader) traits respectively and
-//! can be plugged in already existing [`Runtime`] before loading modules via
+//! The following features may be enabled to get an extra functionality:
+//!
+//! - `allocator` adds support for custom allocators for [`Runtime`]. The allocators should
+//! implements [`std::alloc::Allocator`] trait and can be plugged on [`Runtime`] creation via
+//! [`Runtime::new_with_alloc`].
+//!
+//! - `rust-alloc` forces using Rust's global allocator by default instead of libc's one.
+//!
+//! - `loader` adds support for custom ES6 modules resolvers and loaders. The resolvers and loaders
+//! should implements [`Resolver`](loader::Resolver) and [Loader](loader::Loader) traits
+//! respectively and can be plugged in already existing [`Runtime`] before loading modules via
 //! [`Runtime::set_loader`]. The resolvers and loaders can be easily combined via tuples. When the
-//! previous resolver or loader failed the next one will be applied. - `dyn-load` adds support for
-//! loadable native modules (so/dll/dylib). - `array-buffer` adds support for [`ArrayBuffer`] and
-//! [`TypedArray`]. - `futures` adds support for async Rust. When enabled the Rust futures can be
-//! passed to JS as [ES6
+//! previous resolver or loader failed the next one will be applied.
+//!
+//! - `dyn-load` adds support for loadable native modules (so/dll/dylib).
+//!
+//! - `array-buffer` adds support for [`ArrayBuffer`] and [`TypedArray`].
+//!
+//! - `futures` adds support for async Rust. When enabled the library exports [`AsyncRuntime`] and
+//! [`AsyncContext`]. These are the asynchronous variants of the normal runtime and context. In
+//! order to ensure that QuickJS is used properly the runtime is placed behind a lock. For the
+//! normal runtime this is a normal mutex. You should avoid blocking threads in asynchronous rust
+//! so the async runtime uses a future aware mutex. In the async runtime Rust futures can be passed
+//! to JS as [ES6
 //! Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
-//! and ES6 Promises can be given back as Rust futures. - `tokio` adds integration with [`tokio`]
-//! async runtime. The method [`Runtime::spawn_executor`] can be used with [`Tokio`] to spawn async
-//! executor. - `async-std` adds integration with [`async_std`] runtime. The method
-//! [`Runtime::spawn_executor`] can be used with [`AsyncStd`] to spawn async executor. - `smol`
-//! adds integrations with [`smol`] async runtime. The method [`Runtime::spawn_executor`] can be
-//! used with [`Smol`] to spawn async executor. - `macro` enables some useful procedural macros
-//! which gets Rust/JS interop much easy. An [attribute](#attributes) macros can be applied to
-//! functions, constants and modules. An [derive](#derives) macros can be used with structs and
-//! enums. - `phf` enables using Perfect Hash Function for builtin modules lookup
+//! and ES6 Promises can be given back as Rust futures.
+//!
+//! - `macro` enables some useful procedural macros which gets Rust/JS interop much easy. An
+//! [attribute](#attributes) macros can be applied to functions, constants and modules. An
+//! [derive](#derives) macros can be used with structs and enums.
+//!
+//! - `phf` enables using Perfect Hash Function for builtin modules lookup
 //!
 //! ## Custom
 //!
@@ -68,15 +78,23 @@
 //!
 //! This crate has support for conversion of many Rust types like [`Option`](std::option::Option),
 //! [`Result`](std::result::Result), [`Vec`] and other collections. In addition an extra types
-//! support can be enabled via features: - `either` adds [`FromJs`]/[`IntoJs`] implementations for
-//! [`Either`](`either::Either`) - `indexmap` adds [`FromJs`]/[`IntoJs`] implementations for
-//! [`IndexSet`](`indexmap::IndexSet`) and [`IndexMap`](`indexmap_rs::IndexMap`)
+//! support can be enabled via features:
+//!
+//! - `either` adds [`FromJs`]/[`IntoJs`] implementations for [`Either`](`either::Either`)
+//!
+//! - `indexmap` adds [`FromJs`]/[`IntoJs`] implementations for [`IndexSet`](`indexmap::IndexSet`)
+//! and [`IndexMap`](`indexmap_rs::IndexMap`)
 //!
 //! ## Bindings
 //!
-//! The bindings is pre-built for the following platforms: - `i686-unknown-linux-gnu`,
-//! `x86_64-unknown-linux-gnu` - `x86_64-apple-darwin` - `i686-pc-windows-gnu`,
-//! `x86_64-pc-windows-gnu`, `i686-pc-windows-msvc`, `x86_64-pc-windows-msvc`
+//! The bindings is pre-built for the following platforms:
+//!
+//! - `i686-unknown-linux-gnu`, `x86_64-unknown-linux-gnu`
+//!
+//! - `x86_64-apple-darwin`
+//!
+//! - `i686-pc-windows-gnu`, `x86_64-pc-windows-gnu`, `i686-pc-windows-msvc`,
+//! `x86_64-pc-windows-msvc`
 //!
 //! To build the crate for unsupported target you must enable `bindgen` feature.
 //!
@@ -89,7 +107,10 @@
 //! ## Debugging
 //!
 //! QuickJS can be configured to output some info which can help debug. The following features
-//! enables that: - `dump-bytecode` - `dump-gc` - `dump-gc-free`
+//! enables that:
+//! - `dump-bytecode`
+//! - `dump-gc`
+//! - `dump-gc-free`
 //! - `dump-free`
 //! - `dump-leaks`
 //! - `dump-mem`

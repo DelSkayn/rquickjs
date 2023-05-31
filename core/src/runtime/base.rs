@@ -2,8 +2,8 @@
 
 #[cfg(feature = "loader")]
 use crate::loader::{RawLoader, Resolver};
-use crate::{qjs, result::JobException, Context, Error, Mut, Ref, Result, Weak};
-use std::{ffi::CString, mem, ptr::NonNull, result::Result as StdResult};
+use crate::{result::JobException, Context, Error, Mut, Ref, Result, Weak};
+use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
 
 #[cfg(feature = "allocator")]
 use crate::allocator::Allocator;

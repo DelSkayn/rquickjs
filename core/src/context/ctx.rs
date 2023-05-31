@@ -8,10 +8,6 @@ use std::{
 #[cfg(feature = "futures")]
 use std::future::Future;
 
-#[cfg(feature = "futures")]
-use super::AsyncContext;
-#[cfg(feature = "futures")]
-use crate::ParallelSend;
 use crate::{
     markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, Module,
     Object, Result, Value,
@@ -61,15 +57,18 @@ impl Default for EvalOptions {
 #[derive(Clone, Copy, Debug)]
 pub struct Ctx<'js> {
     ctx: NonNull<qjs::JSContext>,
-    marker: Invariant<'js>,
+    _marker: Invariant<'js>,
 }
 
 impl<'js> Ctx<'js> {
+    /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
+    ///
+    /// # Safety
+    /// User must ensure that a lock was acquired over the runtime and that invariant is a unique
+    /// lifetime which can't be coerced to a lifetime outside the scope of the lock of to the
+    /// lifetime of another runtime.
     pub unsafe fn from_ptr_invariant(ctx: NonNull<qjs::JSContext>, inv: Invariant<'js>) -> Self {
-        Ctx {
-            ctx,
-            marker: Invariant::new(),
-        }
+        Ctx { ctx, _marker: inv }
     }
 
     pub(crate) fn as_ptr(&self) -> *mut qjs::JSContext {
@@ -80,14 +79,14 @@ impl<'js> Ctx<'js> {
         let ctx = NonNull::new_unchecked(ctx);
         Ctx {
             ctx,
-            marker: Invariant::new(),
+            _marker: Invariant::new(),
         }
     }
 
     pub(crate) fn new(ctx: &'js Context) -> Self {
         Ctx {
             ctx: ctx.ctx,
-            marker: Invariant::new(),
+            _marker: Invariant::new(),
         }
     }
 

@@ -28,15 +28,18 @@ macro_rules! cstr {
     };
 }
 
-mod markers;
-pub use markers::ParallelSend;
+pub mod markers;
 mod result;
 pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 mod safe_ref;
 pub(crate) use safe_ref::*;
 pub mod runtime;
+#[cfg(feature = "futures")]
+pub use runtime::AsyncRuntime;
 pub use runtime::Runtime;
 pub mod context;
+#[cfg(feature = "futures")]
+pub use context::AsyncContext;
 pub use context::{Context, Ctx};
 mod persistent;
 mod value;

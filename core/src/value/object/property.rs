@@ -1,6 +1,6 @@
 use crate::{
-    function::AsFunction, qjs, Ctx, Function, IntoAtom, IntoJs, Object, ParallelSend, Result,
-    Undefined, Value,
+    function::AsFunction, markers::ParallelSend, qjs, Ctx, Function, IntoAtom, IntoJs, Object,
+    Result, Undefined, Value,
 };
 
 impl<'js> Object<'js> {
@@ -214,7 +214,7 @@ impl<G, S> Accessor<G, S> {
 /// A property with getter only
 impl<'js, G, GA, GR> AsProperty<'js, (GA, GR, (), ())> for Accessor<G, ()>
 where
-    G: AsFunction<'js, GA, GR> + ParallelSend + 'static,
+    G: AsFunction<'js, GA, GR> + ParallelSend + 'js,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((
@@ -229,7 +229,7 @@ where
 /// A property with setter only
 impl<'js, S, SA, SR> AsProperty<'js, ((), (), SA, SR)> for Accessor<(), S>
 where
-    S: AsFunction<'js, SA, SR> + ParallelSend + 'static,
+    S: AsFunction<'js, SA, SR> + ParallelSend + 'js,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((
@@ -244,8 +244,8 @@ where
 /// A property with getter and setter
 impl<'js, G, GA, GR, S, SA, SR> AsProperty<'js, (GA, GR, SA, SR)> for Accessor<G, S>
 where
-    G: AsFunction<'js, GA, GR> + ParallelSend + 'static,
-    S: AsFunction<'js, SA, SR> + ParallelSend + 'static,
+    G: AsFunction<'js, GA, GR> + ParallelSend + 'js,
+    S: AsFunction<'js, SA, SR> + ParallelSend + 'js,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((

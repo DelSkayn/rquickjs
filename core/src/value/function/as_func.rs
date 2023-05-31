@@ -76,7 +76,7 @@ macro_rules! as_function_impls {
             impl<'js, F,Fut, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<F>
             where
                 F: Fn($($arg),*) -> Fut + ParallelSend + 'js,
-                Fut: Future<Output = Result<R>> + ParallelSend + 'static,
+                Fut: Future<Output = Result<R>> + ParallelSend + 'js,
                 R: IntoJs<'js> + 'js,
                 $($arg: FromInput<'js>,)*
             {
@@ -239,7 +239,7 @@ macro_rules! as_function_impls {
             $(#[$meta])*
             impl<'js, F, Fut,R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), Promised<R>> for Async<Method<F>>
             where
-                F: Fn(T, $($arg),*) -> Fut + ParallelSend + 'static,
+                F: Fn(T, $($arg),*) -> Fut + ParallelSend + 'js,
                 Fut: Future<Output = Result<R>> + ParallelSend + 'js,
                 R: IntoJs<'js> + 'js,
                 T: FromJs<'js>,
@@ -299,8 +299,8 @@ as_function_impls! {
 #[cfg(feature = "classes")]
 impl<'js, C, F, A, R> AsFunction<'js, A, R> for Constructor<C, F>
 where
-    C: ClassDef + ParallelSend + 'static,
-    F: AsFunction<'js, A, R> + ParallelSend + 'static,
+    C: ClassDef + ParallelSend + 'js,
+    F: AsFunction<'js, A, R> + ParallelSend + 'js,
 {
     fn num_args() -> Range<usize> {
         F::num_args()
@@ -359,8 +359,8 @@ macro_rules! overloaded_impls {
             $(#[$meta])*
             impl<'js, $func, $func_args, $func_res $(, $funcs, $funcs_args, $funcs_res)*> AsFunction<'js, ($func_args $(, $funcs_args)*), ($func_res $(, $funcs_res)*)> for ($func $(, $funcs)*)
             where
-                $func: AsFunction<'js, $func_args, $func_res> + ParallelSend + 'static,
-            $($funcs: AsFunction<'js, $funcs_args, $funcs_res> + ParallelSend + 'static,)*
+                $func: AsFunction<'js, $func_args, $func_res> + ParallelSend + 'js,
+            $($funcs: AsFunction<'js, $funcs_args, $funcs_res> + ParallelSend + 'js,)*
             {
                 #[allow(non_snake_case)]
                 fn num_args() -> Range<usize> {

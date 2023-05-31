@@ -123,14 +123,12 @@ doc-cfg = []
 package = "futures"
 version = "0.3"
 
-[dev-dependencies.tokio-rs]
-package = "tokio"
+[dev-dependencies.tokio]
 version = "1.0"
 default-features = false
 features = ["rt", "time", "macros"]
 
-[dev-dependencies.async-std-rs]
-package = "async-std"
+[dev-dependencies.async-std]
 version = "1.8"
 default-features = false
 features = ["attributes"]

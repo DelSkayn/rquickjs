@@ -6,9 +6,8 @@ use std::{
     task::{Context, Poll},
 };
 
-use async_lock::MutexGuard;
-
 use crate::{
+    markers::ParallelSend,
     qjs,
     runtime::{raw::RawRuntime, AsyncRuntime},
     Error, Result,
@@ -47,11 +46,52 @@ where
     }
 }
 
+/// A macro for safely using an asynchronous context.
+///
+/// # Usage
+/// ```
+/// # use rquickjs::{prelude::*, Function, async_with, AsyncRuntime, AsyncContext, Result};
+/// # use std::time::Duration;
+/// # async fn run(){
+/// let rt = AsyncRuntime::new().unwrap();
+/// let ctx = AsyncContext::full(&rt).await.unwrap();
+///
+/// // In order for futures to conver to javascript promises they need to return `Result`.
+/// async fn delay<'js>(amount: f64, cb: Function<'js>) -> Result<()> {
+///     tokio::time::sleep(Duration::from_secs_f64(amount)).await;
+///     cb.call::<(), ()>(());
+///     Ok(())
+/// }
+///
+/// fn print(text: String) -> Result<()> {
+///     println!("{}", text);
+///     Ok(())
+/// }
+///
+/// async_with!(ctx => |ctx|{
+///     let delay = Func::new("delay", Async(delay));
+///
+///     let global = ctx.globals();
+///     global.set("print",Func::from(print)).unwrap();
+///     global.set("delay",delay).unwrap();
+///     ctx.eval::<(),_>(r#"
+///         print("start");
+///         delay(1,() => {
+///             print("delayed");
+///         })
+///         print("after");
+///     "#).unwrap();
+/// }).await;
+///
+/// rt.idle().await
+/// # }
+/// ```
+
 #[macro_export]
 macro_rules! async_with{
     ($context:expr => |$ctx:ident|{ $($t:tt)* }) => {
         unsafe{
-        $context.unsafe_async_with(|ctx| async move {
+        $crate::AsyncContext::async_with(&$context,|ctx| async move {
                let _pin = ();
                 let invariant = $crate::markers::Invariant::new_ref(&_pin);
                 let _lifetime_constrainer;
@@ -71,6 +111,9 @@ macro_rules! async_with{
     };
 }
 
+/// An asynchronous single execution context with its own global variables and stack.
+///
+/// Can share objects with other contexts of the same runtime.
 pub struct AsyncContext {
     pub(crate) ctx: NonNull<qjs::JSContext>,
     pub(crate) rt: AsyncRuntime,
@@ -90,15 +133,15 @@ impl AsyncContext {
     }
 
     /// Creates a base context with only the required functions registered.
-    /// If additional functions are required use [`Context::custom`],
-    /// [`Context::builder`] or [`Context::full`].
+    /// If additional functions are required use [`AsyncContext::custom`],
+    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn base(runtime: &AsyncRuntime) -> Result<Self> {
         Self::custom::<intrinsic::Base>(runtime).await
     }
 
     /// Creates a context with only the required intrinsics registered.
-    /// If additional functions are required use [`Context::custom`],
-    /// [`Context::builder`] or [`Context::full`].
+    /// If additional functions are required use [`AsyncContext::custom`],
+    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
@@ -115,7 +158,7 @@ impl AsyncContext {
 
     /// Creates a context with all standart available intrinsics registered.
     /// If precise controll is required of which functions are available use
-    /// [`Context::custom`] or [`Context::builder`].
+    /// [`AsyncContext::custom`] or [`AsyncContext::builder`].
     pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
@@ -158,11 +201,12 @@ impl AsyncContext {
     /// Furthermore, this way it is impossible to use values from different runtimes in this
     /// context which would otherwise be undefined behaviour.
     ///
+    /// For async contexts this function returns a pointer of which usage is unsafe, use the
+    /// [`async_with`] macro to safely use async contexts.
     ///
-    /// This is the only way to get a [`Ctx`] object.
-    pub async unsafe fn unsafe_async_with<F, Fut, R>(&self, f: F) -> R
+    pub async fn async_with<F, Fut, R>(&self, f: F) -> R
     where
-        F: FnOnce(NonNull<qjs::JSContext>) -> Fut,
+        F: FnOnce(NonNull<qjs::JSContext>) -> Fut + ParallelSend,
         Fut: Future<Output = R>,
     {
         let mut guard = self.rt.inner.lock().await;
@@ -170,7 +214,7 @@ impl AsyncContext {
         let future = std::pin::pin!(f(self.ctx));
         WithFuture {
             future,
-            runtime: &mut *guard,
+            runtime: &mut guard,
         }
         .await
     }

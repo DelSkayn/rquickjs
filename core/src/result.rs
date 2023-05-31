@@ -1,5 +1,3 @@
-use crate::{qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value};
-
 use std::{
     error::Error as StdError,
     ffi::{CString, FromBytesWithNulError, NulError},
@@ -11,6 +9,10 @@ use std::{
     str::{FromStr, Utf8Error},
     string::FromUtf8Error,
 };
+
+#[cfg(feature = "futures")]
+use crate::context::AsyncContext;
+use crate::{qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value};
 
 /// Result type used throught the library.
 pub type Result<T> = StdResult<T, Error>;
@@ -526,6 +528,32 @@ impl fmt::Debug for JobException {
 impl Display for JobException {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         write!(f, "Job raised an exception")?;
+        // TODO print the error?
+        Ok(())
+    }
+}
+
+/// A error raised from running a pending job
+/// Contains the context from which the error was raised.
+///
+/// Use `Ctx::catch` to retrieve the error.
+#[cfg(feature = "futures")]
+#[derive(Clone)]
+pub struct AsyncJobException(pub AsyncContext);
+
+#[cfg(feature = "futures")]
+impl fmt::Debug for AsyncJobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_tuple("AsyncJobException")
+            .field(&"TODO: Context")
+            .finish()
+    }
+}
+
+#[cfg(feature = "futures")]
+impl Display for AsyncJobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "Async job raised an exception")?;
         // TODO print the error?
         Ok(())
     }

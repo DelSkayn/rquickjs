@@ -1,4 +1,4 @@
-use std::{ffi::CString, result::Result as StdResult};
+use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
 
 use async_lock::Mutex;
 
@@ -6,9 +6,10 @@ use async_lock::Mutex;
 use crate::loader::{RawLoader, Resolver};
 use crate::{
     allocator::Allocator,
-    result::JobException,
+    context::AsyncContext,
+    result::{AsyncJobException, JobException},
     safe_ref::{Ref, Weak},
-    Error, Result,
+    Ctx, Error, Exception, Result,
 };
 
 use super::{
@@ -19,10 +20,26 @@ use super::{
 #[derive(Clone)]
 pub struct AsyncWeakRuntime(Weak<Mutex<RawRuntime>>);
 
+/// Asynchronous Quickjs runtime, entry point of the library.
 #[derive(Clone)]
 pub struct AsyncRuntime {
     pub(crate) inner: Ref<Mutex<RawRuntime>>,
 }
+
+// Since all functions which use runtime are behind a mutex
+// sending the runtime to other threads should be fine.
+#[cfg(feature = "parallel")]
+unsafe impl Send for AsyncRuntime {}
+#[cfg(feature = "parallel")]
+unsafe impl Send for AsyncWeakRuntime {}
+
+// Since a global lock needs to be locked for safe use
+// using runtime in a sync way should be safe as
+// simultanious accesses is syncronized behind a lock.
+#[cfg(feature = "parallel")]
+unsafe impl Sync for AsyncRuntime {}
+#[cfg(feature = "parallel")]
+unsafe impl Sync for AsyncWeakRuntime {}
 
 impl AsyncRuntime {
     /// Create a new runtime.
@@ -143,18 +160,58 @@ impl AsyncRuntime {
     /// Returns true when at least one job is pending.
     #[inline]
     pub async fn is_job_pending(&self) -> bool {
-        self.inner.lock().await.is_job_pending()
+        let mut lock = self.inner.lock().await;
+
+        lock.is_job_pending() || !unsafe { lock.get_opaque_mut().spawner() }.is_empty()
     }
 
     /// Execute first pending job
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     #[inline]
-    pub async fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        self.inner
-            .lock()
-            .await
-            .execute_pending_job()
-            .map_err(|_e| todo!())
+    pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
+        let mut lock = self.inner.lock().await;
+
+        if unsafe { lock.get_opaque_mut() }.spawner().drive().await {
+            return Ok(true);
+        }
+
+        lock.execute_pending_job().map_err(|e| {
+            let ptr =
+                NonNull::new(e).expect("executing pending job returned a null context on error");
+            AsyncJobException(AsyncContext::from_raw(ptr, self.clone()))
+        })
+    }
+
+    /// Run all futures and jobs in the runtime until all are finished.
+    #[inline]
+    pub async fn idle(&self) {
+        let mut lock = self.inner.lock().await;
+
+        loop {
+            if unsafe { lock.get_opaque_mut() }.spawner().drive().await {
+                continue;
+            }
+
+            match lock.execute_pending_job().map_err(|e| {
+                let ptr = NonNull::new(e)
+                    .expect("executing pending job returned a null context on error");
+                AsyncJobException(AsyncContext::from_raw(ptr, self.clone()))
+            }) {
+                Err(e) => {
+                    // SAFETY: Runtime is already locked so creating a context is safe.
+                    let ctx = unsafe { Ctx::from_ptr(e.0.ctx.as_ptr()) };
+                    let err = ctx.catch();
+                    if let Some(x) = err.clone().into_object().and_then(Exception::from_object) {
+                        // TODO do somthing better with errors.
+                        println!("error executing job: {}", x);
+                    } else {
+                        println!("error executing job: {:?}", err);
+                    }
+                }
+                Ok(true) => continue,
+                Ok(false) => break,
+            }
+        }
     }
 }

@@ -9,6 +9,7 @@ use crate::allocator::{Allocator, AllocatorHolder};
 use crate::loader::{LoaderHolder, RawLoader, Resolver};
 use crate::{qjs, Function};
 
+#[cfg(feature = "futures")]
 use super::spawner::Spawner;
 
 /// Opaque book keeping data for rust.
@@ -47,6 +48,7 @@ impl<'js> Opaque<'js> {
         }
     }
 
+    #[cfg(feature = "futures")]
     pub fn spawner(&mut self) -> &mut Spawner<'js> {
         self.spawner
             .as_mut()
@@ -89,6 +91,7 @@ impl RawRuntime {
         Self::new_with_allocator(opaque, crate::allocator::RustAllocator)
     }
 
+    #[allow(dead_code)]
     pub unsafe fn new_base(opaque: Opaque<'static>) -> Option<Self> {
         let rt = qjs::JS_NewRuntime();
         let rt = NonNull::new(rt)?;
@@ -115,9 +118,9 @@ impl RawRuntime {
     {
         let allocator = AllocatorHolder::new(allocator);
         let functions = AllocatorHolder::functions::<A>();
-        let opaque = allocator.opaque_ptr();
+        let opaque_ptr = allocator.opaque_ptr();
 
-        let rt = qjs::JS_NewRuntime2(&functions, opaque as _);
+        let rt = qjs::JS_NewRuntime2(&functions, opaque_ptr as _);
         let rt = NonNull::new(rt)?;
 
         Self::init_raw(rt.as_ptr());

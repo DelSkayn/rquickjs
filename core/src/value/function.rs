@@ -1,6 +1,8 @@
 //! JS functions and rust callbacks.
 
-use crate::{qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, ParallelSend, Result, Value};
+use crate::{
+    markers::ParallelSend, qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, Result, Value,
+};
 
 mod args;
 mod as_args;

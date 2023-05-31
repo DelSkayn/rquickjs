@@ -300,38 +300,32 @@ ctx.with(|ctx| {
 ```
 # #[async_std::main]
 # async fn main() {
-use rquickjs::{Runtime, Context, promise::Promise, bind, runtime::AsyncStd};
+use rquickjs::{AsyncRuntime, AsyncContext, promise::Promise, bind, async_with, Result};
 
 #[bind(object)]
-pub async fn sleep(msecs: u64) {
+pub async fn sleep(msecs: u64) -> Result<()> {
     async_std::task::sleep(
         std::time::Duration::from_millis(msecs)
     ).await;
+    Ok(())
 }
 
-let rt = Runtime::new().unwrap();
-let ctx = Context::full(&rt).unwrap();
+let rt = AsyncRuntime::new().unwrap();
+let ctx = AsyncContext::full(&rt).await.unwrap();
 
-rt.spawn_executor(AsyncStd);
 
-ctx.with(|ctx| {
+async_with!(ctx => |ctx| {
     ctx.globals().init_def::<Sleep>().unwrap();
-});
-
-let promise: Promise<String> = ctx.with(|ctx| {
-    ctx.eval(r#"
+    let promise: Promise<String> = ctx.eval(r#"
         async function mysleep() {
             await sleep(50);
             return "ok";
         }
         mysleep()
-    "#).unwrap()
-});
-
-let res = promise.await.unwrap();
-assert_eq!(res, "ok");
-
-rt.idle().await;
+    "#).unwrap();
+    let res = promise.await.unwrap();
+    assert_eq!(res, "ok");
+}).await;
 # }
 ```
 
