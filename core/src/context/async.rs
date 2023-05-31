@@ -191,10 +191,6 @@ impl AsyncContext {
         &self.rt
     }
 
-    pub(crate) fn get_runtime_ptr(&self) -> *mut qjs::JSRuntime {
-        unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) }
-    }
-
     /// A entry point for manipulating and using javascript objects and scripts.
     /// The api is structured this way to avoid repeated locking the runtime when ever
     /// any function is called. This way the runtime is locked once before executing the callback.
@@ -217,10 +213,6 @@ impl AsyncContext {
             runtime: &mut guard,
         }
         .await
-    }
-
-    pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
-        RawRuntime::init_raw(qjs::JS_GetRuntime(ctx));
     }
 }
 

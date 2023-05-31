@@ -2,12 +2,13 @@ use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
 
 use async_lock::Mutex;
 
+#[cfg(feature = "allocator")]
+use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{RawLoader, Resolver};
 use crate::{
-    allocator::Allocator,
     context::AsyncContext,
-    result::{AsyncJobException, JobException},
+    result::AsyncJobException,
     safe_ref::{Ref, Weak},
     Ctx, Error, Exception, Result,
 };

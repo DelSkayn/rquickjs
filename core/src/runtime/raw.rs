@@ -148,11 +148,6 @@ impl RawRuntime {
         }
     }
 
-    #[cfg(feature = "futures")]
-    pub unsafe fn get_opaque<'js>(&self) -> &Opaque<'js> {
-        &*(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *const _)
-    }
-
     pub unsafe fn get_opaque_mut<'js>(&mut self) -> &mut Opaque<'js> {
         &mut *(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *mut _)
     }
