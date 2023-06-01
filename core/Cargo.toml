@@ -128,11 +128,6 @@ version = "1.0"
 default-features = false
 features = ["rt", "rt-multi-thread", "time", "macros"]
 
-[dev-dependencies.async-std]
-version = "1.8"
-default-features = false
-features = ["attributes"]
-
 [dev-dependencies.rquickjs]
 path = ".."
 

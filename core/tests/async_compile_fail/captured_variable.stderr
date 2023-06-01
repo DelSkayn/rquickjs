@@ -1,0 +1,12 @@
+error[E0597]: `var` does not live long enough
+  --> tests/async_compile_fail/captured_variable.rs:9:23
+   |
+7  |     let fut = {
+   |         --- borrow later stored here
+8  |         let mut var = 1u32;
+   |             ------- binding `var` declared here
+9  |         let var_ref = &mut var;
+   |                       ^^^^^^^^ borrowed value does not live long enough
+...
+13 |     };
+   |     - `var` dropped here while still borrowed

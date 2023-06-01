@@ -1,34 +1,28 @@
-error[E0495]: cannot infer an appropriate lifetime for lifetime parameter `'js` due to conflicting requirements
-  --> $DIR/nested_contexts.rs:8:33
-   |
-8  |         let val: String = ctx_1.eval("'foo'").unwrap();
-   |                                 ^^^^
-   |
-note: first, the lifetime cannot outlive the anonymous lifetime #2 defined on the body at 9:20...
-  --> $DIR/nested_contexts.rs:9:20
-   |
-9  |           ctx_2.with(|ctx_2| {
-   |  ____________________^
-10 | |             let f: Function = ctx_2.eval("x => x + 'b'").unwrap();
-11 | |             f.call::<_, ()>(val).unwrap();
-12 | |         })
-   | |_________^
-note: ...but the lifetime must also be valid for the anonymous lifetime #2 defined on the body at 7:16...
-  --> $DIR/nested_contexts.rs:7:16
-   |
-7  |       ctx_1.with(|ctx_1| {
-   |  ________________^
-8  | |         let val: String = ctx_1.eval("'foo'").unwrap();
-9  | |         ctx_2.with(|ctx_2| {
-10 | |             let f: Function = ctx_2.eval("x => x + 'b'").unwrap();
-11 | |             f.call::<_, ()>(val).unwrap();
-12 | |         })
-13 | |     })
-   | |_____^
-note: ...so that the types are compatible
-  --> $DIR/nested_contexts.rs:10:37
-   |
-10 |             let f: Function = ctx_2.eval("x => x + 'b'").unwrap();
-   |                                     ^^^^
-   = note: expected `Ctx<'_>`
-              found `Ctx<'_>`
+error[E0521]: borrowed data escapes outside of closure
+ --> tests/compile_fail/nested_contexts.rs:9:38
+  |
+7 |     ctx_1.with(|ctx_1| {
+  |                 ----- `ctx_1` declared here, outside of the closure body
+8 |         ctx_2.with(|ctx_2| {
+  |                     ----- `ctx_2` is a reference that is only valid in the closure body
+9 |             ctx_1.globals().set("t", ctx_2.globals());
+  |                                      ^^^^^^^^^^^^^^^ `ctx_2` escapes the closure body here
+  |
+  = note: requirement occurs because of the type `Ctx<'_>`, which makes the generic argument `'_` invariant
+  = note: the struct `Ctx<'js>` is invariant over the parameter `'js`
+  = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error[E0521]: borrowed data escapes outside of closure
+ --> tests/compile_fail/nested_contexts.rs:9:13
+  |
+7 |     ctx_1.with(|ctx_1| {
+  |                 -----
+  |                 |
+  |                 `ctx_1` is a reference that is only valid in the closure body
+  |                 has type `Ctx<'1>`
+8 |         ctx_2.with(|ctx_2| {
+9 |             ctx_1.globals().set("t", ctx_2.globals());
+  |             ^^^^^^^^^^^^^^^
+  |             |
+  |             `ctx_1` escapes the closure body here
+  |             argument requires that `'1` must outlive `'static`
