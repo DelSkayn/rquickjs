@@ -308,17 +308,21 @@ mod test {
         #[cfg(not(feature = "parallel"))]
         tokio::task::spawn_local(rt.drive());
 
+        // Give drive time to start.
+        tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
 
         async_with!(&ctx => |ctx|{
             ctx.spawn(async move {
-                tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+                tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
             });
         }).await;
         assert_eq!(number.load(Ordering::SeqCst),0);
-        tokio::time::sleep(Duration::from_secs_f64(0.04)).await;
+        // Give drive time to finish the task.
+        tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
         assert_eq!(number.load(Ordering::SeqCst),1);
 
     });
@@ -331,12 +335,12 @@ mod test {
 
         async_with!(&ctx => |ctx|{
             ctx.spawn(async move {
-                tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+                tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
             });
         }).await;
         assert_eq!(number.load(Ordering::SeqCst),0);
-        tokio::time::sleep(Duration::from_secs_f64(0.04)).await;
+        tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
         assert_eq!(number.load(Ordering::SeqCst),0);
 
     });
@@ -349,7 +353,7 @@ mod test {
 
         async_with!(&ctx => |ctx|{
             ctx.spawn(async move {
-                tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+                tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
             });
         }).await;
