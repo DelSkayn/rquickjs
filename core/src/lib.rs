@@ -46,7 +46,7 @@ mod value;
 pub use persistent::Persistent;
 pub use value::{
     convert, function, module, object, Array, Atom, BigInt, Exception, FromAtom, FromJs, Function,
-    IntoAtom, IntoJs, Module, Object, String, Symbol, Type, Undefined, Value,
+    IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined, Value,
 };
 
 #[cfg(feature = "array-buffer")]
