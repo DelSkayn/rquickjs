@@ -1,4 +1,9 @@
-use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
+use std::{
+    ffi::CString,
+    ptr::NonNull,
+    result::Result as StdResult,
+    sync::{Arc, Weak},
+};
 
 use async_lock::Mutex;
 
@@ -6,12 +11,7 @@ use async_lock::Mutex;
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{RawLoader, Resolver};
-use crate::{
-    context::AsyncContext,
-    result::AsyncJobException,
-    safe_ref::{Ref, Weak},
-    Ctx, Error, Exception, Result,
-};
+use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Error, Exception, Result};
 
 use super::{
     raw::{Opaque, RawRuntime},
@@ -31,7 +31,8 @@ impl AsyncWeakRuntime {
 /// Asynchronous Quickjs runtime, entry point of the library.
 #[derive(Clone)]
 pub struct AsyncRuntime {
-    pub(crate) inner: Ref<Mutex<RawRuntime>>,
+    // use Arc instead of Ref so we can use OwnedLock
+    pub(crate) inner: Arc<Mutex<RawRuntime>>,
 }
 
 // Since all functions which use runtime are behind a mutex
@@ -60,7 +61,7 @@ impl AsyncRuntime {
         let opaque = Opaque::with_spawner();
         let rt = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
         Ok(Self {
-            inner: Ref::new(Mutex::new(rt)),
+            inner: Arc::new(Mutex::new(rt)),
         })
     }
 
@@ -77,13 +78,13 @@ impl AsyncRuntime {
         let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
             .ok_or(Error::Allocation)?;
         Ok(Self {
-            inner: Ref::new(Mutex::new(rt)),
+            inner: Arc::new(Mutex::new(rt)),
         })
     }
 
     /// Get weak ref to runtime
     pub fn weak(&self) -> AsyncWeakRuntime {
-        AsyncWeakRuntime(Ref::downgrade(&self.inner))
+        AsyncWeakRuntime(Arc::downgrade(&self.inner))
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.
@@ -291,6 +292,7 @@ mod test {
 
         let mut a = 1;
         let a_ref = &mut a;
+
 
         async_with!(&ctx => |ctx|{
             tokio::time::sleep(Duration::from_secs_f64(0.01)).await;

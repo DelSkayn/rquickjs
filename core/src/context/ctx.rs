@@ -62,6 +62,8 @@ pub struct Ctx<'js> {
     _marker: Invariant<'js>,
 }
 
+unsafe impl Send for Ctx<'_> {}
+
 impl<'js> Ctx<'js> {
     /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
     ///

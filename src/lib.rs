@@ -138,15 +138,3 @@ extern crate either_rs as either;
 #[cfg(feature = "indexmap")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "indexmap")))]
 extern crate indexmap_rs as indexmap;
-
-#[cfg(feature = "async-std")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "async-std")))]
-extern crate async_std_rs as async_std;
-
-#[cfg(feature = "tokio")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "tokio")))]
-extern crate tokio_rs as tokio;
-
-#[cfg(feature = "smol")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "smol")))]
-extern crate smol_rs as smol;

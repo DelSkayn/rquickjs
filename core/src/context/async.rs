@@ -3,8 +3,10 @@ use std::{
     mem,
     pin::{pin, Pin},
     ptr::NonNull,
-    task::{Context, Poll},
+    task::{ready, Context, Poll},
 };
+
+use async_lock::futures::LockArc;
 
 use crate::{
     markers::ParallelSend,
@@ -15,36 +17,40 @@ use crate::{
 
 use super::{intrinsic, ContextBuilder, Intrinsic};
 
-struct WithFuture<'js, F> {
-    future: Pin<&'js mut F>,
-    runtime: &'js mut RawRuntime,
+struct WithFuture<'js, R> {
+    future: Pin<Box<dyn Future<Output = R> + 'js + Send>>,
+    context: AsyncContext,
+    lock: LockArc<RawRuntime>,
 }
 
-impl<'js, F> Future for WithFuture<'js, F>
-where
-    F: Future,
-{
-    type Output = F::Output;
+impl<'js, R> Future for WithFuture<'js, R> {
+    type Output = R;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        let mut lock = ready!(pin!(&mut self.lock).poll(cx));
+        lock.update_stack_top();
+        let res = self.future.as_mut().poll(cx);
+        dbg!(res.is_pending());
         unsafe {
-            let res = self.future.as_mut().poll(cx);
-
             loop {
-                if let Ok(true) = self.runtime.execute_pending_job() {
+                if let Ok(true) = lock.execute_pending_job() {
                     continue;
                 }
 
-                let fut = pin!(self.runtime.get_opaque_mut().spawner().drive());
+                let fut = pin!(lock.get_opaque_mut().spawner().drive());
                 if let Poll::Ready(true) = fut.poll(cx) {
                     continue;
                 }
 
                 break;
             }
-            res
         }
+        self.lock = self.context.rt.inner.lock_arc();
+        res
     }
 }
+
+//#[cfg(feature = "parallel")]
+unsafe impl<R> Send for WithFuture<'_, R> {}
 
 /// A macro for safely using an asynchronous context while capturing the environment.
 ///
@@ -101,7 +107,7 @@ macro_rules! async_with{
             let fut = Box::pin(async move {
                 $($t)*
             });
-            unsafe fn uplift<'a,'b,R>(f: std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'a>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'b>>{
+            unsafe fn uplift<'a,'b,R>(f: std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'a>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'b + Send>>{
                 std::mem::transmute(f)
             }
             unsafe{ uplift(fut) }
@@ -201,17 +207,21 @@ impl AsyncContext {
     /// Unfortunatly it is currently impossible to have closures return a generic future which has a higher
     /// rank trait bound lifetime. So, to allow closures to work, the closure must return a boxed
     /// future.
-    pub async fn async_with<F, R>(&self, f: F) -> R
+    pub async fn async_with<'a, F, R: 'a>(&'a self, f: F) -> R
     where
-        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js>> + ParallelSend,
+        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
+            + ParallelSend,
     {
-        let mut guard = self.rt.inner.lock().await;
-        guard.update_stack_top();
-        let ctx = unsafe { Ctx::new_async(self) };
-        let future = std::pin::pin!(f(ctx));
+        let future = {
+            let guard = self.rt.inner.lock().await;
+            guard.update_stack_top();
+            let ctx = unsafe { Ctx::new_async(self) };
+            f(ctx)
+        };
         WithFuture {
             future,
-            runtime: &mut guard,
+            context: self.clone(),
+            lock: self.rt.inner.lock_arc(),
         }
         .await
     }

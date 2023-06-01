@@ -71,6 +71,9 @@ pub(crate) struct RawRuntime {
     pub loader: Option<LoaderHolder>,
 }
 
+#[cfg(feature = "parallel")]
+unsafe impl Send for RawRuntime {}
+
 impl Drop for RawRuntime {
     fn drop(&mut self) {
         unsafe {

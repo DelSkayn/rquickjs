@@ -5,7 +5,7 @@ use std::{
     task::{Poll, Waker},
 };
 
-use async_lock::futures::Lock;
+use async_lock::futures::LockArc;
 
 use crate::AsyncRuntime;
 
@@ -87,7 +87,7 @@ impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
 enum DriveFutureState {
     Initial,
     Lock {
-        lock_future: Lock<'static, RawRuntime>,
+        lock_future: LockArc<RawRuntime>,
         // Here to ensure the lock remains valid.
         _runtime: AsyncRuntime,
     },
@@ -126,7 +126,7 @@ impl Future for DriveFuture {
                     // Dirty hack to get a owned lock,
                     // We know the lock will remain alive and won't be moved since it is inside a
                     // arc like structure and we keep it alive in the lock.
-                    let lock_future = unsafe { std::mem::transmute(_runtime.inner.lock()) };
+                    let lock_future = _runtime.inner.lock_arc();
                     self.state = DriveFutureState::Lock {
                         lock_future,
                         _runtime,
