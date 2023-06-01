@@ -303,7 +303,10 @@ mod test {
     async_test_case!(drive => (rt,ctx){
         use std::sync::{Arc, atomic::{Ordering,AtomicUsize}};
 
+        #[cfg(feature = "parallel")]
         tokio::spawn(rt.drive());
+        #[cfg(not(feature = "parallel"))]
+        tokio::task::spawn_local(rt.drive());
 
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
