@@ -281,7 +281,7 @@ mod test {
     use crate::*;
 
     async_test_case!(basic => (_rt,ctx){
-        ctx.async_with(|ctx: Ctx| async move {
+        async_with!(&ctx => |ctx|{
             let res: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(res,2i32);
         }).await;
@@ -292,10 +292,67 @@ mod test {
         let mut a = 1;
         let a_ref = &mut a;
 
-        ctx.async_with(|ctx: Ctx| async move {
+        async_with!(&ctx => |ctx|{
             tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+            ctx.globals().set("foo","bar").unwrap();
             *a_ref += 1;
         }).await;
         assert_eq!(a,2);
+    });
+
+    async_test_case!(drive => (rt,ctx){
+        use std::sync::{Arc, atomic::{Ordering,AtomicUsize}};
+
+        tokio::spawn(rt.drive());
+
+        let number = Arc::new(AtomicUsize::new(0));
+        let number_clone = number.clone();
+
+        async_with!(&ctx => |ctx|{
+            ctx.spawn(async move {
+                tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+                number_clone.store(1,Ordering::SeqCst);
+            });
+        }).await;
+        assert_eq!(number.load(Ordering::SeqCst),0);
+        tokio::time::sleep(Duration::from_secs_f64(0.04)).await;
+        assert_eq!(number.load(Ordering::SeqCst),1);
+
+    });
+
+    async_test_case!(no_drive => (rt,ctx){
+        use std::sync::{Arc, atomic::{Ordering,AtomicUsize}};
+
+        let number = Arc::new(AtomicUsize::new(0));
+        let number_clone = number.clone();
+
+        async_with!(&ctx => |ctx|{
+            ctx.spawn(async move {
+                tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+                number_clone.store(1,Ordering::SeqCst);
+            });
+        }).await;
+        assert_eq!(number.load(Ordering::SeqCst),0);
+        tokio::time::sleep(Duration::from_secs_f64(0.04)).await;
+        assert_eq!(number.load(Ordering::SeqCst),0);
+
+    });
+
+    async_test_case!(idle => (rt,ctx){
+        use std::sync::{Arc, atomic::{Ordering,AtomicUsize}};
+
+        let number = Arc::new(AtomicUsize::new(0));
+        let number_clone = number.clone();
+
+        async_with!(&ctx => |ctx|{
+            ctx.spawn(async move {
+                tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+                number_clone.store(1,Ordering::SeqCst);
+            });
+        }).await;
+        assert_eq!(number.load(Ordering::SeqCst),0);
+        rt.idle().await;
+        assert_eq!(number.load(Ordering::SeqCst),1);
+
     });
 }

@@ -178,34 +178,3 @@ impl Future for DriveFuture {
         }
     }
 }
-
-#[cfg(test)]
-mod test {
-
-    fn drive() {
-        let rt = if cfg!(feature = "parallel") {
-            tokio::runtime::Builder::new_multi_thread()
-        } else {
-            tokio::runtime::Builder::new_current_thread()
-        }
-        .enable_all()
-        .build()
-        .unwrap();
-
-        #[cfg(feature = "parallel")]
-        {
-            rt.block_on(async {
-                let rt = crate::AsyncRuntime::new().unwrap();
-                let ctx = crate::AsyncContext::full(&rt).await.unwrap();
-            })
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            let set = tokio::task::LocalSet::new();
-            set.block_on(&rt, async {
-                let rt = crate::AsyncRuntime::new().unwrap();
-                let ctx = crate::AsyncContext::full(&rt).await.unwrap();
-            })
-        }
-    }
-}
