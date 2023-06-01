@@ -10,7 +10,7 @@ use crate::{
     markers::ParallelSend,
     qjs,
     runtime::{raw::RawRuntime, AsyncRuntime},
-    Error, Result,
+    Ctx, Error, Result,
 };
 
 use super::{intrinsic, ContextBuilder, Intrinsic};
@@ -46,7 +46,7 @@ where
     }
 }
 
-/// A macro for safely using an asynchronous context.
+/// A macro for safely using an asynchronous context while capturing the environment.
 ///
 /// # Usage
 /// ```
@@ -68,7 +68,14 @@ where
 ///     Ok(())
 /// }
 ///
+/// let mut some_var = 1;
+/// // closure always moves, so create a ref.
+/// let some_var_ref = &mut some_var;
 /// async_with!(ctx => |ctx|{
+///     
+///     // With the macro you can borrow the environment.
+///     *some_var_ref += 1;
+///
 ///     let delay = Func::new("delay", Async(delay));
 ///
 ///     let global = ctx.globals();
@@ -82,32 +89,23 @@ where
 ///         print("after");
 ///     "#).unwrap();
 /// }).await;
+/// assert_eq!(some_var,2);
 ///
 /// rt.idle().await
 /// # }
 /// ```
-
 #[macro_export]
 macro_rules! async_with{
-    ($context:expr => |$ctx:ident|{ $($t:tt)* }) => {
-        unsafe{
-        $crate::AsyncContext::async_with(&$context,|ctx| async move {
-               let _pin = ();
-                let invariant = $crate::markers::Invariant::new_ref(&_pin);
-                let _lifetime_constrainer;
-                if false {
-                    struct KeepTillScopeDrop<'a, 'inv>(&'a $crate::markers::Invariant<'inv>);
-                    impl<'a, 'inv> Drop for KeepTillScopeDrop<'a, 'inv> {
-                        fn drop(&mut self) {}
-                    }
-                    _lifetime_constrainer = KeepTillScopeDrop(&invariant);
-                }
-                let $ctx = $crate::Ctx::from_ptr_invariant(ctx,invariant);
-                {
+    ($context:expr => |$ctx:ident| { $($t:tt)* }) => {
+        $crate::AsyncContext::async_with(&$context,|$ctx| {
+            let fut = Box::pin(async move {
                 $($t)*
-                }
+            });
+            unsafe fn uplift<'a,'b,R>(f: std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'a>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'b>>{
+                std::mem::transmute(f)
+            }
+            unsafe{ uplift(fut) }
         })
-        }
     };
 }
 
@@ -197,17 +195,20 @@ impl AsyncContext {
     /// Furthermore, this way it is impossible to use values from different runtimes in this
     /// context which would otherwise be undefined behaviour.
     ///
-    /// For async contexts this function returns a pointer of which usage is unsafe, use the
-    /// [`async_with`] macro to safely use async contexts.
+    /// This function is rather limited in what environment it can capture. If you need to borrow
+    /// the environment in the closure use the [`async_with!`] macro.
     ///
-    pub async fn async_with<F, Fut, R>(&self, f: F) -> R
+    /// Unfortunatly it is currently impossible to have closures return a generic future which has a higher
+    /// rank trait bound lifetime. So, to allow closures to work, the closure must return a boxed
+    /// future.
+    pub async fn async_with<F, R>(&self, f: F) -> R
     where
-        F: FnOnce(NonNull<qjs::JSContext>) -> Fut + ParallelSend,
-        Fut: Future<Output = R>,
+        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js>> + ParallelSend,
     {
         let mut guard = self.rt.inner.lock().await;
         guard.update_stack_top();
-        let future = std::pin::pin!(f(self.ctx));
+        let ctx = unsafe { Ctx::new_async(self) };
+        let future = std::pin::pin!(f(ctx));
         WithFuture {
             future,
             runtime: &mut guard,

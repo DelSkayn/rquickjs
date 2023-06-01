@@ -8,6 +8,8 @@ use std::{
 #[cfg(feature = "futures")]
 use std::future::Future;
 
+#[cfg(feature = "futures")]
+use crate::AsyncContext;
 use crate::{
     markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, Module,
     Object, Result, Value,
@@ -83,7 +85,15 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    pub(crate) fn new(ctx: &'js Context) -> Self {
+    pub(crate) unsafe fn new(ctx: &'js Context) -> Self {
+        Ctx {
+            ctx: ctx.ctx,
+            _marker: Invariant::new(),
+        }
+    }
+
+    #[cfg(feature = "futures")]
+    pub(crate) unsafe fn new_async(ctx: &'js AsyncContext) -> Self {
         Ctx {
             ctx: ctx.ctx,
             _marker: Invariant::new(),

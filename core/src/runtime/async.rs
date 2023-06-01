@@ -281,7 +281,7 @@ mod test {
     use crate::*;
 
     async_test_case!(basic => (_rt,ctx){
-        async_with!(ctx => |ctx|{
+        ctx.async_with(|ctx: Ctx| async move {
             let res: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(res,2i32);
         }).await;
@@ -292,8 +292,7 @@ mod test {
         let mut a = 1;
         let a_ref = &mut a;
 
-        async_with!(ctx => |ctx|{
-
+        ctx.async_with(|ctx: Ctx| async move {
             tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
             *a_ref += 1;
         }).await;

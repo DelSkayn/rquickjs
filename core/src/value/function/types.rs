@@ -1,4 +1,4 @@
-use crate::{function::AsFunction, markers::ParallelSend, Ctx, Function, IntoJs, Result, Value};
+use crate::{function::AsFunction, Ctx, Function, IntoJs, Result, Value};
 use std::{
     cell::RefCell,
     marker::PhantomData,

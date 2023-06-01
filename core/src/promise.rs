@@ -6,7 +6,6 @@ use std::{
 };
 
 use crate::{
-    markers::ParallelSend,
     safe_ref::Ref,
     value::{Func, This},
     CatchResultExt, CaughtError, CaughtResult, Ctx, Exception, FromJs, Function, IntoJs, Object,

@@ -1,7 +1,6 @@
 use super::{FromInput, Input};
 use crate::{
     function::{Method, MutFn, OnceFn, This},
-    markers::ParallelSend,
     Ctx, Error, FromJs, Function, IntoJs, Result, Value,
 };
 use std::ops::Range;

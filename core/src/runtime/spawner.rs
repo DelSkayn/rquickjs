@@ -1,11 +1,11 @@
 use std::{
     future::Future,
     pin::{pin, Pin},
-    task::{ready, Wake},
+    task::ready,
     task::{Poll, Waker},
 };
 
-use async_lock::futures::{Lock, LockArc};
+use async_lock::futures::Lock;
 
 use crate::AsyncRuntime;
 

@@ -102,7 +102,7 @@ impl Context {
     {
         let guard = self.rt.inner.lock();
         guard.update_stack_top();
-        let ctx = Ctx::new(self);
+        let ctx = unsafe { Ctx::new(self) };
         f(ctx)
     }
 
