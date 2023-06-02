@@ -1,28 +1,39 @@
-error[E0521]: borrowed data escapes outside of closure
-  --> tests/async_compile_fail/async_nested_contexts.rs:9:38
+error[E0277]: `NonNull<JSContext>` cannot be shared between threads safely
+  --> tests/async_compile_fail/async_nested_contexts.rs:8:9
    |
-7  | /      async_with!(ctx_1 => |ctx_1|{
-8  | |/         async_with!(ctx_2 => |ctx_2|{
-9  | ||             ctx_1.globals().set("t", ctx_2.globals());
-   | ||                                      ^^^^^^^^^^^^^^^ `ctx_2` escapes the closure body here
-10 | ||         }).await
-   | ||__________- `ctx_2` is a reference that is only valid in the closure body
-11 | |      })
-   | |_______- `ctx_1` declared here, outside of the closure body
-
-error[E0521]: borrowed data escapes outside of closure
-  --> tests/async_compile_fail/async_nested_contexts.rs:9:13
+8  | /         async_with!(ctx_2 => |ctx_2|{
+9  | |             // It is disallowed to use multiple ctx object together from different with closures.
+10 | |             // Lifetime on ctx should be unique.
+11 | |             ctx_1.globals().set("t", ctx_2.globals());
+12 | |         }).await
+   | |          ^
+   | |          |
+   | |__________`NonNull<JSContext>` cannot be shared between threads safely
+   |            required by a bound introduced by this call
    |
-7  | /     async_with!(ctx_1 => |ctx_1|{
-8  | |         async_with!(ctx_2 => |ctx_2|{
-9  | |             ctx_1.globals().set("t", ctx_2.globals());
-   | |             ^^^^^^^^^^^^^^^
-   | |             |
-   | |             `ctx_1` escapes the closure body here
-   | |             argument requires that `'1` must outlive `'static`
-10 | |         }).await
-11 | |     })
-   | |      -
-   | |      |
-   | |______`ctx_1` is a reference that is only valid in the closure body
-   |        has type `Ctx<'1>`
+   = help: within `Ctx<'_>`, the trait `Sync` is not implemented for `NonNull<JSContext>`
+note: required because it appears within the type `Ctx<'_>`
+  --> src/context/ctx.rs
+   |
+   | pub struct Ctx<'js> {
+   |            ^^^
+   = note: required for `&Ctx<'_>` to implement `Send`
+note: required because it's used within this closure
+  --> tests/async_compile_fail/async_nested_contexts.rs:8:9
+   |
+8  | /         async_with!(ctx_2 => |ctx_2|{
+9  | |             // It is disallowed to use multiple ctx object together from different with closures.
+10 | |             // Lifetime on ctx should be unique.
+11 | |             ctx_1.globals().set("t", ctx_2.globals());
+12 | |         }).await
+   | |__________^
+   = note: required for `[closure@$DIR/src/context/async.rs:106:52: 106:58]` to implement `ParallelSend`
+note: required by a bound in `AsyncContext::async_with`
+  --> src/context/async.rs
+   |
+   |     pub async fn async_with<'a, F, R: 'a>(&'a self, f: F) -> R
+   |                  ---------- required by a bound in this associated function
+...
+   |             + ParallelSend,
+   |               ^^^^^^^^^^^^ required by this bound in `AsyncContext::async_with`
+   = note: this error originates in the macro `async_with` (in Nightly builds, run with -Z macro-backtrace for more info)
