@@ -11,6 +11,7 @@ use crate::{qjs, Function};
 
 #[cfg(feature = "futures")]
 use super::spawner::Spawner;
+use super::InterruptHandler;
 
 /// Opaque book keeping data for rust.
 pub(crate) struct Opaque<'js> {
@@ -18,7 +19,7 @@ pub(crate) struct Opaque<'js> {
     pub panic: Option<Box<dyn Any + Send + 'static>>,
 
     /// The user provided interrupt handler, if any.
-    pub interrupt_handler: Option<Box<dyn FnMut() -> bool + 'static>>,
+    pub interrupt_handler: Option<InterruptHandler>,
 
     #[cfg(feature = "futures")]
     pub spawner: Option<Spawner<'js>>,
@@ -233,10 +234,7 @@ impl RawRuntime {
     /// Set a closure which is regularly called by the engine when it is executing code.
     /// If the provided closure returns `true` the interpreter will raise and uncatchable
     /// exception and return control flow to the caller.
-    pub unsafe fn set_interrupt_handler(
-        &mut self,
-        handler: Option<Box<dyn FnMut() -> bool + 'static>>,
-    ) {
+    pub unsafe fn set_interrupt_handler(&mut self, handler: Option<InterruptHandler>) {
         unsafe extern "C" fn interrupt_handler_trampoline(
             _rt: *mut qjs::JSRuntime,
             opaque: *mut ::std::os::raw::c_void,

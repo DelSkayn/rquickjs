@@ -11,12 +11,15 @@ use async_lock::Mutex;
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{RawLoader, Resolver};
-use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Error, Exception, Result};
+use crate::{
+    context::AsyncContext, markers::ParallelSend, result::AsyncJobException, Ctx, Error, Exception,
+    Result,
+};
 
 use super::{
     raw::{Opaque, RawRuntime},
     spawner::DriveFuture,
-    MemoryUsage,
+    InterruptHandler, MemoryUsage,
 };
 
 #[derive(Clone)]
@@ -91,7 +94,7 @@ impl AsyncRuntime {
     /// If the provided closure returns `true` the interpreter will raise and uncatchable
     /// exception and return control flow to the caller.
     #[inline]
-    pub async fn set_interrupt_handler(&self, handler: Option<Box<dyn FnMut() -> bool + 'static>>) {
+    pub async fn set_interrupt_handler(&self, handler: Option<InterruptHandler>) {
         unsafe {
             self.inner.lock().await.set_interrupt_handler(handler);
         }

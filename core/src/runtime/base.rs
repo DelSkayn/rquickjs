@@ -10,7 +10,7 @@ use crate::allocator::Allocator;
 
 use super::{
     raw::{Opaque, RawRuntime},
-    MemoryUsage,
+    InterruptHandler, MemoryUsage,
 };
 
 /// A weak handle to the runtime.
@@ -72,7 +72,7 @@ impl Runtime {
     /// If the provided closure returns `true` the interpreter will raise and uncatchable
     /// exception and return control flow to the caller.
     #[inline]
-    pub fn set_interrupt_handler(&self, handler: Option<Box<dyn FnMut() -> bool + 'static>>) {
+    pub fn set_interrupt_handler(&self, handler: Option<InterruptHandler>) {
         unsafe {
             self.inner.lock().set_interrupt_handler(handler);
         }
