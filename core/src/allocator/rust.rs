@@ -6,11 +6,9 @@ use std::{
 
 use super::{Allocator, RawMemPtr};
 
-#[cfg(target_pointer_width = "32")]
-const ALLOC_ALIGN: usize = 4;
-
-#[cfg(target_pointer_width = "64")]
-const ALLOC_ALIGN: usize = 8;
+/// The largest value quickjs will allocate is a u64;
+/// So all allocated memory must have the same aligment is this largest size.
+const ALLOC_ALIGN: usize = std::mem::align_of::<u64>();
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
