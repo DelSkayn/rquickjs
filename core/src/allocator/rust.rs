@@ -16,8 +16,16 @@ struct Header {
     size: usize,
 }
 
+const fn max(a: usize, b: usize) -> usize {
+    if a < b {
+        b
+    } else {
+        a
+    }
+}
+
 /// Head needs to be atleast alloc alligned so all that values after the header are aligned.
-const HEADER_SIZE: usize = size_of::<Header>().max(ALLOC_ALIGN);
+const HEADER_SIZE: usize = max(size_of::<Header>(), ALLOC_ALIGN);
 
 #[inline]
 fn round_size(size: usize) -> usize {
@@ -86,7 +94,7 @@ impl Allocator for RustAllocator {
             header.size = new_size;
         }
 
-        unsafe { ptr.offset(HEADER_SIZE) }
+        unsafe { ptr.add(HEADER_SIZE) }
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
