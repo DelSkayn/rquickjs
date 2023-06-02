@@ -16,7 +16,8 @@ struct Header {
     size: usize,
 }
 
-const HEADER_SIZE: usize = size_of::<Header>();
+/// Head needs to be atleast alloc alligned so all that values after the header are aligned.
+const HEADER_SIZE: usize = size_of::<Header>().max(ALLOC_ALIGN);
 const HEADER_OFFSET: isize = HEADER_SIZE as _;
 
 #[inline]
@@ -54,7 +55,7 @@ impl Allocator for RustAllocator {
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn dealloc(&mut self, ptr: RawMemPtr) {
-        let ptr = unsafe { ptr.offset(-HEADER_OFFSET) };
+        let ptr = unsafe { ptr.sub(HEADER_OFFSET) };
         let alloc_size = {
             let header = unsafe { &*(ptr as *const Header) };
             header.size + HEADER_SIZE
@@ -67,7 +68,7 @@ impl Allocator for RustAllocator {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr {
         let new_size = round_size(new_size);
-        let ptr = unsafe { ptr.offset(-HEADER_OFFSET) };
+        let ptr = unsafe { ptr.sub(HEADER_OFFSET) };
         let alloc_size = {
             let header = unsafe { &*(ptr as *const Header) };
             header.size + HEADER_SIZE
@@ -91,7 +92,7 @@ impl Allocator for RustAllocator {
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn usable_size(ptr: RawMemPtr) -> usize {
-        let ptr = unsafe { ptr.offset(-HEADER_OFFSET) };
+        let ptr = unsafe { ptr.sub(HEADER_OFFSET) };
         let header = unsafe { &*(ptr as *const Header) };
         header.size
     }
