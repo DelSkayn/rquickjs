@@ -6,11 +6,9 @@ use std::{
 
 use super::{Allocator, RawMemPtr};
 
-#[cfg(target_pointer_width = "32")]
-const ALLOC_ALIGN: usize = 4;
-
-#[cfg(target_pointer_width = "64")]
-const ALLOC_ALIGN: usize = 8;
+/// The largest value quickjs will allocate is a u64;
+/// So all allocated memory must have the same aligment is this largest size.
+const ALLOC_ALIGN: usize = std::mem::align_of::<u64>();
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
@@ -18,8 +16,16 @@ struct Header {
     size: usize,
 }
 
-const HEADER_SIZE: usize = size_of::<Header>();
-const HEADER_OFFSET: isize = HEADER_SIZE as _;
+const fn max(a: usize, b: usize) -> usize {
+    if a < b {
+        b
+    } else {
+        a
+    }
+}
+
+/// Head needs to be atleast alloc alligned so all that values after the header are aligned.
+const HEADER_SIZE: usize = max(size_of::<Header>(), ALLOC_ALIGN);
 
 #[inline]
 fn round_size(size: usize) -> usize {
@@ -51,12 +57,12 @@ impl Allocator for RustAllocator {
             header.size = size;
         }
 
-        unsafe { ptr.offset(HEADER_OFFSET) }
+        unsafe { ptr.add(HEADER_SIZE) }
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn dealloc(&mut self, ptr: RawMemPtr) {
-        let ptr = unsafe { ptr.offset(-HEADER_OFFSET) };
+        let ptr = unsafe { ptr.sub(HEADER_SIZE) };
         let alloc_size = {
             let header = unsafe { &*(ptr as *const Header) };
             header.size + HEADER_SIZE
@@ -69,7 +75,7 @@ impl Allocator for RustAllocator {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr {
         let new_size = round_size(new_size);
-        let ptr = unsafe { ptr.offset(-HEADER_OFFSET) };
+        let ptr = unsafe { ptr.sub(HEADER_SIZE) };
         let alloc_size = {
             let header = unsafe { &*(ptr as *const Header) };
             header.size + HEADER_SIZE
@@ -88,12 +94,12 @@ impl Allocator for RustAllocator {
             header.size = new_size;
         }
 
-        unsafe { ptr.offset(HEADER_OFFSET) }
+        unsafe { ptr.add(HEADER_SIZE) }
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     fn usable_size(ptr: RawMemPtr) -> usize {
-        let ptr = unsafe { ptr.offset(-HEADER_OFFSET) };
+        let ptr = unsafe { ptr.sub(HEADER_SIZE) };
         let header = unsafe { &*(ptr as *const Header) };
         header.size
     }
