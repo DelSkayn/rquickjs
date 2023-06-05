@@ -33,8 +33,9 @@ fn main() {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
 
-    let src_dir = Path::new("c-src");
-    let header_dir = src_dir;
+    let src_dir = Path::new("c-src-split");
+    let header_dir = Path::new("c-include");
+    let quickjs_header_dir = header_dir.join("quickjs");
     let patches_dir = Path::new("patches");
 
     let out_dir = env::var("OUT_DIR").expect("No OUT_DIR env var is set by cargo");
@@ -53,14 +54,40 @@ fn main() {
         "cutils.h",
     ];
 
-    let source_files = [
+    let source_files = vec![
         "libregexp.c",
         "libunicode.c",
         "cutils.c",
-        "quickjs.c",
         "libbf.c",
         "anode-ext.c",
     ];
+    let split_source_dir_1 = src_dir.join("core");
+    let split_source_dir_2 = split_source_dir_1.join("builtins");
+    // Include every .c file in the two split source dirs
+    let split_source_files = split_source_dir_1
+        .read_dir()
+        .unwrap()
+        .filter_map(|p| {
+            let p = p.unwrap();
+            let path = p.path();
+            if path.extension().map(|e| e == "c").unwrap_or(false) {
+                Some(path)
+            } else {
+                None
+            }
+        })
+        .chain(split_source_dir_2.read_dir().unwrap().filter_map(|p| {
+            let p = p.unwrap();
+            let path = p.path();
+            if path.extension().map(|e| e == "c").unwrap_or(false) {
+                Some(path)
+            } else {
+                None
+            }
+        }));
+    let split_source_files = split_source_files
+        .map(|x| x.to_string_lossy().into_owned())
+        .collect::<Vec<_>>();
 
     // rerun if anything in c-src or c-include changes
     for file in src_dir.read_dir().expect("Unable to read c-src") {
@@ -114,12 +141,12 @@ fn main() {
     //     patch(out_dir, patches_dir.join(file));
     // }
 
-    let include_dir = [&src_dir, &header_dir];
+    let include_dir = [src_dir, header_dir, &quickjs_header_dir];
 
     // generating bindings
     bindgen(
         out_dir.join("bindings.rs"),
-        header_dir.join("quickjs-internals.h"),
+        split_source_dir_1.join("quickjs-internals.h"),
         &defines,
         include_dir,
     );
