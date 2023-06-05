@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-sys"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2018"
 license = "MIT"
