@@ -277,7 +277,7 @@ impl<'js> Function<'js> {
 
             // then we check class to make sure it's a **bytecode** function.
             // never use the union unless you have asserted the class :P
-            let class_id = (*obj_ptr).hdr.bitfield.class_id;
+            let class_id = (*obj_ptr).__bindgen_anon_1.__bindgen_anon_1.class_id;
             if class_id as u32 != qjs::JS_CLASS_BYTECODE_FUNCTION {
                 return None;
             }

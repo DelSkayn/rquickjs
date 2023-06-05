@@ -26,6 +26,18 @@
 #define QUICKJS_SOURCE
 #include "quickjs-internals.h"
 
+const char js_atom_init[] =
+#define DEF(name, str) str "\0"
+#include "quickjs-atom.h"
+#undef DEF
+    ;
+
+const JSClassExoticMethods js_arguments_exotic_methods;
+const JSClassExoticMethods js_string_exotic_methods;
+const JSClassExoticMethods js_proxy_exotic_methods;
+const JSClassExoticMethods js_module_ns_exotic_methods;
+JSClassID js_class_id_alloc = JS_CLASS_INIT_COUNT;
+
 static void js_trigger_gc(JSRuntime *rt, size_t size)
 {
     BOOL force_gc;
@@ -10812,7 +10824,7 @@ JSValue JS_NewBigUint64(JSContext *ctx, uint64_t v)
 /* if the returned bigfloat is allocated it is equal to
    'buf'. Otherwise it is a pointer to the bigfloat in 'val'. Return
    NULL in case of error. */
-static bf_t *JS_ToBigFloat(JSContext *ctx, bf_t *buf, JSValueConst val)
+bf_t *JS_ToBigFloat(JSContext *ctx, bf_t *buf, JSValueConst val)
 {
     uint32_t tag;
     bf_t *r;
@@ -10853,7 +10865,7 @@ static bf_t *JS_ToBigFloat(JSContext *ctx, bf_t *buf, JSValueConst val)
 }
 
 /* return NULL if invalid type */
-static bfdec_t *JS_ToBigDecimal(JSContext *ctx, JSValueConst val)
+bfdec_t *JS_ToBigDecimal(JSContext *ctx, JSValueConst val)
 {
     uint32_t tag;
     JSBigDecimal *p;
@@ -10983,7 +10995,7 @@ static bf_t *JS_ToBigIntFree(JSContext *ctx, bf_t *buf, JSValue val)
     return r;
 }
 
-static bf_t *JS_ToBigInt(JSContext *ctx, bf_t *buf, JSValueConst val)
+bf_t *JS_ToBigInt(JSContext *ctx, bf_t *buf, JSValueConst val)
 {
     return JS_ToBigIntFree(ctx, buf, JS_DupValue(ctx, val));
 }
@@ -11017,7 +11029,7 @@ static __maybe_unused JSValue JS_ToBigIntValueFree(JSContext *ctx, JSValue val)
 }
 
 /* free the bf_t allocated by JS_ToBigInt */
-static void JS_FreeBigInt(JSContext *ctx, bf_t *a, bf_t *buf)
+void JS_FreeBigInt(JSContext *ctx, bf_t *a, bf_t *buf)
 {
     if (a == buf) {
         bf_delete(a);
@@ -11029,7 +11041,7 @@ static void JS_FreeBigInt(JSContext *ctx, bf_t *a, bf_t *buf)
 }
 
 /* XXX: merge with JS_ToInt64Free with a specific flag */
-static int JS_ToBigInt64Free(JSContext *ctx, int64_t *pres, JSValue val)
+int JS_ToBigInt64Free(JSContext *ctx, int64_t *pres, JSValue val)
 {
     bf_t a_s, *a;
 
@@ -11059,7 +11071,7 @@ static JSBigFloat *js_new_bf(JSContext *ctx)
     return p;
 }
 
-static JSValue JS_NewBigFloat(JSContext *ctx)
+JSValue JS_NewBigFloat(JSContext *ctx)
 {
     JSBigFloat *p;
     p = js_malloc(ctx, sizeof(*p));
@@ -11070,7 +11082,7 @@ static JSValue JS_NewBigFloat(JSContext *ctx)
     return JS_MKPTR(JS_TAG_BIG_FLOAT, p);
 }
 
-static JSValue JS_NewBigDecimal(JSContext *ctx)
+JSValue JS_NewBigDecimal(JSContext *ctx)
 {
     JSBigDecimal *p;
     p = js_malloc(ctx, sizeof(*p));
@@ -11081,7 +11093,7 @@ static JSValue JS_NewBigDecimal(JSContext *ctx)
     return JS_MKPTR(JS_TAG_BIG_DECIMAL, p);
 }
 
-static JSValue JS_NewBigInt(JSContext *ctx)
+JSValue JS_NewBigInt(JSContext *ctx)
 {
     JSBigFloat *p;
     p = js_malloc(ctx, sizeof(*p));
@@ -11092,7 +11104,7 @@ static JSValue JS_NewBigInt(JSContext *ctx)
     return JS_MKPTR(JS_TAG_BIG_INT, p);
 }
 
-static JSValue JS_CompactBigInt1(JSContext *ctx, JSValue val,
+JSValue JS_CompactBigInt1(JSContext *ctx, JSValue val,
                                  BOOL convert_to_safe_integer)
 {
     int64_t v;
@@ -11117,7 +11129,7 @@ static JSValue JS_CompactBigInt1(JSContext *ctx, JSValue val,
    the zero representation. Could also be used to convert the bigint
    to a short bigint value. The reference count of the value must be
    1. Cannot fail */
-static JSValue JS_CompactBigInt(JSContext *ctx, JSValue val)
+JSValue JS_CompactBigInt(JSContext *ctx, JSValue val)
 {
     return JS_CompactBigInt1(ctx, val, is_math_mode(ctx));
 }
@@ -12225,7 +12237,7 @@ static no_inline __exception int js_binary_arith_slow(JSContext *ctx, JSValue *s
     return -1;
 }
 
-static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
+no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
 {
     JSValue op1, op2, res;
     uint32_t tag1, tag2;
@@ -12339,7 +12351,7 @@ static no_inline __exception int js_add_slow(JSContext *ctx, JSValue *sp)
     return -1;
 }
 
-static no_inline __exception int js_binary_logic_slow(JSContext *ctx,
+no_inline __exception int js_binary_logic_slow(JSContext *ctx,
                                                       JSValue *sp,
                                                       OPCodeEnum op)
 {
@@ -13713,7 +13725,7 @@ static int js_arguments_define_own_property(JSContext *ctx,
                              flags | JS_PROP_NO_EXOTIC);
 }
 
-static const JSClassExoticMethods js_arguments_exotic_methods = {
+const JSClassExoticMethods js_arguments_exotic_methods = {
     .define_own_property = js_arguments_define_own_property,
 };
 
@@ -26467,7 +26479,7 @@ static int js_module_ns_has(JSContext *ctx, JSValueConst obj, JSAtom atom)
     return (find_own_property1(JS_VALUE_GET_OBJ(obj), atom) != NULL);
 }
 
-static const JSClassExoticMethods js_module_ns_exotic_methods = {
+const JSClassExoticMethods js_module_ns_exotic_methods = {
     .has_property = js_module_ns_has,
 };
 
@@ -38964,7 +38976,7 @@ static int js_string_delete_property(JSContext *ctx,
     return TRUE;
 }
 
-static const JSClassExoticMethods js_string_exotic_methods = {
+const JSClassExoticMethods js_string_exotic_methods = {
     .get_own_property = js_string_get_own_property,
     .define_own_property = js_string_define_own_property,
     .delete_property = js_string_delete_property,
@@ -44048,7 +44060,7 @@ int js_proxy_isArray(JSContext *ctx, JSValueConst obj)
     return JS_IsArray(ctx, s->target);
 }
 
-static const JSClassExoticMethods js_proxy_exotic_methods = {
+const JSClassExoticMethods js_proxy_exotic_methods = {
     .get_own_property = js_proxy_get_own_property,
     .define_own_property = js_proxy_define_own_property,
     .delete_property = js_proxy_delete_property,
@@ -47619,7 +47631,7 @@ void JS_AddIntrinsicEval(JSContext *ctx)
 
 /* Operators */
 
-static void js_operator_set_finalizer(JSRuntime *rt, JSValue val)
+void js_operator_set_finalizer(JSRuntime *rt, JSValue val)
 {
     JSOperatorSetData *opset = JS_GetOpaque(val, JS_CLASS_OPERATOR_SET);
     int i, j;
@@ -47650,7 +47662,7 @@ static void js_operator_set_finalizer(JSRuntime *rt, JSValue val)
     }
 }
 
-static void js_operator_set_mark(JSRuntime *rt, JSValueConst val,
+void js_operator_set_mark(JSRuntime *rt, JSValueConst val,
                                  JS_MarkFunc *mark_func)
 {
     JSOperatorSetData *opset = JS_GetOpaque(val, JS_CLASS_OPERATOR_SET);
@@ -48959,7 +48971,7 @@ static JSValue js_float_env_constructor(JSContext *ctx,
     return obj;
 }
 
-static void js_float_env_finalizer(JSRuntime *rt, JSValue val)
+void js_float_env_finalizer(JSRuntime *rt, JSValue val)
 {
     JSFloatEnv *fe = JS_GetOpaque(val, JS_CLASS_FLOAT_ENV);
     js_free_rt(rt, fe);
@@ -49167,7 +49179,7 @@ void JS_AddIntrinsicBigFloat(JSContext *ctx)
 
 /* BigDecimal */
 
-static JSValue JS_ToBigDecimalFree(JSContext *ctx, JSValue val,
+JSValue JS_ToBigDecimalFree(JSContext *ctx, JSValue val,
                                    BOOL allow_null_or_undefined)
 {
  redo:

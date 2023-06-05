@@ -41,6 +41,8 @@
 #include <malloc_np.h>
 #endif
 
+#define CONFIG_BIGNUM
+
 #include "cutils.h"
 #include "libregexp.h"
 #include "list.h"
@@ -72,36 +74,6 @@
 /* enable stack limitation */
 #define CONFIG_STACK_CHECK
 #endif
-
-/* dump object free */
-// #define DUMP_FREE
-// #define DUMP_CLOSURE
-/* dump the bytecode of the compiled functions: combination of bits
-   1: dump pass 3 final byte code
-   2: dump pass 2 code
-   4: dump pass 1 code
-   8: dump stdlib functions
-  16: dump bytecode in hex
-  32: dump line number table
- */
-// #define DUMP_BYTECODE  (1)
-/* dump the occurence of the automatic GC */
-// #define DUMP_GC
-/* dump objects freed by the garbage collector */
-// #define DUMP_GC_FREE
-/* dump objects leaking when freeing the runtime */
-// #define DUMP_LEAKS  1
-/* dump memory usage before running the garbage collector */
-// #define DUMP_MEM
-// #define DUMP_OBJECTS    /* dump objects in JS_FreeContext */
-// #define DUMP_ATOMS      /* dump atoms in JS_FreeContext */
-// #define DUMP_SHAPES     /* dump shapes in JS_FreeContext */
-// #define DUMP_MODULE_RESOLVE
-// #define DUMP_PROMISE
-// #define DUMP_READ_OBJECT
-
-/* test the GC by forcing it before each object allocation */
-// #define FORCE_GC_AT_MALLOC
 
 enum {
     /* classid tag        */ /* union usage   | properties */
@@ -172,7 +144,7 @@ enum {
 
 /* number of typed array types */
 #define JS_TYPED_ARRAY_COUNT (JS_CLASS_FLOAT64_ARRAY - JS_CLASS_UINT8C_ARRAY + 1)
-static uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT] = {};
+extern uint8_t const typed_array_size_log2[JS_TYPED_ARRAY_COUNT];
 #define typed_array_size_log2(classid) (typed_array_size_log2[(classid)-JS_CLASS_UINT8C_ARRAY])
 
 typedef enum JSErrorEnum {
@@ -198,35 +170,13 @@ typedef struct JSShape JSShape;
 typedef struct JSString JSString;
 typedef struct JSString JSAtomStruct;
 
-enum OPCodeEnum {
-#define FMT(f)
-#define DEF(id, size, n_pop, n_push, f) OP_##id,
-#define def(id, size, n_pop, n_push, f)
-#include "quickjs-opcode.h"
-#undef def
-#undef DEF
-#undef FMT
-    OP_COUNT, /* excluding temporary opcodes */
-    /* temporary opcodes : overlap with the short opcodes */
-    OP_TEMP_START = OP_nop + 1,
-    OP___dummy = OP_TEMP_START - 1,
-#define FMT(f)
-#define DEF(id, size, n_pop, n_push, f)
-#define def(id, size, n_pop, n_push, f) OP_##id,
-#include "quickjs-opcode.h"
-#undef def
-#undef DEF
-#undef FMT
-    OP_TEMP_END,
-};
-
-typedef enum OPCodeEnum OPCodeEnum;
-
 typedef enum {
     JS_GC_PHASE_NONE,
     JS_GC_PHASE_DECREF,
     JS_GC_PHASE_REMOVE_CYCLES,
 } JSGCPhaseEnum;
+
+typedef enum OPCodeEnum OPCodeEnum;
 
 #ifdef CONFIG_BIGNUM
 /* function pointers are used for numeric operations so that it is
@@ -235,10 +185,9 @@ typedef struct {
     JSValue (*to_string)(JSContext *ctx, JSValueConst val);
     JSValue (*from_string)(JSContext *ctx, const char *buf, int radix, int flags,
                            slimb_t *pexponent);
-    int (*unary_arith)(JSContext *ctx, JSValue *pres, enum OPCodeEnum op, JSValue op1);
-    int (*binary_arith)(JSContext *ctx, enum OPCodeEnum op, JSValue *pres, JSValue op1,
-                        JSValue op2);
-    int (*compare)(JSContext *ctx, enum OPCodeEnum op, JSValue op1, JSValue op2);
+    int (*unary_arith)(JSContext *ctx, JSValue *pres, OPCodeEnum op, JSValue op1);
+    int (*binary_arith)(JSContext *ctx, OPCodeEnum op, JSValue *pres, JSValue op1, JSValue op2);
+    int (*compare)(JSContext *ctx, OPCodeEnum op, JSValue op1, JSValue op2);
     /* only for bigfloat: */
     JSValue (*mul_pow10_to_float64)(JSContext *ctx, const bf_t *a, int64_t exponent);
     int (*mul_pow10)(JSContext *ctx, JSValue *sp);
@@ -607,8 +556,7 @@ typedef struct JSFunctionBytecode {
     uint8_t *byte_code_buf; /* (self pointer) */
     int byte_code_len;
     JSAtom func_name;
-    JSVarDef *vardefs;         /* arguments + local variables (arg_count + var_count)
-                                  (self pointer) */
+    JSVarDef *vardefs; /* arguments + local variables (arg_count + var_count) (self pointer) */
     JSClosureVar *closure_var; /* list of variables in the closure (self pointer) */
     uint16_t arg_count;
     uint16_t var_count;
@@ -733,7 +681,7 @@ typedef struct {
     JSBinaryOperatorDefEntry *tab;
 } JSBinaryOperatorDef;
 
-typedef struct JSOperatorSetData {
+typedef struct {
     uint32_t operator_counter;
     BOOL is_primitive; /* OperatorSet for a primitive type */
     /* NULL if no operator is defined */
@@ -877,12 +825,11 @@ struct JSObject {
             uint8_t __gc_mark;  /* corresponds to header.mark/gc_obj_type */
 
             uint8_t extensible : 1;
-            uint8_t free_mark : 1;            /* only used when freeing objects with cycles */
-            uint8_t is_exotic : 1;            /* TRUE if object has exotic property handlers */
-            uint8_t fast_array : 1;           /* TRUE if u.array is used for get/put (for
-                                                 JS_CLASS_ARRAY, JS_CLASS_ARGUMENTS and typed
-                                                 arrays) */
-            uint8_t is_constructor : 1;       /* TRUE if object is a constructor function */
+            uint8_t free_mark : 1;      /* only used when freeing objects with cycles */
+            uint8_t is_exotic : 1;      /* TRUE if object has exotic property handlers */
+            uint8_t fast_array : 1;     /* TRUE if u.array is used for get/put (for JS_CLASS_ARRAY,
+                                           JS_CLASS_ARGUMENTS and typed arrays) */
+            uint8_t is_constructor : 1; /* TRUE if object is a constructor function */
             uint8_t is_uncatchable_error : 1; /* if TRUE, error is not catchable */
             uint8_t tmp_mark : 1;             /* used in JS_WriteObjectRec() */
             uint8_t is_HTMLDDA : 1;           /* specific annex B IsHtmlDDA behavior */
@@ -904,14 +851,14 @@ struct JSObject {
             *array_buffer;                /* JS_CLASS_ARRAY_BUFFER, JS_CLASS_SHARED_ARRAY_BUFFER */
         struct JSTypedArray *typed_array; /* JS_CLASS_UINT8C_ARRAY..JS_CLASS_DATAVIEW */
 #ifdef CONFIG_BIGNUM
-        struct JSFloatEnv *float_env;           /* JS_CLASS_FLOAT_ENV */
-        struct JSOperatorSetData *operator_set; /* JS_CLASS_OPERATOR_SET */
+        struct JSFloatEnv *float_env;    /* JS_CLASS_FLOAT_ENV */
+        JSOperatorSetData *operator_set; /* JS_CLASS_OPERATOR_SET */
 #endif
         struct JSMapState *map_state; /* JS_CLASS_MAP..JS_CLASS_WEAKSET */
         struct JSMapIteratorData
             *map_iterator_data; /* JS_CLASS_MAP_ITERATOR, JS_CLASS_SET_ITERATOR */
-        struct JSArrayIteratorData *array_iterator_data; /* JS_CLASS_ARRAY_ITERATOR,
-                                                            JS_CLASS_STRING_ITERATOR */
+        struct JSArrayIteratorData
+            *array_iterator_data; /* JS_CLASS_ARRAY_ITERATOR, JS_CLASS_STRING_ITERATOR */
         struct JSRegExpStringIteratorData
             *regexp_string_iterator_data;                    /* JS_CLASS_REGEXP_STRING_ITERATOR */
         struct JSGeneratorData *generator_data;              /* JS_CLASS_GENERATOR */
@@ -924,15 +871,14 @@ struct JSObject {
         struct JSAsyncFromSyncIteratorData
             *async_from_sync_iterator_data;                /* JS_CLASS_ASYNC_FROM_SYNC_ITERATOR */
         struct JSAsyncGeneratorData *async_generator_data; /* JS_CLASS_ASYNC_GENERATOR */
-        struct JSBytecodeFunctionData {
-            /* JS_CLASS_BYTECODE_FUNCTION: 12/24 bytes
-             * also used by JS_CLASS_GENERATOR_FUNCTION, JS_CLASS_ASYNC_FUNCTION and
+        struct { /* JS_CLASS_BYTECODE_FUNCTION: 12/24 bytes */
+            /* also used by JS_CLASS_GENERATOR_FUNCTION, JS_CLASS_ASYNC_FUNCTION and
              * JS_CLASS_ASYNC_GENERATOR_FUNCTION */
             struct JSFunctionBytecode *function_bytecode;
             JSVarRef **var_refs;
             JSObject *home_object; /* for 'super' access */
         } func;
-        struct JSCFuntionData { /* JS_CLASS_C_FUNCTION: 12/20 bytes */
+        struct { /* JS_CLASS_C_FUNCTION: 12/20 bytes */
             JSContext *realm;
             JSCFunctionType c_function;
             uint8_t length;
@@ -940,8 +886,8 @@ struct JSObject {
             int16_t magic;
         } cfunc;
         /* array part for fast arrays and typed arrays */
-        struct JSArrayData { /* JS_CLASS_ARRAY, JS_CLASS_ARGUMENTS,
-                     JS_CLASS_UINT8C_ARRAY..JS_CLASS_FLOAT64_ARRAY */
+        struct { /* JS_CLASS_ARRAY, JS_CLASS_ARGUMENTS,
+                    JS_CLASS_UINT8C_ARRAY..JS_CLASS_FLOAT64_ARRAY */
             union {
                 uint32_t size; /* JS_CLASS_ARRAY, JS_CLASS_ARGUMENTS */
                 struct JSTypedArray
@@ -978,11 +924,7 @@ enum {
 #define JS_ATOM_LAST_KEYWORD JS_ATOM_super
 #define JS_ATOM_LAST_STRICT_KEYWORD JS_ATOM_yield
 
-static const char js_atom_init[] =
-#define DEF(name, str) str "\0"
-#include "quickjs-atom.h"
-#undef DEF
-    ;
+extern const char js_atom_init[];
 
 typedef enum OPCodeFormat {
 #define FMT(f) OP_FMT_##f,
@@ -991,6 +933,28 @@ typedef enum OPCodeFormat {
 #undef DEF
 #undef FMT
 } OPCodeFormat;
+
+enum OPCodeEnum {
+#define FMT(f)
+#define DEF(id, size, n_pop, n_push, f) OP_##id,
+#define def(id, size, n_pop, n_push, f)
+#include "quickjs-opcode.h"
+#undef def
+#undef DEF
+#undef FMT
+    OP_COUNT, /* excluding temporary opcodes */
+    /* temporary opcodes : overlap with the short opcodes */
+    OP_TEMP_START = OP_nop + 1,
+    OP___dummy = OP_TEMP_START - 1,
+#define FMT(f)
+#define DEF(id, size, n_pop, n_push, f)
+#define def(id, size, n_pop, n_push, f) OP_##id,
+#include "quickjs-opcode.h"
+#undef def
+#undef DEF
+#undef FMT
+    OP_TEMP_END,
+};
 
 int JS_InitAtoms(JSRuntime *rt);
 JSAtom __JS_NewAtomInit(JSRuntime *rt, const char *str, int len, int atom_type);
@@ -1013,7 +977,7 @@ JSValue JS_EvalObject(JSContext *ctx, JSValueConst this_obj, JSValueConst val, i
                       int scope_idx);
 JSValue __attribute__((format(printf, 2, 3)))
 JS_ThrowInternalError(JSContext *ctx, const char *fmt, ...);
-__maybe_unused void JS_DumpAtoms(JSRuntime *rt);
+void JS_DumpAtoms(JSRuntime *rt);
 __maybe_unused void JS_DumpString(JSRuntime *rt, const JSString *p);
 __maybe_unused void JS_DumpObjectHeader(JSRuntime *rt);
 __maybe_unused void JS_DumpObject(JSRuntime *rt, JSObject *p);
@@ -1087,6 +1051,23 @@ JSProperty *add_property(JSContext *ctx, JSObject *p, JSAtom prop, int prop_flag
 #ifdef CONFIG_BIGNUM
 void js_float_env_finalizer(JSRuntime *rt, JSValue val);
 JSValue JS_NewBigFloat(JSContext *ctx);
+static inline bf_t *JS_GetBigFloat(JSValueConst val)
+{
+    JSBigFloat *p = JS_VALUE_GET_PTR(val);
+    return &p->num;
+}
+JSValue JS_NewBigDecimal(JSContext *ctx);
+static inline bfdec_t *JS_GetBigDecimal(JSValueConst val)
+{
+    JSBigDecimal *p = JS_VALUE_GET_PTR(val);
+    return &p->num;
+}
+JSValue JS_NewBigInt(JSContext *ctx);
+static inline bf_t *JS_GetBigInt(JSValueConst val)
+{
+    JSBigFloat *p = JS_VALUE_GET_PTR(val);
+    return &p->num;
+}
 JSValue JS_CompactBigInt1(JSContext *ctx, JSValue val, BOOL convert_to_safe_integer);
 JSValue JS_CompactBigInt(JSContext *ctx, JSValue val);
 int JS_ToBigInt64Free(JSContext *ctx, int64_t *pres, JSValue val);
@@ -1169,6 +1150,12 @@ JSValue js_instantiate_prototype(JSContext *ctx, JSObject *p, JSAtom atom, void 
 JSValue js_module_ns_autoinit(JSContext *ctx, JSObject *p, JSAtom atom, void *opaque);
 JSValue JS_InstantiateFunctionListItem2(JSContext *ctx, JSObject *p, JSAtom atom, void *opaque);
 void JS_SetUncatchableError(JSContext *ctx, JSValueConst val, BOOL flag);
+
+extern const JSClassExoticMethods js_arguments_exotic_methods;
+extern const JSClassExoticMethods js_string_exotic_methods;
+extern const JSClassExoticMethods js_proxy_exotic_methods;
+extern const JSClassExoticMethods js_module_ns_exotic_methods;
+extern JSClassID js_class_id_alloc;
 
 #pragma region JS Arithmetic Impl
 int js_add_slow(JSContext *ctx, JSValue *sp);
