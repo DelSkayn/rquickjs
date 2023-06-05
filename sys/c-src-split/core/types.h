@@ -870,7 +870,7 @@ struct JSObject {
         struct JSTypedArray *typed_array; /* JS_CLASS_UINT8C_ARRAY..JS_CLASS_DATAVIEW */
 #ifdef CONFIG_BIGNUM
         struct JSFloatEnv *float_env; /* JS_CLASS_FLOAT_ENV */
-        struct JSOperatorSetData *operator_set; /* JS_CLASS_OPERATOR_SET */
+        JSOperatorSetData *operator_set; /* JS_CLASS_OPERATOR_SET */
 #endif
         struct JSMapState *map_state;   /* JS_CLASS_MAP..JS_CLASS_WEAKSET */
         struct JSMapIteratorData *map_iterator_data; /* JS_CLASS_MAP_ITERATOR, JS_CLASS_SET_ITERATOR */
