@@ -29,7 +29,6 @@ impl<'js, R> Future for WithFuture<'js, R> {
         let mut lock = ready!(pin!(&mut self.lock).poll(cx));
         lock.update_stack_top();
         let res = self.future.as_mut().poll(cx);
-        dbg!(res.is_pending());
         unsafe {
             loop {
                 if let Ok(true) = lock.execute_pending_job() {
