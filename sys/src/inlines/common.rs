@@ -161,7 +161,7 @@ pub unsafe fn JS_ToCStringLen(
 
 #[inline]
 pub unsafe fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> JSValue {
-    JS_GetPropertyInternal(ctx, this_obj, prop, this_obj, 0)
+    JS_GetPropertyInternal(ctx, this_obj, prop, this_obj, std::ptr::null_mut(), 0)
 }
 
 #[inline]
@@ -171,7 +171,14 @@ pub unsafe fn JS_SetProperty(
     prop: JSAtom,
     val: JSValue,
 ) -> i32 {
-    JS_SetPropertyInternal(ctx, this_obj, prop, val, JS_PROP_THROW as i32)
+    JS_SetPropertyInternal(
+        ctx,
+        this_obj,
+        prop,
+        val,
+        JS_PROP_THROW as i32,
+        std::ptr::null_mut(),
+    )
 }
 
 #[inline]
