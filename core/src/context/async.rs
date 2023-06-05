@@ -207,10 +207,6 @@ impl AsyncContext {
     }
 
     /// A entry point for manipulating and using javascript objects and scripts.
-    /// The api is structured this way to avoid repeated locking the runtime when ever
-    /// any function is called. This way the runtime is locked once before executing the callback.
-    /// Furthermore, this way it is impossible to use values from different runtimes in this
-    /// context which would otherwise be undefined behaviour.
     ///
     /// This function is rather limited in what environment it can capture. If you need to borrow
     /// the environment in the closure use the [`async_with!`] macro.
@@ -218,10 +214,11 @@ impl AsyncContext {
     /// Unfortunatly it is currently impossible to have closures return a generic future which has a higher
     /// rank trait bound lifetime. So, to allow closures to work, the closure must return a boxed
     /// future.
-    pub async fn async_with<'a, F, R: 'a>(&'a self, f: F) -> R
+    pub async fn async_with<F, R>(&self, f: F) -> R
     where
         F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
             + ParallelSend,
+        R: ParallelSend,
     {
         let future = {
             let guard = self.rt.inner.lock().await;
@@ -235,6 +232,21 @@ impl AsyncContext {
             lock: self.rt.inner.lock_arc(),
         }
         .await
+    }
+
+    /// A entry point for manipulating and using javascript objects and scripts.
+    ///
+    /// This closure can't return a future, if you need to await javascript promises prefer the
+    /// [`async_with!`] macro.
+    pub async fn with<F, R>(&self, f: F) -> R
+    where
+        F: for<'js> FnOnce(Ctx<'js>) -> R + ParallelSend,
+        R: ParallelSend,
+    {
+        let guard = self.rt.inner.lock().await;
+        guard.update_stack_top();
+        let ctx = unsafe { Ctx::new_async(self) };
+        f(ctx)
     }
 }
 

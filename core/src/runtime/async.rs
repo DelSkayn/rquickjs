@@ -11,10 +11,7 @@ use async_lock::Mutex;
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{RawLoader, Resolver};
-use crate::{
-    context::AsyncContext, markers::ParallelSend, result::AsyncJobException, Ctx, Error, Exception,
-    Result,
-};
+use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Error, Exception, Result};
 
 use super::{
     raw::{Opaque, RawRuntime},
