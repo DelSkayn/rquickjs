@@ -165,8 +165,12 @@ fn main() {
     for src in &source_files {
         builder.file(src_dir.join(src));
     }
+    for src in &split_source_files {
+        builder.file(src);
+    }
 
     builder.include(header_dir);
+    builder.include(quickjs_header_dir);
     builder.include(src_dir);
 
     builder.compile("libquickjs.a");
