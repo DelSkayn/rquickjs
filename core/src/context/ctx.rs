@@ -1,21 +1,18 @@
-use crate::{
-    markers::Invariant, qjs, runtime::Opaque, Context, Error, FromJs, Function, Module, Object,
-    Result, Value,
+use std::{
+    ffi::{CStr, CString},
+    fs, mem,
+    path::Path,
+    ptr::NonNull,
 };
 
 #[cfg(feature = "futures")]
 use std::future::Future;
 
 #[cfg(feature = "futures")]
-use crate::ParallelSend;
-
-use std::{
-    ffi::{CStr, CString},
-    fs,
-    marker::PhantomData,
-    mem,
-    path::Path,
-    ptr::NonNull,
+use crate::AsyncContext;
+use crate::{
+    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, Module,
+    Object, Result, Value,
 };
 
 /// Eval options.
@@ -62,10 +59,22 @@ impl Default for EvalOptions {
 #[derive(Clone, Copy, Debug)]
 pub struct Ctx<'js> {
     ctx: NonNull<qjs::JSContext>,
-    marker: Invariant<'js>,
+    _marker: Invariant<'js>,
 }
 
+unsafe impl Send for Ctx<'_> {}
+
 impl<'js> Ctx<'js> {
+    /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
+    ///
+    /// # Safety
+    /// User must ensure that a lock was acquired over the runtime and that invariant is a unique
+    /// lifetime which can't be coerced to a lifetime outside the scope of the lock of to the
+    /// lifetime of another runtime.
+    pub unsafe fn from_ptr_invariant(ctx: NonNull<qjs::JSContext>, inv: Invariant<'js>) -> Self {
+        Ctx { ctx, _marker: inv }
+    }
+
     pub(crate) fn as_ptr(&self) -> *mut qjs::JSContext {
         self.ctx.as_ptr()
     }
@@ -74,14 +83,22 @@ impl<'js> Ctx<'js> {
         let ctx = NonNull::new_unchecked(ctx);
         Ctx {
             ctx,
-            marker: PhantomData,
+            _marker: Invariant::new(),
         }
     }
 
-    pub(crate) fn new(ctx: &'js Context) -> Self {
+    pub(crate) unsafe fn new(ctx: &'js Context) -> Self {
         Ctx {
             ctx: ctx.ctx,
-            marker: PhantomData,
+            _marker: Invariant::new(),
+        }
+    }
+
+    #[cfg(feature = "futures")]
+    pub(crate) unsafe fn new_async(ctx: &'js AsyncContext) -> Self {
+        Ctx {
+            ctx: ctx.ctx,
+            _marker: Invariant::new(),
         }
     }
 
@@ -215,7 +232,7 @@ impl<'js> Ctx<'js> {
         })
     }
 
-    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque {
+    pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque<'js> {
         let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
         &mut *(qjs::JS_GetRuntimeOpaque(rt) as *mut _)
     }
@@ -223,13 +240,11 @@ impl<'js> Ctx<'js> {
     /// Spawn future using configured async runtime
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-    pub fn spawn<F, T>(&self, future: F)
+    pub fn spawn<F>(&self, future: F)
     where
-        F: Future<Output = T> + ParallelSend + 'static,
-        T: ParallelSend + 'static,
+        F: Future<Output = ()> + 'js,
     {
-        let opaque = unsafe { self.get_opaque() };
-        opaque.get_spawner().spawn(future);
+        unsafe { self.get_opaque().spawner().push(future) }
     }
 }
 

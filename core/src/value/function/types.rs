@@ -1,4 +1,4 @@
-use crate::{function::AsFunction, Ctx, Function, IntoJs, ParallelSend, Result, Value};
+use crate::{function::AsFunction, Ctx, Function, IntoJs, Result, Value};
 use std::{
     cell::RefCell,
     marker::PhantomData,
@@ -70,7 +70,8 @@ pub struct Func<F>(pub F);
 /// # let ctx = Context::full(&rt).unwrap();
 /// # ctx.with(|ctx| -> Result<()> {
 /// #
-/// async fn my_func() {}
+/// // Inorder to conver to a javascript promise the future must return a `Result`.
+/// async fn my_func() -> Result<()> { Ok(()) }
 /// let func = Function::new(ctx, Async(my_func));
 /// #
 /// # Ok(())
@@ -256,7 +257,7 @@ impl<F, A, R> From<F> for Func<(F, PhantomData<(A, R)>)> {
 
 impl<'js, F, A, R> IntoJs<'js> for Func<(F, PhantomData<(A, R)>)>
 where
-    F: AsFunction<'js, A, R> + ParallelSend + 'static,
+    F: AsFunction<'js, A, R> + 'js,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let data = self.0;
@@ -273,7 +274,7 @@ impl<N, F, A, R> Func<(N, F, PhantomData<(A, R)>)> {
 impl<'js, N, F, A, R> IntoJs<'js> for Func<(N, F, PhantomData<(A, R)>)>
 where
     N: AsRef<str>,
-    F: AsFunction<'js, A, R> + ParallelSend + 'static,
+    F: AsFunction<'js, A, R> + 'js,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let data = self.0;

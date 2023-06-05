@@ -1,7 +1,6 @@
 use super::{FromInput, Input};
 use crate::{
     function::{Method, MutFn, OnceFn, This},
-    markers::ParallelSend,
     Ctx, Error, FromJs, Function, IntoJs, Result, Value,
 };
 use std::ops::Range;
@@ -50,7 +49,7 @@ macro_rules! as_function_impls {
             $(#[$meta])*
             impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), R> for F
             where
-                F: Fn($($arg),*) -> R + ParallelSend + 'static,
+                F: Fn($($arg),*) -> R + 'js,
                 R: IntoJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
@@ -73,11 +72,11 @@ macro_rules! as_function_impls {
             // for async Fn() via Async wrapper
             #[cfg(feature = "futures")]
             $(#[$meta])*
-            impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<F>
+            impl<'js, F,Fut, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<F>
             where
-                F: Fn($($arg),*) -> R + ParallelSend + 'static,
-                R: Future + ParallelSend + 'static,
-                R::Output: for<'js_> IntoJs<'js_>,
+                F: Fn($($arg),*) -> Fut + 'js,
+                Fut: Future<Output = Result<R>> + 'js,
+                R: IntoJs<'js> + 'js,
                 $($arg: FromInput<'js>,)*
             {
                 #[allow(non_snake_case)]
@@ -100,7 +99,7 @@ macro_rules! as_function_impls {
             $(#[$meta])*
             impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), R> for MutFn<F>
             where
-                F: FnMut($($arg),*) -> R + ParallelSend + 'static,
+                F: FnMut($($arg),*) -> R + 'js,
                 R: IntoJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
@@ -125,11 +124,11 @@ macro_rules! as_function_impls {
             // for async FnMut() via MutFn wrapper
             #[cfg(feature = "futures")]
             $(#[$meta])*
-            impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<MutFn<F>>
+            impl<'js, F, Fut, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<MutFn<F>>
             where
-                F: FnMut($($arg),*) -> R + ParallelSend + 'static,
-                R: Future + ParallelSend + 'static,
-                R::Output: for<'js_> IntoJs<'js_>,
+                F: FnMut($($arg),*) -> Fut  + 'js,
+                Fut: Future<Output = Result<R>> + 'js,
+                R: IntoJs<'js> + 'js,
                 $($arg: FromInput<'js>,)*
             {
                 #[allow(non_snake_case)]
@@ -154,7 +153,7 @@ macro_rules! as_function_impls {
             $(#[$meta])*
             impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), R> for OnceFn<F>
             where
-                F: FnOnce($($arg),*) -> R + ParallelSend + 'static,
+                F: FnOnce($($arg),*) -> R + 'js,
                 R: IntoJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
@@ -181,11 +180,11 @@ macro_rules! as_function_impls {
             // for async FnOnce() via OnceFn wrapper
             #[cfg(feature = "futures")]
             $(#[$meta])*
-            impl<'js, F, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<OnceFn<F>>
+            impl<'js, F,Fut, R $(, $arg)*> AsFunction<'js, ($($arg,)*), Promised<R>> for Async<OnceFn<F>>
             where
-                F: FnOnce($($arg),*) -> R + ParallelSend + 'static,
-                R: Future + ParallelSend + 'static,
-                R::Output: for<'js_> IntoJs<'js_>,
+                F: FnOnce($($arg),*) -> Fut + 'js,
+                Fut: Future<Output = Result<R>> + 'js,
+                R: IntoJs<'js> + 'js,
                 $($arg: FromInput<'js>,)*
             {
                 #[allow(non_snake_case)]
@@ -212,7 +211,7 @@ macro_rules! as_function_impls {
             $(#[$meta])*
             impl<'js, F, R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), R> for Method<F>
             where
-                F: Fn(T, $($arg),*) -> R + ParallelSend + 'static,
+                F: Fn(T, $($arg),*) -> R + 'js,
                 R: IntoJs<'js>,
                 T: FromJs<'js>,
                 $($arg: FromInput<'js>,)*
@@ -237,11 +236,11 @@ macro_rules! as_function_impls {
             // for async methods via Method wrapper
             #[cfg(feature = "futures")]
             $(#[$meta])*
-            impl<'js, F, R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), Promised<R>> for Async<Method<F>>
+            impl<'js, F, Fut,R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), Promised<R>> for Async<Method<F>>
             where
-                F: Fn(T, $($arg),*) -> R + ParallelSend + 'static,
-                R: Future + ParallelSend + 'static,
-                R::Output: for<'js_> IntoJs<'js_>,
+                F: Fn(T, $($arg),*) -> Fut + 'js,
+                Fut: Future<Output = Result<R>> + 'js,
+                R: IntoJs<'js> + 'js,
                 T: FromJs<'js>,
                 $($arg: FromInput<'js>,)*
             {
@@ -299,8 +298,8 @@ as_function_impls! {
 #[cfg(feature = "classes")]
 impl<'js, C, F, A, R> AsFunction<'js, A, R> for Constructor<C, F>
 where
-    C: ClassDef + ParallelSend + 'static,
-    F: AsFunction<'js, A, R> + ParallelSend + 'static,
+    C: ClassDef + 'js,
+    F: AsFunction<'js, A, R> + 'js,
 {
     fn num_args() -> Range<usize> {
         F::num_args()
@@ -359,8 +358,8 @@ macro_rules! overloaded_impls {
             $(#[$meta])*
             impl<'js, $func, $func_args, $func_res $(, $funcs, $funcs_args, $funcs_res)*> AsFunction<'js, ($func_args $(, $funcs_args)*), ($func_res $(, $funcs_res)*)> for ($func $(, $funcs)*)
             where
-                $func: AsFunction<'js, $func_args, $func_res> + ParallelSend + 'static,
-            $($funcs: AsFunction<'js, $funcs_args, $funcs_res> + ParallelSend + 'static,)*
+                $func: AsFunction<'js, $func_args, $func_res> + 'js,
+            $($funcs: AsFunction<'js, $funcs_args, $funcs_res> + 'js,)*
             {
                 #[allow(non_snake_case)]
                 fn num_args() -> Range<usize> {

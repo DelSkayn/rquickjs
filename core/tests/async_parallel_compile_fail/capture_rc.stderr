@@ -1,0 +1,32 @@
+error[E0277]: `Rc<i32>` cannot be sent between threads safely
+  --> tests/async_parallel_compile_fail/capture_rc.rs:12:9
+   |
+12 | /         async_with!(ctx => |_ctx|{
+13 | |             // you should not be able to move non send types into the closure.
+14 | |             assert_eq!(*var_c,1);
+15 | |         })
+   | |          ^
+   | |          |
+   | |          `Rc<i32>` cannot be sent between threads safely
+   | |__________within this `[closure@$DIR/src/context/async.rs:106:52: 106:58]`
+   |            required by a bound introduced by this call
+   |
+   = help: within `[closure@$DIR/src/context/async.rs:106:52: 106:58]`, the trait `Send` is not implemented for `Rc<i32>`
+note: required because it's used within this closure
+  --> tests/async_parallel_compile_fail/capture_rc.rs:12:9
+   |
+12 | /         async_with!(ctx => |_ctx|{
+13 | |             // you should not be able to move non send types into the closure.
+14 | |             assert_eq!(*var_c,1);
+15 | |         })
+   | |__________^
+   = note: required for `[closure@$DIR/src/context/async.rs:106:52: 106:58]` to implement `ParallelSend`
+note: required by a bound in `AsyncContext::async_with`
+  --> src/context/async.rs
+   |
+   |     pub async fn async_with<'a, F, R: 'a>(&'a self, f: F) -> R
+   |                  ---------- required by a bound in this associated function
+...
+   |             + ParallelSend,
+   |               ^^^^^^^^^^^^ required by this bound in `AsyncContext::async_with`
+   = note: this error originates in the macro `async_with` (in Nightly builds, run with -Z macro-backtrace for more info)

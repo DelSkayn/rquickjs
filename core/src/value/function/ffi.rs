@@ -4,7 +4,7 @@ use std::{ops::Deref, panic::AssertUnwindSafe, ptr};
 
 static FUNC_CLASS_ID: ClassId = ClassId::new();
 
-type BoxedFunc<'js> = Box<dyn Fn(&Input<'js>) -> Result<Value<'js>>>;
+type BoxedFunc<'js> = Box<dyn Fn(&Input<'js>) -> Result<Value<'js>> + 'js>;
 
 #[repr(transparent)]
 pub struct JsFunction<'js>(BoxedFunc<'js>);
@@ -20,7 +20,7 @@ impl<'js> Deref for JsFunction<'js> {
 impl<'js> JsFunction<'js> {
     pub fn new<F>(func: F) -> Self
     where
-        F: Fn(&Input<'js>) -> Result<Value<'js>> + 'static,
+        F: Fn(&Input<'js>) -> Result<Value<'js>> + 'js,
     {
         Self(Box::new(func))
     }
