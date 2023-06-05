@@ -5,12 +5,15 @@ use std::{
     process::{Command, Stdio},
 };
 
+use log::info;
+
 fn main() {
     #[cfg(feature = "logging")]
     pretty_env_logger::init();
 
     println!("cargo:rerun-if-changed=build.rs");
 
+    info!("Begin quickjs compilation");
     let features = [
         "exports",
         "bindgen",
@@ -88,6 +91,7 @@ fn main() {
     let split_source_files = split_source_files
         .map(|x| x.to_string_lossy().into_owned())
         .collect::<Vec<_>>();
+    info!("Found split source files: {:?}", split_source_files);
 
     // rerun if anything in c-src or c-include changes
     for file in src_dir.read_dir().expect("Unable to read c-src") {
@@ -115,12 +119,6 @@ fn main() {
         defines.push(("CONFIG_BOX64".into(), None));
     }
 
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
-        && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
-    {
-        patch_files.push("basic_msvc_compat.patch");
-    }
-
     if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
         patch_files.push("read_module_exports.patch");
         defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
@@ -132,18 +130,12 @@ fn main() {
         }
     }
 
-    // for file in source_files.iter().chain(header_files.iter()) {
-    //     fs::copy(src_dir.join(file), out_dir.join(file)).expect("Unable to copy source");
-    // }
-
-    // // applying patches
-    // for file in &patch_files {
-    //     patch(out_dir, patches_dir.join(file));
-    // }
-
     let include_dir = [src_dir, header_dir, &quickjs_header_dir];
 
+    info!("Finished configuration");
+
     // generating bindings
+    info!("Generate bindings");
     bindgen(
         out_dir.join("bindings.rs"),
         split_source_dir_1.join("quickjs-internals.h"),
@@ -151,6 +143,7 @@ fn main() {
         include_dir,
     );
 
+    info!("Begin compiler setup");
     let mut builder = cc::Build::new();
     builder
         .extra_warnings(false)
@@ -173,7 +166,8 @@ fn main() {
     builder.include(quickjs_header_dir);
     builder.include(src_dir);
 
-    builder.compile("libquickjs.a");
+    info!("Begin compiling");
+    builder.compile("quickjs");
 }
 
 fn feature_to_cargo(name: impl AsRef<str>) -> String {
