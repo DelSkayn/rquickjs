@@ -36,7 +36,7 @@ fn main() {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
 
-    let src_dir = Path::new("c-src-split");
+    let src_dir = Path::new("c-src");
     let header_dir = Path::new("c-include");
     let quickjs_header_dir = header_dir.join("quickjs");
     let patches_dir = Path::new("patches");
