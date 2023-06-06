@@ -62,6 +62,8 @@ FMT(label_u16)
 #define def(id, size, n_pop, n_push, f) DEF(id, size, n_pop, n_push, f)
 #endif
 
+// =OPCODE_START
+
 DEF(invalid, 1, 0, 0, none) /* never emitted */
 
 /* push values */
@@ -364,6 +366,8 @@ DEF( typeof_is_function, 1, 1, 1, none)
 DEF(      get_field_ic, 5, 1, 1, none)
 DEF(     get_field2_ic, 5, 1, 2, none)
 DEF(      put_field_ic, 5, 2, 0, none)
+
+// =OPCODE_END
 
 #undef DEF
 #undef def
