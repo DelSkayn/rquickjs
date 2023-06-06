@@ -177,9 +177,9 @@ impl<'js, T> TypedArray<'js, T> {
             ctx.handle_exception(val).ok()?;
             Value::from_js_value(ctx, val)
         };
-        let off = unsafe { off.assume_init() } as usize;
-        let len = unsafe { len.assume_init() } as usize;
-        let stp = unsafe { stp.assume_init() } as usize;
+        let off = unsafe { off.assume_init() };
+        let len = unsafe { len.assume_init() };
+        let stp = unsafe { stp.assume_init() };
         if stp != size_of::<T>() {
             return None;
         }
