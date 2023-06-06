@@ -1,4 +1,6 @@
-use crate::{qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value};
+use crate::{
+    qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Value,
+};
 use std::{
     convert::TryFrom,
     marker::PhantomData,
@@ -55,6 +57,10 @@ typedarray_items! {
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
 pub struct TypedArray<'js, T>(pub(crate) Object<'js>, PhantomData<T>);
+
+impl<'js, 't, T> Outlive<'t> for TypedArray<'js, T> {
+    type Target = TypedArray<'t, T>;
+}
 
 impl<'js, T> TypedArray<'js, T> {
     /// Create typed array from vector data

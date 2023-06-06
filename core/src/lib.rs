@@ -43,7 +43,7 @@ pub use context::AsyncContext;
 pub use context::{Context, Ctx};
 mod persistent;
 mod value;
-pub use persistent::Persistent;
+pub use persistent::{Outlive, Persistent};
 pub use value::{
     convert, function, module, object, Array, Atom, BigInt, Exception, FromAtom, FromJs, Function,
     IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined, Value,

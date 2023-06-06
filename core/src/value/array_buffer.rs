@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value};
 use std::{
     mem::{size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
@@ -12,6 +12,10 @@ use std::{
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
 pub struct ArrayBuffer<'js>(pub(crate) Object<'js>);
+
+impl<'js, 't> Outlive<'t> for ArrayBuffer<'js> {
+    type Target = ArrayBuffer<'t>;
+}
 
 impl<'js> ArrayBuffer<'js> {
     /// Create array buffer from vector data
