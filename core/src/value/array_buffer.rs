@@ -116,7 +116,7 @@ impl<'js> ArrayBuffer<'js> {
     pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut u8)> {
         let ctx = val.ctx;
         let val = val.as_js_value();
-        let mut size = MaybeUninit::<qjs::size_t>::uninit();
+        let mut size = MaybeUninit::<usize>::uninit();
         let ptr = unsafe { qjs::JS_GetArrayBuffer(ctx.as_ptr(), size.as_mut_ptr(), val) };
 
         if ptr.is_null() {

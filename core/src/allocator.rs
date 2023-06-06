@@ -60,10 +60,7 @@ impl AllocatorHolder {
         self.0
     }
 
-    unsafe extern "C" fn malloc(
-        state: *mut qjs::JSMallocState,
-        size: qjs::size_t,
-    ) -> *mut qjs::c_void {
+    unsafe extern "C" fn malloc(state: *mut qjs::JSMallocState, size: usize) -> *mut qjs::c_void {
         // simulate the default behavior of libc::malloc
         if size == 0 {
             return null_mut();
@@ -91,7 +88,7 @@ impl AllocatorHolder {
     unsafe extern "C" fn realloc(
         state: *mut qjs::JSMallocState,
         ptr: *mut qjs::c_void,
-        size: qjs::size_t,
+        size: usize,
     ) -> *mut qjs::c_void {
         let state = &*state;
         let allocator = &mut *(state.opaque as *mut DynAllocator);
@@ -109,7 +106,7 @@ impl AllocatorHolder {
         allocator.realloc(ptr as _, size as _) as _
     }
 
-    unsafe extern "C" fn malloc_usable_size<A>(ptr: *const qjs::c_void) -> qjs::size_t
+    unsafe extern "C" fn malloc_usable_size<A>(ptr: *const qjs::c_void) -> usize
     where
         A: Allocator,
     {

@@ -163,9 +163,9 @@ impl<'js, T> TypedArray<'js, T> {
     pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut T)> {
         let ctx = val.ctx;
         let val = val.as_js_value();
-        let mut off = MaybeUninit::<qjs::size_t>::uninit();
-        let mut len = MaybeUninit::<qjs::size_t>::uninit();
-        let mut stp = MaybeUninit::<qjs::size_t>::uninit();
+        let mut off = MaybeUninit::<usize>::uninit();
+        let mut len = MaybeUninit::<usize>::uninit();
+        let mut stp = MaybeUninit::<usize>::uninit();
         let buf = unsafe {
             let val = qjs::JS_GetTypedArrayBuffer(
                 ctx.as_ptr(),
