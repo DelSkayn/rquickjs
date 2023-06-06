@@ -35,7 +35,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "mimalloc.h"
+// #include "mimalloc.h"
 
 #ifdef _MSC_VER
 

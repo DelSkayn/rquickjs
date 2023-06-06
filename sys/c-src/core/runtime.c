@@ -3063,7 +3063,8 @@ static const JSMallocFunctions def_malloc_funcs = {
     js_def_malloc,
     js_def_free,
     js_def_realloc,
-    mi_usable_size,
+    js_def_malloc_usable_size,
+    // mi_usable_size,
 };
 
 JSRuntime* JS_NewRuntime(void) {

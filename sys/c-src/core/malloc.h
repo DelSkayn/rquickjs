@@ -26,7 +26,7 @@
 #ifndef QUICKJS_MALLOC_H
 #define QUICKJS_MALLOC_H
 
-#include "mimalloc.h"
+// #include "mimalloc.h"
 #include "quickjs/cutils.h"
 #include "quickjs/quickjs.h"
 #include "types.h"
@@ -48,6 +48,7 @@ static inline void js_dbuf_init(JSContext *ctx, DynBuf *s) {
   dbuf_init2(s, ctx->rt, (DynBufReallocFunc *)js_realloc_rt);
 }
 
+size_t js_def_malloc_usable_size(void *ptr);
 void *js_def_malloc(JSMallocState *s, size_t size);
 void js_def_free(JSMallocState *s, void *ptr);
 void *js_def_realloc(JSMallocState *s, void *ptr, size_t size);
