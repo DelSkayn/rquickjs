@@ -109,13 +109,9 @@ impl<'js> Exception<'js> {
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                message.as_ptr(),
-                buffer.as_mut_ptr().cast::<u8>(),
-                str_len,
-            );
+            std::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str_len);
             buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowSyntaxError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            let res = qjs::JS_ThrowSyntaxError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -133,7 +129,7 @@ impl<'js> Exception<'js> {
                 str_len,
             );
             buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowTypeError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            let res = qjs::JS_ThrowTypeError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -151,7 +147,7 @@ impl<'js> Exception<'js> {
                 str_len,
             );
             buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowReferenceError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            let res = qjs::JS_ThrowReferenceError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -169,7 +165,7 @@ impl<'js> Exception<'js> {
                 str_len,
             );
             buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowRangeError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            let res = qjs::JS_ThrowRangeError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -187,7 +183,7 @@ impl<'js> Exception<'js> {
                 str_len,
             );
             buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowInternalError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            let res = qjs::JS_ThrowInternalError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
