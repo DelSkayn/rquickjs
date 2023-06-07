@@ -11,8 +11,8 @@ use std::future::Future;
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, Module,
-    Object, Result, Value,
+    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, IntoJs,
+    Module, Object, Result, String, Value,
 };
 
 /// Eval options.
@@ -212,6 +212,127 @@ impl<'js> Ctx<'js> {
             qjs::JS_Throw(self.ctx.as_ptr(), v);
         }
         Error::Exception
+    }
+
+    /// Parse json into a javascript value.
+    pub fn json_parse<S>(self, json: S) -> Result<Value<'js>>
+    where
+        S: Into<Vec<u8>>,
+    {
+        self.json_parse_ext(json, false)
+    }
+
+    /// Parse json into a javascript value, possibly allowing extended syntax support.
+    ///
+    /// If allow_extensions is true, this function will allow extended json syntex.
+    /// Extended syntax allows comments, single quoted strings, non string property names, trailing
+    /// comma's and hex, oct and binary numbers.
+    pub fn json_parse_ext<S>(self, json: S, allow_extensions: bool) -> Result<Value<'js>>
+    where
+        S: Into<Vec<u8>>,
+    {
+        let src = json.into();
+        let len = src.len();
+        let mut src = CString::new(src)?;
+        unsafe {
+            let flag = if allow_extensions {
+                qjs::JS_PARSE_JSON_EXT as i32
+            } else {
+                0i32
+            };
+            let name = b"<input>\0";
+            let v = qjs::JS_ParseJSON2(
+                self.as_ptr(),
+                src.as_ptr().cast(),
+                len,
+                name.as_ptr().cast(),
+                flag,
+            );
+            self.handle_exception(v)?;
+            Ok(Value::from_js_value(self, v))
+        }
+    }
+
+    /// Stringify a javascript value into its JSON representation
+    pub fn json_stringify<V>(self, value: V) -> Result<Option<String<'js>>>
+    where
+        V: IntoJs<'js>,
+    {
+        self.json_stringify_inner(
+            &value.into_js(self)?,
+            &Value::new_undefined(self),
+            &Value::new_undefined(self),
+        )
+    }
+
+    /// Stringify a javascript value into its JSON representation with a possible replacer.
+    ///
+    /// The replacer is the same as the replacer argument for `JSON.stringify`.
+    /// It is is a function that alters the behavior of the stringification process.
+    pub fn json_stringify_replacer<V, R>(self, value: V, replacer: R) -> Result<Option<String<'js>>>
+    where
+        V: IntoJs<'js>,
+        R: IntoJs<'js>,
+    {
+        self.json_stringify_inner(
+            &value.into_js(self)?,
+            &replacer.into_js(self)?,
+            &Value::new_undefined(self),
+        )
+    }
+
+    /// Stringify a javascript value into its JSON representation with a possible replacer and
+    /// spaces
+    ///
+    /// The replacer is the same as the replacer argument for `JSON.stringify`.
+    /// It is is a function that alters the behavior of the stringification process.
+    ///
+    /// Space is either a number or a string which is used to insert whitespace into the output
+    /// string for readability purposes. This behaves the same as the space argument for
+    /// `JSON.stringify`.
+    pub fn json_stringify_replacer_space<V, R, S>(
+        self,
+        value: V,
+        replacer: R,
+        space: S,
+    ) -> Result<Option<String<'js>>>
+    where
+        V: IntoJs<'js>,
+        R: IntoJs<'js>,
+        S: IntoJs<'js>,
+    {
+        self.json_stringify_inner(
+            &value.into_js(self)?,
+            &replacer.into_js(self)?,
+            &space.into_js(self)?,
+        )
+    }
+
+    // Inner non-generic version of json stringify>
+    fn json_stringify_inner(
+        self,
+        value: &Value<'js>,
+        replacer: &Value<'js>,
+        space: &Value<'js>,
+    ) -> Result<Option<String<'js>>> {
+        unsafe {
+            let res = qjs::JS_JSONStringify(
+                self.as_ptr(),
+                value.as_js_value(),
+                replacer.as_js_value(),
+                space.as_js_value(),
+            );
+            self.handle_exception(res)?;
+            let v = Value::from_js_value(self, res);
+            if v.is_undefined() {
+                Ok(None)
+            } else {
+                let v = v.into_string().expect(
+                    "JS_JSONStringify did not return either an exception, undefined, or a string",
+                );
+                Ok(Some(v))
+            }
+        }
     }
 
     /// Creates promise and resolving functions.

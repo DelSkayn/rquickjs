@@ -261,6 +261,18 @@ impl<'js> Value<'js> {
         qjs::JS_VALUE_GET_PTR(self.value)
     }
 
+    #[inline]
+    pub fn is_null(&self) -> bool {
+        let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
+        qjs::JS_TAG_NULL == tag
+    }
+
+    #[inline]
+    pub fn is_undefined(&self) -> bool {
+        let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
+        qjs::JS_TAG_UNDEFINED == tag
+    }
+
     /// Check if the value is a bool
     #[inline]
     pub fn is_bool(&self) -> bool {
