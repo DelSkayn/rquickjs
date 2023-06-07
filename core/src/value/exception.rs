@@ -56,6 +56,25 @@ impl<'js> Exception<'js> {
         Ok(Exception(obj))
     }
 
+    /// Creates a new exception with a give message, file name and line number.
+    pub fn from_message_location(
+        ctx: Ctx<'js>,
+        message: &str,
+        file: &str,
+        line: i32,
+    ) -> Result<Self> {
+        let obj = unsafe {
+            let value = ctx.handle_exception(qjs::JS_NewError(ctx.as_ptr()))?;
+            Value::from_js_value(ctx, value)
+                .into_object()
+                .expect("`JS_NewError` did not return an object")
+        };
+        obj.set("message", message)?;
+        obj.set("fileName", file)?;
+        obj.set("lineNumber", line)?;
+        Ok(Exception(obj))
+    }
+
     pub fn message(&self) -> Option<String> {
         self.get::<_, Option<Coerced<String>>>("message")
             .ok()
@@ -82,6 +101,96 @@ impl<'js> Exception<'js> {
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
+    }
+
+    /// Throws a new syntax error.
+    pub fn throw_syntax(ctx: Ctx<'js>, message: &str) -> Error {
+        // generate C string inline.
+        let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
+        let str_len = message.as_bytes().len().min(255);
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                message.as_ptr(),
+                buffer.as_mut_ptr().cast::<u8>(),
+                str_len,
+            );
+            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
+            let res = qjs::JS_ThrowSyntaxError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
+        }
+        Error::Exception
+    }
+
+    /// Throws a new type error.
+    pub fn throw_type(ctx: Ctx<'js>, message: &str) -> Error {
+        // generate C string inline.
+        let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
+        let str_len = message.as_bytes().len().min(255);
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                message.as_ptr(),
+                buffer.as_mut_ptr().cast::<u8>(),
+                str_len,
+            );
+            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
+            let res = qjs::JS_ThrowTypeError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
+        }
+        Error::Exception
+    }
+
+    /// Throws a new reference error.
+    pub fn throw_reference(ctx: Ctx<'js>, message: &str) -> Error {
+        // generate C string inline.
+        let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
+        let str_len = message.as_bytes().len().min(255);
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                message.as_ptr(),
+                buffer.as_mut_ptr().cast::<u8>(),
+                str_len,
+            );
+            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
+            let res = qjs::JS_ThrowReferenceError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
+        }
+        Error::Exception
+    }
+
+    /// Throws a new range error.
+    pub fn throw_range(ctx: Ctx<'js>, message: &str) -> Error {
+        // generate C string inline.
+        let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
+        let str_len = message.as_bytes().len().min(255);
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                message.as_ptr(),
+                buffer.as_mut_ptr().cast::<u8>(),
+                str_len,
+            );
+            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
+            let res = qjs::JS_ThrowRangeError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
+        }
+        Error::Exception
+    }
+
+    /// Throws a new internal error.
+    pub fn throw_internal(ctx: Ctx<'js>, message: &str) -> Error {
+        // generate C string inline.
+        let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
+        let str_len = message.as_bytes().len().min(255);
+        unsafe {
+            std::ptr::copy_nonoverlapping(
+                message.as_ptr(),
+                buffer.as_mut_ptr().cast::<u8>(),
+                str_len,
+            );
+            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
+            let res = qjs::JS_ThrowInternalError(ctx.as_ptr(), buffer.as_ptr().cast::<i8>());
+            debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
+        }
+        Error::Exception
     }
 
     /// Sets the exception as the current error an returns `Error::Exception`
