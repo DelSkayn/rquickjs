@@ -233,7 +233,7 @@ impl<'js> Ctx<'js> {
     {
         let src = json.into();
         let len = src.len();
-        let mut src = CString::new(src)?;
+        let src = CString::new(src)?;
         unsafe {
             let flag = if allow_extensions {
                 qjs::JS_PARSE_JSON_EXT as i32
@@ -489,6 +489,79 @@ mod test {
                 )
                 .catch(ctx)
                 .unwrap();
+        })
+    }
+
+    #[test]
+    fn json_parse() {
+        use crate::{Array, Context, Object, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let v = ctx
+                .json_parse(r#"{ "a": { "b": 1, "c": true }, "d": [0,"foo"] }"#)
+                .unwrap();
+            let obj = v.into_object().unwrap();
+            let inner_obj: Object = obj.get("a").unwrap();
+            assert_eq!(inner_obj.get::<_, i32>("b").unwrap(), 1);
+            assert!(inner_obj.get::<_, bool>("c").unwrap());
+            let inner_array: Array = obj.get("d").unwrap();
+            assert_eq!(inner_array.get::<i32>(0).unwrap(), 0);
+            assert_eq!(inner_array.get::<String>(1).unwrap(), "foo".to_string());
+        })
+    }
+
+    #[test]
+    fn json_parse_extension() {
+        use crate::{Array, Context, Object, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let v = ctx
+                .json_parse_ext(
+                    r#"{ a: { "b": 0xf, "c": 0b11 }, "d": [0o17,'foo'], }"#,
+                    true,
+                )
+                .unwrap();
+            let obj = v.into_object().unwrap();
+            let inner_obj: Object = obj.get("a").unwrap();
+            assert_eq!(inner_obj.get::<_, i32>("b").unwrap(), 0xf);
+            assert_eq!(inner_obj.get::<_, i32>("c").unwrap(), 0b11);
+            let inner_array: Array = obj.get("d").unwrap();
+            assert_eq!(inner_array.get::<i32>(0).unwrap(), 0o17);
+            assert_eq!(inner_array.get::<String>(1).unwrap(), "foo".to_string());
+        })
+    }
+
+    #[test]
+    fn json_stringify() {
+        use crate::{Array, Context, Object, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let obj_inner = Object::new(ctx).unwrap();
+            obj_inner.set("b", 1).unwrap();
+            obj_inner.set("c", true).unwrap();
+
+            let array_inner = Array::new(ctx).unwrap();
+            array_inner.set(0, 0).unwrap();
+            array_inner.set(1, "foo").unwrap();
+
+            let obj = Object::new(ctx).unwrap();
+            obj.set("a", obj_inner).unwrap();
+            obj.set("d", array_inner).unwrap();
+
+            let str = ctx
+                .json_stringify(obj)
+                .unwrap()
+                .unwrap()
+                .to_string()
+                .unwrap();
+
+            assert_eq!(str, r#"{"a":{"b":1,"c":true},"d":[0,"foo"]}"#);
         })
     }
 }
