@@ -62,8 +62,7 @@ pub struct Func<F>(pub F);
 
 /// The wrapper for async functons
 ///
-/// This type wraps returned future into [`Promised`](crate::Promised)
-///
+/// This type wraps returned future into [`Promised`](crate::promise::Promised)
 /// ```
 /// # use rquickjs::{Runtime, Context, Result, Function, function::Async};
 /// # let rt = Runtime::new().unwrap();

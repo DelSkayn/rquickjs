@@ -25,16 +25,17 @@ pub use compile::Compile;
 #[cfg(feature = "dyn-load")]
 mod native_loader;
 #[cfg(feature = "dyn-load")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "dyn-load")))]
 pub use native_loader::NativeLoader;
 
 pub mod bundle;
 
 #[cfg(feature = "phf")]
-/// The type of bundle that the [`embed!`] macro returns
+/// The type of bundle that the `embed!` macro returns
 pub type Bundle = bundle::Bundle<bundle::PhfBundleData<&'static [u8]>>;
 
 #[cfg(not(feature = "phf"))]
-/// The type of bundle that the [`embed!`] macro returns
+/// The type of bundle that the `embed!` macro returns
 pub type Bundle = bundle::Bundle<bundle::ScaBundleData<&'static [u8]>>;
 
 mod util;
@@ -79,6 +80,7 @@ pub trait Loader {
 /// # Safety
 /// Implementors must ensure that all module declaration and evaluation errors are returned from
 /// this function.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub unsafe trait RawLoader {
     /// Load module by name, should return an unevaluted module.
     ///

@@ -19,6 +19,7 @@ use super::{
     InterruptHandler, MemoryUsage,
 };
 
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncWeakRuntime(Weak<Mutex<RawRuntime>>);
 
@@ -29,6 +30,7 @@ impl AsyncWeakRuntime {
 }
 
 /// Asynchronous Quickjs runtime, entry point of the library.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncRuntime {
     // use Arc instead of Ref so we can use OwnedLock

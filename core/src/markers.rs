@@ -1,9 +1,12 @@
+//! Utility types and traits.
+
 use std::marker::PhantomData;
 
 // Super nice trick taken from the rlua library.
 // Can be used to pin a lifetime so that all functions which use
 // that lifetime can only us that single lifetime and not one which
 // is variant over that lifetime
+/// A marker struct which marks a lifetime as invariant.
 #[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Hash, Debug, Default)]
 pub struct Invariant<'inv>(PhantomData<&'inv mut &'inv fn(&'inv ()) -> &'inv ()>);
 

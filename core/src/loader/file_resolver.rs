@@ -4,7 +4,6 @@ use relative_path::{RelativePath, RelativePathBuf};
 /// The file module resolver
 ///
 /// This resolver can be used as the nested backing resolver in user-defined resolvers.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug)]
 pub struct FileResolver {
     paths: Vec<RelativePathBuf>,

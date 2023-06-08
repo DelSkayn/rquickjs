@@ -200,7 +200,7 @@ impl ModuleData {
 /// modules to import eachother.
 ///
 /// Only use if you need to aquire the module objects after. Otherwise, it is easier to use the
-/// other safe methods on the [`Module`] struct like [`Module::instantiate`]
+/// other safe methods on the [`Module`] struct like [`Module::evaluate`]
 pub struct ModulesBuilder {
     modules: Vec<ModuleData>,
 }

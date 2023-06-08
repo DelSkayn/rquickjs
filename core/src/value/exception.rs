@@ -31,6 +31,7 @@ impl<'js> Exception<'js> {
         &self.0
     }
 
+    /// Turns the exception into a generic javascript value.
     pub fn into_value(self) -> Value<'js> {
         self.0.into_value()
     }
@@ -75,6 +76,9 @@ impl<'js> Exception<'js> {
         Ok(Exception(obj))
     }
 
+    /// Returns the message of the error.
+    ///
+    /// Same as retrieving `error.message` in javascript.
     pub fn message(&self) -> Option<String> {
         self.get::<_, Option<Coerced<String>>>("message")
             .ok()
@@ -82,6 +86,9 @@ impl<'js> Exception<'js> {
             .map(|x| x.0)
     }
 
+    /// Returns the file name from with the error originated..
+    ///
+    /// Same as retrieving `error.fileName` in javascript.
     pub fn file(&self) -> Option<String> {
         self.get::<_, Option<Coerced<String>>>("fileName")
             .ok()
@@ -89,6 +96,9 @@ impl<'js> Exception<'js> {
             .map(|x| x.0)
     }
 
+    /// Returns the file line from with the error originated..
+    ///
+    /// Same as retrieving `error.lineNumber` in javascript.
     pub fn line(&self) -> Option<i32> {
         self.get::<_, Option<Coerced<i32>>>("lineNumber")
             .ok()
@@ -96,11 +106,34 @@ impl<'js> Exception<'js> {
             .map(|x| x.0)
     }
 
+    /// Returns the error stack.
+    ///
+    /// Same as retrieving `error.stack` in javascript.
     pub fn stack(&self) -> Option<String> {
         self.get::<_, Option<Coerced<String>>>("stack")
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
+    }
+
+    /// Throws a new generic error.
+    ///
+    /// Equivalent to:
+    /// ```rust
+    /// {
+    ///     let (Ok(e) | Err(e)) = Self::from_message(ctx, message).map(|x| x.throw());
+    ///     e
+    /// }
+    /// ```
+    pub fn throw_message(ctx: Ctx<'js>, message: &str) -> Error {
+        let (Ok(e) | Err(e)) = Self::from_message(ctx, message).map(|x| x.throw());
+        e
+    }
+    /// Throws a new generic error with a file name and line number.
+    pub fn throw_message_location(ctx: Ctx<'js>, message: &str, file: &str, line: i32) -> Error {
+        let (Ok(e) | Err(e)) =
+            Self::from_message_location(ctx, message, file, line).map(|x| x.throw());
+        e
     }
 
     /// Throws a new syntax error.

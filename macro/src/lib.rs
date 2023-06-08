@@ -129,7 +129,7 @@ This attributes applies to structs and enums to use it as ES6 classes.
 Attribute                 | Description
 ------------------------- | ---------------------------
 __`rename = "new_name"`__ | Renames data type to export
-__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::HasRefs) to be implemented)
+__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::class::HasRefs) to be implemented)
 __`cloneable`__           | Marks data type which implements `Clone` trait
 __`skip`__                | Skips exporting this data type
 __`hide`__                | Do not output this data type (bindings only)
@@ -160,7 +160,7 @@ This attributes applies to `impl` blocks to bind class methods and properties an
 Attribute                 | Description
 ------------------------- | ---------------------------
 __`rename = "new_name"`__ | Renames data type to export
-__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::HasRefs) to be implemented)
+__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::class::HasRefs) to be implemented)
 __`skip`__                | Skips exporting this impl block
 __`hide`__                | Do not output this impl block (bindings only)
 
@@ -517,7 +517,7 @@ pub fn embed(item: TokenStream1) -> TokenStream1 {
 }
 
 /**
-A macro to derive [`HasRefs`](rquickjs_core::module::HasRefs)
+A macro to derive [`HasRefs`](rquickjs_core::class::HasRefs)
 
 # Supported attributes
 

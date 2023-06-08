@@ -10,7 +10,6 @@ use std::{
 };
 
 /// Modules compiling data
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Default, Clone)]
 pub struct Compile<T = ()> {
     data: Ref<Mut<CompileData>>,

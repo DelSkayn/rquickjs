@@ -9,7 +9,6 @@ use super::Loader;
 /// The builtin native module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug, Default)]
 pub struct ModuleLoader {
     modules: HashMap<String, ModuleData>,

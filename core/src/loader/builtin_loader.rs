@@ -4,7 +4,6 @@ use std::collections::HashMap;
 /// The builtin script module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug, Default)]
 pub struct BuiltinLoader {
     modules: HashMap<String, Vec<u8>>,

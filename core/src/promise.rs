@@ -1,3 +1,5 @@
+//! Utilities for converting promises to futures and vice versa.
+
 use std::{
     cell::Cell,
     future::Future,

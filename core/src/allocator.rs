@@ -1,3 +1,5 @@
+//! Tools for using different allocators with quickjs.
+
 use crate::qjs;
 use std::ptr::null_mut;
 
@@ -28,7 +30,7 @@ pub trait Allocator {
 
 type DynAllocator = Box<dyn Allocator>;
 
-pub struct AllocatorHolder(*mut DynAllocator);
+pub(crate) struct AllocatorHolder(*mut DynAllocator);
 
 impl Drop for AllocatorHolder {
     fn drop(&mut self) {

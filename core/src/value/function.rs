@@ -15,6 +15,7 @@ use ffi::JsFunction;
 pub use types::{Func, Method, MutFn, OnceFn, Opt, Rest, This};
 
 #[cfg(feature = "futures")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub use types::Async;
 
 /// Rust representation of a javascript function.

@@ -35,10 +35,12 @@ mod safe_ref;
 pub(crate) use safe_ref::*;
 pub mod runtime;
 #[cfg(feature = "futures")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub use runtime::AsyncRuntime;
 pub use runtime::Runtime;
 pub mod context;
 #[cfg(feature = "futures")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub use context::AsyncContext;
 pub use context::{Context, Ctx};
 mod persistent;
@@ -50,27 +52,34 @@ pub use value::{
 };
 
 #[cfg(feature = "array-buffer")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub use value::{ArrayBuffer, TypedArray};
 mod class_id;
 #[cfg(not(feature = "classes"))]
 pub(crate) use class_id::ClassId;
 #[cfg(feature = "classes")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 pub use class_id::ClassId;
 
 #[cfg(feature = "classes")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 pub mod class;
 #[cfg(feature = "classes")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
 pub use class::Class;
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
 #[cfg(feature = "futures")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub mod promise;
 
 #[cfg(feature = "allocator")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
 pub mod allocator;
 
 #[cfg(feature = "loader")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub mod loader;
 
 pub mod prelude {
@@ -82,6 +91,7 @@ pub mod prelude {
         result::{CatchResultExt, ThrowResultExt},
     };
     #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub use crate::{
         function::Async,
         promise::{Promise, Promised},
