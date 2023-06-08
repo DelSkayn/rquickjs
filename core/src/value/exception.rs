@@ -120,10 +120,16 @@ impl<'js> Exception<'js> {
     ///
     /// Equivalent to:
     /// ```rust
-    /// {
-    ///     let (Ok(e) | Err(e)) = Self::from_message(ctx, message).map(|x| x.throw());
-    ///     e
-    /// }
+    /// # use rquickjs::{Runtime,Context,Exception};
+    /// # let rt = Runtime::new().unwrap();
+    /// # let ctx = Context::full(&rt).unwrap();
+    /// # ctx.with(|ctx|{
+    /// # let _ = {
+    /// # let message = "";
+    /// let (Ok(e) | Err(e)) = Exception::from_message(ctx, message).map(|x| x.throw());
+    /// e
+    /// # };
+    /// # })
     /// ```
     pub fn throw_message(ctx: Ctx<'js>, message: &str) -> Error {
         let (Ok(e) | Err(e)) = Self::from_message(ctx, message).map(|x| x.throw());

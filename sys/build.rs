@@ -10,7 +10,6 @@ fn main() {
     pretty_env_logger::init();
 
     println!("cargo:rerun-if-changed=build.rs");
-    println!("cargo:rerun-if-changed=TARGET");
 
     let features = [
         "exports",
