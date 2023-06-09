@@ -4,7 +4,7 @@ use crate::{
 use std::{
     convert::TryFrom,
     marker::PhantomData,
-    mem::{size_of, MaybeUninit},
+    mem::{self, MaybeUninit},
     ops::Deref,
     ptr::null_mut,
     slice,
@@ -147,16 +147,8 @@ impl<'js, T> TypedArray<'js, T> {
     ///
     /// Returns None if the array is detached.
     pub fn as_bytes(&self) -> Option<&[u8]> {
-        let mut len = MaybeUninit::<usize>::uninit();
-        unsafe {
-            let ptr =
-                qjs::JS_GetArrayBuffer(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value());
-            if ptr.is_null() {
-                return None;
-            }
-            let len = len.assume_init();
-            Some(slice::from_raw_parts::<u8>(ptr, len))
-        }
+        let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
+        Some(unsafe { slice::from_raw_parts(ptr, len) })
     }
 
     /// Get underlaying ArrayBuffer
@@ -182,7 +174,7 @@ impl<'js, T> TypedArray<'js, T> {
         ctor.construct((arraybuffer,))
     }
 
-    pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut T)> {
+    pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {
         let ctx = val.ctx;
         let val = val.as_js_value();
         let mut off = MaybeUninit::<usize>::uninit();
@@ -202,16 +194,22 @@ impl<'js, T> TypedArray<'js, T> {
         let off = unsafe { off.assume_init() };
         let len = unsafe { len.assume_init() };
         let stp = unsafe { stp.assume_init() };
-        if stp != size_of::<T>() {
-            return None;
-        }
         let (full_len, ptr) = ArrayBuffer::get_raw(&buf)?;
         if (off + len) > full_len {
             return None;
         }
-        let len = len / size_of::<T>();
-        let ptr = unsafe { ptr.add(off) } as *mut T;
-        Some((len, ptr))
+        let ptr = unsafe { ptr.add(off) };
+        Some((stp, len, ptr))
+    }
+
+    pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut T)> {
+        let (stp, len, ptr) = Self::get_raw_bytes(val)?;
+        if stp != mem::size_of::<T>() {
+            return None;
+        }
+        debug_assert_eq!(ptr.align_offset(mem::align_of::<T>()), 0);
+        let ptr = ptr.cast::<T>();
+        Some((len / mem::size_of::<T>(), ptr))
     }
 }
 
@@ -356,5 +354,25 @@ mod test {
                 .unwrap();
             assert_eq!(res, 0);
         })
+    }
+
+    #[test]
+    fn as_bytes() {
+        test_with(|ctx| {
+            let val: TypedArray<u32> = ctx
+                .eval(
+                    r#"
+                        new Uint32Array([0xCAFEDEAD,0xFEEDBEAD])
+                    "#,
+                )
+                .unwrap();
+            let mut res = [0; 8];
+            let bytes_0 = 0xCAFEDEADu32.to_ne_bytes();
+            res[..4].copy_from_slice(&bytes_0);
+            let bytes_1 = 0xFEEDBEADu32.to_ne_bytes();
+            res[4..].copy_from_slice(&bytes_1);
+
+            assert_eq!(val.as_bytes().unwrap(), &res)
+        });
     }
 }

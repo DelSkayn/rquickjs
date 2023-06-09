@@ -78,16 +78,8 @@ impl<'js> ArrayBuffer<'js> {
     ///
     /// Returns None if the array is detached.
     pub fn as_bytes(&self) -> Option<&[u8]> {
-        let mut len = MaybeUninit::<usize>::uninit();
-        unsafe {
-            let ptr =
-                qjs::JS_GetArrayBuffer(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value());
-            if ptr.is_null() {
-                return None;
-            }
-            let len = len.assume_init();
-            Some(slice::from_raw_parts::<u8>(ptr, len))
-        }
+        let (len, ptr) = Self::get_raw(self.as_value())?;
+        Some(unsafe { slice::from_raw_parts_mut(ptr, len) })
     }
 
     /// Detach array buffer
@@ -274,5 +266,25 @@ mod test {
                 .unwrap();
             assert_eq!(res, 0);
         })
+    }
+
+    #[test]
+    fn as_bytes() {
+        test_with(|ctx| {
+            let val: ArrayBuffer = ctx
+                .eval(
+                    r#"
+                        new Uint32Array([0xCAFEDEAD,0xFEEDBEAD]).buffer
+                    "#,
+                )
+                .unwrap();
+            let mut res = [0; 8];
+            let bytes_0 = 0xCAFEDEADu32.to_ne_bytes();
+            res[..4].copy_from_slice(&bytes_0);
+            let bytes_1 = 0xFEEDBEADu32.to_ne_bytes();
+            res[4..].copy_from_slice(&bytes_1);
+
+            assert_eq!(val.as_bytes().unwrap(), &res)
+        });
     }
 }
