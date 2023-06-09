@@ -74,6 +74,22 @@ impl<'js> ArrayBuffer<'js> {
         self.len() == 0
     }
 
+    /// Returns the underlying bytes of the buffer,
+    ///
+    /// Returns None if the array is detached.
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        let mut len = MaybeUninit::<usize>::uninit();
+        unsafe {
+            let ptr =
+                qjs::JS_GetArrayBuffer(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value());
+            if ptr.is_null() {
+                return None;
+            }
+            let len = len.assume_init();
+            Some(slice::from_raw_parts::<u8>(ptr, len))
+        }
+    }
+
     /// Detach array buffer
     pub fn detach(&mut self) {
         unsafe { qjs::JS_DetachArrayBuffer(self.0.ctx.as_ptr(), self.0.as_js_value()) }

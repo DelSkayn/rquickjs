@@ -143,6 +143,22 @@ impl<'js, T> TypedArray<'js, T> {
         }
     }
 
+    /// Returns the underlying bytes of the buffer,
+    ///
+    /// Returns None if the array is detached.
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        let mut len = MaybeUninit::<usize>::uninit();
+        unsafe {
+            let ptr =
+                qjs::JS_GetArrayBuffer(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value());
+            if ptr.is_null() {
+                return None;
+            }
+            let len = len.assume_init();
+            Some(slice::from_raw_parts::<u8>(ptr, len))
+        }
+    }
+
     /// Get underlaying ArrayBuffer
     pub fn arraybuffer(&self) -> Result<ArrayBuffer<'js>> {
         let ctx = self.0.ctx;
