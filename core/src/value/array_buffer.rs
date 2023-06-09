@@ -1,10 +1,12 @@
 use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value};
 use std::{
-    mem::{size_of, ManuallyDrop, MaybeUninit},
+    mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
     os::raw::c_void,
     slice,
 };
+
+use super::typed_array::TypedArrayItem;
 
 /// Rust representation of a javascript object of class ArrayBuffer.
 ///
@@ -82,6 +84,18 @@ impl<'js> ArrayBuffer<'js> {
         Some(unsafe { slice::from_raw_parts_mut(ptr, len) })
     }
 
+    /// Returns a slice if the buffer underlying buffer is properly aligned for the type and the
+    /// buffer is not detached.
+    pub fn as_slice<T: TypedArrayItem>(&self) -> Option<&[T]> {
+        let (len, ptr) = Self::get_raw(&self.0)?;
+        if ptr.align_offset(mem::align_of::<T>()) != 0 {
+            return None;
+        }
+        //assert!(len % size_of::<T>() == 0);
+        let len = len / size_of::<T>();
+        Some(unsafe { slice::from_raw_parts(ptr as _, len) })
+    }
+
     /// Detach array buffer
     pub fn detach(&mut self) {
         unsafe { qjs::JS_DetachArrayBuffer(self.0.ctx.as_ptr(), self.0.as_js_value()) }
@@ -140,21 +154,9 @@ impl<'js> ArrayBuffer<'js> {
     }
 }
 
-impl<'js, T> AsRef<[T]> for ArrayBuffer<'js> {
+impl<'js, T: TypedArrayItem> AsRef<[T]> for ArrayBuffer<'js> {
     fn as_ref(&self) -> &[T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect("Not an ArrayBuffer");
-        //assert!(len % size_of::<T>() == 0);
-        let len = len / size_of::<T>();
-        unsafe { slice::from_raw_parts(ptr as _, len) }
-    }
-}
-
-impl<'js, T> AsMut<[T]> for ArrayBuffer<'js> {
-    fn as_mut(&mut self) -> &mut [T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect("Not an ArrayBuffer");
-        //assert!(len % size_of::<T>() == 0);
-        let len = len / size_of::<T>();
-        unsafe { slice::from_raw_parts_mut(ptr as _, len) }
+        self.as_slice().expect("Arraybuffer was detached")
     }
 }
 

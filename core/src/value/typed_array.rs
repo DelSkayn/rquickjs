@@ -13,7 +13,7 @@ use std::{
 /// The trait which implements types which capable to be TypedArray items
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
-pub trait TypedArrayItem {
+pub trait TypedArrayItem: Copy {
     const CLASS_NAME: &'static str;
 }
 
@@ -217,13 +217,6 @@ impl<'js, T: TypedArrayItem> AsRef<[T]> for TypedArray<'js, T> {
     fn as_ref(&self) -> &[T] {
         let (len, ptr) = Self::get_raw(&self.0).expect(T::CLASS_NAME);
         unsafe { slice::from_raw_parts(ptr as _, len) }
-    }
-}
-
-impl<'js, T: TypedArrayItem> AsMut<[T]> for TypedArray<'js, T> {
-    fn as_mut(&mut self) -> &mut [T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect(T::CLASS_NAME);
-        unsafe { slice::from_raw_parts_mut(ptr, len) }
     }
 }
 
