@@ -20,12 +20,22 @@ pub mod phf {
 
 /// Short macro to define a cstring literal.
 ///
-/// Make sure the string does not contain internal null characters or it will end early.
+/// Make sure the string does not contain any internal null characters or it panic.
 #[macro_export]
 macro_rules! cstr {
-    ($str:tt) => {
-        std::ffi::CStr::from_bytes_until_nul(concat!($str, "\0").as_bytes()).unwrap()
-    };
+    ($str:tt) => {{
+        const fn no_null(s: &[u8]) {
+            let mut i = 0;
+            while i < s.len() {
+                if s[i] == 0 {
+                    panic!("cstr string contained null character")
+                }
+                i += 1;
+            }
+        }
+        no_null($str.as_bytes());
+        unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(concat!($str, "\0").as_bytes()) }
+    }};
 }
 
 pub mod markers;
