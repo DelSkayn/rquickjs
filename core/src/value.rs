@@ -1,4 +1,4 @@
-mod array;
+pub mod array;
 mod atom;
 mod bigint;
 pub mod convert;
