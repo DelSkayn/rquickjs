@@ -236,6 +236,7 @@ macro_rules! as_function_impls {
             }
 
             // for methods via Method wrapper
+            #[cfg(feature="classes")]
             $(#[$meta])*
             impl<'js, F, R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), R> for SelfMethod<T,F>
             where
@@ -294,7 +295,7 @@ macro_rules! as_function_impls {
             }
 
             // for async methods via Method wrapper
-            #[cfg(feature = "futures")]
+            #[cfg(all(feature = "futures", feature="classes"))]
             #[allow(non_snake_case)]
             $(#[$meta])*
             impl<'js,Fut,R, T $(, $arg)*> AsFunction<'js, (&T, $($arg),*), Promised<R>> for Async<SelfMethod<T,fn(&T$(,$arg)*) -> Fut>>
@@ -327,7 +328,7 @@ macro_rules! as_function_impls {
             }
 
             // for async methods via Method wrapper
-            #[cfg(feature = "futures")]
+            #[cfg(all(feature = "futures", feature="classes"))]
             #[allow(non_snake_case)]
             $(#[$meta])*
             impl<'js,Fut,R, T $(, $arg)*> AsFunction<'js, (&T, $($arg),*), Promised<R>> for Async<SelfMethod<T,fn(T$(,$arg)*) -> Fut>>
