@@ -26,6 +26,16 @@ use std::{
 #[repr(transparent)]
 pub struct Method<F>(pub F);
 
+/// A method which takes a class type as a self argument.
+#[repr(transparent)]
+pub struct SelfMethod<S, F>(pub F, PhantomData<S>);
+
+impl<S, F> From<F> for SelfMethod<S, F> {
+    fn from(func: F) -> Self {
+        Self(func, PhantomData)
+    }
+}
+
 /// The wrapper for function to convert is into JS
 ///
 /// The Rust functions should be wrapped to convert it to JS using [`IntoJs`] trait.
@@ -288,6 +298,7 @@ type_impls! {
     MutFn<F>(RefCell<F>): AsRef Deref;
     OnceFn<F>(RefCell<Option<F>>): AsRef Deref;
     Method<F>(F): AsRef Deref;
+    SelfMethod<T,F>(F, PhantomData): AsRef Deref;
     This<T>(T): into_inner From AsRef AsMut Deref DerefMut;
     Opt<T>(Option<T>): into_inner Into From AsRef AsMut Deref DerefMut;
     Rest<T>(Vec<T>): into_inner Into From AsRef AsMut Deref DerefMut;

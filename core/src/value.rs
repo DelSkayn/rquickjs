@@ -160,6 +160,12 @@ impl<'js> Value<'js> {
         Self { ctx, value }
     }
 
+    /// Returns the Ctx object associated with this value.
+    #[inline]
+    pub fn ctx(&self) -> Ctx<'js> {
+        self.ctx
+    }
+
     // unsafe because no type checking
     #[inline]
     pub(crate) unsafe fn get_bool(&self) -> bool {

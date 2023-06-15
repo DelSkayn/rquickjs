@@ -337,6 +337,7 @@ use rquickjs::{bind, Context, Runtime};
 #[bind(object)]
 #[quickjs(bare)]
 mod geom {
+    use rquickjs::class::Ref;
     use std::cell::Cell;
 
     pub struct Point {
@@ -399,7 +400,13 @@ mod geom {
         }
 
         // static method
-        pub fn dot(a: &Point, b: &Point) -> f64 {
+        #[quickjs(rename = "dot")]
+        pub fn dot_js(a: Ref<Point>, b: Ref<Point>) -> f64 {
+            Self::dot(&*a,&*b)
+        }
+
+        #[quickjs(skip)]
+        pub fn dot(a: &Self, b: &Self) -> f64{
             a.x.get() * b.x.get() + a.y.get() * b.y.get()
         }
 

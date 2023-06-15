@@ -12,7 +12,7 @@ use args::{FromInput, Input};
 pub use as_args::{AsArguments, CallInput, IntoInput};
 pub use as_func::AsFunction;
 use ffi::JsFunction;
-pub use types::{Func, Method, MutFn, OnceFn, Opt, Rest, This};
+pub use types::{Func, Method, MutFn, OnceFn, Opt, Rest, SelfMethod, This};
 
 #[cfg(feature = "futures")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
