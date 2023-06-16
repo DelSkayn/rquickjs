@@ -4,6 +4,7 @@ use crate::{
 };
 use std::{ops::Range, slice};
 
+/// The input to rust callback functions containing its arguments.
 pub struct Input<'js> {
     ctx: Ctx<'js>,
     this: qjs::JSValue,
@@ -12,7 +13,7 @@ pub struct Input<'js> {
 
 impl<'js> Input<'js> {
     #[inline]
-    pub unsafe fn new_raw(
+    pub(crate) unsafe fn new_raw(
         ctx: *mut qjs::JSContext,
         this: qjs::JSValue,
         argc: qjs::c_int,
@@ -23,6 +24,7 @@ impl<'js> Input<'js> {
         Self { ctx, this, args }
     }
 
+    /// Returns the input accessor for actually acquiring arguments
     #[inline]
     pub fn access(&self) -> InputAccessor<'_, 'js> {
         InputAccessor {
@@ -31,12 +33,20 @@ impl<'js> Input<'js> {
         }
     }
 
+    /// Returns the number of arguments
     #[inline]
     pub fn len(&self) -> usize {
         self.args.len()
     }
+
+    /// Returns whether there are no arguments
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.args.is_empty()
+    }
 }
 
+/// struct for accessing function arguments
 pub struct InputAccessor<'i, 'js> {
     input: &'i Input<'js>,
     arg: usize,
