@@ -65,6 +65,12 @@ impl BindFn {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelfArg {
+    pub class: Source,
+    pub self_: Ident,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct BindFn1 {
     pub src: Source,
@@ -72,6 +78,7 @@ pub struct BindFn1 {
     pub define: Option<ItemFn>,
     pub async_: bool,
     pub method: bool,
+    pub self_arg: Option<SelfArg>,
 }
 
 impl BindFn1 {
@@ -93,7 +100,12 @@ impl BindFn1 {
 
         let path = &self.src;
         let bind = if self.method {
-            quote! { #lib_crate::function::Method(#path) }
+            if let Some(self_arg) = self.self_arg.as_ref() {
+                let cls = self_arg.class.clone();
+                quote! { #lib_crate::function::SelfMethod::<#cls,_>::from(#path) }
+            } else {
+                quote! { #lib_crate::function::Method(#path) }
+            }
         } else {
             quote! { #path }
         };
@@ -188,12 +200,20 @@ impl Binder {
         self.identify(ident);
 
         let async_ = asyncness.is_some();
+        let mut self_arg = None;
+
         let args = inputs
             .iter()
-            .map(|arg| match arg {
-                FnArg::Receiver(_) => format_ident!("self_"),
+            .filter_map(|arg| match arg {
+                FnArg::Receiver(_) => {
+                    self_arg = Some(SelfArg {
+                        self_: format_ident!("self_"),
+                        class: self.top_class().unwrap().src.clone(),
+                    });
+                    None
+                }
                 FnArg::Typed(arg) => match &*arg.pat {
-                    Pat::Ident(pat) => pat.ident.clone(),
+                    Pat::Ident(pat) => Some(pat.ident.clone()),
                     _ => abort!(arg.colon_token, "Only named arguments is supported."),
                 },
             })
@@ -202,6 +222,7 @@ impl Binder {
         let decl = BindFn1 {
             src: self.sub_src(ident),
             args,
+            self_arg,
             async_,
             method,
             ..Default::default()
