@@ -28,7 +28,6 @@ It optionally supports mathematical extensions such as big decimal floating poin
 
 - Full integration with async Rust
   - The ES6 Promises can be handled as Rust futures and vice versa
-  - Both __Tokio__ and __AsyncStd__ runtimes supported natively
   - Easy integration with almost any async runtime or executor
 - Flexible data conversion between Rust and JS
   - Many widely used Rust types can be converted to JS and vice versa
@@ -57,6 +56,12 @@ It optionally supports mathematical extensions such as big decimal floating poin
 This bindings is feature complete, mostly stable and ready to use.
 The error handling is only thing which may change in the future.
 Some experimental features like `parallel` may not works as expected. Use it for your own risk.
+
+## Using rquickjs on windows
+
+Note that the QuickJS library does not support windows natively, this library supports windows by patching QuickJS.
+For patching we use the `patch` utility which needs to be installed when building for windows.
+For more information see [#88](https://github.com/delskayn/rquickjs/issues/88).
 
 ## License
 
