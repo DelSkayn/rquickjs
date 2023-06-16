@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-macro"
-version = "0.2.2"
+version = "0.3.0"
 authors = ["K. <kayo@illumium.org>", "Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2018"
 license = "MIT"
@@ -39,7 +39,7 @@ optional = true
 
 [dependencies.rquickjs-core]
 path = "../core"
-version = "0.2.2"
+version = "0.3.0"
 features = ["loader"]
 
 [dev-dependencies.difference]
@@ -47,7 +47,7 @@ version = "2"
 
 [dev-dependencies.rquickjs]
 path = ".."
-version = "0.2.2"
+version = "0.3.0"
 features = ["macro", "classes", "properties", "futures"]
 
 [dev-dependencies.async-std]
