@@ -75,6 +75,12 @@ impl<'i, 'js> InputAccessor<'i, 'js> {
         self.input.args.len() - self.arg
     }
 
+    /// Get whether there are no more arguments
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// Get next argument
     #[inline]
     pub fn arg<T>(&mut self) -> Result<T>
@@ -164,7 +170,7 @@ where
     }
 
     fn from_input<'i>(accessor: &mut InputAccessor<'i, 'js>) -> Result<Self> {
-        if accessor.len() > 0 {
+        if !accessor.is_empty() {
             accessor.arg().map(Self)
         } else {
             Ok(Self(None))

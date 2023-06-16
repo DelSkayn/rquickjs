@@ -322,10 +322,7 @@ impl Binder {
                         args: vec![val],
                         method: true,
                         define: Some(def),
-                        self_arg: Some(SelfArg {
-                            self_,
-                            class: class.clone(),
-                        }),
+                        self_arg: Some(SelfArg { self_, class }),
                         ..Default::default()
                     }
                 });
