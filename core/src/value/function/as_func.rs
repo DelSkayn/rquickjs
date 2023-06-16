@@ -1,13 +1,15 @@
 use super::{FromInput, Input};
 use crate::{
-    class,
-    function::{Method, MutFn, OnceFn, SelfMethod, This},
+    function::{Method, MutFn, OnceFn, This},
     Ctx, Error, FromJs, Function, IntoJs, Result, Value,
 };
 use std::ops::Range;
 
 #[cfg(feature = "classes")]
-use crate::class::{Class, ClassDef, Constructor};
+use crate::{
+    class::{self, Class, ClassDef, Constructor},
+    function::SelfMethod,
+};
 
 #[cfg(feature = "futures")]
 use crate::{function::Async, promise::Promised};
@@ -41,6 +43,15 @@ impl<'js> Input<'js> {
             Err(Error::new_num_args(expected, given))
         }
     }
+}
+
+/// A utility trait required to make async borrows work.
+#[cfg(feature = "futures")]
+pub trait AsyncBorrowFn<Arg> {
+    type Fut: Future<Output = <Self as AsyncBorrowFn<Arg>>::Output>;
+    type Output;
+
+    fn call(&self, arg: Arg) -> Self::Fut;
 }
 
 macro_rules! as_function_impls {
@@ -241,8 +252,8 @@ macro_rules! as_function_impls {
             impl<'js, F, R, T $(, $arg)*> AsFunction<'js, (T, $($arg),*), R> for SelfMethod<T,F>
             where
                 F: Fn(&T, $($arg),*) -> R + 'js,
-                R: IntoJs<'js>,
-                T: ClassDef,
+                R: IntoJs<'js> + 'js,
+                T: ClassDef + 'js,
                 $($arg: FromInput<'js>,)*
             {
                 #[allow(non_snake_case)]
@@ -294,13 +305,30 @@ macro_rules! as_function_impls {
                 }
             }
 
+            #[allow(non_snake_case)]
+            #[cfg(feature = "futures")]
+            $(#[$meta])*
+            impl<T, F, Fut, R $(,$arg)*>  AsyncBorrowFn<(T,$($arg,)*)> for F
+            where
+                F: Fn(T$(,$arg)*) -> Fut,
+                Fut: Future<Output = R>,
+            {
+                type Fut = Fut;
+                type Output = R;
+
+                fn call(&self, args: (T,$($arg,)*)) -> Fut{
+                    let (first, $($arg,)*) = args;
+                    self(first,$($arg,)*)
+                }
+            }
+
             // for async methods via Method wrapper
             #[cfg(all(feature = "futures", feature="classes"))]
             #[allow(non_snake_case)]
             $(#[$meta])*
-            impl<'js,Fut,R, T $(, $arg)*> AsFunction<'js, (&T, $($arg),*), Promised<R>> for Async<SelfMethod<T,fn(&T$(,$arg)*) -> Fut>>
+            impl<'js,F, R, T $(, $arg)*> AsFunction<'js, (T, $($arg,)*), Promised<R>> for Async<SelfMethod<T,F>>
             where
-                Fut: Future<Output = Result<R>> + 'js,
+                for<'a> F: AsyncBorrowFn<(&'a T, $($arg,)*), Output = Result<R>> + Clone + 'js,
                 R: IntoJs<'js> + 'js,
                 T: ClassDef + 'js,
                 $($arg: FromInput<'js> + 'js,)*
@@ -316,11 +344,10 @@ macro_rules! as_function_impls {
                     let mut accessor = input.access();
                     let this = This::<class::Ref<T>>::from_input(&mut accessor)?;
                     $(let $arg = $arg::from_input(&mut accessor)?;)*
-                    let f = self.0.0;
+                    let f = self.0.0.clone();
                     let future = async move {
-                        f(
-                            &*this,
-                            $($arg,)*
+                        AsyncBorrowFn::call(&f,
+                            (&**this, $($arg,)*)
                         ).await
                     };
                     Promised(future).into_js(accessor.ctx())

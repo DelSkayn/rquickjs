@@ -10,12 +10,6 @@ impl<'js, C: ClassDef + fmt::Debug> fmt::Debug for Ref<'js, C> {
     }
 }
 
-impl<'js, C> Clone for Ref<'js, C> {
-    fn clone(&self) -> Self {
-        Ref(self.0.clone())
-    }
-}
-
 impl<'js, C: ClassDef> Deref for Ref<'js, C> {
     type Target = C;
 

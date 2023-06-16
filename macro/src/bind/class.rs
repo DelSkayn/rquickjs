@@ -122,7 +122,7 @@ impl BindClass {
 
                 impl<'js> #lib_crate::FromJs<'js> for #src {
                     fn from_js(ctx: #lib_crate::Ctx<'js>, value: #lib_crate::Value<'js>) -> #lib_crate::Result<Self> {
-                        #lib_crate::class::ClassDef::from_js_obj(ctx, value)
+                        #lib_crate::class::ClassDef::from_js_obj(value)
                     }
                 }
             });
@@ -534,7 +534,7 @@ mod test {
 
             impl<'js> rquickjs::FromJs<'js> for test::Node {
                 fn from_js(ctx: rquickjs::Ctx<'js>, value: rquickjs::Value<'js>) -> rquickjs::Result<Self> {
-                    rquickjs::class::ClassDef::from_js_obj(ctx, value)
+                    rquickjs::class::ClassDef::from_js_obj(value)
                 }
             }
 
