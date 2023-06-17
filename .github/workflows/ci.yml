@@ -309,8 +309,8 @@ jobs:
           # Install wasmtime
           wget https://github.com/bytecodealliance/wasmtime/releases/download/v8.0.0/wasmtime-v8.0.0-x86_64-linux.tar.xz
           tar xJvf wasmtime-v8.0.0-x86_64-linux.tar.xz
-          export WASI_SDK=$(realpath ./wasi-sdk-20.0-linux)
-          export CARGO_TARGET_WASM32_WASI_RUNNER=$(realpath ./wasmtime-v8.0.0-x86_64-linux/wasmtime)
+          echo "WASI_SDK=$(realpath ./wasi-sdk-20.0-linux)" >> $GITHUB_ENV
+          echo "CARGO_TARGET_WASM32_WASI_RUNNER=$(realpath ./wasmtime-v8.0.0-x86_64-linux/wasmtime)" >> $GITHUB_ENV
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@v1
         with:
