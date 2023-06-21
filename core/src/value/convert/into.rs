@@ -1,6 +1,6 @@
 use crate::{
-    convert::IteratorJs, Array, Ctx, Error, Function, IntoAtom, IntoJs, Object, Result, StdResult,
-    StdString, String, Value,
+    convert::IteratorJs, Array, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString,
+    String, Value,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -444,6 +444,7 @@ into_js_impls! {
     i32 f64 => i64 u32 u64 usize isize,
 }
 
+/*
 fn millis_to_date<'js>(ctx: Ctx<'js>, millis: i64) -> Result<Value<'js>> {
     let date_ctor: Function = ctx.globals().get("Date")?;
 
@@ -551,3 +552,4 @@ mod test {
         });
     }
 }
+*/

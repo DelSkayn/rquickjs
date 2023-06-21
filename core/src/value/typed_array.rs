@@ -58,7 +58,7 @@ typedarray_items! {
 #[repr(transparent)]
 pub struct TypedArray<'js, T>(pub(crate) Object<'js>, PhantomData<T>);
 
-impl<'js, 't, T> Outlive<'t> for TypedArray<'js, T> {
+unsafe impl<'js, 't, T> Outlive<'t> for TypedArray<'js, T> {
     type Target = TypedArray<'t, T>;
 }
 
@@ -171,7 +171,8 @@ impl<'js, T> TypedArray<'js, T> {
     {
         let ctx = arraybuffer.0.ctx;
         let ctor: Function = ctx.globals().get(T::CLASS_NAME)?;
-        ctor.construct((arraybuffer,))
+        /* ctor.construct((arraybuffer,)) */
+        todo!()
     }
 
     pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {

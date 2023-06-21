@@ -57,26 +57,15 @@ mod persistent;
 mod value;
 pub use persistent::{Outlive, Persistent};
 pub use value::{
-    array, convert, function, module, object, Array, Atom, BigInt, Exception, FromAtom, FromJs,
-    Function, IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined, Value,
+    array, convert, module, object, Array, Atom, BigInt, Exception, FromAtom, FromJs, Function,
+    IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined, Value,
 };
+
+pub mod class;
 
 #[cfg(feature = "array-buffer")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub use value::{ArrayBuffer, TypedArray};
-mod class_id;
-#[cfg(not(feature = "classes"))]
-pub(crate) use class_id::ClassId;
-#[cfg(feature = "classes")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
-pub use class_id::ClassId;
-
-#[cfg(feature = "classes")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
-pub mod class;
-#[cfg(feature = "classes")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]
-pub use class::Class;
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
@@ -94,17 +83,13 @@ pub mod loader;
 
 pub mod prelude {
     //! A group of often used types.
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub use crate::promise::{Promise, Promised};
     pub use crate::{
         context::MultiWith,
         convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs},
-        function::{AsArguments, Func, MutFn, OnceFn, Rest, This},
         result::{CatchResultExt, ThrowResultExt},
-    };
-    #[cfg(feature = "futures")]
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-    pub use crate::{
-        function::Async,
-        promise::{Promise, Promised},
     };
 }
 

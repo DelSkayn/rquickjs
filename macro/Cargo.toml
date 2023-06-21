@@ -2,7 +2,7 @@
 name = "rquickjs-macro"
 version = "0.3.1"
 authors = ["K. <kayo@illumium.org>", "Mees Delzenne <mees.delzenne@gmail.com>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 readme = "README.md"
 description = "Procedural macros for rquickjs"

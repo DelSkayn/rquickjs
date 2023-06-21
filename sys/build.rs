@@ -93,6 +93,7 @@ fn main() {
     for file in source_files.iter().chain(header_files.iter()) {
         fs::copy(src_dir.join(file), out_dir.join(file)).expect("Unable to copy source");
     }
+    fs::copy("quickjs.bind.h", out_dir.join("quickjs.bind.h")).expect("Unable to copy source");
 
     // applying patches
     for file in &patch_files {
@@ -100,7 +101,7 @@ fn main() {
     }
 
     // generating bindings
-    bindgen(out_dir, out_dir.join("quickjs.h"), &defines);
+    bindgen(out_dir, out_dir.join("quickjs.bind.h"), &defines);
 
     let mut builder = cc::Build::new();
     builder

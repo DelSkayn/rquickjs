@@ -12,8 +12,8 @@ use std::future::Future;
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, IntoJs,
-    Module, Object, Result, String, Value,
+    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, IntoJs, Module, Object,
+    Result, String, Value,
 };
 
 /// Eval options.
@@ -336,7 +336,8 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Creates promise and resolving functions.
+    // Creates promise and resolving functions.
+    /*
     pub fn promise(self) -> Result<(Object<'js>, Function<'js>, Function<'js>)> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
 
@@ -353,6 +354,7 @@ impl<'js> Ctx<'js> {
             )
         })
     }
+    */
 
     pub(crate) unsafe fn get_opaque(self) -> &'js mut Opaque<'js> {
         let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
@@ -373,6 +375,7 @@ impl<'js> Ctx<'js> {
 #[cfg(test)]
 mod test {
 
+    /*
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
@@ -388,6 +391,7 @@ mod test {
             func.call::<(), ()>(()).unwrap();
         });
     }
+    */
 
     #[test]
     fn eval() {

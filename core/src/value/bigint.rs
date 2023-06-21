@@ -41,6 +41,7 @@ mod test {
             assert_eq!(s.to_i64().unwrap(), i64::MAX);
         })
     }
+    /*
 
     #[test]
     fn to_javascript() {
@@ -59,4 +60,5 @@ mod test {
             func.call::<_, ()>((bigint,)).unwrap();
         })
     }
+    */
 }

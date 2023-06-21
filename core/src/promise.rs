@@ -7,13 +7,7 @@ use std::{
     task::{Context as TaskContext, Poll, Waker},
 };
 
-use crate::{
-    qjs,
-    safe_ref::Ref,
-    value::{Func, This},
-    CatchResultExt, CaughtError, CaughtResult, Ctx, Exception, FromJs, Function, IntoJs, Object,
-    Result, ThrowResultExt, Value,
-};
+use crate::{safe_ref::Ref, CaughtResult, Ctx, FromJs, IntoJs, Object, Result, Value};
 
 /// Future-aware promise
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
@@ -61,33 +55,8 @@ where
 {
     type Output = Result<T>;
 
-    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext) -> Poll<Self::Output> {
-        if let Some(x) = self.state.result.take() {
-            return Poll::Ready(x.throw(self.promise.ctx));
-        }
-
-        if self.state.waker.replace(Some(cx.waker().clone())).is_none() {
-            // Initial poll, actually fire promise
-            let then: Function = self.promise.get("then")?;
-            let state = self.state.clone();
-            let resolve = Func::new("resolve", move |ctx: Ctx<'js>, value: Value<'js>| {
-                let t = T::from_js(ctx, value).catch(ctx);
-                state.resolve(t)
-            });
-            let state = self.state.clone();
-            let reject = Func::new("reject", move |value: Value<'js>| {
-                let e =
-                    if let Some(e) = value.clone().into_object().and_then(Exception::from_object) {
-                        CaughtError::Exception(e)
-                    } else {
-                        CaughtError::Value(value)
-                    };
-                state.resolve(Err(e))
-            });
-            then.call::<_, ()>((This(self.promise.clone()), resolve, reject))?;
-        }
-
-        Poll::Pending
+    fn poll(self: Pin<&mut Self>, _cx: &mut TaskContext) -> Poll<Self::Output> {
+        todo!()
     }
 }
 
@@ -108,27 +77,6 @@ where
     R: IntoJs<'js> + 'js,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let (promise, resolve, reject) = ctx.promise()?;
-
-        let future = async move {
-            let err = match self.0.await.and_then(|v| v.into_js(ctx)).catch(ctx) {
-                Ok(x) => resolve.call::<_, ()>((x,)),
-                Err(e) => match e {
-                    CaughtError::Exception(e) => reject.call::<_, ()>((e,)),
-                    CaughtError::Value(e) => reject.call::<_, ()>((e,)),
-                    CaughtError::Error(e) => {
-                        unsafe { debug_assert!(qjs::JS_IsException(e.throw(ctx))) };
-                        let e = ctx.catch();
-                        reject.call::<_, ()>((e,))
-                    }
-                },
-            };
-            // TODO figure out something better to do here.
-            if let Err(e) = err {
-                println!("promise handle function returned error:{}", e);
-            }
-        };
-        ctx.spawn(future);
-        Ok(promise.into_value())
+        todo!()
     }
 }

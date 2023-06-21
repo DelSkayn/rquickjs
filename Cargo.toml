@@ -2,7 +2,7 @@
 name = "rquickjs"
 version = "0.3.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 readme = "README.md"
 description = "High level bindings to the QuickJS javascript engine"

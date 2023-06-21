@@ -1,6 +1,4 @@
-use crate::{
-    function::AsFunction, qjs, Ctx, Function, IntoAtom, IntoJs, Object, Result, Undefined, Value,
-};
+use crate::{qjs, Ctx, IntoAtom, IntoJs, Object, Result, Undefined, Value};
 
 impl<'js> Object<'js> {
     /// Define a property of an object

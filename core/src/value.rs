@@ -3,7 +3,7 @@ mod atom;
 mod bigint;
 pub mod convert;
 mod exception;
-pub mod function;
+mod function;
 pub mod module;
 pub mod object;
 mod string;
@@ -21,11 +21,9 @@ pub use atom::Atom;
 pub use bigint::BigInt;
 pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
 pub use exception::Exception;
-pub use function::{
-    AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
-};
+pub use function::Function;
 pub use module::Module;
-pub use object::{Filter, Object, ObjectDef};
+pub use object::{Filter, Object};
 pub use string::String;
 pub use symbol::Symbol;
 
@@ -33,9 +31,6 @@ pub use symbol::Symbol;
 pub use array_buffer::ArrayBuffer;
 #[cfg(feature = "array-buffer")]
 pub use typed_array::TypedArray;
-
-#[cfg(feature = "futures")]
-pub use function::Async;
 
 use std::{fmt, mem, ops::Deref, result::Result as StdResult, str};
 
@@ -87,7 +82,12 @@ impl<'js> fmt::Debug for Value<'js> {
                 unsafe { self.get_ptr() }.fmt(f)?;
                 ')'.fmt(f)?;
             }
-            _ => (),
+            Null => "null".fmt(f)?,
+            Undefined => "undefined".fmt(f)?,
+            Uninitialized => "uninitialized".fmt(f)?,
+            Module => "module".fmt(f)?,
+            BigInt => "BigInt".fmt(f)?,
+            Unknown => "unknown".fmt(f)?,
         }
         Ok(())
     }
@@ -391,8 +391,7 @@ macro_rules! type_impls {
 
                 o == t ||
                     (o == Float as i32 && t == Int as i32) ||
-                    (o == Object as i32 && (t == Array as i32 ||
-                                            t == Function as i32))
+                    (o == Object as i32 && (t == Array as i32))
             }
 
             /// Returns string representation of type
@@ -459,8 +458,8 @@ type_impls! {
     String: string => JS_TAG_STRING,
     Symbol: symbol => JS_TAG_SYMBOL,
     Array: array => JS_TAG_OBJECT,
-    Function: function => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
+    Function: function => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
     BigInt: big_int => JS_TAG_BIG_INT,
 }
@@ -587,8 +586,8 @@ sub_types! {
     String as_string ref_string into_string from_string,
     Symbol as_symbol ref_symbol into_symbol from_symbol,
     Object as_object ref_object into_object from_object,
-    Array as_array ref_array into_array from_array,
     Function as_function ref_function into_function from_function,
+    Array as_array ref_array into_array from_array,
     BigInt as_big_int ref_big_int into_big_int from_big_int,
 }
 
@@ -651,7 +650,6 @@ mod test {
 
         assert!(Type::Object.interpretable_as(Type::Object));
         assert!(Type::Array.interpretable_as(Type::Object));
-        assert!(Type::Function.interpretable_as(Type::Object));
 
         assert!(!Type::Object.interpretable_as(Type::Array));
         assert!(!Type::Object.interpretable_as(Type::Function));

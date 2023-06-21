@@ -127,7 +127,7 @@ pub use rquickjs_core::*;
 
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
 #[cfg(feature = "macro")]
-pub use rquickjs_macro::{bind, embed, FromJs, HasRefs, IntoJs, IntoJsByRef};
+pub use rquickjs_macro::{jsclass, jsfunction};
 
 // The following imports needed to linking docs
 

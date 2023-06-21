@@ -1,63 +1,14 @@
 //! Module for types dealing with JS objects.
 
 use crate::{
-    convert::FromIteratorJs, qjs, Array, Atom, Ctx, Error, FromAtom, FromJs, Function, IntoAtom,
-    IntoJs, Result, Value,
+    convert::FromIteratorJs, qjs, Array, Atom, Ctx, Error, FromAtom, FromJs, IntoAtom, IntoJs,
+    Result, Value,
 };
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
     mem,
 };
-
-#[cfg(feature = "properties")]
-mod property;
-#[cfg(feature = "properties")]
-pub use property::{Accessor, AsProperty, Property};
-
-/// The helper trait to define objects
-pub trait ObjectDef {
-    /// Initialize object contents
-    ///
-    /// You should set fields with specific values using [Object::set] method.
-    fn init<'js>(ctx: Ctx<'js>, object: &Object<'js>) -> Result<()>;
-}
-
-macro_rules! object_def_impls {
-    ($($($t:ident)*,)*) => {
-        $(
-            impl<$($t),*> ObjectDef for ($($t,)*)
-            where
-                $($t: ObjectDef,)*
-            {
-                fn init<'js>(_ctx: Ctx<'js>, _object: &Object<'js>) -> Result<()> {
-                    $($t::init(_ctx, _object)?;)*
-                    Ok(())
-                }
-            }
-        )*
-    };
-}
-
-object_def_impls! {
-    ,
-    A,
-    A B,
-    A B C,
-    A B C D,
-    A B C D E,
-    A B C D E F,
-    A B C D E F G,
-    A B C D E F G H,
-    A B C D E F G H I,
-    A B C D E F G H I J,
-    A B C D E F G H I J K,
-    A B C D E F G H I J K L,
-    A B C D E F G H I J K L M,
-    A B C D E F G H I J K L M N,
-    A B C D E F G H I J K L M N O,
-    A B C D E F G H I J K L M N O P,
-}
 
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]
@@ -72,24 +23,6 @@ impl<'js> Object<'js> {
             let val = ctx.handle_exception(val)?;
             Object::from_js_value(ctx, val)
         })
-    }
-
-    /// Initialize an object using `ObjectDef`
-    pub fn init_def<T>(&self) -> Result<()>
-    where
-        T: ObjectDef,
-    {
-        T::init(self.0.ctx, self)
-    }
-
-    /// Create an object using `ObjectDef`
-    pub fn new_def<T>(ctx: Ctx<'js>) -> Result<Self>
-    where
-        T: ObjectDef,
-    {
-        let obj = Self::new(ctx)?;
-        T::init(ctx, &obj)?;
-        Ok(obj)
     }
 
     /// Get a new value
@@ -242,15 +175,6 @@ impl<'js> Object<'js> {
                 self.0.as_js_value(),
                 class.as_js_value(),
             )
-        }
-    }
-
-    /// Convert into a function
-    pub fn into_function(self) -> Option<Function<'js>> {
-        if self.is_function() {
-            Some(Function(self.0))
-        } else {
-            None
         }
     }
 

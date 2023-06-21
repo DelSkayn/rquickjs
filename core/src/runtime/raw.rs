@@ -7,7 +7,7 @@ use std::{
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
 use crate::loader::{LoaderHolder, RawLoader, Resolver};
-use crate::{qjs, Function};
+use crate::qjs;
 
 #[cfg(feature = "futures")]
 use super::spawner::Spawner;
@@ -142,7 +142,7 @@ impl RawRuntime {
     }
 
     pub(crate) unsafe fn init_raw(rt: *mut qjs::JSRuntime) {
-        Function::init_raw(rt);
+        /*Function::init_raw(rt);*/
     }
 
     pub fn update_stack_top(&self) {

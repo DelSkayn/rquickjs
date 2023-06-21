@@ -1,5 +1,5 @@
 use crate::{
-    qjs, Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
+    qjs, Array, BigInt, Ctx, Error, FromJs, IntoJs, Object, Result, String, Symbol, Value,
 };
 use std::{
     cell::Cell,
@@ -11,7 +11,7 @@ use std::{
 };
 
 /// The trait to help break lifetime rules when JS objects leaves current context via [`Persistent`] wrapper.
-pub trait Outlive<'t> {
+pub unsafe trait Outlive<'t> {
     /// The target which has the same type as a `Self` but with another lifetime `'t`
     type Target;
 }
@@ -19,7 +19,7 @@ pub trait Outlive<'t> {
 macro_rules! outlive_impls {
     ($($type:ident,)*) => {
         $(
-            impl<'js, 't> Outlive<'t> for $type<'js> {
+            unsafe impl<'js, 't> Outlive<'t> for $type<'js> {
                 type Target = $type<'t>;
             }
         )*
@@ -28,7 +28,6 @@ macro_rules! outlive_impls {
 
 outlive_impls! {
     Value,
-    Function,
     Symbol,
     String,
     Object,
@@ -219,26 +218,7 @@ mod test {
 
     #[test]
     fn persistent_function() {
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-
-        let func = ctx.with(|ctx| {
-            let func: Function = ctx.eval("a => a + 1").unwrap();
-            Persistent::save(ctx, func)
-        });
-
-        let res: i32 = ctx.with(|ctx| {
-            let func = func.clone().restore(ctx).unwrap();
-            func.call((2,)).unwrap()
-        });
-        assert_eq!(res, 3);
-
-        let ctx2 = Context::full(&rt).unwrap();
-        let res: i32 = ctx2.with(|ctx| {
-            let func = func.restore(ctx).unwrap();
-            func.call((0,)).unwrap()
-        });
-        assert_eq!(res, 1);
+        todo!()
     }
 
     #[test]
