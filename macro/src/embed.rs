@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use rquickjs_core::{Context, Module, Result, Runtime};
@@ -47,12 +49,37 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
             .as_ref()
             .map(|x| x.1.value())
             .unwrap_or_else(|| f.name.value());
+
+        let path = Path::new(&path);
+
+        let path = if path.is_relative() {
+            match Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join(path)
+                .canonicalize()
+            {
+                Ok(x) => x,
+                Err(e) => {
+                    error!(
+                        f.name,
+                        "Error loading embedded js module from path `{}`: {}",
+                        path.display(),
+                        e
+                    );
+                    continue;
+                }
+            }
+        } else {
+            path.to_owned()
+        };
+
         let source = match std::fs::read_to_string(&path) {
             Ok(x) => x,
             Err(e) => {
                 error!(
                     f.name,
-                    "Error loading embedded js module from path `{}`: {}", path, e
+                    "Error loading embedded js module from path `{}`: {}",
+                    path.display(),
+                    e
                 );
                 continue;
             }
