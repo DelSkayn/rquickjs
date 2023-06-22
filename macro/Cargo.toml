@@ -23,10 +23,10 @@ fnv = "1"
 indexmap = "1"
 
 [dependencies.darling]
-version = "0.14"
+version = "0.20"
 
 [dependencies.syn]
-version = "1"
+version = "2"
 features = ["full"]
 
 [dependencies.phf_shared]
