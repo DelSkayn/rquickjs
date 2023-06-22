@@ -1,7 +1,7 @@
 //! Tools for using different allocators with quickjs.
 
 use crate::qjs;
-use std::ptr::null_mut;
+use std::{convert::TryInto, ptr::null_mut};
 
 mod rust;
 pub use rust::RustAllocator;
@@ -62,7 +62,11 @@ impl AllocatorHolder {
         self.0
     }
 
-    unsafe extern "C" fn malloc(state: *mut qjs::JSMallocState, size: usize) -> *mut qjs::c_void {
+    unsafe extern "C" fn malloc(
+        state: *mut qjs::JSMallocState,
+        size: qjs::size_t,
+    ) -> *mut qjs::c_void {
+        let size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
         // simulate the default behavior of libc::malloc
         if size == 0 {
             return null_mut();
@@ -90,25 +94,26 @@ impl AllocatorHolder {
     unsafe extern "C" fn realloc(
         state: *mut qjs::JSMallocState,
         ptr: *mut qjs::c_void,
-        size: usize,
+        size: qjs::size_t,
     ) -> *mut qjs::c_void {
+        let size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
         let state = &*state;
         let allocator = &mut *(state.opaque as *mut DynAllocator);
 
         // simulate the default behavior of libc::realloc
         if ptr.is_null() {
             // alloc new memory chunk
-            return allocator.alloc(size as _) as _;
+            return allocator.alloc(size) as _;
         } else if size == 0 {
             // free memory chunk
             allocator.dealloc(ptr as _);
             return null_mut();
         }
 
-        allocator.realloc(ptr as _, size as _) as _
+        allocator.realloc(ptr as _, size) as _
     }
 
-    unsafe extern "C" fn malloc_usable_size<A>(ptr: *const qjs::c_void) -> usize
+    unsafe extern "C" fn malloc_usable_size<A>(ptr: *const qjs::c_void) -> qjs::size_t
     where
         A: Allocator,
     {
@@ -116,6 +121,6 @@ impl AllocatorHolder {
         if ptr.is_null() {
             return 0;
         }
-        A::usable_size(ptr as _) as _
+        A::usable_size(ptr as _).try_into().unwrap()
     }
 }

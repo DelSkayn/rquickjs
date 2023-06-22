@@ -1,4 +1,5 @@
 use std::{
+    convert::TryInto,
     ffi::{CStr, CString},
     fs, mem,
     path::Path,
@@ -244,7 +245,7 @@ impl<'js> Ctx<'js> {
             let v = qjs::JS_ParseJSON2(
                 self.as_ptr(),
                 src.as_ptr().cast(),
-                len,
+                len.try_into().expect(qjs::SIZE_T_ERROR),
                 name.as_ptr().cast(),
                 flag,
             );

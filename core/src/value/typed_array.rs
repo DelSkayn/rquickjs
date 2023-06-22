@@ -2,7 +2,7 @@ use crate::{
     qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Value,
 };
 use std::{
-    convert::TryFrom,
+    convert::{TryFrom, TryInto},
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
@@ -177,9 +177,9 @@ impl<'js, T> TypedArray<'js, T> {
     pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {
         let ctx = val.ctx;
         let val = val.as_js_value();
-        let mut off = MaybeUninit::<usize>::uninit();
-        let mut len = MaybeUninit::<usize>::uninit();
-        let mut stp = MaybeUninit::<usize>::uninit();
+        let mut off = MaybeUninit::<qjs::size_t>::uninit();
+        let mut len = MaybeUninit::<qjs::size_t>::uninit();
+        let mut stp = MaybeUninit::<qjs::size_t>::uninit();
         let buf = unsafe {
             let val = qjs::JS_GetTypedArrayBuffer(
                 ctx.as_ptr(),
@@ -191,14 +191,20 @@ impl<'js, T> TypedArray<'js, T> {
             ctx.handle_exception(val).ok()?;
             Value::from_js_value(ctx, val)
         };
-        let off = unsafe { off.assume_init() };
-        let len = unsafe { len.assume_init() };
-        let stp = unsafe { stp.assume_init() };
+        let off: usize = unsafe { off.assume_init() }
+            .try_into()
+            .expect(qjs::SIZE_T_ERROR);
+        let len: usize = unsafe { len.assume_init() }
+            .try_into()
+            .expect(qjs::SIZE_T_ERROR);
+        let stp: usize = unsafe { stp.assume_init() }
+            .try_into()
+            .expect(qjs::SIZE_T_ERROR);
         let (full_len, ptr) = ArrayBuffer::get_raw(&buf)?;
         if (off + len) > full_len {
             return None;
         }
-        let ptr = unsafe { ptr.add(off) };
+        let ptr = unsafe { ptr.add(off.try_into().expect(qjs::SIZE_T_ERROR)) };
         Some((stp, len, ptr))
     }
 

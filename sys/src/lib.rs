@@ -8,6 +8,9 @@
 
 use std::ptr;
 
+/// Common error message for converting between c 'size_t' and rust 'usize';
+pub const SIZE_T_ERROR: &str = "c type 'size_t' didnt fit into rust type 'usize'";
+
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
 #[cfg(not(feature = "bindgen"))]

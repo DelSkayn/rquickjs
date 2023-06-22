@@ -200,6 +200,7 @@ where
         .clang_arg("-xc")
         .clang_arg("-v")
         .clang_args(cflags)
+        .size_t_is_usize(false)
         .header(header_file.display().to_string())
         .allowlist_type("JS.*")
         .allowlist_function("js.*")

@@ -1,5 +1,6 @@
 use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value};
 use std::{
+    convert::TryInto,
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
     os::raw::c_void,
@@ -142,13 +143,15 @@ impl<'js> ArrayBuffer<'js> {
     pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut u8)> {
         let ctx = val.ctx;
         let val = val.as_js_value();
-        let mut size = MaybeUninit::<usize>::uninit();
+        let mut size = MaybeUninit::<qjs::size_t>::uninit();
         let ptr = unsafe { qjs::JS_GetArrayBuffer(ctx.as_ptr(), size.as_mut_ptr(), val) };
 
         if ptr.is_null() {
             None
         } else {
-            let len = unsafe { size.assume_init() } as _;
+            let len = unsafe { size.assume_init() }
+                .try_into()
+                .expect(qjs::SIZE_T_ERROR);
             Some((len, ptr))
         }
     }

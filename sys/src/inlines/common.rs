@@ -156,7 +156,7 @@ pub unsafe fn JS_ToCStringLen(
     plen: *mut usize,
     val: JSValue,
 ) -> *const c_char {
-    JS_ToCStringLen2(ctx, plen, val, 0)
+    JS_ToCStringLen2(ctx, plen as _, val, 0)
 }
 
 #[inline]
