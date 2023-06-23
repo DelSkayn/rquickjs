@@ -3,7 +3,7 @@ mod atom;
 mod bigint;
 pub mod convert;
 mod exception;
-mod function;
+pub mod function;
 pub mod module;
 pub mod object;
 mod string;

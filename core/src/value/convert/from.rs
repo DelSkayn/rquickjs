@@ -1,4 +1,7 @@
-use crate::{Array, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type, Value};
+use crate::{
+    convert::List, Array, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type,
+    Value,
+};
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
@@ -134,7 +137,7 @@ macro_rules! from_js_impls {
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
         $(
-            impl<'js, $($type,)*> FromJs<'js> for ($($type,)*)
+            impl<'js, $($type,)*> FromJs<'js> for List<($($type,)*)>
             where
                 $($type: FromJs<'js>,)*
             {
@@ -145,9 +148,9 @@ macro_rules! from_js_impls {
                     let array_len = array.len();
                     tuple_match_size(array_len, tuple_len)?;
 
-                    Ok((
+                    Ok(List((
                         $(array.get::<$type>(from_js_impls!(@idx $type))?,)*
-                    ))
+                    )))
                 }
             }
         )*

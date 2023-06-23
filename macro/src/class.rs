@@ -38,11 +38,16 @@ pub(crate) fn derive(attr: AttrItem, item: ItemStruct) -> TokenStream {
 
             type Mutable = #mutable;
 
+            type Outlive<'a> = #ident;
+
             fn class_id() -> &'static #lib_crate::class::ClassId{
                 static ID: #lib_crate::class::ClassId =  #lib_crate::class::ClassId::new();
                 &ID
             }
-        }
 
+            fn prototype<'js>(ctx: Ctx<'js>) -> #lib_crate::Result<Option<Object<'js>>>{
+                Ok(Some(#lib_crate::Object::new(ctx)?))
+            }
+        }
     }
 }

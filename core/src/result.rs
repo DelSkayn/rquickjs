@@ -3,7 +3,6 @@ use std::{
     ffi::{CString, FromBytesWithNulError, NulError},
     fmt::{self, Display, Formatter, Result as FmtResult},
     io::Error as IoError,
-    ops::Range,
     panic,
     panic::UnwindSafe,
     str::{FromStr, Utf8Error},
@@ -12,7 +11,9 @@ use std::{
 
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
-use crate::{qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value};
+use crate::{
+    class::BorrowError, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
+};
 
 /// Result type used throught the library.
 pub type Result<T> = StdResult<T, Error>;
@@ -39,6 +40,8 @@ pub enum Error {
     Utf8(Utf8Error),
     /// An io error
     Io(IoError),
+    /// An error happened while trying to borrow a rust class object.
+    Borrow(BorrowError),
     /// An exception raised by quickjs itself.
     /// The actual javascript value can be retrieved by calling [`Ctx::catch`].
     ///
@@ -58,8 +61,12 @@ pub enum Error {
         message: Option<StdString>,
     },
     /// Error matching of function arguments
-    NumArgs {
-        expected: Range<usize>,
+    MissingArgs {
+        expected: usize,
+        given: usize,
+    },
+    TooManyArgs {
+        expected: usize,
         given: usize,
     },
     #[cfg(feature = "loader")]
@@ -207,14 +214,9 @@ impl Error {
         matches!(self, Self::IntoJs { .. })
     }
 
-    /// Create function args mismatch error
-    pub fn new_num_args(expected: Range<usize>, given: usize) -> Self {
-        Self::NumArgs { expected, given }
-    }
-
     /// Return whether the error is an function args mismatch error
     pub fn is_num_args(&self) -> bool {
-        matches!(self, Self::NumArgs { .. })
+        matches!(self, Self::TooManyArgs { .. } | Self::MissingArgs { .. })
     }
 
     /// Optimized conversion to CString
@@ -234,7 +236,12 @@ impl Error {
         match self {
             Exception => qjs::JS_EXCEPTION,
             Allocation => unsafe { qjs::JS_ThrowOutOfMemory(ctx.as_ptr()) },
-            InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } | NumArgs { .. } => {
+            InvalidString(_)
+            | Utf8(_)
+            | FromJs { .. }
+            | IntoJs { .. }
+            | TooManyArgs { .. }
+            | MissingArgs { .. } => {
                 let message = self.to_cstring();
                 unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
             }
@@ -324,16 +331,20 @@ impl Display for Error {
                     }
                 }
             }
-            NumArgs { expected, given } => {
+            MissingArgs { expected, given } => {
                 "Error calling function with ".fmt(f)?;
                 given.fmt(f)?;
                 " argument(s) while ".fmt(f)?;
-                expected.start.fmt(f)?;
-                "..".fmt(f)?;
-                if expected.end < usize::MAX {
-                    expected.end.fmt(f)?;
-                }
-                " expected".fmt(f)?;
+                expected.fmt(f)?;
+                " where expected".fmt(f)?;
+            }
+            TooManyArgs { expected, given } => {
+                "Error calling function with ".fmt(f)?;
+                given.fmt(f)?;
+                " argument(s), function is exhaustive and cannot be called with more then "
+                    .fmt(f)?;
+                expected.fmt(f)?;
+                " arguments".fmt(f)?;
             }
             #[cfg(feature = "loader")]
             Resolving {
@@ -369,6 +380,7 @@ impl Display for Error {
                 "IO Error: ".fmt(f)?;
                 error.fmt(f)?;
             }
+            Borrow(x) => x.fmt(f)?,
             UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
         Ok(())
@@ -392,6 +404,7 @@ from_impls! {
     FromBytesWithNulError => InvalidCStr,
     Utf8Error => Utf8,
     IoError => Io,
+    BorrowError => Borrow,
 }
 
 impl From<FromUtf8Error> for Error {

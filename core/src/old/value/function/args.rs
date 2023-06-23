@@ -124,6 +124,14 @@ impl<'i, 'js> InputAccessor<'i, 'js> {
     {
         T::from_input(self)
     }
+
+    fn len(&self) -> usize {
+        match self.slice {}
+    }
+
+    fn as_ptr(&self) -> *mut qjs::JSValue {
+        match self.slice {}
+    }
 }
 
 pub trait FromInput<'js>: Sized {

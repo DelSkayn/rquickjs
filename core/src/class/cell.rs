@@ -1,5 +1,7 @@
 use std::{
     cell::{Cell, UnsafeCell},
+    error::Error,
+    fmt,
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
@@ -11,6 +13,19 @@ pub enum BorrowError {
     NotWritable,
     AlreadyBorrowed,
 }
+
+impl fmt::Display for BorrowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            BorrowError::NotWritable => write!(f, "tried to borrow a class which is not writable"),
+            BorrowError::AlreadyBorrowed => {
+                write!(f, "can't borrow a class as it is already borrowed")
+            }
+        }
+    }
+}
+
+impl Error for BorrowError {}
 
 pub unsafe trait Mutability {
     #[doc(hidden)]
@@ -43,7 +58,8 @@ pub unsafe trait Mutability {
     ) -> Result<Self::BorrowMut<'a, T>, BorrowError>;
 }
 
-/// A marker type used for t
+/// A marker type used for marking the mutability of a class.
+/// When a class has `Readable` as it Mutable type you can only borrow it immutable.
 pub enum Readable {}
 
 unsafe impl Mutability for Readable {
@@ -78,6 +94,8 @@ unsafe impl Mutability for Readable {
     }
 }
 
+/// A marker type used for marking the mutability of a class.
+/// When a class has `Writable` as it Mutable type you can borrow it both mutability and immutable.
 pub enum Writable {}
 
 pub struct WritableCell<T> {

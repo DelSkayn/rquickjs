@@ -93,3 +93,7 @@ where
         B::from_iter_js(ctx, self)
     }
 }
+
+/// A helper type for turning a tuple into a javascript array.
+/// Implementes [`IntoJs`] and [`FromJs`] for tuples of various lengths
+pub struct List<T>(pub T);

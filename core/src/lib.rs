@@ -57,8 +57,8 @@ mod persistent;
 mod value;
 pub use persistent::{Outlive, Persistent};
 pub use value::{
-    array, convert, module, object, Array, Atom, BigInt, Exception, FromAtom, FromJs, Function,
-    IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined, Value,
+    array, convert, function, module, object, Array, Atom, BigInt, Exception, FromAtom, FromJs,
+    Function, IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined, Value,
 };
 
 pub mod class;

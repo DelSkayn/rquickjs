@@ -2,6 +2,7 @@ use crate::{qjs, Ctx, Error, Object, Outlive, Result};
 use std::{
     ffi::CString,
     marker::PhantomData,
+    ops::Deref,
     ptr::{self, NonNull},
 };
 
@@ -10,29 +11,46 @@ pub use id::ClassId;
 
 mod cell;
 pub use cell::{JsCell, Mutability, Readable, Writable};
+
+pub use self::cell::{Borrow, BorrowError, BorrowMut};
 mod ffi;
 
-pub trait JsClass {
+pub unsafe trait JsClass {
     /// The name the constructor has in javascript
     const NAME: &'static str;
 
     /// Can the type be mutated while a javascript value.
     type Mutable: Mutability;
 
+    /// The class with any possible 'js lifetimes changed to 'a.
+    type Outlive<'a>;
+
     /// A unique id for the class.
     fn class_id() -> &'static ClassId;
+
+    /// The class prototype,
+    fn prototype<'js>(ctx: Ctx<'js>) -> Result<Option<Object<'js>>>;
 }
 
-pub struct Class<'js, C>(pub(crate) Object<'js>, PhantomData<C>);
+/// A object which is instance of a rust class.
+pub struct Class<'js, C: JsClass>(pub(crate) Object<'js>, PhantomData<C>);
 
-impl<'js, C> Clone for Class<'js, C> {
+impl<'js, C: JsClass> Clone for Class<'js, C> {
     fn clone(&self) -> Self {
         Class(self.0.clone(), PhantomData)
     }
 }
 
-unsafe impl<'js, 't, C> Outlive<'t> for Class<'js, C> {
+unsafe impl<'js, 't, C: JsClass> Outlive<'t> for Class<'js, C> {
     type Target = Class<'t, C>;
+}
+
+impl<'js, C: JsClass> Deref for Class<'js, C> {
+    type Target = Object<'js>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl<'js, C: JsClass> Class<'js, C> {
@@ -95,11 +113,61 @@ impl<'js, C: JsClass> Class<'js, C> {
     }
 
     /// Returns a reference to the underlying object.
-    pub fn into_inner<'a>(&self) -> &'a JsCell<C> {
+    #[inline]
+    pub fn as_class<'a>(&self) -> &'a JsCell<C> {
         unsafe { self.get_class_ptr().as_ref() }
     }
 
+    /// Borrow the rust class type.
+    ///
+    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    ///
+    /// # Panic
+    /// This function panics if the class is already borrowed mutably
+    #[inline]
+    pub fn borrow<'a>(&'a self) -> Borrow<'a, C> {
+        self.as_class().borrow()
+    }
+
+    /// Borrow the rust class type mutably.
+    ///
+    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    ///
+    /// # Panic
+    /// This function panics if the class is already borrowed mutably or immutably, or the Class
+    /// can't be borrowed mutably.
+    #[inline]
+    pub fn borrow_mut<'a>(&'a self) -> BorrowMut<'a, C> {
+        self.as_class().borrow_mut()
+    }
+
+    /// Try to borrow the rust class type.
+    ///
+    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    ///
+    /// This returns an error when the class is already borrowed mutably.
+    #[inline]
+    pub fn try_borrow<'a>(&'a self) -> Result<Borrow<'a, C>> {
+        self.as_class().try_borrow().map_err(Error::from)
+    }
+
+    /// Try to borrow the rust class type mutably.
+    ///
+    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    ///
+    /// This returns an error when the class is already borrowed mutably, immutably or the class
+    /// can't be borrowed mutably.
+    #[inline]
+    pub fn try_borrow_mut<'a>(&'a self) -> Result<BorrowMut<'a, C>> {
+        self.as_class().try_borrow_mut().map_err(Error::from)
+    }
+
     /// returns a pointer to the class object.
+    #[inline]
     pub(crate) fn get_class_ptr(&self) -> NonNull<JsCell<C>> {
         let ptr = unsafe {
             qjs::JS_GetOpaque2(

@@ -1,6 +1,6 @@
 use crate::{
-    convert::IteratorJs, Array, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString,
-    String, Value,
+    convert::{IteratorJs, List},
+    Array, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String, Value,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -239,13 +239,13 @@ macro_rules! into_js_impls {
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
         $(
-            impl<'js, $($type,)*> IntoJs<'js> for ($($type,)*)
+            impl<'js, $($type,)*> IntoJs<'js> for List<($($type,)*)>
             where
                 $($type: IntoJs<'js>,)*
             {
                 #[allow(non_snake_case)]
                 fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                    let ($($type,)*) = self;
+                    let ($($type,)*) = self.0;
                     let array = Array::new(ctx)?;
                     $(array.set(into_js_impls!(@idx $type), $type)?;)*
                     Ok(array.0)
