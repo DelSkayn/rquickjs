@@ -1,4 +1,6 @@
-use crate::{qjs, Ctx, Error, Object, Outlive, Result};
+use crate::{
+    function::ClassFn, qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Type, Value,
+};
 use std::{
     ffi::CString,
     marker::PhantomData,
@@ -10,9 +12,11 @@ mod id;
 pub use id::ClassId;
 
 mod cell;
-pub use cell::{JsCell, Mutability, Readable, Writable};
+pub use cell::{
+    Borrow, BorrowError, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable,
+    Writable,
+};
 
-pub use self::cell::{Borrow, BorrowError, BorrowMut};
 mod ffi;
 
 pub unsafe trait JsClass {
@@ -30,6 +34,14 @@ pub unsafe trait JsClass {
 
     /// The class prototype,
     fn prototype<'js>(ctx: Ctx<'js>) -> Result<Option<Object<'js>>>;
+
+    /// A possible call function.
+    ///
+    /// Returning a function from this method makes any objects with this class callable as if it
+    /// is a function object..
+    fn function() -> Option<ClassFn> {
+        None
+    }
 }
 
 /// A object which is instance of a rust class.
@@ -87,7 +99,11 @@ impl<'js, C: JsClass> Class<'js, C> {
         ))
     }
 
-    /// Registers the class into the runtime.
+    /// Registers the class `C` into the runtime.
+    ///
+    /// It is required to call this function on context before using type implementing [`JsClass`]
+    /// with javascript.
+    /// Otherwise the runtime might abort or memory might not be properly freed.
     pub fn register(ctx: Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         let class_id = C::class_id().get();
@@ -98,11 +114,12 @@ impl<'js, C: JsClass> Class<'js, C> {
             } else {
                 None
             };
+            let call = C::function().map(|x| x.0);
             let class_def = qjs::JSClassDef {
                 class_name: class_name.as_ptr(),
                 finalizer,
                 gc_mark: None,
-                call: None,
+                call,
                 exotic: ptr::null_mut(),
             };
             if 0 != unsafe { qjs::JS_NewClass(rt, class_id, &class_def) } {
@@ -112,7 +129,7 @@ impl<'js, C: JsClass> Class<'js, C> {
         Ok(())
     }
 
-    /// Returns a reference to the underlying object.
+    /// Returns a reference to the underlying object contained in a cell.
     #[inline]
     pub fn as_class<'a>(&self) -> &'a JsCell<C> {
         unsafe { self.get_class_ptr().as_ref() }
@@ -121,7 +138,7 @@ impl<'js, C: JsClass> Class<'js, C> {
     /// Borrow the rust class type.
     ///
     /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
-    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// # Panic
     /// This function panics if the class is already borrowed mutably
@@ -133,7 +150,7 @@ impl<'js, C: JsClass> Class<'js, C> {
     /// Borrow the rust class type mutably.
     ///
     /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
-    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// # Panic
     /// This function panics if the class is already borrowed mutably or immutably, or the Class
@@ -146,7 +163,7 @@ impl<'js, C: JsClass> Class<'js, C> {
     /// Try to borrow the rust class type.
     ///
     /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
-    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// This returns an error when the class is already borrowed mutably.
     #[inline]
@@ -157,7 +174,7 @@ impl<'js, C: JsClass> Class<'js, C> {
     /// Try to borrow the rust class type mutably.
     ///
     /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
-    /// of a class as a `Rc<RefCell<C>>` and borrowing functions similarly.
+    /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// This returns an error when the class is already borrowed mutably, immutably or the class
     /// can't be borrowed mutably.
@@ -177,5 +194,57 @@ impl<'js, C: JsClass> Class<'js, C> {
             )
         };
         NonNull::new(ptr.cast()).expect("invalid class object, object didn't have opaque value")
+    }
+
+    /// Turns the class back into a generic object.
+    #[inline]
+    pub fn into_object(self) -> Object<'js> {
+        self.0
+    }
+
+    /// Converts a generic object into a class if the object is of the right class.
+    pub fn from_object(object: Object<'js>) -> Option<Self> {
+        object.into_class()
+    }
+}
+
+impl<'js> Object<'js> {
+    /// Returns if the object is of a certain rust class.
+    pub fn is_class<C: JsClass>(&self) -> bool {
+        let p = unsafe {
+            qjs::JS_GetOpaque2(
+                self.0.ctx.as_ptr(),
+                self.0.as_js_value(),
+                C::class_id().get(),
+            )
+        };
+        p == ptr::null_mut()
+    }
+
+    pub fn into_class<C: JsClass>(self) -> Option<Class<'js, C>> {
+        if self.is_class::<C>() {
+            Some(Class(self, PhantomData))
+        } else {
+            None
+        }
+    }
+}
+
+impl<'js, C: JsClass> FromJs<'js> for Class<'js, C> {
+    fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        if let Some(cls) = value.clone().into_object().and_then(Object::into_class) {
+            return Ok(cls);
+        }
+        Err(Error::FromJs {
+            from: value.type_name(),
+            to: C::NAME,
+            message: None,
+        })
+    }
+}
+
+impl<'js, C: JsClass> IntoJs<'js> for Class<'js, C> {
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        Ok(self.0 .0)
     }
 }

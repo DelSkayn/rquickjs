@@ -46,10 +46,12 @@ impl<'js> Args<'js> {
         }
     }
 
+    /// Returns the context associated with these arguments.
     pub fn ctx(&self) -> Ctx<'js> {
         self.ctx
     }
 
+    /// Add an argument to the list.
     pub fn push_arg<T: IntoJs<'js>>(&mut self, arg: T) -> Result<()> {
         let v = arg.into_js(self.ctx)?;
 
@@ -70,6 +72,7 @@ impl<'js> Args<'js> {
         Ok(())
     }
 
+    /// Add multiple arguments to the list.
     pub fn push_args<T, I>(&mut self, iter: I) -> Result<()>
     where
         T: IntoJs<'js>,
@@ -81,6 +84,7 @@ impl<'js> Args<'js> {
         Ok(())
     }
 
+    /// Add a this arguments.
     pub fn this<T>(&mut self, this: T) -> Result<()>
     where
         T: IntoJs<'js>,
@@ -91,6 +95,7 @@ impl<'js> Args<'js> {
         Ok(())
     }
 
+    /// The number of arguments currently in the list.
     fn len(&self) -> usize {
         match self.args {
             ArgsSlice::Stack { offset, .. } => offset as usize,
@@ -105,6 +110,7 @@ impl<'js> Args<'js> {
         }
     }
 
+    /// Call a function with the current set of arguments.
     pub fn apply<R>(self, func: &Function<'js>) -> Result<R>
     where
         R: FromJs<'js>,
@@ -140,15 +146,21 @@ impl Drop for Args<'_> {
     }
 }
 
+/// A trait for converting values into arguments.
 pub trait IntoArg<'js> {
+    /// The number of arguments this value produces.
     fn num_args(&self) -> usize;
 
+    /// Convert the value into an argument.
     fn into_arg(self, args: &mut Args<'js>) -> Result<()>;
 }
 
+/// A trait for converting a tuple of values into a list arguments.
 pub trait IntoArgs<'js> {
+    /// The number of arguments this value produces.
     fn num_args(&self) -> usize;
 
+    /// Convert the value into an argument.
     fn into_args(self, args: &mut Args<'js>) -> Result<()>;
 }
 

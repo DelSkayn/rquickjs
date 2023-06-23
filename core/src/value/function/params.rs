@@ -1,5 +1,5 @@
 use crate::{
-    function::{Exhaustive, Flat, Opt, Rest, This},
+    function::{Exhaustive, Flat, Func, Opt, Rest, This},
     qjs, Ctx, FromJs, Result, Value,
 };
 use std::slice;
@@ -80,6 +80,7 @@ impl<'a, 'js> Params<'a, 'js> {
         self.args.is_empty()
     }
 
+    /// Turns the params into an accessor object for extracting the arguments.
     pub fn access(self) -> ParamsAccessor<'a, 'js> {
         ParamsAccessor {
             params: self,
@@ -94,14 +95,27 @@ pub struct ParamsAccessor<'a, 'js> {
 }
 
 impl<'a, 'js> ParamsAccessor<'a, 'js> {
+    /// Returns the context associated with the params.
     pub fn ctx(&self) -> Ctx<'js> {
         self.params.ctx()
     }
 
+    /// Returns this value of call from which the params originate.
     pub fn this(&self) -> Value<'js> {
         self.params.this()
     }
 
+    /// Returns the value on which this function called. i.e. in `bla.foo()` the `foo` value.
+    pub fn function(&self) -> Value<'js> {
+        self.params.function()
+    }
+
+    /// Returns the next arguments.
+    ///
+    /// Each call to this function returns a different argument
+    ///
+    /// # Panic
+    /// This function panics if it is called more times then there are arguments.
     pub fn arg(&mut self) -> Value<'js> {
         assert!(
             self.offset < self.params.args.len(),
@@ -177,6 +191,7 @@ impl ParamReq {
         }
     }
 
+    /// Combine to requirements into one which covers both.
     pub const fn combine(self, other: Self) -> ParamReq {
         Self {
             min: self.min.saturating_add(other.min),
@@ -186,10 +201,13 @@ impl ParamReq {
     }
 }
 
+/// A trait to extract argument values.
 pub trait FromParam<'js>: Sized {
+    /// The parameters requirements this value requires.
     fn params_required() -> ParamReq;
 
-    fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self>;
+    /// Convert from a parameter value.
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self>;
 }
 
 impl<'js, T: FromJs<'js>> FromParam<'js> for T {
@@ -197,7 +215,7 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for T {
         ParamReq::single()
     }
 
-    fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
         T::from_js(params.ctx(), params.arg())
     }
 }
@@ -207,7 +225,7 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for Opt<T> {
         ParamReq::optional()
     }
 
-    fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
         if !params.is_empty() {
             Ok(Opt(Some(T::from_js(params.ctx(), params.arg())?)))
         } else {
@@ -221,8 +239,18 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for This<T> {
         ParamReq::any()
     }
 
-    fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
         T::from_js(params.ctx(), params.this()).map(This)
+    }
+}
+
+impl<'js, T: FromJs<'js>> FromParam<'js> for Func<T> {
+    fn params_required() -> ParamReq {
+        ParamReq::any()
+    }
+
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+        T::from_js(params.ctx(), params.function()).map(Func)
     }
 }
 
@@ -231,7 +259,7 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for Rest<T> {
         ParamReq::any()
     }
 
-    fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
         let mut res = Vec::with_capacity(params.len());
         for _ in 0..params.len() {
             let p = params.arg();
@@ -246,7 +274,7 @@ impl<'js, T: FromParams<'js>> FromParam<'js> for Flat<T> {
         T::params_required()
     }
 
-    fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
         T::from_params(params).map(Flat)
     }
 }
@@ -256,14 +284,17 @@ impl<'js> FromParam<'js> for Exhaustive {
         ParamReq::exhaustive()
     }
 
-    fn from_params<'a>(_params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+    fn from_param<'a>(_params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
         Ok(Exhaustive)
     }
 }
 
+/// A trait to extract a tuple of argument values.
 pub trait FromParams<'js>: Sized {
+    /// The parameters requirements this value requires.
     fn params_required() -> ParamReq;
 
+    /// Convert from a parameter value.
     fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self>;
 }
 
@@ -281,7 +312,7 @@ macro_rules! impl_from_params{
 
             fn from_params<'a>(_args: &mut ParamsAccessor<'a,'js>) -> Result<Self>{
                 Ok((
-                    $($t::from_params(_args)?,)*
+                    $($t::from_param(_args)?,)*
                 ))
             }
         }
