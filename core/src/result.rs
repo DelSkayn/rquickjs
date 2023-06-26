@@ -236,9 +236,7 @@ impl Error {
             Allocation => unsafe { qjs::JS_ThrowOutOfMemory(ctx.as_ptr()) },
             InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } | NumArgs { .. } => {
                 let message = self.to_cstring();
-                let res = unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) };
-                unsafe { assert!(qjs::JS_IsException(res)) };
-                res
+                unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
             }
             #[cfg(feature = "loader")]
             Resolving { .. } | Loading { .. } => {
