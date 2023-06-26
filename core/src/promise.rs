@@ -8,6 +8,7 @@ use std::{
 };
 
 use crate::{
+    qjs,
     safe_ref::Ref,
     value::{Func, This},
     CatchResultExt, CaughtError, CaughtResult, Ctx, Exception, FromJs, Function, IntoJs, Object,
@@ -116,8 +117,9 @@ where
                     CaughtError::Exception(e) => reject.call::<_, ()>((e,)),
                     CaughtError::Value(e) => reject.call::<_, ()>((e,)),
                     CaughtError::Error(e) => {
-                        let v = unsafe { Value::from_js_value(ctx, e.throw(ctx)) };
-                        reject.call::<_, ()>((v,))
+                        unsafe { debug_assert!(qjs::JS_IsException(e.throw(ctx))) };
+                        let e = ctx.catch();
+                        reject.call::<_, ()>((e,))
                     }
                 },
             };
