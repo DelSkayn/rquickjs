@@ -199,6 +199,23 @@ impl ParamReq {
             exhaustive: self.exhaustive || other.exhaustive,
         }
     }
+
+    /// Returns the minimum number of arguments for this requirement
+    pub fn min(&self) -> usize {
+        self.min
+    }
+
+    /// Returns the maximum number of arguments for this requirement
+    pub fn max(&self) -> usize {
+        self.min
+    }
+
+    /// Returns whether this function is required to be exhaustive called
+    ///
+    /// i.e. there can be no more arguments then parameters.
+    pub fn is_exhaustive(&self) -> bool {
+        self.exhaustive
+    }
 }
 
 /// A trait to extract argument values.

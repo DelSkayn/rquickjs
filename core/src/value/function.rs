@@ -6,7 +6,7 @@ mod params;
 mod types;
 
 pub use args::{Args, IntoArg, IntoArgs};
-pub use ffi::ClassFn;
+pub use ffi::{ClassFn, RustFunction};
 pub use params::{FromParam, FromParams, ParamReq, Params, ParamsAccessor};
 pub use types::{Exhaustive, Flat, Func, Null, Opt, Rest, This};
 

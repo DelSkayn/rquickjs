@@ -49,7 +49,8 @@ impl ClassFn {
     }
 }
 
-pub struct RustFunction(Box<dyn JsFunction>);
+/// The class used for wrapping closures with state.
+pub struct RustFunction(pub Box<dyn JsFunction>);
 
 fn call_rust_func<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>> {
     let this = Class::<RustFunction>::from_js(params.ctx(), params.function())?;
