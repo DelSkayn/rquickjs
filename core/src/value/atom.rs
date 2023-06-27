@@ -1,8 +1,60 @@
-use crate::{qjs, Ctx, Error, Result, String, Value};
+use crate::{qjs, Ctx, Error, IntoAtom, Result, String, Value};
 use std::{ffi::CStr, string::String as StdString};
 
-/// An atom is value representing the name of a variable of an objects and can be created
-/// from any javascript value.
+/// A collection of atoms which are predefined in quickjs.
+///
+/// Using these over [`Atom::from_str`] can be more performant as these don't need to be looked up
+/// in a hashmap.
+#[repr(u32)]
+pub enum PredefinedAtoms {
+    /// "length"
+    Length = qjs::JS_ATOM_length,
+    /// "fileName",
+    FileName = qjs::JS_ATOM_fileName,
+    /// "LineNumber",
+    LineNumber = qjs::JS_ATOM_lineNumber,
+    /// "stack",
+    Stack = qjs::JS_ATOM_stack,
+    /// "name",
+    Name = qjs::JS_ATOM_name,
+    /// "toString",
+    ToString = qjs::JS_ATOM_toString,
+    /// "valueOf",
+    ValueOf = qjs::JS_ATOM_valueOf,
+    /// "prototype",
+    Prototype = qjs::JS_ATOM_prototype,
+    /// "constructor",
+    Constructor = qjs::JS_ATOM_constructor,
+    /// "configurable",
+    Configurable = qjs::JS_ATOM_configurable,
+    /// "writable",
+    Writable = qjs::JS_ATOM_writable,
+    /// "enumerable",
+    Enumerable = qjs::JS_ATOM_enumerable,
+    /// "Symbol.iterator"
+    SymbolIterator = qjs::JS_ATOM_Symbol_iterator,
+    /// "Symbol.match"
+    SymbolMatch = qjs::JS_ATOM_Symbol_match,
+    /// "Symbol.matchAll"
+    SymbolMatchAll = qjs::JS_ATOM_Symbol_matchAll,
+    /// "Symbol.replace"
+    SymbolReplace = qjs::JS_ATOM_Symbol_replace,
+    /// "Symbol.search"
+    SymbolSearch = qjs::JS_ATOM_Symbol_search,
+    /// "Symbol.split"
+    SymbolSplit = qjs::JS_ATOM_Symbol_split,
+    /// "Symbol.toStringTag"
+    SymbolToStringTag = qjs::JS_ATOM_Symbol_toStringTag,
+    /// "Symbol.isConcatSpreadable"
+    SymbolIsConcatSpreadable = qjs::JS_ATOM_Symbol_isConcatSpreadable,
+    /// "Symbol.hasInstance"
+    SymbolHasInstance = qjs::JS_ATOM_Symbol_hasInstance,
+    /// "Symbol.species"
+    SymbolSpecies = qjs::JS_ATOM_Symbol_species,
+    /// "Symbol.unscopables"
+    SymbolUnscopables = qjs::JS_ATOM_Symbol_unscopables,
+}
+
 ///
 /// # Representation
 ///
@@ -116,6 +168,11 @@ impl<'js> Atom<'js> {
     }
 
     pub(crate) unsafe fn from_atom_val(ctx: Ctx<'js>, val: qjs::JSAtom) -> Self {
+        Atom { atom: val, ctx }
+    }
+
+    pub(crate) unsafe fn from_atom_val_dup(ctx: Ctx<'js>, val: qjs::JSAtom) -> Self {
+        qjs::JS_DupAtom(ctx.as_ptr(), val);
         Atom { atom: val, ctx }
     }
 }

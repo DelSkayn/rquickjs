@@ -1,4 +1,6 @@
-use crate::{Atom, Ctx, FromAtom, IntoAtom, Result, StdString, String, Value};
+use crate::{
+    atom::PredefinedAtoms, qjs, Atom, Ctx, FromAtom, IntoAtom, Result, StdString, String, Value,
+};
 
 impl<'js> FromAtom<'js> for Atom<'js> {
     fn from_atom(atom: Atom<'js>) -> Result<Self> {
@@ -21,6 +23,12 @@ impl<'js> FromAtom<'js> for String<'js> {
 impl<'js> FromAtom<'js> for StdString {
     fn from_atom(atom: Atom<'js>) -> Result<Self> {
         atom.to_string()
+    }
+}
+
+impl<'js> IntoAtom<'js> for PredefinedAtoms {
+    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
+        Ok(unsafe { Atom::from_atom_val_dup(ctx, self as qjs::JSAtom) })
     }
 }
 

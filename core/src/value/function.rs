@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, FromJs, Object, Result, Value};
+use crate::{atom::PredefinedAtoms, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
 
 mod args;
 mod as_func;
@@ -52,6 +52,42 @@ impl<'js> Function<'js> {
         R: FromJs<'js>,
     {
         args.apply(self)
+    }
+
+    /// Set the `name` property of this function
+    pub fn set_name<S: AsRef<str>>(&self, name: S) -> Result<()> {
+        let name = name.as_ref().into_js(self.0.ctx)?;
+        unsafe {
+            let res = qjs::JS_DefinePropertyValue(
+                self.0.ctx.as_ptr(),
+                self.0.as_js_value(),
+                PredefinedAtoms::Name as qjs::JSAtom,
+                name.into_js_value(),
+                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
+            );
+            if res < 0 {
+                return Err(self.0.ctx.raise_exception());
+            }
+        };
+        Ok(())
+    }
+
+    /// Set the `length` property of this function
+    pub fn set_length(&self, len: usize) -> Result<()> {
+        let len = len.into_js(self.0.ctx)?;
+        unsafe {
+            let res = qjs::JS_DefinePropertyValue(
+                self.0.ctx.as_ptr(),
+                self.0.as_js_value(),
+                PredefinedAtoms::Length as qjs::JSAtom,
+                len.into_js_value(),
+                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
+            );
+            if res < 0 {
+                return Err(self.0.ctx.raise_exception());
+            }
+        };
+        Ok(())
     }
 
     /// Returns the prototype which all javascript function by default have as its prototype, i.e.

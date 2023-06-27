@@ -1,5 +1,5 @@
 pub mod array;
-mod atom;
+pub mod atom;
 mod bigint;
 pub mod convert;
 mod exception;
