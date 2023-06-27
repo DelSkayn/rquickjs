@@ -13,14 +13,14 @@ use std::{
 /// The trait to help break lifetime rules when JS objects leaves current context via [`Persistent`] wrapper.
 pub unsafe trait Outlive<'t> {
     /// The target which has the same type as a `Self` but with another lifetime `'t`
-    type Target;
+    type Target<'to>;
 }
 
 macro_rules! outlive_impls {
     ($($type:ident,)*) => {
         $(
-            unsafe impl<'js, 't> Outlive<'t> for $type<'js> {
-                type Target = $type<'t>;
+            unsafe impl<'js> Outlive<'js> for $type<'js> {
+                type Target<'to> = $type<'to>;
             }
         )*
     };
@@ -34,6 +34,36 @@ outlive_impls! {
     Array,
     BigInt,
 }
+
+macro_rules! impl_outlive{
+    ($($($ty:ident)::*$([$($g:ident),+])*),*$(,)?) => {
+        $(
+            unsafe impl<'js,$($($g,)*)*> Outlive<'js> for $($ty)::*$(<$($g,)*>)*
+            where Self: 'static,
+                  $($($g: 'static,)*)*
+            {
+                type Target<'to> = $($ty)::*$(<$($g,)*>)*;
+            }
+        )*
+    };
+}
+
+impl_outlive!(
+    u8,
+    u16,
+    u32,
+    u64,
+    usize,
+    u128,
+    i8,
+    i16,
+    i32,
+    i64,
+    isize,
+    i128,
+    std::string::String,
+    Vec[T]
+);
 
 /// The wrapper for JS values to keep it from GC
 ///
@@ -112,22 +142,20 @@ impl<T> Persistent<T> {
     }
 
     /// Save the value of an arbitrary type
-    pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target>
+    pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target<'static>>
     where
-        T: AsRef<Value<'js>> + Outlive<'static>,
+        T: Outlive<'js>,
     {
-        let value = val.as_ref().value;
-        mem::forget(val);
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
+        todo!();
 
-        Persistent::new_raw(rt, value)
+        //Persistent::new_raw(rt, value)
     }
 
     /// Restore the value of an arbitrary type
-    pub fn restore<'js>(self, ctx: Ctx<'js>) -> Result<T::Target>
+    pub fn restore<'js>(self, ctx: Ctx<'js>) -> Result<T::Target<'js>>
     where
-        T: Outlive<'js>,
-        T::Target: FromJs<'js>,
+        T: Outlive<'static>,
+        T::Target<'js>: FromJs<'js>,
     {
         let ctx_runtime_ptr = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         if self.rt != ctx_runtime_ptr {
@@ -135,7 +163,7 @@ impl<T> Persistent<T> {
         }
         let value = unsafe { Value::from_js_value(ctx, self.value.get()) };
         mem::forget(self);
-        T::Target::from_js(ctx, value)
+        T::Target::<'js>::from_js(ctx, value)
     }
 
     fn ptr(&self) -> *mut qjs::c_void {
@@ -147,18 +175,14 @@ impl<T> Persistent<T> {
     }
 }
 
-impl<'js, T> FromJs<'js> for Persistent<T>
+impl<'js, T, R> FromJs<'js> for Persistent<R>
 where
-    T: Outlive<'js>,
-    T::Target: FromJs<'js> + IntoJs<'js>,
+    R: Outlive<'static, Target<'js> = T>,
+    T: Outlive<'js, Target<'static> = R> + FromJs<'js>,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Persistent<T>> {
-        let value = T::Target::from_js(ctx, value)?;
-        let value = value.into_js(ctx)?;
-        let value = value.into_js_value();
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
-
-        Ok(Self::new_raw(rt, value))
+    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Persistent<R>> {
+        let value = T::from_js(ctx, value)?;
+        Ok(Persistent::save(ctx, value))
     }
 }
 

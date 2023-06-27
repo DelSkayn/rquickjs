@@ -277,7 +277,6 @@ impl Drop for AsyncContext {
 }
 
 // Since the reference to runtime is behind a Arc this object is send
-//
 #[cfg(feature = "parallel")]
 unsafe impl Send for AsyncContext {}
 

@@ -16,8 +16,8 @@ use super::typed_array::TypedArrayItem;
 #[repr(transparent)]
 pub struct ArrayBuffer<'js>(pub(crate) Object<'js>);
 
-unsafe impl<'js, 't> Outlive<'t> for ArrayBuffer<'js> {
-    type Target = ArrayBuffer<'t>;
+unsafe impl<'js> Outlive<'js> for ArrayBuffer<'js> {
+    type Target<'to> = ArrayBuffer<'to>;
 }
 
 impl<'js> ArrayBuffer<'js> {

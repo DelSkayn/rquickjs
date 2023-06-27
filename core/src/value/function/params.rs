@@ -13,7 +13,7 @@ pub struct Params<'a, 'js> {
 }
 
 impl<'a, 'js> Params<'a, 'js> {
-    pub(crate) unsafe fn from_ffi(
+    pub(crate) unsafe fn from_ffi_class(
         ctx: *mut qjs::JSContext,
         function: qjs::JSValue,
         this: qjs::JSValue,
@@ -26,6 +26,22 @@ impl<'a, 'js> Params<'a, 'js> {
         Self {
             ctx: Ctx::from_ptr(ctx),
             function,
+            this,
+            args,
+        }
+    }
+
+    pub(crate) unsafe fn from_ffi_c_func(
+        ctx: *mut qjs::JSContext,
+        this: qjs::JSValue,
+        argc: qjs::c_int,
+        argv: *mut qjs::JSValue,
+    ) -> Self {
+        let argc = usize::try_from(argc).expect("invalid argument number");
+        let args = slice::from_raw_parts(argv, argc);
+        Self {
+            ctx: Ctx::from_ptr(ctx),
+            function: qjs::JS_UNDEFINED,
             this,
             args,
         }

@@ -1,18 +1,26 @@
-use crate::{qjs, FromJs, Result, Value};
+use crate::{qjs, Ctx, FromJs, Object, Result, Value};
 
 mod args;
+mod as_func;
+mod cell_fn;
 mod ffi;
 mod params;
 mod types;
 
 pub use args::{Args, IntoArg, IntoArgs};
-pub use ffi::{ClassFn, RustFunction};
+pub use cell_fn::{CellFn, Mut, Once};
+pub use ffi::{RustFunction, StaticJsFn};
 pub use params::{FromParam, FromParams, ParamReq, Params, ParamsAccessor};
 pub use types::{Exhaustive, Flat, Func, Null, Opt, Rest, This};
 
-/// A trait for functions callable from javascript.
-pub trait JsFunction {
-    fn call<'a, 'js>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
+pub trait AsJsFunction<'js> {
+    fn as_js_function(self, ctx: Ctx<'js>) -> Result<Box<dyn JsFunction<'js> + 'js>>;
+}
+
+/// A trait for functions callable from javascript but static,
+/// Used for implementing callable objects.
+pub trait JsFunction<'js> {
+    fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
 }
 
 /// A trait for functions callable from javascript but static,
@@ -44,6 +52,15 @@ impl<'js> Function<'js> {
         R: FromJs<'js>,
     {
         args.apply(self)
+    }
+
+    /// Returns the prototype which all javascript function by default have as its prototype, i.e.
+    /// `Function.prototype`.
+    pub fn prototype(ctx: Ctx<'js>) -> Object<'js> {
+        let res = unsafe { Value::from_js_value(ctx, qjs::JS_GetFunctionProto(ctx.as_ptr())) };
+        // as far is I know this should always be an object.
+        res.into_object()
+            .expect("`Function.prototype` wasn't an object")
     }
 
     /// Returns wether this function is an constructor.

@@ -1,5 +1,5 @@
 use crate::{
-    function::ClassFn, qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Type, Value,
+    function::StaticJsFn, qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value,
 };
 use std::{
     ffi::CString,
@@ -19,45 +19,46 @@ pub use cell::{
 
 mod ffi;
 
-pub unsafe trait JsClass {
+pub unsafe trait JsClass<'js>: Outlive<'js> {
     /// The name the constructor has in javascript
     const NAME: &'static str;
 
     /// Can the type be mutated while a javascript value.
     type Mutable: Mutability;
 
-    /// The class with any possible 'js lifetimes changed to 'a.
-    type Outlive<'a>;
-
     /// A unique id for the class.
     fn class_id() -> &'static ClassId;
 
     /// The class prototype,
-    fn prototype<'js>(ctx: Ctx<'js>) -> Result<Option<Object<'js>>>;
+    fn prototype(ctx: Ctx<'js>) -> Result<Option<Object<'js>>>;
 
     /// A possible call function.
     ///
     /// Returning a function from this method makes any objects with this class callable as if it
     /// is a function object..
-    fn function() -> Option<ClassFn> {
+    fn function() -> Option<StaticJsFn> {
         None
     }
 }
 
 /// A object which is instance of a rust class.
-pub struct Class<'js, C: JsClass>(pub(crate) Object<'js>, PhantomData<C>);
+pub struct Class<'js, C: JsClass<'js>>(pub(crate) Object<'js>, PhantomData<C>);
 
-impl<'js, C: JsClass> Clone for Class<'js, C> {
+impl<'js, C: JsClass<'js>> Clone for Class<'js, C> {
     fn clone(&self) -> Self {
         Class(self.0.clone(), PhantomData)
     }
 }
 
-unsafe impl<'js, 't, C: JsClass> Outlive<'t> for Class<'js, C> {
-    type Target = Class<'t, C>;
+unsafe impl<'js, C> Outlive<'js> for Class<'js, C>
+where
+    C: JsClass<'js> + Outlive<'js>,
+    for<'to> C::Target<'to>: JsClass<'to>,
+{
+    type Target<'to> = Class<'to, C::Target<'to>>;
 }
 
-impl<'js, C: JsClass> Deref for Class<'js, C> {
+impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
     type Target = Object<'js>;
 
     fn deref(&self) -> &Self::Target {
@@ -65,7 +66,7 @@ impl<'js, C: JsClass> Deref for Class<'js, C> {
     }
 }
 
-impl<'js, C: JsClass> Class<'js, C> {
+impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Create a class from a rust object.
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
         let val = unsafe {
@@ -131,7 +132,7 @@ impl<'js, C: JsClass> Class<'js, C> {
 
     /// Returns a reference to the underlying object contained in a cell.
     #[inline]
-    pub fn as_class<'a>(&self) -> &'a JsCell<C> {
+    pub fn as_class<'a>(&self) -> &'a JsCell<'js, C> {
         unsafe { self.get_class_ptr().as_ref() }
     }
 
@@ -143,7 +144,7 @@ impl<'js, C: JsClass> Class<'js, C> {
     /// # Panic
     /// This function panics if the class is already borrowed mutably
     #[inline]
-    pub fn borrow<'a>(&'a self) -> Borrow<'a, C> {
+    pub fn borrow<'a>(&'a self) -> Borrow<'a, 'js, C> {
         self.as_class().borrow()
     }
 
@@ -156,7 +157,7 @@ impl<'js, C: JsClass> Class<'js, C> {
     /// This function panics if the class is already borrowed mutably or immutably, or the Class
     /// can't be borrowed mutably.
     #[inline]
-    pub fn borrow_mut<'a>(&'a self) -> BorrowMut<'a, C> {
+    pub fn borrow_mut<'a>(&'a self) -> BorrowMut<'a, 'js, C> {
         self.as_class().borrow_mut()
     }
 
@@ -167,7 +168,7 @@ impl<'js, C: JsClass> Class<'js, C> {
     ///
     /// This returns an error when the class is already borrowed mutably.
     #[inline]
-    pub fn try_borrow<'a>(&'a self) -> Result<Borrow<'a, C>> {
+    pub fn try_borrow<'a>(&'a self) -> Result<Borrow<'a, 'js, C>> {
         self.as_class().try_borrow().map_err(Error::from)
     }
 
@@ -179,13 +180,13 @@ impl<'js, C: JsClass> Class<'js, C> {
     /// This returns an error when the class is already borrowed mutably, immutably or the class
     /// can't be borrowed mutably.
     #[inline]
-    pub fn try_borrow_mut<'a>(&'a self) -> Result<BorrowMut<'a, C>> {
+    pub fn try_borrow_mut<'a>(&'a self) -> Result<BorrowMut<'a, 'js, C>> {
         self.as_class().try_borrow_mut().map_err(Error::from)
     }
 
     /// returns a pointer to the class object.
     #[inline]
-    pub(crate) fn get_class_ptr(&self) -> NonNull<JsCell<C>> {
+    pub(crate) fn get_class_ptr(&self) -> NonNull<JsCell<'js, C>> {
         let ptr = unsafe {
             qjs::JS_GetOpaque2(
                 self.0.ctx.as_ptr(),
@@ -210,7 +211,7 @@ impl<'js, C: JsClass> Class<'js, C> {
 
 impl<'js> Object<'js> {
     /// Returns if the object is of a certain rust class.
-    pub fn is_class<C: JsClass>(&self) -> bool {
+    pub fn is_class<C: JsClass<'js>>(&self) -> bool {
         let p = unsafe {
             qjs::JS_GetOpaque2(
                 self.0.ctx.as_ptr(),
@@ -221,7 +222,7 @@ impl<'js> Object<'js> {
         p == ptr::null_mut()
     }
 
-    pub fn into_class<C: JsClass>(self) -> Option<Class<'js, C>> {
+    pub fn into_class<C: JsClass<'js>>(self) -> Option<Class<'js, C>> {
         if self.is_class::<C>() {
             Some(Class(self, PhantomData))
         } else {
@@ -230,7 +231,7 @@ impl<'js> Object<'js> {
     }
 }
 
-impl<'js, C: JsClass> FromJs<'js> for Class<'js, C> {
+impl<'js, C: JsClass<'js>> FromJs<'js> for Class<'js, C> {
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
         if let Some(cls) = value.clone().into_object().and_then(Object::into_class) {
             return Ok(cls);
@@ -243,7 +244,7 @@ impl<'js, C: JsClass> FromJs<'js> for Class<'js, C> {
     }
 }
 
-impl<'js, C: JsClass> IntoJs<'js> for Class<'js, C> {
+impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         Ok(self.0 .0)
     }
