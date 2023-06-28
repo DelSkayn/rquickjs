@@ -11,7 +11,30 @@ use std::{
 };
 
 /// The trait to help break lifetime rules when JS objects leaves current context via [`Persistent`] wrapper.
-pub unsafe trait Outlive<'t> {
+///
+/// # Safety
+///
+/// `Outlive<'js>` must be implemented for types the same, specific, lifetime 'js.
+/// For example the following is unsound:
+/// ```rust
+/// struct Container<'js>(rquickjs::Object<'js>);
+///
+/// unsafe impl<'a,'js> Outlive<'js> for Object<'a>{
+///     type Target<'to> = Container<'to>;
+/// }
+/// ```
+/// Instead it must be implemented as following
+/// ```
+/// struct Container<'js>(rquickjs::Object<'js>);
+///
+/// unsafe impl<'js> Outlive<'js> for Object<'js>{
+///     type Target<'to> = Container<'to>;
+/// }
+/// ```
+/// `Outlive::Target` must be the same type with all 'js lifetimes changed from 'js to 'to, no
+/// other lifetimes may be changed and the type must be otherwise the exact same type.
+///
+pub unsafe trait Outlive<'js> {
     /// The target which has the same type as a `Self` but with another lifetime `'t`
     type Target<'to>;
 }
@@ -36,13 +59,13 @@ outlive_impls! {
 }
 
 macro_rules! impl_outlive{
-    ($($($ty:ident)::*$([$($g:ident),+])*),*$(,)?) => {
+    ($($($ty:ident)::+$(<$($g:ident),+>)*),*$(,)?) => {
         $(
             unsafe impl<'js,$($($g,)*)*> Outlive<'js> for $($ty)::*$(<$($g,)*>)*
-            where Self: 'static,
-                  $($($g: 'static,)*)*
+            where
+                  $($($g: Outlive<'js>,)*)*
             {
-                type Target<'to> = $($ty)::*$(<$($g,)*>)*;
+                type Target<'to> = $($ty)::*$(<$($g::Target<'to>,)*>)*;
             }
         )*
     };
@@ -61,8 +84,45 @@ impl_outlive!(
     i64,
     isize,
     i128,
+    char,
     std::string::String,
-    Vec[T]
+    Vec<T>,
+    Box<T>,
+    Option<T>,
+    std::result::Result<T,E>,
+    std::backtrace::Backtrace,
+    std::cell::Cell<T>,
+    std::cell::RefCell<T>,
+    std::cell::OnceCell<T>,
+    std::cell::UnsafeCell<T>,
+    std::collections::BTreeMap<K,V>,
+    std::collections::BTreeSet<K>,
+    std::collections::BinaryHeap<K>,
+    std::collections::HashMap<K,V>,
+    std::collections::HashSet<K>,
+    std::collections::LinkedList<T>,
+    std::collections::VecDeque<T>,
+    std::ffi::CString,
+    std::ffi::OsString,
+    std::ops::Range<T>,
+    std::ops::RangeFrom<T>,
+    std::ops::RangeFull,
+    std::ops::RangeInclusive<T>,
+    std::ops::RangeTo<T>,
+    std::ops::RangeToInclusive<T>,
+    std::ops::Bound<T>,
+    std::ops::ControlFlow<B,C>,
+    std::process::Child,
+    std::process::Command,
+    std::process::ExitCode,
+    std::process::ExitStatus,
+    std::process::Output,
+    std::process::Stdio,
+    std::path::PathBuf,
+    std::rc::Rc<T>,
+    std::sync::Arc<T>,
+    std::sync::Mutex<T>,
+    std::sync::RwLock<T>,
 );
 
 /// The wrapper for JS values to keep it from GC

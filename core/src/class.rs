@@ -16,10 +16,11 @@ pub use cell::{
     Borrow, BorrowError, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable,
     Writable,
 };
-
 mod ffi;
+mod trace;
+pub use trace::{Trace, Tracer};
 
-pub unsafe trait JsClass<'js>: Outlive<'js> {
+pub trait JsClass<'js>: Trace<'js> {
     /// The name the constructor has in javascript
     const NAME: &'static str;
 
@@ -69,13 +70,17 @@ impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
 impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Create a class from a rust object.
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
+        if !Self::is_registered(ctx) {
+            Self::register(ctx)?;
+        }
+
         let val = unsafe {
             ctx.handle_exception(qjs::JS_NewObjectClass(
                 ctx.as_ptr(),
                 C::class_id().get() as i32,
             ))?
         };
-        let ptr = Box::into_raw(Box::new(value));
+        let ptr: *mut JsCell<'js, C> = Box::into_raw(Box::new(JsCell::new(value)));
         unsafe { qjs::JS_SetOpaque(val, ptr.cast()) };
         Ok(Self(
             unsafe { Object::from_js_value(ctx, val) },
@@ -85,6 +90,9 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Create a class from a rust object with a given prototype
     pub fn instance_proto(value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
+        if !Self::is_registered(proto.ctx()) {
+            Self::register(proto.ctx())?;
+        }
         let val = unsafe {
             proto.ctx.handle_exception(qjs::JS_NewObjectProtoClass(
                 proto.ctx().as_ptr(),
@@ -92,7 +100,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
                 C::class_id().get(),
             ))?
         };
-        let ptr = Box::into_raw(Box::new(value));
+        let ptr: *mut JsCell<'js, C> = Box::into_raw(Box::new(JsCell::new(value)));
         unsafe { qjs::JS_SetOpaque(val, ptr.cast()) };
         Ok(Self(
             unsafe { Object::from_js_value(proto.ctx, val) },
@@ -100,11 +108,39 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         ))
     }
 
+    /// Returns the prototype for the class.
+    ///
+    /// Returns None if the class is not yet registered or if the class doesn't have a prototype
+    pub fn prototype(ctx: Ctx<'js>) -> Option<Object<'js>> {
+        if !Self::is_registered(ctx) {
+            return None;
+        }
+        let proto = unsafe {
+            let proto = qjs::JS_GetClassProto(ctx.as_ptr(), C::class_id().get());
+            Value::from_js_value(ctx, proto)
+        };
+        if proto.is_null() {
+            return None;
+        }
+        Some(
+            proto
+                .into_object()
+                .expect("class prototype wasn't an object"),
+        )
+    }
+
+    /// Returns if the class is registered in the runtime.
+    #[inline]
+    pub fn is_registered(ctx: Ctx<'js>) -> bool {
+        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
+        let class_id = C::class_id().get();
+        0 != unsafe { qjs::JS_IsRegisteredClass(rt, class_id) }
+    }
+
     /// Registers the class `C` into the runtime.
     ///
-    /// It is required to call this function on context before using type implementing [`JsClass`]
-    /// with javascript.
-    /// Otherwise the runtime might abort or memory might not be properly freed.
+    /// It is required to call this function on every context in which the class is used before using the class.
+    /// Otherwise the class
     pub fn register(ctx: Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         let class_id = C::class_id().get();
@@ -127,6 +163,16 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
                 return Err(Error::Unknown);
             }
         }
+
+        if unsafe {
+            qjs::JS_VALUE_GET_TAG(qjs::JS_GetClassProto(ctx.as_ptr(), class_id)) == qjs::JS_TAG_NULL
+        } {
+            if let Some(proto) = C::prototype(ctx)? {
+                let val = proto.into_value().into_js_value();
+                unsafe { qjs::JS_SetClassProto(ctx.as_ptr(), class_id, val) }
+            }
+        }
+
         Ok(())
     }
 
@@ -205,13 +251,17 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Converts a generic object into a class if the object is of the right class.
     pub fn from_object(object: Object<'js>) -> Option<Self> {
-        object.into_class()
+        object.into_class().ok()
     }
 }
 
 impl<'js> Object<'js> {
     /// Returns if the object is of a certain rust class.
     pub fn is_class<C: JsClass<'js>>(&self) -> bool {
+        if !Class::<C>::is_registered(self.ctx) {
+            return false;
+        }
+
         let p = unsafe {
             qjs::JS_GetOpaque2(
                 self.0.ctx.as_ptr(),
@@ -219,21 +269,22 @@ impl<'js> Object<'js> {
                 C::class_id().get(),
             )
         };
-        p == ptr::null_mut()
+        !p.is_null()
     }
 
-    pub fn into_class<C: JsClass<'js>>(self) -> Option<Class<'js, C>> {
+    /// Turn the object into the class if it is an instance of that class.
+    pub fn into_class<C: JsClass<'js>>(self) -> std::result::Result<Class<'js, C>, Self> {
         if self.is_class::<C>() {
-            Some(Class(self, PhantomData))
+            Ok(Class(self, PhantomData))
         } else {
-            None
+            Err(self)
         }
     }
 }
 
 impl<'js, C: JsClass<'js>> FromJs<'js> for Class<'js, C> {
     fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        if let Some(cls) = value.clone().into_object().and_then(Object::into_class) {
+        if let Some(cls) = value.clone().into_object().and_then(Self::from_object) {
             return Ok(cls);
         }
         Err(Error::FromJs {

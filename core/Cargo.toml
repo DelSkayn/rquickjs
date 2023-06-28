@@ -86,6 +86,9 @@ array-buffer = []
 # Enable interop between Rust futures and JS Promises
 futures = ["async-lock"]
 
+# Allows transfering objects between different contexts of the same runtime.
+multi-ctx = []
+
 # Max number of function args
 max-args-7 = []
 max-args-8 = ["max-args-7"]

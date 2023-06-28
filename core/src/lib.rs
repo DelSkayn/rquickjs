@@ -52,6 +52,8 @@ pub mod context;
 #[cfg(feature = "futures")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub use context::AsyncContext;
+#[cfg(feature = "multi-ctx")]
+pub use context::MultiWith;
 pub use context::{Context, Ctx};
 mod persistent;
 mod value;
@@ -84,11 +86,12 @@ pub mod loader;
 
 pub mod prelude {
     //! A group of often used types.
+    #[cfg(feature = "multi-ctx")]
+    pub use crate::context::MultiWith;
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub use crate::promise::{Promise, Promised};
     pub use crate::{
-        context::MultiWith,
         convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs},
         result::{CatchResultExt, ThrowResultExt},
     };

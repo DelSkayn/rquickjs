@@ -94,6 +94,9 @@ array-buffer = ["rquickjs-core/array-buffer"]
 # Enable helper macros
 macro = ["rquickjs-macro"]
 
+# Allows transfering objects between different contexts of the same runtime.
+multi-ctx = ["rquickjs-core/multi-ctx"]
+
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]
 

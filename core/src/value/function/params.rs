@@ -223,7 +223,7 @@ impl ParamReq {
 
     /// Returns the maximum number of arguments for this requirement
     pub fn max(&self) -> usize {
-        self.min
+        self.max
     }
 
     /// Returns whether this function is required to be exhaustive called
@@ -304,7 +304,7 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for Rest<T> {
 
 impl<'js, T: FromParams<'js>> FromParam<'js> for Flat<T> {
     fn params_required() -> ParamReq {
-        T::params_required()
+        T::params_requirements()
     }
 
     fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
@@ -325,7 +325,7 @@ impl<'js> FromParam<'js> for Exhaustive {
 /// A trait to extract a tuple of argument values.
 pub trait FromParams<'js>: Sized {
     /// The parameters requirements this value requires.
-    fn params_required() -> ParamReq;
+    fn params_requirements() -> ParamReq;
 
     /// Convert from a parameter value.
     fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self>;
@@ -338,7 +338,7 @@ macro_rules! impl_from_params{
         where
             $($t : FromParam<'js>,)*
         {
-            fn params_required() -> ParamReq{
+            fn params_requirements() -> ParamReq{
                 ParamReq::none()
                     $(.combine($t::params_required()))*
             }

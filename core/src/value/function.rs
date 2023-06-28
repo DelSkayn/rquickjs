@@ -1,20 +1,26 @@
-use crate::{atom::PredefinedAtoms, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
+use crate::{
+    atom::PredefinedAtoms,
+    class::{Class, Tracer},
+    qjs, Ctx, FromJs, IntoJs, Object, Result, Value,
+};
 
 mod args;
-mod as_func;
 mod cell_fn;
 mod ffi;
+mod into_func;
 mod params;
 mod types;
 
 pub use args::{Args, IntoArg, IntoArgs};
-pub use cell_fn::{CellFn, Mut, Once};
+pub use cell_fn::{CellFn, CellFnError, Mut, Once};
 pub use ffi::{RustFunction, StaticJsFn};
 pub use params::{FromParam, FromParams, ParamReq, Params, ParamsAccessor};
 pub use types::{Exhaustive, Flat, Func, Null, Opt, Rest, This};
 
-pub trait AsJsFunction<'js> {
-    fn as_js_function(self, ctx: Ctx<'js>) -> Result<Box<dyn JsFunction<'js> + 'js>>;
+pub trait IntoJsFunction<'js, T, P, R> {
+    fn param_requirements() -> ParamReq;
+
+    fn into_js_function(self) -> Box<dyn JsFunction<'js> + 'js>;
 }
 
 /// A trait for functions callable from javascript but static,
@@ -33,6 +39,14 @@ pub trait StaticJsFunction {
 pub struct Function<'js>(pub(crate) Value<'js>);
 
 impl<'js> Function<'js> {
+    pub fn new<T, P, R, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
+    where
+        F: IntoJsFunction<'js, T, P, R>,
+    {
+        let cls = Class::instance(ctx, RustFunction(f.into_js_function()))?;
+        Function(cls.into_object().into_value()).with_length(F::param_requirements().max())
+    }
+
     /// Call the function with given arguments.
     pub fn call<A, R>(&self, args: A) -> Result<R>
     where
@@ -72,6 +86,11 @@ impl<'js> Function<'js> {
         Ok(())
     }
 
+    pub fn with_name<S: AsRef<str>>(self, name: S) -> Result<Self> {
+        self.set_name(name)?;
+        Ok(self)
+    }
+
     /// Set the `length` property of this function
     pub fn set_length(&self, len: usize) -> Result<()> {
         let len = len.into_js(self.0.ctx)?;
@@ -90,10 +109,20 @@ impl<'js> Function<'js> {
         Ok(())
     }
 
+    pub fn with_length(self, len: usize) -> Result<Self> {
+        self.set_length(len)?;
+        Ok(self)
+    }
+
     /// Returns the prototype which all javascript function by default have as its prototype, i.e.
     /// `Function.prototype`.
     pub fn prototype(ctx: Ctx<'js>) -> Object<'js> {
-        let res = unsafe { Value::from_js_value(ctx, qjs::JS_GetFunctionProto(ctx.as_ptr())) };
+        let res = unsafe {
+            Value::from_js_value(
+                ctx,
+                qjs::JS_DupValue(qjs::JS_GetFunctionProto(ctx.as_ptr())),
+            )
+        };
         // as far is I know this should always be an object.
         res.into_object()
             .expect("`Function.prototype` wasn't an object")

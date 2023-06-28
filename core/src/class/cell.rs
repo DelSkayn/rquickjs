@@ -32,10 +32,15 @@ impl fmt::Display for BorrowError {
 
 impl Error for BorrowError {}
 
+/// A trait to allow classes to choose there borrowing implementation.
+///
+/// # Safety
+/// This trait is not meant to be implementeded outside the rquickjs library.
 pub unsafe trait Mutability {
     #[doc(hidden)]
     type Cell<T>;
 
+    #[doc(hidden)]
     fn new_cell<T>(t: T) -> Self::Cell<T>;
 
     #[doc(hidden)]
@@ -50,8 +55,10 @@ pub unsafe trait Mutability {
     #[doc(hidden)]
     unsafe fn unborrow_mut<'a, T>(cell: &'a Self::Cell<T>);
 
+    #[doc(hidden)]
     unsafe fn deref<'a, T>(cell: &'a Self::Cell<T>) -> &'a T;
 
+    #[doc(hidden)]
     #[allow(clippy::mut_from_ref)]
     unsafe fn deref_mut<'a, T>(cell: &'a Self::Cell<T>) -> &'a mut T;
 }
@@ -239,6 +246,15 @@ impl<'js, T: JsClass<'js>> JsCell<'js, T> {
             <T::Mutable as Mutability>::borrow_mut(&self.cell)?;
             Ok(BorrowMut(&self.cell))
         }
+    }
+}
+
+impl<'js, T: JsClass<'js>> Drop for JsCell<'js, T> {
+    fn drop(&mut self) {
+        #[cfg(feature = "multi-ctx")]
+        unsafe {
+            //qjs::JS_FreeContext(self.ctx.as_ptr())
+        };
     }
 }
 

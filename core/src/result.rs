@@ -12,7 +12,8 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
 use crate::{
-    class::BorrowError, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
+    class::BorrowError, function::CellFnError, qjs, Context, Ctx, Exception, Object, StdResult,
+    StdString, Type, Value,
 };
 
 /// Result type used throught the library.
@@ -42,6 +43,8 @@ pub enum Error {
     Io(IoError),
     /// An error happened while trying to borrow a rust class object.
     Borrow(BorrowError),
+    /// An error happened while trying to borrow a rust function.
+    CellFn(CellFnError),
     /// An exception raised by quickjs itself.
     /// The actual javascript value can be retrieved by calling [`Ctx::catch`].
     ///
@@ -381,6 +384,7 @@ impl Display for Error {
                 error.fmt(f)?;
             }
             Borrow(x) => x.fmt(f)?,
+            CellFn(x) => x.fmt(f)?,
             UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
         Ok(())
@@ -405,6 +409,7 @@ from_impls! {
     Utf8Error => Utf8,
     IoError => Io,
     BorrowError => Borrow,
+    CellFnError => CellFn,
 }
 
 impl From<FromUtf8Error> for Error {

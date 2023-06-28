@@ -1,5 +1,7 @@
 use std::cell::{Cell, RefCell};
 
+use crate::{class::Trace, markers::Invariant};
+
 /// helper type for working setting and retrieving `this` values.
 pub struct This<T>(pub T);
 
@@ -26,4 +28,5 @@ pub struct Flat<T>(pub T);
 pub struct Exhaustive;
 
 /// Helper type for creating a function from a closure which returns a future.
+#[cfg(feature = "futures")]
 pub struct Async<T>(pub T);

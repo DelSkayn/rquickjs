@@ -1,10 +1,10 @@
 use std::panic::AssertUnwindSafe;
 
 use crate::{
-    class::{Class, ClassId, JsClass, Readable},
+    class::{Class, ClassId, JsClass, Readable, Trace, Tracer},
     qjs,
-    value::function::{CellFn, Params, StaticJsFunction},
-    Ctx, FromJs, Function, Outlive, Result, Value,
+    value::function::{Params, StaticJsFunction},
+    FromJs, Function, Outlive, Result, Value,
 };
 pub use mac::static_fn;
 
@@ -54,21 +54,25 @@ impl StaticJsFn {
 
 /// The class used for wrapping closures, all rust functions which are callable from javascript are
 /// instances of this class.
-pub struct RustFunction<'js>(pub Box<dyn for<'a> Fn(Params<'a, 'js>) -> Result<Value<'js>> + 'js>);
+pub struct RustFunction<'js>(pub Box<dyn JsFunction<'js> + 'js>);
 
 /// The static function which is called when javascripts calls an instance of RustFunction
 fn call_rust_func_class<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>> {
     let this = Class::<RustFunction>::from_js(params.ctx(), params.function())?;
     // RustFunction isn't readable this always succeeds.
     let borrow = this.borrow();
-    (*borrow).0(params)
+    (*borrow).0.call(params)
 }
 
 unsafe impl<'js> Outlive<'js> for RustFunction<'js> {
     type Target<'to> = RustFunction<'to>;
 }
 
-unsafe impl<'js> JsClass<'js> for RustFunction<'js> {
+impl<'js> Trace<'js> for RustFunction<'js> {
+    fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+}
+
+impl<'js> JsClass<'js> for RustFunction<'js> {
     const NAME: &'static str = "RustFunction";
 
     type Mutable = Readable;

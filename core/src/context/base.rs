@@ -1,6 +1,9 @@
 use std::{mem, ptr::NonNull};
 
-use crate::{qjs, runtime::raw::RawRuntime, Ctx, Error, Result, Runtime};
+use crate::{
+    class::Class, function::RustFunction, qjs, runtime::raw::RawRuntime, Ctx, Error, Result,
+    Runtime,
+};
 
 use super::{intrinsic, ContextBuilder, Intrinsic};
 
@@ -40,6 +43,7 @@ impl Context {
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
         unsafe { I::add_intrinsic(ctx) };
+        unsafe { Self::init_raw(ctx.as_ptr()) }
         let res = Context {
             ctx,
             rt: runtime.clone(),
@@ -56,6 +60,7 @@ impl Context {
         let guard = runtime.inner.lock();
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
+        unsafe { Self::init_raw(ctx.as_ptr()) }
         let res = Context {
             ctx,
             rt: runtime.clone(),
@@ -107,7 +112,8 @@ impl Context {
     }
 
     pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
-        RawRuntime::init_raw(qjs::JS_GetRuntime(ctx));
+        Class::<RustFunction>::register(Ctx::from_ptr(ctx))
+            .expect("failed to initialized callback class");
     }
 }
 
