@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, IntoAtom, Result, String, Value};
+use crate::{qjs, Ctx, Error, Result, String, Value};
 use std::{ffi::CStr, string::String as StdString};
 
 /// A collection of atoms which are predefined in quickjs.

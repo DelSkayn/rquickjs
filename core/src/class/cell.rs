@@ -1,36 +1,13 @@
 use std::{
     cell::{Cell, UnsafeCell},
-    error::Error,
-    fmt,
     marker::PhantomData,
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
 };
 
-use crate::{FromJs, IntoJs};
+use crate::{result::BorrowError, Error, FromJs, IntoJs};
 
 use super::{Class, JsClass};
-
-#[derive(Debug)]
-pub enum BorrowError {
-    /// The class was not writable
-    NotWritable,
-    /// The class was already borrowed in a way that prevents borrowing again.
-    AlreadyBorrowed,
-}
-
-impl fmt::Display for BorrowError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            BorrowError::NotWritable => write!(f, "tried to borrow a class which is not writable"),
-            BorrowError::AlreadyBorrowed => {
-                write!(f, "can't borrow a class as it is already borrowed")
-            }
-        }
-    }
-}
-
-impl Error for BorrowError {}
 
 /// A trait to allow classes to choose there borrowing implementation.
 ///
@@ -249,15 +226,6 @@ impl<'js, T: JsClass<'js>> JsCell<'js, T> {
     }
 }
 
-impl<'js, T: JsClass<'js>> Drop for JsCell<'js, T> {
-    fn drop(&mut self) {
-        #[cfg(feature = "multi-ctx")]
-        unsafe {
-            //qjs::JS_FreeContext(self.ctx.as_ptr())
-        };
-    }
-}
-
 /// A borrow guard for a borrowed class.
 pub struct Borrow<'a, 'js, T: JsClass<'js> + 'a>(&'a <T::Mutable as Mutability>::Cell<T>);
 
@@ -346,7 +314,7 @@ impl<'js, T: JsClass<'js> + 'js> Deref for OwnedBorrow<'js, T> {
 impl<'js, T: JsClass<'js>> FromJs<'js> for OwnedBorrow<'js, T> {
     fn from_js(ctx: crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
         let cls = Class::from_js(ctx, value)?;
-        Ok(OwnedBorrow::try_from_class(cls)?)
+        OwnedBorrow::try_from_class(cls).map_err(Error::ClassBorrow)
     }
 }
 
@@ -410,7 +378,7 @@ impl<'js, T: JsClass<'js> + 'js> DerefMut for OwnedBorrowMut<'js, T> {
 impl<'js, T: JsClass<'js>> FromJs<'js> for OwnedBorrowMut<'js, T> {
     fn from_js(ctx: crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
         let cls = Class::from_js(ctx, value)?;
-        Ok(OwnedBorrowMut::try_from_class(cls)?)
+        OwnedBorrowMut::try_from_class(cls).map_err(Error::ClassBorrow)
     }
 }
 

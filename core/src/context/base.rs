@@ -1,9 +1,6 @@
 use std::{mem, ptr::NonNull};
 
-use crate::{
-    class::Class, function::RustFunction, qjs, runtime::raw::RawRuntime, Ctx, Error, Result,
-    Runtime,
-};
+use crate::{class::Class, function::RustFunction, qjs, Ctx, Error, Result, Runtime};
 
 use super::{intrinsic, ContextBuilder, Intrinsic};
 

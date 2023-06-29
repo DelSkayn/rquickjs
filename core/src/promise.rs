@@ -7,7 +7,10 @@ use std::{
     task::{Context as TaskContext, Poll, Waker},
 };
 
-use crate::{safe_ref::Ref, CaughtResult, Ctx, FromJs, IntoJs, Object, Result, Value};
+use crate::{
+    qjs, safe_ref::Ref, CatchResultExt, CaughtError, CaughtResult, Ctx, FromJs, IntoJs, Object,
+    Result, Value,
+};
 
 /// Future-aware promise
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
@@ -73,10 +76,32 @@ impl<T> From<T> for Promised<T> {
 
 impl<'js, T, R> IntoJs<'js> for Promised<T>
 where
-    T: Future<Output = Result<R>> + 'js,
+    T: Future<Output = R> + 'js,
     R: IntoJs<'js> + 'js,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        todo!()
+        let (promise, resolve, reject) = ctx.promise()?;
+
+        let future = async move {
+            let err = match self.0.await.into_js(ctx).catch(ctx) {
+                Ok(x) => resolve.call::<_, ()>((x,)),
+                Err(e) => match e {
+                    CaughtError::Exception(e) => reject.call::<_, ()>((e,)),
+                    CaughtError::Value(e) => reject.call::<_, ()>((e,)),
+                    CaughtError::Error(e) => {
+                        let is_exception = unsafe { qjs::JS_IsException(e.throw(ctx)) };
+                        debug_assert!(is_exception);
+                        let e = ctx.catch();
+                        reject.call::<_, ()>((e,))
+                    }
+                },
+            };
+            // TODO figure out something better to do here.
+            if let Err(e) = err {
+                println!("promise handle function returned error:{}", e);
+            }
+        };
+        ctx.spawn(future);
+        Ok(promise.into_value())
     }
 }

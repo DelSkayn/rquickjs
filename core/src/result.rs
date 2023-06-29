@@ -11,16 +11,42 @@ use std::{
 
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
-use crate::{
-    class::BorrowError, function::CellFnError, qjs, Context, Ctx, Exception, Object, StdResult,
-    StdString, Type, Value,
-};
+use crate::{qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value};
 
 /// Result type used throught the library.
 pub type Result<T> = StdResult<T, Error>;
 
 /// Result type containing an the javascript exception if there was one.
 pub type CaughtResult<'js, T> = StdResult<T, CaughtError<'js>>;
+
+#[derive(Debug)]
+pub enum BorrowError {
+    /// The object was not writable
+    NotWritable,
+    /// The object was already borrowed in a way that prevents borrowing again.
+    AlreadyBorrowed,
+    /// The object could only be used once and was used already.
+    AlreadyUsed,
+}
+
+impl fmt::Display for BorrowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            BorrowError::NotWritable => write!(f, "tried to borrow a value which is not writable"),
+            BorrowError::AlreadyBorrowed => {
+                write!(f, "can't borrow a value as it is already borrowed")
+            }
+            BorrowError::AlreadyUsed => {
+                write!(
+                    f,
+                    "tried to use a value, which can only be used once, again."
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for BorrowError {}
 
 /// Error type of the library.
 #[derive(Debug)]
@@ -42,9 +68,9 @@ pub enum Error {
     /// An io error
     Io(IoError),
     /// An error happened while trying to borrow a rust class object.
-    Borrow(BorrowError),
+    ClassBorrow(BorrowError),
     /// An error happened while trying to borrow a rust function.
-    CellFn(CellFnError),
+    FunctionBorrow(BorrowError),
     /// An exception raised by quickjs itself.
     /// The actual javascript value can be retrieved by calling [`Ctx::catch`].
     ///
@@ -383,8 +409,14 @@ impl Display for Error {
                 "IO Error: ".fmt(f)?;
                 error.fmt(f)?;
             }
-            Borrow(x) => x.fmt(f)?,
-            CellFn(x) => x.fmt(f)?,
+            ClassBorrow(x) => {
+                "Error borrowing class: ".fmt(f)?;
+                x.fmt(f)?;
+            }
+            FunctionBorrow(x) => {
+                "Error borrowing function: ".fmt(f)?;
+                x.fmt(f)?;
+            }
             UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
         Ok(())
@@ -408,8 +440,6 @@ from_impls! {
     FromBytesWithNulError => InvalidCStr,
     Utf8Error => Utf8,
     IoError => Io,
-    BorrowError => Borrow,
-    CellFnError => CellFn,
 }
 
 impl From<FromUtf8Error> for Error {

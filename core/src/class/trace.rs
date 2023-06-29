@@ -42,7 +42,7 @@ macro_rules! trace_impls {
         $(
         $(#[$meta])*
         impl<'js> Trace<'js> for $($type)::*$(<$lt>)*{
-            fn trace<'a>(&self, tracer: Tracer<'a,'js>) { }
+            fn trace<'a>(&self, _tracer: Tracer<'a,'js>) { }
         }
         )*
     };

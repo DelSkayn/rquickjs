@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::{Object, Result};
 
 pub trait MethodImplementor {
-    fn implement<'js>(&self, proto: &Object<'js>) -> Result<()> {
+    fn implement<'js>(&self, _proto: &Object<'js>) -> Result<()> {
         Ok(())
     }
 }

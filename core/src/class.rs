@@ -13,8 +13,7 @@ pub use id::ClassId;
 
 mod cell;
 pub use cell::{
-    Borrow, BorrowError, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable,
-    Writable,
+    Borrow, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable, Writable,
 };
 mod ffi;
 mod trace;
@@ -217,7 +216,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// This returns an error when the class is already borrowed mutably.
     #[inline]
     pub fn try_borrow<'a>(&'a self) -> Result<Borrow<'a, 'js, C>> {
-        self.as_class().try_borrow().map_err(Error::from)
+        self.as_class().try_borrow().map_err(Error::ClassBorrow)
     }
 
     /// Try to borrow the rust class type mutably.
@@ -229,7 +228,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// can't be borrowed mutably.
     #[inline]
     pub fn try_borrow_mut<'a>(&'a self) -> Result<BorrowMut<'a, 'js, C>> {
-        self.as_class().try_borrow_mut().map_err(Error::from)
+        self.as_class().try_borrow_mut().map_err(Error::ClassBorrow)
     }
 
     /// returns a pointer to the class object.
@@ -298,7 +297,7 @@ impl<'js, C: JsClass<'js>> FromJs<'js> for Class<'js, C> {
 }
 
 impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, _ctx: Ctx<'js>) -> Result<Value<'js>> {
         Ok(self.0 .0)
     }
 }

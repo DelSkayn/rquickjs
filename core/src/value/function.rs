@@ -5,20 +5,18 @@ use crate::{
 };
 
 mod args;
-mod cell_fn;
 mod ffi;
 mod into_func;
 mod params;
 mod types;
 
 pub use args::{Args, IntoArg, IntoArgs};
-pub use cell_fn::{CellFn, CellFnError, Mut, Once};
 pub use ffi::{RustFunction, StaticJsFn};
 pub use params::{FromParam, FromParams, ParamReq, Params, ParamsAccessor};
-pub use types::{Exhaustive, Flat, Null, Opt, Rest, This, ThisFunc};
+pub use types::{Exhaustive, Flat, Mut, Null, Once, Opt, Rest, This, ThisFunc};
 
 /// A trait for converting a rust function to a javascript function.
-pub trait ToJsFunction<'js, P, const ASYNC: bool = false> {
+pub trait ToJsFunction<'js, P> {
     const NAME: Option<&'static str>;
     const CONSTRUCTOR: Option<bool>;
 
@@ -47,7 +45,7 @@ impl<'js> Function<'js> {
     /// Create a new function from any type which implements `ToJsFunction`.
     pub fn new<P, const ASYNC: bool, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
-        F: ToJsFunction<'js, P, ASYNC>,
+        F: ToJsFunction<'js, P>,
     {
         let cls = Class::instance(ctx, RustFunction(f.to_js_function()))?;
         Function(cls.into_object().into_value()).with_length(F::param_requirements().max())

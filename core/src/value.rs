@@ -32,7 +32,7 @@ pub use array_buffer::ArrayBuffer;
 #[cfg(feature = "array-buffer")]
 pub use typed_array::TypedArray;
 
-use std::{backtrace::Backtrace, fmt, mem, ops::Deref, result::Result as StdResult, str};
+use std::{fmt, mem, ops::Deref, result::Result as StdResult, str};
 
 /// Any javascript value
 pub struct Value<'js> {

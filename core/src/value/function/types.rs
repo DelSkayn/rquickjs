@@ -1,13 +1,16 @@
-use std::marker::PhantomData;
+use std::{
+    cell::{Cell, RefCell},
+    marker::PhantomData,
+};
 
 use super::ToJsFunction;
 
 /// Helper type to implement ToJsFunction for closure by constraining arguments.
-pub struct Func<T, P, const ASYNC: bool>(T, PhantomData<P>);
+pub struct Func<T, P>(T, PhantomData<P>);
 
-impl<'js, T, P, const ASYNC: bool> From<T> for Func<T, P, ASYNC>
+impl<'js, T, P> From<T> for Func<T, P>
 where
-    T: ToJsFunction<'js, P, ASYNC>,
+    T: ToJsFunction<'js, P>,
 {
     fn from(value: T) -> Self {
         Func(value, PhantomData)
@@ -41,3 +44,15 @@ pub struct Exhaustive;
 
 /// Helper type for creating a function from a closure which returns a future.
 pub struct Async<T>(pub T);
+
+/// Helper type for creating a function from a closure which implements FnMut
+///
+/// When called through [`CellFn`] will try to borrow the internal [`RefCell`], if this is not
+/// possible it will return an error.
+pub struct Mut<T>(pub RefCell<T>);
+
+/// Helper type for creating a function from a closure which implements FnMut
+///
+/// When called through [`CellFn`] will take the internal value leaving it empty. If the internal
+/// value was already empty it will return a error.
+pub struct Once<T>(pub Cell<Option<T>>);
