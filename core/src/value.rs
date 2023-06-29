@@ -391,7 +391,7 @@ macro_rules! type_impls {
 
                 o == t ||
                     (o == Float as i32 && t == Int as i32) ||
-                    (o == Object as i32 && (t == Array as i32))
+                    (o == Object as i32 && (t == Array as i32 || t == Function as i32))
             }
 
             /// Returns string representation of type
@@ -458,8 +458,8 @@ type_impls! {
     String: string => JS_TAG_STRING,
     Symbol: symbol => JS_TAG_SYMBOL,
     Array: array => JS_TAG_OBJECT,
-    Object: object => JS_TAG_OBJECT,
     Function: function => JS_TAG_OBJECT,
+    Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
     BigInt: big_int => JS_TAG_BIG_INT,
 }
@@ -650,6 +650,7 @@ mod test {
 
         assert!(Type::Object.interpretable_as(Type::Object));
         assert!(Type::Array.interpretable_as(Type::Object));
+        assert!(Type::Function.interpretable_as(Type::Object));
 
         assert!(!Type::Object.interpretable_as(Type::Array));
         assert!(!Type::Object.interpretable_as(Type::Function));

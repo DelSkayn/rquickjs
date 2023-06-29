@@ -30,14 +30,16 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
         quote!(#lib_crate::class::Writable)
     };
 
+    // TODO properly figure out generics.
     quote! {
         #item
 
-        impl #generics #lib_crate::class::Trace for #ident #generics{
-
+        impl<'js> #generics #lib_crate::class::Trace<'js> for #ident #generics{
+            fn trace<'a>(&self, _: #lib_crate::class::Tracer<'a,'js>){
+            }
         }
 
-        impl #generics #lib_crate::class::JsClass for #ident #generics{
+        impl<'js> #generics #lib_crate::class::JsClass<'js> for #ident #generics{
             const NAME: &'static str = #name;
 
             type Mutable = #mutable;
@@ -47,15 +49,20 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
                 &ID
             }
 
-            fn prototype<'js>(ctx: Ctx<'js>) -> #lib_crate::Result<Option<Object<'js>>>{
+            fn prototype(ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::Object<'js>>>{
                 use #lib_crate::class::impl_::MethodImplementor;
 
                 let res = #lib_crate::Object::new(ctx)?;
-                let implementor = #lib_crate::class::impl_::MethodImpl<#ident>;
-                (&implementor).implement(&res);
+                let implementor = #lib_crate::class::impl_::MethodImpl::<#ident>::new();
+                (&implementor).implement(&res)?;
                 Ok(Some(#lib_crate::Object::new(ctx)?))
             }
+        }
 
+        impl<'js> #generics #lib_crate::IntoJs<'js> for #ident #generics{
+            fn into_js(self,ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                #lib_crate::IntoJs::into_js(#lib_crate::class::Class::<#ident>::instance(ctx,self)?, ctx)
+            }
         }
     }
 }

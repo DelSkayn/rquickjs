@@ -31,16 +31,17 @@ pub trait StaticJsFunction {
 }
 
 /// A javascript function.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Function<'js>(pub(crate) Value<'js>);
 
 impl<'js> Function<'js> {
     /// Create a new function from any type which implements `ToJsFunction`.
-    pub fn new<P, const ASYNC: bool, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
+    pub fn new<P, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
         F: ToJsFunction<'js, P>,
     {
         let cls = Class::instance(ctx, RustFunction(f.to_js_function()))?;
+        assert!(dbg!(cls.is_function()));
         Function(cls.into_object().into_value()).with_length(F::param_requirements().max())
     }
 

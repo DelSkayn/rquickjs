@@ -26,7 +26,7 @@ fn crate_ident() -> Ident {
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn jsclass(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let meta = match NestedMeta::parse_meta_list(attr.into()) {
         Ok(x) => x,
         Err(e) => return e.into_compile_error().into(),
@@ -47,7 +47,7 @@ pub fn jsclass(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn jsfunction(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let meta = match NestedMeta::parse_meta_list(attr.into()) {
         Ok(x) => x,
         Err(e) => return e.into_compile_error().into(),
@@ -68,7 +68,7 @@ pub fn jsfunction(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn jsmethods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let item = parse_macro_input!(item as Item);
     match item {
         Item::Impl(_) => todo!(),

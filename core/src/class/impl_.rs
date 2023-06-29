@@ -11,4 +11,10 @@ pub trait MethodImplementor {
 #[derive(Default)]
 pub struct MethodImpl<T>(PhantomData<T>);
 
+impl<T> MethodImpl<T> {
+    pub fn new() -> Self {
+        MethodImpl(PhantomData)
+    }
+}
+
 impl<T> MethodImplementor for &MethodImpl<T> {}
