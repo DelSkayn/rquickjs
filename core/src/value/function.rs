@@ -1,8 +1,4 @@
-use crate::{
-    atom::PredefinedAtoms,
-    class::{Class, Tracer},
-    qjs, Ctx, FromJs, IntoJs, Object, Result, Value,
-};
+use crate::{atom::PredefinedAtom, class::Class, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
 
 mod args;
 mod ffi;
@@ -17,9 +13,6 @@ pub use types::{Exhaustive, Flat, Mut, Null, Once, Opt, Rest, This, ThisFunc};
 
 /// A trait for converting a rust function to a javascript function.
 pub trait ToJsFunction<'js, P> {
-    const NAME: Option<&'static str>;
-    const CONSTRUCTOR: Option<bool>;
-
     fn param_requirements() -> ParamReq;
 
     fn to_js_function(self) -> Box<dyn JsFunction<'js> + 'js>;
@@ -79,7 +72,7 @@ impl<'js> Function<'js> {
             let res = qjs::JS_DefinePropertyValue(
                 self.0.ctx.as_ptr(),
                 self.0.as_js_value(),
-                PredefinedAtoms::Name as qjs::JSAtom,
+                PredefinedAtom::Name as qjs::JSAtom,
                 name.into_js_value(),
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );
@@ -103,7 +96,7 @@ impl<'js> Function<'js> {
             let res = qjs::JS_DefinePropertyValue(
                 self.0.ctx.as_ptr(),
                 self.0.as_js_value(),
-                PredefinedAtoms::Length as qjs::JSAtom,
+                PredefinedAtom::Length as qjs::JSAtom,
                 len.into_js_value(),
                 (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
             );

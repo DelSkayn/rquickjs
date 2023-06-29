@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! # High-level bindings to quickjs
 //!
 //! The `rquickjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.

@@ -1,5 +1,5 @@
 use crate::{
-    atom::PredefinedAtoms, qjs, Atom, Ctx, FromAtom, IntoAtom, Result, StdString, String, Value,
+    atom::PredefinedAtom, qjs, Atom, Ctx, FromAtom, IntoAtom, Result, StdString, String, Value,
 };
 
 impl<'js> FromAtom<'js> for Atom<'js> {
@@ -26,7 +26,7 @@ impl<'js> FromAtom<'js> for StdString {
     }
 }
 
-impl<'js> IntoAtom<'js> for PredefinedAtoms {
+impl<'js> IntoAtom<'js> for PredefinedAtom {
     fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
         Ok(unsafe { Atom::from_atom_val_dup(ctx, self as qjs::JSAtom) })
     }

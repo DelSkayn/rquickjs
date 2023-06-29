@@ -1,5 +1,6 @@
 use crate::{
-    qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Value,
+    atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive,
+    Result, Value,
 };
 use std::{
     convert::{TryFrom, TryInto},
@@ -14,13 +15,13 @@ use std::{
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub trait TypedArrayItem: Copy {
-    const CLASS_NAME: &'static str;
+    const CLASS_NAME: PredefinedAtom;
 }
 
 macro_rules! typedarray_items {
     ($($name:ident: $type:ty,)*) => {
         $(impl TypedArrayItem for $type {
-            const CLASS_NAME: &'static str = stringify!($name);
+            const CLASS_NAME: PredefinedAtom = PredefinedAtom::$name;
         })*
     };
 }
@@ -139,7 +140,7 @@ impl<'js, T> TypedArray<'js, T> {
         if object.is_instance_of(class) {
             Ok(Self(object, PhantomData))
         } else {
-            Err(Error::new_from_js("object", T::CLASS_NAME))
+            Err(Error::new_from_js("object", T::CLASS_NAME.to_str()))
         }
     }
 
@@ -222,7 +223,7 @@ impl<'js, T> TypedArray<'js, T> {
 
 impl<'js, T: TypedArrayItem> AsRef<[T]> for TypedArray<'js, T> {
     fn as_ref(&self) -> &[T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect(T::CLASS_NAME);
+        let (len, ptr) = Self::get_raw(&self.0).expect(T::CLASS_NAME.to_str());
         unsafe { slice::from_raw_parts(ptr as _, len) }
     }
 }

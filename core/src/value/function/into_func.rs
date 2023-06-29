@@ -28,8 +28,6 @@ where
     ($($t,)*): FromParams<'js> + 'js,
     R: IntoJs<'js> + 'js,
 {
-    const NAME: Option<&'static str> = None;
-    const CONSTRUCTOR: Option<bool> = None;
 
     fn param_requirements() -> ParamReq {
         <($($t,)*)>::params_required()
@@ -54,8 +52,6 @@ where
     Fut: Future<Output = R> + 'js,
     R: IntoJs<'js> + 'js,
 {
-    const NAME: Option<&'static str> = None;
-    const CONSTRUCTOR: Option<bool> = None;
 
     fn param_requirements() -> ParamReq {
         <($($t,)*)>::params_required()
@@ -75,12 +71,10 @@ where
 
 impl<'js, R, Fun $(,$t)*> ToJsFunction<'js, ($($t,)*)> for Mut<Fun>
 where
-    Fun: Fn($($t),*) -> R + 'js,
+    Fun: FnMut($($t),*) -> R + 'js,
     ($($t,)*): FromParams<'js> + 'js,
     R: IntoJs<'js> + 'js,
 {
-    const NAME: Option<&'static str> = None;
-    const CONSTRUCTOR: Option<bool> = None;
 
     fn param_requirements() -> ParamReq {
         <($($t,)*)>::params_required()
@@ -101,13 +95,11 @@ where
 #[cfg(feature = "futures")]
 impl<'js, R, Fun, Fut $(,$t)*> ToJsFunction<'js, ($($t,)*)> for Async<Mut<Fun>>
 where
-    Fun: Fn($($t),*) -> Fut + 'js,
+    Fun: FnMut($($t),*) -> Fut + 'js,
     ($($t,)*): FromParams<'js> + 'js,
     Fut: Future<Output = R> + 'js,
     R: IntoJs<'js> + 'js,
 {
-    const NAME: Option<&'static str> = None;
-    const CONSTRUCTOR: Option<bool> = None;
 
     fn param_requirements() -> ParamReq {
         <($($t,)*)>::params_required()
@@ -127,12 +119,10 @@ where
 
 impl<'js, R, Fun $(,$t)*> ToJsFunction<'js, ($($t,)*)> for Once<Fun>
 where
-    Fun: Fn($($t),*) -> R + 'js,
+    Fun: FnOnce($($t),*) -> R + 'js,
     ($($t,)*): FromParams<'js> + 'js,
     R: IntoJs<'js> + 'js,
 {
-    const NAME: Option<&'static str> = None;
-    const CONSTRUCTOR: Option<bool> = None;
 
     fn param_requirements() -> ParamReq {
         <($($t,)*)>::params_required()
@@ -143,7 +133,7 @@ where
         Box::new(move |params: Params<'_, 'js>| {
             let ctx = params.ctx();
             let ($($t,)*) = <($($t,)*)>::from_params(&mut params.access())?;
-            let mut lock = self.0.take().ok_or(Error::FunctionBorrow(BorrowError::AlreadyUsed))?;
+            let lock = self.0.take().ok_or(Error::FunctionBorrow(BorrowError::AlreadyUsed))?;
             let r = (lock)($($t),*);
             r.into_js(ctx)
         }) as Box<dyn JsFunction<'js> + 'js>
@@ -153,13 +143,11 @@ where
 #[cfg(feature = "futures")]
 impl<'js, R, Fun, Fut $(,$t)*> ToJsFunction<'js, ($($t,)*)> for Async<Once<Fun>>
 where
-    Fun: Fn($($t),*) -> Fut + 'js,
+    Fun: FnOnce($($t),*) -> Fut + 'js,
     ($($t,)*): FromParams<'js> + 'js,
     Fut: Future<Output = R> + 'js,
     R: IntoJs<'js> + 'js,
 {
-    const NAME: Option<&'static str> = None;
-    const CONSTRUCTOR: Option<bool> = None;
 
     fn param_requirements() -> ParamReq {
         <($($t,)*)>::params_required()
@@ -170,7 +158,7 @@ where
         Box::new(move |params: Params<'_, 'js>| {
             let ctx = params.ctx();
             let ($($t,)*) = <($($t,)*)>::from_params(&mut params.access())?;
-            let mut lock = self.0.0.take().ok_or(Error::FunctionBorrow(BorrowError::AlreadyUsed))?;
+            let lock = self.0.0.take().ok_or(Error::FunctionBorrow(BorrowError::AlreadyUsed))?;
             let fut = (lock)($($t),*);
             Promised(fut).into_js(ctx)
         }) as Box<dyn JsFunction<'js> + 'js>

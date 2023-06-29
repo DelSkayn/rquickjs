@@ -2,10 +2,7 @@ use darling::FromMeta;
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
-use syn::{
-    punctuated::Punctuated, token::Comma, FnArg, ItemFn, LitBool, PatType, ReturnType, Signature,
-    Type,
-};
+use syn::{punctuated::Punctuated, token::Comma, FnArg, ItemFn, PatType, Signature, Type};
 
 use crate::crate_ident;
 
@@ -17,8 +14,28 @@ pub(crate) struct AttrItem {
     /// The ident prefix, defaults to 'js_'.
     prefix: Option<String>,
     rename: Option<String>,
-    #[darling(rename = "try")]
-    try_: Option<bool>,
+}
+
+pub struct Common {
+    lib_crate: Ident,
+    js_type_name: Ident,
+    arg_bindings: Vec<Ident>,
+}
+
+impl Common {
+    fn new(attr: AttrItem, sig: &Signature) -> Self {
+        let lib_crate = attr.crate_.unwrap_or_else(crate_ident);
+        let prefix = attr.prefix.as_deref().unwrap_or("js_");
+        let js_type_name = format_ident!("{}{}", prefix, sig.ident.to_string());
+        let arg_bindings = (0..sig.inputs.len())
+            .map(|x| format_ident!("tmp_{}", x))
+            .collect::<Vec<_>>();
+        Common {
+            lib_crate,
+            js_type_name,
+            arg_bindings,
+        }
+    }
 }
 
 pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
@@ -38,7 +55,6 @@ pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
         ..
     } = sig;
 
-    let lib_crate = attr.crate_.unwrap_or_else(crate_ident);
     if let Some(unsafe_) = unsafety {
         abort!(
             unsafe_,
@@ -55,47 +71,59 @@ pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
         abort!(variadic,"implementing javascript callbacks for functions with variadic params is not supported.")
     }
 
-    let prefix = attr.prefix.as_deref().unwrap_or("js_");
-
-    let is_async = asyncness.is_some();
-    let arg_types = to_args_types(inputs);
-    let arg_bindings = (0..inputs.len())
-        .map(|x| format_ident!("tmp_{}", x))
-        .collect::<Vec<_>>();
-    let name = format_ident!("{}{}", prefix, ident.to_string());
-    let output_type = match output {
-        ReturnType::Default => quote! { () },
-        ReturnType::Type(_, t) => quote! { #t },
-    };
-
-    let try_stmt = if attr.try_.unwrap_or(false) {
-        quote! { let res = res? }
-    } else {
-        TokenStream::new()
-    };
-
-    let is_async_literal = if is_async {
-        quote! { true }
-    } else {
-        quote! { false }
-    };
-
-    let future_stmt = if is_async {
+    let common = Common::new(attr, sig);
+    let name = &common.js_type_name;
+    let lib_crate = &common.lib_crate;
+    if asyncness.is_some() {
+        let impls = expand_async(sig, &common);
         quote! {
-            let res = #lib_crate::promise::Promised(res);
+            #item;
+
+            #[allow(non_camel_case_types)]
+            #vis struct #name;
+
+            #impls;
+
+            impl<'js> #lib_crate::IntoJs<'js> for #name{
+                fn into_js(self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                    #lib_crate::Function::new(ctx,#name)?.into_js(ctx)
+                }
+            }
         }
     } else {
-        TokenStream::new()
-    };
+        let impls = expand_sync(sig, &common);
+        quote! {
+            #item;
 
+            #[allow(non_camel_case_types)]
+            #vis struct #name;
+
+            #impls
+
+            impl<'js> #lib_crate::IntoJs<'js> for #name{
+                fn into_js(self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                    #lib_crate::Function::new(ctx,#name)?.into_js(ctx)
+                }
+            }
+        }
+    }
+}
+
+fn expand_sync(sig: &Signature, common: &Common) -> TokenStream {
+    let Signature {
+        ref ident,
+        ref inputs,
+        ..
+    } = sig;
+    let Common {
+        ref lib_crate,
+        ref js_type_name,
+        ref arg_bindings,
+    } = common;
+
+    let arg_types = to_args_types(inputs);
     quote! {
-        #item
-
-        #[allow(non_camel_case_types)]
-        #vis struct #name;
-
-        impl<'js> #lib_crate::function::ToJsFunction<'js,#arg_types, #is_async_literal> for #name{
-            type Output = #output_type;
+        impl<'js> #lib_crate::function::ToJsFunction<'js,#arg_types> for #js_type_name{
 
             fn param_requirements() -> #lib_crate::function::ParamReq {
                 <#arg_types as #lib_crate::function::FromParams>::params_required()
@@ -107,17 +135,52 @@ pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
                     params.check_params(<#arg_types as #lib_crate::function::FromParams>::params_required())?;
                     let (#(#arg_bindings),*) = <#arg_types as #lib_crate::function::FromParams>::from_params(&mut params.access())?;
                     let res = #ident(#(#arg_bindings),*);
-                    #try_stmt;
-                    #future_stmt;
                     #lib_crate::IntoJs::into_js(res,ctx)
                 }
+
+                Box::new(__inner)
             }
 
         }
+    }
+}
 
-        impl<'js> #lib_crate::IntoJs<'js> for #name{
-            fn into_js(self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
-                #lib_crate::Function::new(ctx,#name)?.into_js(ctx)
+fn expand_async(sig: &Signature, common: &Common) -> TokenStream {
+    let Signature {
+        ref ident,
+        ref inputs,
+        ..
+    } = sig;
+    let Common {
+        ref lib_crate,
+        ref js_type_name,
+        ref arg_bindings,
+    } = common;
+
+    let arg_types = to_args_types(inputs);
+
+    quote! {
+        impl<'js> #lib_crate::function::ToJsFunction<'js,#arg_types> for #js_type_name{
+
+            fn param_requirements() -> #lib_crate::function::ParamReq {
+                <#arg_types as #lib_crate::function::FromParams>::params_required()
+            }
+
+            fn to_js_function(self) -> Box<dyn #lib_crate::function::JsFunction<'js> + 'js>{
+                fn __inner<'js>(params: #lib_crate::function::Params<'_,'js>) -> #lib_crate::Result<rquickjs::Value<'js>>{
+                    let ctx = params.ctx();
+                    params.check_params(<#arg_types as #lib_crate::function::FromParams>::params_required())?;
+                    let params = <#arg_types as #lib_crate::function::FromParams>::from_params(&mut params.access())?;
+
+                    let fut = async move {
+                        let (#(#arg_bindings),*) = params;
+                        #ident(#(#arg_bindings),*).await
+                    };
+
+                    #lib_crate::promise::Promised(fut).into_js(ctx)
+                }
+
+                Box::new(__inner)
             }
         }
     }

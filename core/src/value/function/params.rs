@@ -223,7 +223,7 @@ impl ParamReq {
 
     /// Returns the maximum number of arguments for this requirement
     pub fn max(&self) -> usize {
-        self.min
+        self.max
     }
 
     /// Returns whether this function is required to be exhaustive called
