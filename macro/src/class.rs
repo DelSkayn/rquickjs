@@ -1,4 +1,4 @@
-use darling::{FromAttributes, FromMeta};
+use darling::FromMeta;
 use proc_macro2::{Ident, Literal, TokenStream};
 use quote::quote;
 use syn::ItemStruct;
@@ -13,7 +13,7 @@ pub(crate) struct AttrItem {
     crate_: Option<Ident>,
 }
 
-pub(crate) fn derive(attr: AttrItem, item: ItemStruct) -> TokenStream {
+pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
     let ItemStruct {
         ref ident,
         ref generics,
@@ -33,12 +33,14 @@ pub(crate) fn derive(attr: AttrItem, item: ItemStruct) -> TokenStream {
     quote! {
         #item
 
-        impl #generics #lib_crate ::class::JsClass for #ident #generics{
+        impl #generics #lib_crate::class::Trace for #ident #generics{
+
+        }
+
+        impl #generics #lib_crate::class::JsClass for #ident #generics{
             const NAME: &'static str = #name;
 
             type Mutable = #mutable;
-
-            type Outlive<'a> = #ident;
 
             fn class_id() -> &'static #lib_crate::class::ClassId{
                 static ID: #lib_crate::class::ClassId =  #lib_crate::class::ClassId::new();
@@ -46,8 +48,14 @@ pub(crate) fn derive(attr: AttrItem, item: ItemStruct) -> TokenStream {
             }
 
             fn prototype<'js>(ctx: Ctx<'js>) -> #lib_crate::Result<Option<Object<'js>>>{
+                use #lib_crate::class::impl_::MethodImplementor;
+
+                let res = #lib_crate::Object::new(ctx)?;
+                let implementor = #lib_crate::class::impl_::MethodImpl<#ident>;
+                (&implementor).implement(&res);
                 Ok(Some(#lib_crate::Object::new(ctx)?))
             }
+
         }
     }
 }

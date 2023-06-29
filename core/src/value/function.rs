@@ -15,12 +15,16 @@ pub use args::{Args, IntoArg, IntoArgs};
 pub use cell_fn::{CellFn, CellFnError, Mut, Once};
 pub use ffi::{RustFunction, StaticJsFn};
 pub use params::{FromParam, FromParams, ParamReq, Params, ParamsAccessor};
-pub use types::{Exhaustive, Flat, Func, Null, Opt, Rest, This};
+pub use types::{Exhaustive, Flat, Null, Opt, Rest, This, ThisFunc};
 
-pub trait IntoJsFunction<'js, T, P, R> {
+/// A trait for converting a rust function to a javascript function.
+pub trait ToJsFunction<'js, P, const ASYNC: bool = false> {
+    const NAME: Option<&'static str>;
+    const CONSTRUCTOR: Option<bool>;
+
     fn param_requirements() -> ParamReq;
 
-    fn into_js_function(self) -> Box<dyn JsFunction<'js> + 'js>;
+    fn to_js_function(self) -> Box<dyn JsFunction<'js> + 'js>;
 }
 
 /// A trait for functions callable from javascript but static,
@@ -35,15 +39,17 @@ pub trait StaticJsFunction {
     fn call<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>>;
 }
 
+/// A javascript function.
 #[derive(Clone)]
 pub struct Function<'js>(pub(crate) Value<'js>);
 
 impl<'js> Function<'js> {
-    pub fn new<T, P, R, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
+    /// Create a new function from any type which implements `ToJsFunction`.
+    pub fn new<P, const ASYNC: bool, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
-        F: IntoJsFunction<'js, T, P, R>,
+        F: ToJsFunction<'js, P, ASYNC>,
     {
-        let cls = Class::instance(ctx, RustFunction(f.into_js_function()))?;
+        let cls = Class::instance(ctx, RustFunction(f.to_js_function()))?;
         Function(cls.into_object().into_value()).with_length(F::param_requirements().max())
     }
 
@@ -86,12 +92,13 @@ impl<'js> Function<'js> {
         Ok(())
     }
 
+    /// Set the `name` property of this function and then return self.
     pub fn with_name<S: AsRef<str>>(self, name: S) -> Result<Self> {
         self.set_name(name)?;
         Ok(self)
     }
 
-    /// Set the `length` property of this function
+    /// Sets the `length` property of the function.
     pub fn set_length(&self, len: usize) -> Result<()> {
         let len = len.into_js(self.0.ctx)?;
         unsafe {
@@ -109,6 +116,7 @@ impl<'js> Function<'js> {
         Ok(())
     }
 
+    /// Sets the `length` property of the function and return self.
     pub fn with_length(self, len: usize) -> Result<Self> {
         self.set_length(len)?;
         Ok(self)
@@ -134,7 +142,7 @@ impl<'js> Function<'js> {
         res != 0
     }
 
-    /// Make this function an constructor.
+    /// Set whether this function is a constructor or not.
     pub fn set_constructor(&self, is_constructor: bool) {
         unsafe {
             qjs::JS_SetConstructorBit(
@@ -143,5 +151,11 @@ impl<'js> Function<'js> {
                 is_constructor as i32,
             )
         };
+    }
+
+    /// Set whether this function is a constructor or not then return self.
+    pub fn with_constructor(self, is_constructor: bool) -> Self {
+        self.set_constructor(is_constructor);
+        self
     }
 }

@@ -19,6 +19,8 @@ pub use cell::{
 mod ffi;
 mod trace;
 pub use trace::{Trace, Tracer};
+#[doc(hidden)]
+pub mod impl_;
 
 pub trait JsClass<'js>: Trace<'js> {
     /// The name the constructor has in javascript

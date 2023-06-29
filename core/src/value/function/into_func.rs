@@ -1,5 +1,5 @@
-use super::{CellFn, FromParams, IntoJsFunction, JsFunction, ParamReq, Params};
-use crate::{IntoJs, Result, Value};
+use super::{CellFn, FromParams, JsFunction, ParamReq, Params, ToJsFunction};
+use crate::{FromJs, Function, IntoJs, Result, Value};
 
 #[cfg(feature = "futures")]
 use crate::{function::types::Async, promise::Promised};
@@ -15,17 +15,20 @@ where
     }
 }
 
-impl<'js, P, R, F> IntoJsFunction<'js, F, P, R> for F
+impl<'js, R, P, F> ToJsFunction<'js, P, false> for F
 where
-    F: CellFn<'js, P, R> + 'js,
+    F: CellFn<'js, P, false, Output = R> + 'js,
     P: FromParams<'js> + 'js,
     R: IntoJs<'js> + 'js,
 {
+    const NAME: Option<&'static str> = None;
+    const CONSTRUCTOR: Option<bool> = None;
+
     fn param_requirements() -> ParamReq {
-        P::params_requirements()
+        P::params_required()
     }
 
-    fn into_js_function(self) -> Box<dyn JsFunction<'js> + 'js> {
+    fn to_js_function(self) -> Box<dyn JsFunction<'js> + 'js> {
         Box::new(move |params: Params<'_, 'js>| {
             let ctx = params.ctx();
             let params = P::from_params(&mut params.access())?;
@@ -36,22 +39,25 @@ where
 }
 
 #[cfg(feature = "futures")]
-impl<'js, P, R, F, Fut> IntoJsFunction<'js, F, P, Fut> for Async<F>
+impl<'js, P, R, F, Fut> ToJsFunction<'js, P, true> for F
 where
-    F: CellFn<'js, P, Fut> + 'js,
+    F: CellFn<'js, P, true, Output = Fut> + 'js,
     P: FromParams<'js> + 'js,
     Fut: Future<Output = Result<R>> + 'js,
     R: IntoJs<'js> + 'js,
 {
+    const NAME: Option<&'static str> = None;
+    const CONSTRUCTOR: Option<bool> = None;
+
     fn param_requirements() -> ParamReq {
-        P::params_requirements()
+        P::params_required()
     }
 
-    fn into_js_function(self) -> Box<dyn JsFunction<'js> + 'js> {
+    fn to_js_function(self) -> Box<dyn JsFunction<'js> + 'js> {
         Box::new(move |params: Params<'_, 'js>| {
             let ctx = params.ctx();
             let params = P::from_params(&mut params.access())?;
-            let r = self.0.call(params)?;
+            let r = self.call(params)?;
             Promised(r).into_js(ctx)
         }) as Box<dyn JsFunction<'js> + 'js>
     }

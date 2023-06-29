@@ -1,12 +1,24 @@
-use std::cell::{Cell, RefCell};
+use std::marker::PhantomData;
 
-use crate::{class::Trace, markers::Invariant};
+use super::ToJsFunction;
+
+/// Helper type to implement ToJsFunction for closure by constraining arguments.
+pub struct Func<T, P, const ASYNC: bool>(T, PhantomData<P>);
+
+impl<'js, T, P, const ASYNC: bool> From<T> for Func<T, P, ASYNC>
+where
+    T: ToJsFunction<'js, P, ASYNC>,
+{
+    fn from(value: T) -> Self {
+        Func(value, PhantomData)
+    }
+}
 
 /// helper type for working setting and retrieving `this` values.
 pub struct This<T>(pub T);
 
 /// helper type for retrieving function object on which a function is called..
-pub struct Func<T>(pub T);
+pub struct ThisFunc<T>(pub T);
 
 /// Helper type for optional paramaters.
 pub struct Opt<T>(pub Option<T>);
@@ -28,5 +40,4 @@ pub struct Flat<T>(pub T);
 pub struct Exhaustive;
 
 /// Helper type for creating a function from a closure which returns a future.
-#[cfg(feature = "futures")]
 pub struct Async<T>(pub T);

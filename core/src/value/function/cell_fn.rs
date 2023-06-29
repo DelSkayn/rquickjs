@@ -30,8 +30,9 @@ impl fmt::Display for CellFnError {
 
 /// A trait for making closures with different borrowing rules callable throught the same
 /// interface..
-pub trait CellFn<'js, P, R> {
-    fn call(&self, params: P) -> Result<R, CellFnError>;
+pub trait CellFn<'js, P, const ASYNC: bool> {
+    type Output;
+    fn call(&self, params: P) -> Result<Self::Output, CellFnError>;
 }
 
 /// Helper type for creating a function from a closure which implements FnMut
@@ -50,20 +51,22 @@ macro_rules! impl_cell_fn{
     ($($t:ident),*) => {
 
         #[allow(non_snake_case)]
-        impl<'js,Func,R$(,$t)*> CellFn<'js, ($($t,)*), R> for Func
+        impl<'js,Func,R$(,$t)*> CellFn<'js, ($($t,)*), false> for Func
         where
             Func: Fn($($t,)*) -> R,
         {
+            type Output = R;
             fn call(&self, ($($t,)*): ($($t,)*)) -> Result<R, CellFnError>{
                 Ok((self)($($t,)*))
             }
         }
 
         #[allow(non_snake_case)]
-        impl<'js,Func,R$(,$t)*> CellFn<'js, ($($t,)*), R> for Mut<Func>
+        impl<'js,Func,R$(,$t)*> CellFn<'js, ($($t,)*), false> for Mut<Func>
         where
             Func: FnMut($($t,)*) -> R,
         {
+            type Output = R;
             fn call(&self, ($($t,)*): ($($t,)*)) -> Result<R, CellFnError>{
                 let mut lock = self.0.try_borrow_mut().map_err(|_| CellFnError::AlreadyBorrowed)?;
                 Ok((lock)($($t,)*))
@@ -71,10 +74,11 @@ macro_rules! impl_cell_fn{
         }
 
         #[allow(non_snake_case)]
-        impl<'js,Func,R$(,$t)*> CellFn<'js, ($($t,)*), R> for Once<Func>
+        impl<'js,Func,R$(,$t)*> CellFn<'js, ($($t,)*), false> for Once<Func>
         where
             Func: FnOnce($($t,)*) -> R,
         {
+            type Output = R;
             fn call(&self, ($($t,)*): ($($t,)*)) -> Result<R, CellFnError>{
                 let f = self.0.take().ok_or(CellFnError::AlreadyUsed)?;
                 Ok((f)($($t,)*))
