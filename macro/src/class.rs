@@ -54,8 +54,8 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
 
                 let res = #lib_crate::Object::new(ctx)?;
                 let implementor = #lib_crate::class::impl_::MethodImpl::<#ident>::new();
-                (&implementor).implement(&res)?;
-                Ok(Some(#lib_crate::Object::new(ctx)?))
+                #lib_crate::class::impl_::MethodImplementor::<#ident>::implement(&implementor,&res)?;
+                Ok(Some(res))
             }
         }
 

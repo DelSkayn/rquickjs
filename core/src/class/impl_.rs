@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{Object, Result};
 
-pub trait MethodImplementor {
+pub trait MethodImplementor<T> {
     fn implement<'js>(&self, _proto: &Object<'js>) -> Result<()> {
         Ok(())
     }
@@ -17,4 +17,4 @@ impl<T> MethodImpl<T> {
     }
 }
 
-impl<T> MethodImplementor for &MethodImpl<T> {}
+impl<T> MethodImplementor<T> for &MethodImpl<T> {}

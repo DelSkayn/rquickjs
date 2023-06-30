@@ -76,7 +76,7 @@ impl<'a, 'js> Params<'a, 'js> {
 
     /// Returns the this on which this function called. i.e. in `bla.foo()` the `bla` value.
     pub fn this(&self) -> Value<'js> {
-        unsafe { Value::from_js_value_const(self.ctx, self.function) }
+        unsafe { Value::from_js_value_const(self.ctx, self.this) }
     }
 
     /// Returns the argument at a given index..
@@ -140,7 +140,7 @@ impl<'a, 'js> ParamsAccessor<'a, 'js> {
         let res = self.params.args[self.offset];
         self.offset += 1;
         // TODO: figure out ownership
-        unsafe { Value::from_js_value(self.params.ctx, res) }
+        unsafe { Value::from_js_value_const(self.params.ctx, res) }
     }
 
     /// returns the number of arguments remaining

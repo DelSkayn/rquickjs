@@ -41,7 +41,7 @@ impl<'js> Function<'js> {
         F: ToJsFunction<'js, P>,
     {
         let cls = Class::instance(ctx, RustFunction(f.to_js_function()))?;
-        assert!(dbg!(cls.is_function()));
+        debug_assert!(cls.is_function());
         Function(cls.into_object().into_value()).with_length(F::param_requirements().max())
     }
 

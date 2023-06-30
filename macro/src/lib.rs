@@ -8,6 +8,7 @@ use syn::{parse_macro_input, DeriveInput, Item};
 
 mod class;
 mod function;
+mod method;
 mod trace;
 
 fn crate_ident() -> Ident {
@@ -22,6 +23,11 @@ fn crate_ident() -> Ident {
             format_ident!("{}", x)
         }
     }
+}
+
+struct Common {
+    pub prefix: String,
+    pub lib_crate: Ident,
 }
 
 #[proc_macro_attribute]
@@ -40,7 +46,7 @@ pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     match item {
         Item::Struct(item) => TokenStream1::from(class::expand(attr, item)),
         item => {
-            abort!(item, "#[jsclass] macro can only be used on structs")
+            abort!(item, "#[class] macro can only be used on structs")
         }
     }
 }
@@ -61,7 +67,7 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     match item {
         Item::Fn(func) => function::expand(attr, func).into(),
         item => {
-            abort!(item, "#[jsfunction] macro can only be used on functions")
+            abort!(item, "#[function] macro can only be used on functions")
         }
     }
 }
@@ -69,11 +75,20 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let meta = match NestedMeta::parse_meta_list(attr.into()) {
+        Ok(x) => x,
+        Err(e) => return e.into_compile_error().into(),
+    };
+
+    let attr = method::AttrItem::from_list(&meta).unwrap_or_else(|error| {
+        abort_call_site!("{}", error);
+    });
+
     let item = parse_macro_input!(item as Item);
     match item {
-        Item::Impl(_) => todo!(),
+        Item::Impl(item) => method::expand(attr, item).into(),
         item => {
-            abort!(item, "#[jsmethods] macro can only be used on impl blocks")
+            abort!(item, "#[methods] macro can only be used on impl blocks")
         }
     }
 }
