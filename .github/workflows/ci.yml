@@ -87,12 +87,10 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
-      - uses: sksat/action-clippy@main
+      - uses: actions-rs/clippy-check@v1
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-check
-          fail_on_error: true
-          clippy_flags: --all --all-targets --features full-async
+          token: ${{ secrets.GITHUB_TOKEN }}
+          args: --all --all-targets --features full-async
 
   test:
     needs:
