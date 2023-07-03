@@ -15,28 +15,56 @@ use super::{Class, JsClass};
 /// This trait is not meant to be implementeded outside the rquickjs library.
 pub unsafe trait Mutability {
     #[doc(hidden)]
+    /// The interal type of cell used for this mutability.
     type Cell<T>;
 
     #[doc(hidden)]
+    /// Create a new cell.
     fn new_cell<T>(t: T) -> Self::Cell<T>;
 
     #[doc(hidden)]
+    /// Will be called before deref
+    ///
+    /// # Safety
+    /// Implementation must ensure that the cell can be immutably borrowed until unborrow is called if
+    /// this function returns without an error.
     unsafe fn borrow<'a, T>(cell: &'a Self::Cell<T>) -> Result<(), BorrowError>;
 
     #[doc(hidden)]
+    /// Will be called after the reference returned by deref is no longer in use.
+    ///
+    /// # Safety
+    /// Caller must ansure that the reference returned by deref no longer exists.
     unsafe fn unborrow<'a, T>(cell: &'a Self::Cell<T>);
 
     #[doc(hidden)]
+    /// Will be called before deref_mut
+    ///
+    /// # Safety
+    /// Implementation must ensure that the cell can be mutably borrowed until unborrow_mut is called if
+    /// this function returns without an error.
     unsafe fn borrow_mut<'a, T>(cell: &'a Self::Cell<T>) -> Result<(), BorrowError>;
 
     #[doc(hidden)]
+    /// Will be called after the reference returned by deref_mut is no longer reachable.
+    ///
+    /// # Safety
+    /// Caller must ansure that the reference returned by deref_mut no longer exists.
     unsafe fn unborrow_mut<'a, T>(cell: &'a Self::Cell<T>);
 
     #[doc(hidden)]
+    /// Returns a reference to the cell.
+    ///
+    /// # Safety
+    /// [`borrow`] must first be called on the cell and return without error before calling deref.
     unsafe fn deref<'a, T>(cell: &'a Self::Cell<T>) -> &'a T;
 
     #[doc(hidden)]
     #[allow(clippy::mut_from_ref)]
+    /// Returns a reference to the cell.
+    ///
+    /// # Safety
+    /// [`borrow_mut`] must first be called on the cell and return without error before calling deref.
     unsafe fn deref_mut<'a, T>(cell: &'a Self::Cell<T>) -> &'a mut T;
 }
 

@@ -17,7 +17,9 @@ pub trait Trace<'js> {
 pub struct Tracer<'a, 'js> {
     rt: *mut qjs::JSRuntime,
     mark_func: qjs::JS_MarkFunc,
+    /// This trace should not be able to be used with different runtimes
     _inv: Invariant<'js>,
+    /// Marker for acting like a reference so that the tracer can't be stored in an object.
     _marker: PhantomData<&'a ()>,
 }
 
