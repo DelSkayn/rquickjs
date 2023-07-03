@@ -30,6 +30,17 @@ pub unsafe extern "C" fn js_callback_class<F: StaticJsFunction>(
     }))
 }
 
+pub unsafe extern "C" fn defer_call_job(
+    ctx: *mut qjs::JSContext,
+    argc: qjs::c_int,
+    argv: *mut qjs::JSValue,
+) -> qjs::JSValue {
+    let func = *argv.offset((argc - 1) as _);
+    let this = *argv.offset((argc - 2) as _);
+    let argc = argc - 2;
+    qjs::JS_Call(ctx, func, this, argc, argv)
+}
+
 /// A static class method for making function object like classes.
 ///
 /// You can quickly create an ClassFn from any function by using the [`class_fn`] macro.

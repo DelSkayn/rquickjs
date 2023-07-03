@@ -66,6 +66,22 @@ impl<'js> Function<'js> {
         args.apply(self)
     }
 
+    /// Defer call the function with given arguments.
+    ///
+    /// Calling a function with defer is equivalent to calling a javascript function with
+    /// `setTimeout(func,0)`.
+    pub fn defer<A, R>(&self, args: A) -> Result<R>
+    where
+        A: IntoArgs<'js>,
+        R: FromJs<'js>,
+    {
+        let ctx = self.0.ctx;
+        let num = args.num_args();
+        let mut accum_args = Args::new(ctx, num);
+        args.into_args(&mut accum_args)?;
+        self.call_arg(accum_args)
+    }
+
     /// Set the `name` property of this function
     pub fn set_name<S: AsRef<str>>(&self, name: S) -> Result<()> {
         let name = name.as_ref().into_js(self.0.ctx)?;

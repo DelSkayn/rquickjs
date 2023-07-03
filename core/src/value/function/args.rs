@@ -3,6 +3,8 @@ use crate::{
     qjs, Ctx, FromJs, Function, IntoJs, Result, Value,
 };
 
+use super::ffi::defer_call_job;
+
 const ARGS_ON_STACK: usize = 8;
 
 pub enum ArgsSlice {
@@ -95,6 +97,14 @@ impl<'js> Args<'js> {
         Ok(())
     }
 
+    pub fn take_this(&mut self) -> Value<'js> {
+        let value = std::mem::replace(&mut self.this, qjs::JS_UNDEFINED);
+        Value {
+            ctx: self.ctx(),
+            value,
+        }
+    }
+
     /// The number of arguments currently in the list.
     fn len(&self) -> usize {
         match self.args {
@@ -127,6 +137,25 @@ impl<'js> Args<'js> {
             Value::from_js_value(self.ctx, val)
         };
         R::from_js(self.ctx, val)
+    }
+
+    pub fn defer<R>(mut self, func: Function<'js>) -> Result<()> {
+        let ctx = self.ctx();
+        let this = self.take_this();
+        self.push_arg(this)?;
+        self.push_arg(func)?;
+        unsafe {
+            if qjs::JS_EnqueueJob(
+                ctx.as_ptr(),
+                Some(defer_call_job),
+                self.len() as _,
+                self.as_ptr() as _,
+            ) < 0
+            {
+                return Err(ctx.raise_exception());
+            }
+        }
+        Ok(())
     }
 }
 
