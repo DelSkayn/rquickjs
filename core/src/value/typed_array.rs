@@ -204,7 +204,7 @@ impl<'js, T> TypedArray<'js, T> {
         if (off + len) > full_len {
             return None;
         }
-        let ptr = unsafe { ptr.add(off.try_into().expect(qjs::SIZE_T_ERROR)) };
+        let ptr = unsafe { ptr.add(off) };
         Some((stp, len, ptr))
     }
 

@@ -330,7 +330,7 @@ pub fn get_attrs<R: FromMeta + Default + Extend<R>>(
                          ..
                      }| FromMeta::from_list(&attrs),
                 ) {
-                    Ok(Ok(val)) => res.extend(Some(val).into_iter()),
+                    Ok(Ok(val)) => res.extend(Some(val)),
                     Ok(Err(error)) => warning!("{}", error),
                     Err(error) => warning!("{}", error),
                 }
