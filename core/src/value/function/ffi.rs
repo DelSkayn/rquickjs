@@ -8,8 +8,6 @@ use crate::{
 };
 pub use mac::static_fn;
 
-use super::JsFunction;
-
 ///. The C side callback
 pub unsafe extern "C" fn js_callback_class<F: StaticJsFunction>(
     ctx: *mut qjs::JSContext,
@@ -63,9 +61,24 @@ impl StaticJsFn {
     }
 }
 
-/// The class used for wrapping closures, all rust functions which are callable from javascript are
-/// instances of this class.
-pub struct RustFunction<'js>(pub Box<dyn JsFunction<'js> + 'js>);
+/// A trait for dynamic callbacks to rust.
+pub trait RustFunc<'js> {
+    /// Call the actual function with a given set of parameters and return a function.
+    fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
+}
+
+impl<'js, F> RustFunc<'js> for F
+where
+    for<'a> F: Fn(Params<'a, 'js>) -> Result<Value<'js>>,
+{
+    fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>> {
+        (self)(params)
+    }
+}
+
+/// The class used for wrapping closures, rquickjs implements callbacks by creating an instances of
+/// this class.
+pub struct RustFunction<'js>(pub Box<dyn RustFunc<'js> + 'js>);
 
 /// The static function which is called when javascripts calls an instance of RustFunction
 fn call_rust_func_class<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>> {

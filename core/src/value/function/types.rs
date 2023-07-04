@@ -3,14 +3,14 @@ use std::{
     marker::PhantomData,
 };
 
-use super::ToJsFunction;
+use super::IntoJsFunc;
 
 /// Helper type to implement ToJsFunction for closure by constraining arguments.
 pub struct Func<T, P>(T, PhantomData<P>);
 
 impl<'js, T, P> From<T> for Func<T, P>
 where
-    T: ToJsFunction<'js, P>,
+    T: IntoJsFunc<'js, P>,
 {
     fn from(value: T) -> Self {
         Func(value, PhantomData)

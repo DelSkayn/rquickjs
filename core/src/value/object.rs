@@ -181,7 +181,7 @@ impl<'js> Object<'js> {
     /// Convert into an array
     pub fn into_array(self) -> Option<Array<'js>> {
         if self.is_array() {
-            Some(Array(self.0))
+            Some(Array(self))
         } else {
             None
         }

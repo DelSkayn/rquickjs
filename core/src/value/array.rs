@@ -13,7 +13,7 @@ use super::convert::FromIteratorJs;
 /// This value represents such a optimized array.
 #[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
-pub struct Array<'js>(pub(crate) Value<'js>);
+pub struct Array<'js>(pub(crate) Object<'js>);
 
 impl<'js> Array<'js> {
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
@@ -21,6 +21,8 @@ impl<'js> Array<'js> {
             let val = qjs::JS_NewArray(ctx.as_ptr());
             ctx.handle_exception(val)?;
             Value::from_js_value(ctx, val)
+                .into_object()
+                .expect("arrays should always be objects")
         }))
     }
 
@@ -42,7 +44,7 @@ impl<'js> Array<'js> {
 
     /// Get the value at an index in the javascript array.
     pub fn get<V: FromJs<'js>>(&self, idx: usize) -> Result<V> {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let obj = self.0.as_js_value();
         let val = unsafe {
             let val = qjs::JS_GetPropertyUint32(ctx.as_ptr(), obj, idx as _);
@@ -54,12 +56,12 @@ impl<'js> Array<'js> {
 
     /// Set the value at an index in the javascript array.
     pub fn set<V: IntoJs<'js>>(&self, idx: usize, val: V) -> Result<()> {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let obj = self.0.as_js_value();
         let val = val.into_js(ctx)?.into_js_value();
         unsafe {
             if 0 > qjs::JS_SetPropertyUint32(ctx.as_ptr(), obj, idx as _, val) {
-                return Err(self.ctx.raise_exception());
+                return Err(ctx.raise_exception());
             }
         }
         Ok(())
@@ -76,25 +78,12 @@ impl<'js> Array<'js> {
         }
     }
 
-    /// Reference as an object
-    #[inline]
-    pub fn as_object(&self) -> &Object<'js> {
-        unsafe { &*(self as *const _ as *const Object) }
-    }
-
-    /// Convert into an object
-    #[inline]
     pub fn into_object(self) -> Object<'js> {
-        Object(self.0)
+        self.0
     }
 
-    /// Convert from an object
-    pub fn from_object(object: Object<'js>) -> Result<Self> {
-        if object.is_array() {
-            Ok(Self(object.0))
-        } else {
-            Err(Error::new_from_js("object", "array"))
-        }
+    pub fn as_object(&self) -> &Object<'js> {
+        &self.0
     }
 }
 

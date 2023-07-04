@@ -75,12 +75,13 @@ where
         if self.state.poll(cx.waker().clone()).is_none() {
             let then: Function = self.promise.get(PredefinedAtom::Then)?;
             let state = self.state.clone();
-            let resolve = Function::new(ctx, move |ctx: Ctx<'js>, value: Value<'js>| {
+            let resolve = Function::new(ctx, move |value: Value<'js>| {
+                let ctx = value.ctx();
                 let t = T::from_js(ctx, value).catch(ctx);
                 state.resolve(t);
             });
             let state = self.state.clone();
-            let reject = Function::new(ctx, move |ctx: Ctx<'js>, value: Value<'js>| {
+            let reject = Function::new(ctx, move |value: Value<'js>| {
                 let e =
                     if let Some(e) = value.clone().into_object().and_then(Exception::from_object) {
                         CaughtError::Exception(e)

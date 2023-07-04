@@ -157,7 +157,6 @@ impl PredefinedAtom {
             PredefinedAtom::Configurable => "configurable",
             PredefinedAtom::Writable => "writable",
             PredefinedAtom::Enumerable => "enumerable",
-
             PredefinedAtom::Module => "Module",
             PredefinedAtom::Then => "then",
             PredefinedAtom::Resolve => "resolve",
@@ -170,7 +169,6 @@ impl PredefinedAtom {
             PredefinedAtom::Groups => "groups",
             PredefinedAtom::Status => "status",
             PredefinedAtom::Reason => "reason",
-
             PredefinedAtom::ToJSON => "toJSON",
             PredefinedAtom::Object => "Object",
             PredefinedAtom::Array => "Array",

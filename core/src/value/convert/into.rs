@@ -50,7 +50,9 @@ where
     for<'a> &'a T: IntoJs<'js>,
 {
     fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        self.iter().collect_js(ctx).map(|Array(value)| value)
+        self.iter()
+            .collect_js(ctx)
+            .map(|Array(value)| value.into_value())
     }
 }
 
@@ -248,7 +250,7 @@ macro_rules! into_js_impls {
                     let ($($type,)*) = self.0;
                     let array = Array::new(ctx)?;
                     $(array.set(into_js_impls!(@idx $type), $type)?;)*
-                    Ok(array.0)
+                    Ok(array.into_value())
                 }
             }
         )*
@@ -265,7 +267,7 @@ macro_rules! into_js_impls {
                 fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js(ctx)
-                        .map(|Array(value)| value)
+                        .map(|Array(value)| value.into_value())
                 }
             }
 
@@ -277,7 +279,7 @@ macro_rules! into_js_impls {
                 fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js(ctx)
-                        .map(|Array(value)| value)
+                        .map(|Array(value)| value.into_value())
                 }
             }
         )*

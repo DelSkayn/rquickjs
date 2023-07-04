@@ -1,4 +1,9 @@
-use crate::{atom::PredefinedAtom, class::Class, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
+use crate::{
+    atom::PredefinedAtom,
+    class::{Class, JsClass},
+    function::ffi::RustFunc,
+    qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Type, Value,
+};
 
 mod args;
 mod ffi;
@@ -8,19 +13,16 @@ mod types;
 
 pub use args::{Args, IntoArg, IntoArgs};
 pub use ffi::{RustFunction, StaticJsFn};
-pub use params::{FromParam, FromParams, ParamReq, Params, ParamsAccessor};
+pub use params::{FromParam, FromParams, ParamRequirement, Params, ParamsAccessor};
 pub use types::{Exhaustive, Flat, Mut, Null, Once, Opt, Rest, This, ThisFunc};
 
 /// A trait for converting a rust function to a javascript function.
-pub trait ToJsFunction<'js, P> {
-    fn param_requirements() -> ParamReq;
+pub trait IntoJsFunc<'js, P> {
+    /// Returns the requirements this function has for the set of arguments used to call this
+    /// function.
+    fn param_requirement() -> ParamRequirement;
 
-    fn to_js_function(self) -> Box<dyn JsFunction<'js> + 'js>;
-}
-
-/// A trait for functions callable from javascript but static,
-/// Used for implementing callable objects.
-pub trait JsFunction<'js> {
+    /// Call the function with the given parameters.
     fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
 }
 
@@ -32,17 +34,21 @@ pub trait StaticJsFunction {
 
 /// A javascript function.
 #[derive(Clone, Debug)]
-pub struct Function<'js>(pub(crate) Value<'js>);
+#[repr(transparent)]
+pub struct Function<'js>(pub(crate) Object<'js>);
 
 impl<'js> Function<'js> {
-    /// Create a new function from any type which implements `ToJsFunction`.
+    /// Create a new function from a rust function which implements [`IntoJsFunc`].
     pub fn new<P, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
-        F: ToJsFunction<'js, P>,
+        F: IntoJsFunc<'js, P> + 'js,
     {
-        let cls = Class::instance(ctx, RustFunction(f.to_js_function()))?;
+        let func =
+            Box::new(move |params: Params<'_, 'js>| f.call(params)) as Box<dyn RustFunc<'js> + 'js>;
+
+        let cls = Class::instance(ctx, RustFunction(func))?;
         debug_assert!(cls.is_function());
-        Function(cls.into_object().into_value()).with_length(F::param_requirements().max())
+        Function(cls.into_object()).with_length(F::param_requirement().min())
     }
 
     /// Call the function with given arguments.
@@ -165,5 +171,53 @@ impl<'js> Function<'js> {
     pub fn with_constructor(self, is_constructor: bool) -> Self {
         self.set_constructor(is_constructor);
         self
+    }
+}
+
+pub struct Constructor<'js>(pub(crate) Function<'js>);
+
+impl<'js> Constructor<'js> {
+    /// Creates a rust constructor function for a rust class.
+    pub fn new<C, F, P>(ctx: Ctx<'js>, f: F) -> Result<Self>
+    where
+        F: IntoJsFunc<'js, P>,
+    {
+        let func = Box::new(move |params: Params<'_, 'js>| {
+            let this = params.this();
+        });
+        todo!()
+    }
+
+    /// Create a new rust constructor function with a given prototype.
+    ///
+    /// Usefull if the function does not return a rust class.
+    pub fn new_prototype<F, P>(ctx: Ctx<'js>, prototype: Object<'js>, f: F) -> Result<Self>
+    where
+        F: IntoJsFunc<'js, P> + 'js,
+    {
+        let proto_clone = prototype.clone();
+        let func = Box::new(move |mut params: Params<'_, 'js>| -> Result<Value<'js>> {
+            let this = params.this();
+            let proto = this
+                .as_function()
+                .map(|func| func.get(PredefinedAtom::Prototype))
+                .unwrap_or_else(|| Ok(proto_clone.clone()))?;
+
+            let res = f.call(params)?;
+            res.as_object()
+                .ok_or_else(|| Error::IntoJs {
+                    from: res.type_of().as_str(),
+                    to: "object",
+                    message: Some("rust constructor function did not return a object".to_owned()),
+                })?
+                .set_prototype(&proto)?;
+            Ok(res)
+        });
+        let func = Function(Class::instance(ctx, RustFunction(func))?.into_object())
+            .with_constructor(true);
+        unsafe {
+            qjs::JS_SetConstructor(ctx.as_ptr(), func.as_js_value(), prototype.as_js_value())
+        };
+        Ok(Constructor(func))
     }
 }

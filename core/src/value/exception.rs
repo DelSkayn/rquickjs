@@ -6,7 +6,7 @@ use crate::{convert::Coerced, qjs, Ctx, Error, FromJs, IntoJs, Object, Result, V
 ///
 /// Will turn into a error when converted to javascript but won't autmatically be thrown.
 #[repr(transparent)]
-pub struct Exception<'js>(Object<'js>);
+pub struct Exception<'js>(pub(crate) Object<'js>);
 
 impl fmt::Debug for Exception<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -29,11 +29,6 @@ impl<'js> Exception<'js> {
     /// Returns a reference to the underlying object.
     pub fn as_object(&self) -> &Object<'js> {
         &self.0
-    }
-
-    /// Turns the exception into a generic javascript value.
-    pub fn into_value(self) -> Value<'js> {
-        self.0.into_value()
     }
 
     /// Creates an exception from an object if it is an instance of error.
@@ -255,40 +250,5 @@ impl fmt::Display for Exception<'_> {
             stack.fmt(f)?;
         }
         Ok(())
-    }
-}
-
-impl<'js> Deref for Exception<'js> {
-    type Target = Object<'js>;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_object()
-    }
-}
-
-impl<'js> FromJs<'js> for Exception<'js> {
-    fn from_js(_ctx: crate::Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        if let Some(obj) = value.as_object() {
-            if obj.is_error() {
-                return Ok(Exception(obj.clone()));
-            } else {
-                return Err(Error::FromJs {
-                    from: value.type_name(),
-                    to: "Exception",
-                    message: Some("object was not an instance of error".to_string()),
-                });
-            }
-        }
-        return Err(Error::FromJs {
-            from: value.type_name(),
-            to: "Exception",
-            message: Some("value was not a type".to_string()),
-        });
-    }
-}
-
-impl<'js> IntoJs<'js> for Exception<'js> {
-    fn into_js(self, _ctx: crate::Ctx<'js>) -> Result<Value<'js>> {
-        Ok(self.0.into_value())
     }
 }
