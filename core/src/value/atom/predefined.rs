@@ -31,6 +31,32 @@ pub enum PredefinedAtom {
     Writable = qjs::JS_ATOM_writable,
     /// "enumerable",
     Enumerable = qjs::JS_ATOM_enumerable,
+
+    /// "Module"
+    Module = qjs::JS_ATOM_Module,
+    /// "then"
+    Then = qjs::JS_ATOM_then,
+    /// "resolve"
+    Resolve = qjs::JS_ATOM_resolve,
+    /// "reject"
+    Reject = qjs::JS_ATOM_reject,
+    /// "promise"
+    Promise = qjs::JS_ATOM_promise,
+    /// "proxy"
+    Proxy = qjs::JS_ATOM_proxy,
+    /// "revoke"
+    Revoke = qjs::JS_ATOM_revoke,
+    /// "async"
+    Async = qjs::JS_ATOM_async,
+    /// "exec"
+    Exec = qjs::JS_ATOM_exec,
+    /// "groups"
+    Groups = qjs::JS_ATOM_groups,
+    /// "status"
+    Status = qjs::JS_ATOM_status,
+    /// "reason"
+    Reason = qjs::JS_ATOM_reason,
+
     /// "toJSON"
     ToJSON = qjs::JS_ATOM_toJSON,
     /// "Object"
@@ -131,6 +157,20 @@ impl PredefinedAtom {
             PredefinedAtom::Configurable => "configurable",
             PredefinedAtom::Writable => "writable",
             PredefinedAtom::Enumerable => "enumerable",
+
+            PredefinedAtom::Module => "Module",
+            PredefinedAtom::Then => "then",
+            PredefinedAtom::Resolve => "resolve",
+            PredefinedAtom::Reject => "reject",
+            PredefinedAtom::Promise => "promise",
+            PredefinedAtom::Proxy => "proxy",
+            PredefinedAtom::Revoke => "revoke",
+            PredefinedAtom::Async => "async",
+            PredefinedAtom::Exec => "exec",
+            PredefinedAtom::Groups => "groups",
+            PredefinedAtom::Status => "status",
+            PredefinedAtom::Reason => "reason",
+
             PredefinedAtom::ToJSON => "toJSON",
             PredefinedAtom::Object => "Object",
             PredefinedAtom::Array => "Array",

@@ -8,8 +8,8 @@ use std::{
 };
 
 use crate::{
-    qjs, safe_ref::Ref, CatchResultExt, CaughtError, CaughtResult, Ctx, FromJs, IntoJs, Object,
-    Result, Value,
+    atom::PredefinedAtom, function::This, qjs, safe_ref::Ref, CatchResultExt, CaughtError,
+    CaughtResult, Ctx, Exception, FromJs, Function, IntoJs, Object, Result, ThrowResultExt, Value,
 };
 
 /// Future-aware promise
@@ -25,6 +25,14 @@ struct State<'js, T> {
 }
 
 impl<'js, T: 'js> State<'js, T> {
+    fn poll(&self, waker: Waker) -> Option<Waker> {
+        self.waker.replace(Some(waker))
+    }
+
+    fn take_result(&self) -> Option<CaughtResult<'js, T>> {
+        self.result.take()
+    }
+
     fn resolve(&self, result: CaughtResult<'js, T>) {
         self.result.set(Some(result));
         self.waker
@@ -58,8 +66,32 @@ where
 {
     type Output = Result<T>;
 
-    fn poll(self: Pin<&mut Self>, _cx: &mut TaskContext) -> Poll<Self::Output> {
-        todo!()
+    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext) -> Poll<Self::Output> {
+        let ctx = self.promise.ctx();
+        if let Some(x) = self.state.take_result() {
+            return Poll::Ready(x.throw(ctx));
+        }
+
+        if self.state.poll(cx.waker().clone()).is_none() {
+            let then: Function = self.promise.get(PredefinedAtom::Then)?;
+            let state = self.state.clone();
+            let resolve = Function::new(ctx, move |ctx: Ctx<'js>, value: Value<'js>| {
+                let t = T::from_js(ctx, value).catch(ctx);
+                state.resolve(t);
+            });
+            let state = self.state.clone();
+            let reject = Function::new(ctx, move |ctx: Ctx<'js>, value: Value<'js>| {
+                let e =
+                    if let Some(e) = value.clone().into_object().and_then(Exception::from_object) {
+                        CaughtError::Exception(e)
+                    } else {
+                        CaughtError::Value(value)
+                    };
+                state.resolve(Err(e))
+            });
+            then.call((This(self.promise.clone()), resolve, reject))?;
+        };
+        Poll::Pending
     }
 }
 

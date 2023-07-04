@@ -253,6 +253,16 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for T {
     }
 }
 
+impl<'js> FromParam<'js> for Ctx<'js> {
+    fn params_required() -> ParamReq {
+        ParamReq::none()
+    }
+
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+        Ok(params.ctx())
+    }
+}
+
 impl<'js, T: FromJs<'js>> FromParam<'js> for Opt<T> {
     fn params_required() -> ParamReq {
         ParamReq::optional()
