@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
@@ -31,7 +31,7 @@ impl<'js> Array<'js> {
         let ctx = self.0.ctx;
         let value = self.0.as_js_value();
         unsafe {
-            let val = qjs::JS_GetPropertyStr(ctx.as_ptr(), value, b"length\0".as_ptr() as *const _);
+            let val = qjs::JS_GetProperty(ctx.as_ptr(), value, PredefinedAtom::Length as _);
             assert!(qjs::JS_IsInt(val));
             qjs::JS_VALUE_GET_INT(val) as _
         }

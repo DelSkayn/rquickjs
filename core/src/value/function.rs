@@ -174,18 +174,46 @@ impl<'js> Function<'js> {
     }
 }
 
+#[repr(transparent)]
 pub struct Constructor<'js>(pub(crate) Function<'js>);
 
 impl<'js> Constructor<'js> {
     /// Creates a rust constructor function for a rust class.
     pub fn new<C, F, P>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
-        F: IntoJsFunc<'js, P>,
+        F: IntoJsFunc<'js, P> + 'js,
+        C: JsClass<'js>,
     {
-        let func = Box::new(move |params: Params<'_, 'js>| {
+        let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
             let this = params.this();
+            let proto = this
+                .into_function()
+                .map(|func| func.get(PredefinedAtom::Prototype))
+                .unwrap_or_else(|| Ok(Class::<C>::prototype(ctx)))?;
+
+            let res = f.call(params)?;
+            res.as_object()
+                .ok_or_else(|| Error::IntoJs {
+                    from: res.type_of().as_str(),
+                    to: "object",
+                    message: Some("rust constructor function did not return a object".to_owned()),
+                })?
+                .set_prototype(proto.as_ref())?;
+            Ok(res)
         });
-        todo!()
+        let func = Function(Class::instance(ctx, RustFunction(func))?.into_object())
+            .with_constructor(true);
+        unsafe {
+            qjs::JS_SetConstructor(
+                ctx.as_ptr(),
+                func.as_js_value(),
+                Class::<C>::prototype(ctx)
+                    .as_ref()
+                    .map(|x| x.as_js_value())
+                    .unwrap_or(qjs::JS_NULL),
+            )
+        };
+        Ok(Constructor(func))
     }
 
     /// Create a new rust constructor function with a given prototype.
@@ -196,12 +224,12 @@ impl<'js> Constructor<'js> {
         F: IntoJsFunc<'js, P> + 'js,
     {
         let proto_clone = prototype.clone();
-        let func = Box::new(move |mut params: Params<'_, 'js>| -> Result<Value<'js>> {
+        let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
             let this = params.this();
             let proto = this
                 .as_function()
                 .map(|func| func.get(PredefinedAtom::Prototype))
-                .unwrap_or_else(|| Ok(proto_clone.clone()))?;
+                .unwrap_or_else(|| Ok(Some(proto_clone.clone())))?;
 
             let res = f.call(params)?;
             res.as_object()
@@ -210,7 +238,7 @@ impl<'js> Constructor<'js> {
                     to: "object",
                     message: Some("rust constructor function did not return a object".to_owned()),
                 })?
-                .set_prototype(&proto)?;
+                .set_prototype(proto.as_ref())?;
             Ok(res)
         });
         let func = Function(Class::instance(ctx, RustFunction(func))?.into_object())

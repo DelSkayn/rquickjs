@@ -1,6 +1,6 @@
-use std::{fmt, ops::Deref};
+use std::fmt;
 
-use crate::{convert::Coerced, qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Result, Value};
 
 /// A javascript instance of Error
 ///
@@ -48,7 +48,7 @@ impl<'js> Exception<'js> {
                 .into_object()
                 .expect("`JS_NewError` did not return an object")
         };
-        obj.set("message", message)?;
+        obj.set(PredefinedAtom::Message, message)?;
         Ok(Exception(obj))
     }
 
@@ -65,9 +65,9 @@ impl<'js> Exception<'js> {
                 .into_object()
                 .expect("`JS_NewError` did not return an object")
         };
-        obj.set("message", message)?;
-        obj.set("fileName", file)?;
-        obj.set("lineNumber", line)?;
+        obj.set(PredefinedAtom::Message, message)?;
+        obj.set(PredefinedAtom::FileName, file)?;
+        obj.set(PredefinedAtom::LineNumber, line)?;
         Ok(Exception(obj))
     }
 
@@ -85,7 +85,7 @@ impl<'js> Exception<'js> {
     ///
     /// Same as retrieving `error.fileName` in javascript.
     pub fn file(&self) -> Option<String> {
-        self.get::<_, Option<Coerced<String>>>("fileName")
+        self.get::<_, Option<Coerced<String>>>(PredefinedAtom::FileName)
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
@@ -95,7 +95,7 @@ impl<'js> Exception<'js> {
     ///
     /// Same as retrieving `error.lineNumber` in javascript.
     pub fn line(&self) -> Option<i32> {
-        self.get::<_, Option<Coerced<i32>>>("lineNumber")
+        self.get::<_, Option<Coerced<i32>>>(PredefinedAtom::LineNumber)
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
@@ -105,7 +105,7 @@ impl<'js> Exception<'js> {
     ///
     /// Same as retrieving `error.stack` in javascript.
     pub fn stack(&self) -> Option<String> {
-        self.get::<_, Option<Coerced<String>>>("stack")
+        self.get::<_, Option<Coerced<String>>>(PredefinedAtom::Stack)
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
@@ -140,6 +140,8 @@ impl<'js> Exception<'js> {
     /// Throws a new syntax error.
     pub fn throw_syntax(ctx: Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -154,6 +156,8 @@ impl<'js> Exception<'js> {
     /// Throws a new type error.
     pub fn throw_type(ctx: Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -172,6 +176,8 @@ impl<'js> Exception<'js> {
     /// Throws a new reference error.
     pub fn throw_reference(ctx: Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -190,6 +196,8 @@ impl<'js> Exception<'js> {
     /// Throws a new range error.
     pub fn throw_range(ctx: Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -208,6 +216,8 @@ impl<'js> Exception<'js> {
     /// Throws a new internal error.
     pub fn throw_internal(ctx: Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {

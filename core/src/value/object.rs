@@ -140,25 +140,28 @@ impl<'js> Object<'js> {
     }
 
     /// Get an object prototype
-    pub fn get_prototype(&self) -> Result<Object<'js>> {
-        Ok(unsafe {
+    ///
+    /// Objects can have no prototype, in this case this function will return null.
+    pub fn get_prototype(&self) -> Option<Object<'js>> {
+        unsafe {
             let proto = qjs::JS_GetPrototype(self.0.ctx.as_ptr(), self.0.as_js_value());
             if qjs::JS_IsNull(proto) {
-                return Err(Error::Unknown);
+                None
             } else {
-                Object::from_js_value(self.0.ctx, proto)
+                Some(Object::from_js_value(self.0.ctx, proto))
             }
-        })
+        }
     }
 
     /// Set an object prototype
-    pub fn set_prototype(&self, proto: &Object<'js>) -> Result<()> {
+    ///
+    /// If called with None the function will set the prototype of the object to null.
+    ///
+    /// This function will error if setting the prototype causes a cycle in the prototype chain.
+    pub fn set_prototype(&self, proto: Option<&Object<'js>>) -> Result<()> {
+        let proto = proto.map(|x| x.as_js_value()).unwrap_or(qjs::JS_NULL);
         unsafe {
-            if 1 != qjs::JS_SetPrototype(
-                self.0.ctx.as_ptr(),
-                self.0.as_js_value(),
-                proto.0.as_js_value(),
-            ) {
+            if 1 != qjs::JS_SetPrototype(self.0.ctx.as_ptr(), self.0.as_js_value(), proto) {
                 Err(self.0.ctx.raise_exception())
             } else {
                 Ok(())

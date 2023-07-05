@@ -11,7 +11,9 @@ use std::{
 
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
-use crate::{qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value};
+use crate::{
+    atom::PredefinedAtom, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
+};
 
 /// Result type used throught the library.
 pub type Result<T> = StdResult<T, Error>;
@@ -292,7 +294,7 @@ impl Error {
                         return value;
                     }
                     let obj = Object::from_js_value(ctx, value);
-                    match obj.set("message", error.to_string()) {
+                    match obj.set(PredefinedAtom::Message, error.to_string()) {
                         Ok(_) => {}
                         Err(Error::Exception) => return qjs::JS_EXCEPTION,
                         Err(e) => {
