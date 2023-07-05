@@ -3,7 +3,7 @@ use crate::{
     qjs, Ctx, FromJs, Function, IntoJs, Result, Value,
 };
 
-use super::ffi::defer_call_job;
+use super::{ffi::defer_call_job, Constructor};
 
 const ARGS_ON_STACK: usize = 8;
 
@@ -139,7 +139,7 @@ impl<'js> Args<'js> {
         R::from_js(self.ctx, val)
     }
 
-    pub fn defer<R>(mut self, func: Function<'js>) -> Result<()> {
+    pub fn defer(mut self, func: Function<'js>) -> Result<()> {
         let ctx = self.ctx();
         let this = self.take_this();
         self.push_arg(this)?;
@@ -156,6 +156,34 @@ impl<'js> Args<'js> {
             }
         }
         Ok(())
+    }
+
+    pub fn construct<R>(self, constructor: &Constructor<'js>) -> Result<R>
+    where
+        R: FromJs<'js>,
+    {
+        let value = if unsafe { qjs::JS_VALUE_GET_TAG(self.this) != qjs::JS_TAG_UNDEFINED } {
+            unsafe {
+                qjs::JS_CallConstructor2(
+                    self.ctx.as_ptr(),
+                    constructor.as_js_value(),
+                    self.this,
+                    self.len() as _,
+                    self.as_ptr() as _,
+                )
+            }
+        } else {
+            unsafe {
+                qjs::JS_CallConstructor(
+                    self.ctx.as_ptr(),
+                    constructor.as_js_value(),
+                    self.len() as _,
+                    self.as_ptr() as _,
+                )
+            }
+        };
+        let value = unsafe { self.ctx.handle_exception(value)? };
+        R::from_js(self.ctx, unsafe { Value::from_js_value(self.ctx, value) })
     }
 }
 
@@ -191,6 +219,34 @@ pub trait IntoArgs<'js> {
 
     /// Convert the value into an argument.
     fn into_args(self, args: &mut Args<'js>) -> Result<()>;
+
+    fn apply<R>(self, function: &Function<'js>) -> Result<R>
+    where
+        R: FromJs<'js>,
+        Self: Sized,
+    {
+        let mut args = Args::new(function.ctx(), self.num_args());
+        self.into_args(&mut args)?;
+        args.apply(function)
+    }
+
+    fn defer<R>(self, function: Function<'js>) -> Result<()>
+    where
+        Self: Sized,
+    {
+        let mut args = Args::new(function.ctx(), self.num_args());
+        self.into_args(&mut args)?;
+        args.defer(function)
+    }
+
+    fn construct<R>(self, function: &Constructor<'js>) -> Result<()>
+    where
+        Self: Sized,
+    {
+        let mut args = Args::new(function.ctx(), self.num_args());
+        self.into_args(&mut args)?;
+        args.construct(function)
+    }
 }
 
 impl<'js, T: IntoJs<'js>> IntoArg<'js> for T {

@@ -2,7 +2,7 @@ use crate::{
     atom::PredefinedAtom,
     class::{Class, JsClass},
     function::ffi::RustFunc,
-    qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Type, Value,
+    qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value,
 };
 
 mod args;
@@ -247,5 +247,24 @@ impl<'js> Constructor<'js> {
             qjs::JS_SetConstructor(ctx.as_ptr(), func.as_js_value(), prototype.as_js_value())
         };
         Ok(Constructor(func))
+    }
+
+    pub fn construct<A, R>(&self, args: A) -> Result<R>
+    where
+        A: IntoArgs<'js>,
+        R: FromJs<'js>,
+    {
+        let ctx = self.0.ctx;
+        let num = args.num_args();
+        let mut accum_args = Args::new(ctx, num);
+        args.into_args(&mut accum_args)?;
+        self.construct_args(accum_args)
+    }
+
+    pub fn construct_args<R>(&self, args: Args<'js>) -> Result<R>
+    where
+        R: FromJs<'js>,
+    {
+        args.construct(self)
     }
 }

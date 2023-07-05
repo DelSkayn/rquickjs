@@ -95,6 +95,7 @@ pub mod prelude {
     pub use crate::promise::{Promise, Promised};
     pub use crate::{
         convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs},
+        function::{IntoArg, IntoArgs},
         result::{CatchResultExt, ThrowResultExt},
     };
 }

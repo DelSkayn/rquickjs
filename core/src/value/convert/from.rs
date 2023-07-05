@@ -322,7 +322,6 @@ impl<'js> FromJs<'js> for f32 {
     }
 }
 
-/*
 fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
     let global = ctx.globals();
     let date_ctor: Object = global.get("Date")?;
@@ -337,9 +336,7 @@ fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
 
     get_time_fn.call((crate::function::This(value),))
 }
-*/
 
-/*
 impl<'js> FromJs<'js> for SystemTime {
     fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
         let millis = date_to_millis(ctx, value)?;
@@ -441,4 +438,3 @@ mod test {
         });
     }
 }
-*/

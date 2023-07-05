@@ -11,6 +11,8 @@ use std::{
     slice,
 };
 
+use super::Constructor;
+
 /// The trait which implements types which capable to be TypedArray items
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
@@ -171,9 +173,8 @@ impl<'js, T> TypedArray<'js, T> {
         T: TypedArrayItem,
     {
         let ctx = arraybuffer.0.ctx;
-        let ctor: Function = ctx.globals().get(T::CLASS_NAME)?;
-        /* ctor.construct((arraybuffer,)) */
-        todo!()
+        let ctor: Constructor = ctx.globals().get(T::CLASS_NAME)?;
+        ctor.construct((arraybuffer,))
     }
 
     pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {

@@ -301,10 +301,8 @@ impl Error {
                             panic!("generated error while throwing error: {}", e);
                         }
                     }
-                    std::mem::drop(obj);
-                    todo!()
-                    //let js_val = (obj).into_js_value();
-                    //return qjs::JS_Throw(ctx.as_ptr(), js_val);
+                    let js_val = (obj).into_js_value();
+                    qjs::JS_Throw(ctx.as_ptr(), js_val)
                 }
             }
         }
