@@ -1,4 +1,6 @@
-use crate::{qjs, Ctx, IntoAtom, IntoJs, Object, Result, Undefined, Value};
+use crate::{
+    function::IntoJsFunc, qjs, Ctx, Function, IntoAtom, IntoJs, Object, Result, Undefined, Value,
+};
 
 impl<'js> Object<'js> {
     /// Define a property of an object
@@ -209,9 +211,9 @@ impl<G, S> Accessor<G, S> {
 }
 
 /// A property with getter only
-impl<'js, G, GA, GR> AsProperty<'js, (GA, GR, (), ())> for Accessor<G, ()>
+impl<'js, G, GA> AsProperty<'js, (GA, (), ())> for Accessor<G, ()>
 where
-    G: AsFunction<'js, GA, GR> + 'js,
+    G: IntoJsFunc<'js, GA> + 'js,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((
@@ -224,9 +226,9 @@ where
 }
 
 /// A property with setter only
-impl<'js, S, SA, SR> AsProperty<'js, ((), (), SA, SR)> for Accessor<(), S>
+impl<'js, S, SA> AsProperty<'js, ((), (), SA)> for Accessor<(), S>
 where
-    S: AsFunction<'js, SA, SR> + 'js,
+    S: IntoJsFunc<'js, SA> + 'js,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((
@@ -239,10 +241,10 @@ where
 }
 
 /// A property with getter and setter
-impl<'js, G, GA, GR, S, SA, SR> AsProperty<'js, (GA, GR, SA, SR)> for Accessor<G, S>
+impl<'js, G, GA, S, SA> AsProperty<'js, (GA, SA)> for Accessor<G, S>
 where
-    G: AsFunction<'js, GA, GR> + 'js,
-    S: AsFunction<'js, SA, SR> + 'js,
+    G: IntoJsFunc<'js, GA> + 'js,
+    S: IntoJsFunc<'js, SA> + 'js,
 {
     fn config(self, ctx: Ctx<'js>) -> Result<(PropertyFlags, Value<'js>, Value<'js>, Value<'js>)> {
         Ok((

@@ -9,6 +9,8 @@ use std::{
     marker::PhantomData,
     mem,
 };
+mod property;
+pub use property::{Accessor, AsProperty, Property, PropertyFlags};
 
 /// Rust representation of a javascript object.
 #[derive(Debug, PartialEq, Clone)]

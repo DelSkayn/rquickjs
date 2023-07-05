@@ -1,7 +1,8 @@
-use darling::FromMeta;
+use darling::{FromAttributes, FromField, FromMeta};
 use proc_macro2::{Ident, Literal, TokenStream};
+use proc_macro_error::abort;
 use quote::quote;
-use syn::ItemStruct;
+use syn::{Fields, ItemStruct, Type, Visibility};
 
 use crate::crate_ident;
 
@@ -13,10 +14,57 @@ pub(crate) struct AttrItem {
     crate_: Option<Ident>,
 }
 
+#[derive(Debug, FromMeta, FromField)]
+pub(crate) struct Field {
+    /// Rename the field when creating getters and setters.
+    #[darling(default)]
+    rename: Option<String>,
+    /// Create a getter
+    #[darling(default)]
+    get: bool,
+    /// Create a setter
+    #[darling(default)]
+    set: bool,
+    /// Don't trace this field
+    skip_trace: bool,
+    name: Option<Ident>,
+    vis: Visibility,
+    ty: Type,
+}
+
+impl Field {
+    pub fn parse_fields(fields: &Fields) -> Vec<Field> {
+        match fields {
+            Fields::Unit => Vec::new(),
+            Fields::Named(fields) => fields
+                .named
+                .iter()
+                .map(|x| match Field::from_field(x) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        abort!(x, "{}", e)
+                    }
+                })
+                .collect(),
+            Fields::Unnamed(fields) => fields
+                .unnamed
+                .iter()
+                .map(|x| match Field::from_field(x) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        abort!(x, "{}", e)
+                    }
+                })
+                .collect(),
+        }
+    }
+}
+
 pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
     let ItemStruct {
         ref ident,
         ref generics,
+        ref fields,
         ..
     } = item;
 
@@ -29,6 +77,8 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
     } else {
         quote!(#lib_crate::class::Writable)
     };
+
+    let _fields = Field::parse_fields(fields);
 
     // TODO properly figure out generics.
     quote! {

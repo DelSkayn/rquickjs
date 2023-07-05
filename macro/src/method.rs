@@ -1,4 +1,4 @@
-use darling::FromMeta;
+use darling::{FromAttributes, FromMeta};
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::quote;
@@ -12,6 +12,14 @@ pub(crate) struct AttrItem {
     prefix: Option<String>,
     #[darling(rename = "crate")]
     crate_: Option<Ident>,
+}
+
+#[derive(Debug, FromMeta, Default)]
+#[darling(default)]
+pub(crate) struct FuncAttr {
+    new: bool,
+    skip: bool,
+    rename: Option<String>,
 }
 
 pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
