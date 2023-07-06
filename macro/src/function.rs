@@ -1,10 +1,8 @@
 use darling::FromMeta;
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::{abort, emit_warning};
+use proc_macro_error::abort;
 use quote::{format_ident, quote};
-use syn::{
-    punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, TypePath, Visibility,
-};
+use syn::{punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, Visibility};
 
 use crate::{crate_ident, Common};
 
@@ -45,6 +43,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct JsFunction {
     pub vis: Visibility,
     pub name: Ident,
@@ -180,6 +179,7 @@ impl JsFunction {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct JsParams {
     pub params: Vec<JsParam>,
 }
@@ -201,13 +201,14 @@ impl JsParams {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum ParamKind {
     Value,
     Borrow,
     BorrowMut,
 }
 
+#[derive(Debug)]
 pub(crate) struct JsParam {
     kind: ParamKind,
     number: usize,

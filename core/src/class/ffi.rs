@@ -5,7 +5,7 @@ use crate::{class::JsCell, qjs};
 use super::JsClass;
 
 pub(crate) unsafe extern "C" fn finalizer<'js, C: JsClass<'js>>(
-    rt: *mut qjs::JSRuntime,
+    _rt: *mut qjs::JSRuntime,
     val: qjs::JSValue,
 ) {
     let ptr = qjs::JS_GetOpaque(val, C::class_id().get()).cast::<JsCell<C>>();

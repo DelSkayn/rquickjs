@@ -11,7 +11,6 @@ pub struct Exception<'js>(pub(crate) Object<'js>);
 impl fmt::Debug for Exception<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exception")
-            .field("object", &self.0)
             .field("message", &self.message())
             .field("file", &self.file())
             .field("line", &self.line())

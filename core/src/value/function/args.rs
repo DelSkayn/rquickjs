@@ -97,6 +97,7 @@ impl<'js> Args<'js> {
         Ok(())
     }
 
+    /// Replace the this value with 'Undefined' and return the original value.
     pub fn take_this(&mut self) -> Value<'js> {
         let value = std::mem::replace(&mut self.this, qjs::JS_UNDEFINED);
         Value {
@@ -271,7 +272,7 @@ impl<'js, T: IntoJs<'js>> IntoArg<'js> for This<T> {
 
 impl<'js, T: IntoJs<'js>> IntoArg<'js> for Opt<T> {
     fn num_args(&self) -> usize {
-        1
+        self.0.is_some() as usize
     }
 
     fn into_arg(self, args: &mut Args<'js>) -> Result<()> {
@@ -284,7 +285,7 @@ impl<'js, T: IntoJs<'js>> IntoArg<'js> for Opt<T> {
 
 impl<'js, T: IntoJs<'js>> IntoArg<'js> for Rest<T> {
     fn num_args(&self) -> usize {
-        1
+        self.0.len()
     }
 
     fn into_arg(self, args: &mut Args<'js>) -> Result<()> {

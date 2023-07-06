@@ -224,7 +224,8 @@ impl<'js, T> TypedArray<'js, T> {
 
 impl<'js, T: TypedArrayItem> AsRef<[T]> for TypedArray<'js, T> {
     fn as_ref(&self) -> &[T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect(T::CLASS_NAME.to_str());
+        let (len, ptr) =
+            Self::get_raw(&self.0).unwrap_or_else(|| panic!("{}", T::CLASS_NAME.to_str()));
         unsafe { slice::from_raw_parts(ptr as _, len) }
     }
 }

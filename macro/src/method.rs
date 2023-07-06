@@ -2,7 +2,7 @@ use darling::{FromAttributes, FromMeta};
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::quote;
-use syn::{ImplItemFn, ItemImpl};
+use syn::{spanned::Spanned, Attribute, Block, ImplItemFn, ItemImpl, Signature, Type, Visibility};
 
 use crate::{crate_ident, function::JsFunction, Common};
 
@@ -14,19 +14,124 @@ pub(crate) struct AttrItem {
     crate_: Option<Ident>,
 }
 
-#[derive(Debug, FromMeta, Default)]
+#[derive(Debug, FromAttributes, Default)]
 #[darling(default)]
-pub(crate) struct FuncAttr {
+#[darling(attributes(quickjs))]
+pub(crate) struct MethodAttr {
     new: bool,
     skip: bool,
+    r#static: bool,
     rename: Option<String>,
+}
+
+#[derive(Debug)]
+pub struct JsMethod {
+    parse_attrs: MethodAttr,
+    function: JsFunction,
+    attrs: Vec<Attribute>,
+    vis: Visibility,
+    sig: Signature,
+    block: Block,
+}
+
+impl JsMethod {
+    pub fn parse_impl_fn(func: ImplItemFn, self_ty: &Type) -> Self {
+        let span = func.span();
+        let ImplItemFn {
+            mut attrs,
+            vis,
+            defaultness,
+            sig,
+            block,
+        } = func;
+        let parse_attrs = match MethodAttr::from_attributes(&attrs) {
+            Ok(x) => x,
+            Err(e) => {
+                abort!(span, "{}", e);
+            }
+        };
+
+        if let Some(d) = defaultness {
+            abort!(d, "default fn's are not supported.")
+        }
+
+        attrs.retain(|x| !x.path().is_ident("quickjs"));
+
+        let function = JsFunction::new(vis.clone(), &sig, Some(self_ty));
+
+        JsMethod {
+            parse_attrs,
+            function,
+            attrs,
+            vis,
+            sig,
+            block,
+        }
+    }
+
+    pub fn expand_impl(&self) -> TokenStream {
+        let attrs = &self.attrs;
+        let vis = &self.vis;
+        let sig = &self.sig;
+        let block = &self.block;
+
+        quote! {
+            #(#attrs)* #vis #sig #block
+        }
+    }
+
+    pub(crate) fn expand_js_impl(&self, common: &Common) -> TokenStream {
+        if self.parse_attrs.skip {
+            return TokenStream::new();
+        }
+        let carry_type = self.function.expand_carry_type(common);
+        let impl_ = self.function.expand_to_js_function_impl(common);
+        let into_js = self.function.expand_into_js_impl(common);
+
+        quote! {
+            #carry_type
+
+            #impl_
+
+            #into_js
+        }
+    }
+
+    pub(crate) fn expand_associated_type(&self, common: &Common) -> TokenStream {
+        if self.parse_attrs.skip {
+            return TokenStream::new();
+        }
+        let associated_name = self.function.expand_carry_type_name(common);
+        let impl_name = self.function.expand_carry_type_name(common);
+        let vis = &self.vis;
+
+        quote! {
+            #vis const #associated_name: #impl_name = #impl_name;
+        }
+    }
+
+    pub(crate) fn expand_apply_to_proto(&self, common: &Common, self_ty: &Type) -> TokenStream {
+        if self.parse_attrs.skip {
+            return TokenStream::new();
+        }
+        let func_name_str = &self.function.name;
+        let js_func_name = self.function.expand_carry_type_name(common);
+        quote! {
+            _proto.set(stringify!(#func_name_str),#self_ty::#js_func_name)?;
+        }
+    }
 }
 
 pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
     let ItemImpl {
-        ref trait_,
-        ref self_ty,
-        ref items,
+        attrs,
+        defaultness,
+        unsafety,
+        impl_token,
+        generics,
+        trait_,
+        self_ty,
+        items,
         ..
     } = item;
 
@@ -37,6 +142,13 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         );
     }
 
+    if let Some(d) = defaultness {
+        abort!(d, "default impl's are not supported.")
+    }
+    if let Some(u) = unsafety {
+        abort!(u, "unsafe impl's are not supported.")
+    }
+
     let common = Common {
         prefix: attr.prefix.unwrap_or_else(|| "js_".to_string()),
         lib_crate: attr.crate_.unwrap_or_else(crate_ident),
@@ -45,14 +157,10 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
     let mut functions = Vec::new();
     //let mut consts = Vec::new();
 
-    for item in items.iter() {
+    for item in items {
         match item {
-            syn::ImplItem::Const(ref _item) => {}
-            syn::ImplItem::Fn(ref item) => {
-                let ImplItemFn { vis, sig, .. } = item;
-
-                functions.push(JsFunction::new(vis.clone(), sig, Some(&**self_ty)))
-            }
+            syn::ImplItem::Const(_item) => {}
+            syn::ImplItem::Fn(item) => functions.push(JsMethod::parse_impl_fn(item, &self_ty)),
             _ => {}
         }
     }
@@ -61,45 +169,29 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         prefix: "__impl_".to_string(),
         lib_crate: common.lib_crate.clone(),
     };
+    let function_impls = functions.iter().map(|func| func.expand_impl());
 
-    let function_impls = functions.iter().map(|func| {
-        let carry_type = func.expand_carry_type(&func_common);
-        let impl_ = func.expand_to_js_function_impl(&func_common);
-        let into_js = func.expand_into_js_impl(&func_common);
-
-        quote! {
-            #carry_type
-
-            #impl_
-
-            #into_js
-        }
-    });
+    let function_js_impls = functions
+        .iter()
+        .map(|func| func.expand_js_impl(&func_common));
 
     let lib_crate = &common.lib_crate;
 
-    let associated_types = functions.iter().map(|func| {
-        let associated_name = func.expand_carry_type_name(&common);
-        let impl_name = func.expand_carry_type_name(&func_common);
-        let vis = &func.vis;
+    let associated_types = functions
+        .iter()
+        .map(|func| func.expand_associated_type(&func_common));
 
-        quote! {
-            #vis const #associated_name: #impl_name = #impl_name;
-        }
-    });
-
-    let function_apply_proto = functions.iter().map(|func| {
-        let func_name_str = &func.name;
-        let js_func_name = func.expand_carry_type_name(&common);
-        quote! {
-            _proto.set(stringify!(#func_name_str),#self_ty::#js_func_name)?;
-        }
-    });
+    let function_apply_proto = functions
+        .iter()
+        .map(|func| func.expand_apply_to_proto(&common, &self_ty));
 
     quote! {
-        #item
+        #(#attrs)*
+        #impl_token #generics #self_ty {
+            #(#function_impls)*
+        }
 
-        #(#function_impls)*
+        #(#function_js_impls)*
 
         #[allow(non_upper_case_globals)]
         impl #self_ty{

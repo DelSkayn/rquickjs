@@ -6,7 +6,6 @@ use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     sync::{Mutex, RwLock},
-    time::SystemTime,
 };
 
 #[cfg(feature = "either")]
