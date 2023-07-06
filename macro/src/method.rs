@@ -1,6 +1,8 @@
+use std::collections::HashMap;
+
 use darling::{FromAttributes, FromMeta};
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::abort;
+use proc_macro_error::{abort, emit_warning};
 use quote::quote;
 use syn::{spanned::Spanned, Attribute, Block, ImplItemFn, ItemImpl, Signature, Type, Visibility};
 
@@ -14,7 +16,7 @@ pub(crate) struct AttrItem {
     crate_: Option<Ident>,
 }
 
-#[derive(Debug, FromAttributes, Default)]
+#[derive(Debug, FromAttributes, Default, Clone)]
 #[darling(default)]
 #[darling(attributes(qjs))]
 pub(crate) struct MethodAttr {
@@ -28,7 +30,7 @@ pub(crate) struct MethodAttr {
     rename: Option<String>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct JsMethod {
     parse_attrs: MethodAttr,
     function: JsFunction,
@@ -108,6 +110,15 @@ impl JsMethod {
         }
     }
 
+    /// The name on of this method on the javascript side.
+    pub fn name(&self) -> String {
+        if let Some(x) = self.parse_attrs.rename.clone() {
+            x
+        } else {
+            format!("{}", self.function.name)
+        }
+    }
+
     pub fn expand_impl(&self) -> TokenStream {
         let attrs = &self.attrs;
         let vis = &self.vis;
@@ -165,6 +176,120 @@ impl JsMethod {
     }
 }
 
+pub struct Accessor {
+    get: Option<JsMethod>,
+    set: Option<JsMethod>,
+}
+
+impl Accessor {
+    fn expand_impl(&self) -> TokenStream {
+        let mut res = TokenStream::new();
+        if let Some(ref x) = self.get {
+            res.extend(x.expand_impl());
+        }
+        if let Some(ref x) = self.set {
+            res.extend(x.expand_impl());
+        }
+        res
+    }
+
+    fn expand_js_impl(&self, common: &Common) -> TokenStream {
+        let get_common = Common {
+            prefix: "__impl_get_".to_string(),
+            lib_crate: common.lib_crate.clone(),
+        };
+        let set_common = Common {
+            prefix: "__impl_set_".to_string(),
+            lib_crate: common.lib_crate.clone(),
+        };
+
+        let mut res = TokenStream::new();
+        if let Some(ref g) = self.get {
+            res.extend(g.expand_js_impl(&get_common));
+        }
+        if let Some(ref s) = self.set {
+            res.extend(s.expand_js_impl(&set_common));
+        }
+        res
+    }
+
+    fn expand_apply_to_proto(&self, lib_crate: &Ident) -> TokenStream {
+        let get_common = Common {
+            prefix: "__impl_get_".to_string(),
+            lib_crate: lib_crate.clone(),
+        };
+        let set_common = Common {
+            prefix: "__impl_set_".to_string(),
+            lib_crate: lib_crate.clone(),
+        };
+
+        match (self.get.as_ref(), self.set.as_ref()) {
+            (Some(get), Some(set)) => {
+                let configurable = get.parse_attrs.configurable || set.parse_attrs.configurable;
+                let enumerable = get.parse_attrs.enumerable || set.parse_attrs.enumerable;
+
+                let name = get.name();
+
+                let configurable = configurable
+                    .then(|| quote!(.configurable()))
+                    .unwrap_or_default();
+                let enumerable = enumerable
+                    .then(|| quote!(.enumerable()))
+                    .unwrap_or_default();
+
+                let get_name = get.function.expand_carry_type_name(&get_common);
+                let set_name = set.function.expand_carry_type_name(&set_common);
+                quote! {_proto.prop(#name,
+                        #lib_crate::object::Accessor::new(#get_name,#set_name)
+                        #configurable
+                        #enumerable
+                )?;}
+            }
+            (Some(get), None) => {
+                let configurable = get.parse_attrs.configurable;
+                let enumerable = get.parse_attrs.enumerable;
+
+                let name = get.name();
+
+                let configurable = configurable
+                    .then(|| quote!(.configurable()))
+                    .unwrap_or_default();
+                let enumerable = enumerable
+                    .then(|| quote!(.enumerable()))
+                    .unwrap_or_default();
+
+                let get_name = get.function.expand_carry_type_name(&get_common);
+                quote! {_proto.prop(#name,
+                        #lib_crate::object::Accessor::new_get(#get_name)
+                        #configurable
+                        #enumerable
+                )?;}
+            }
+            (None, Some(set)) => {
+                let configurable = set.parse_attrs.configurable;
+                let enumerable = set.parse_attrs.enumerable;
+
+                let name = set.name();
+
+                let configurable = configurable
+                    .then(|| quote!(.configurable()))
+                    .unwrap_or_default();
+                let enumerable = enumerable
+                    .then(|| quote!(.enumerable()))
+                    .unwrap_or_default();
+
+                let set_name = set.function.expand_carry_type_name(&set_common);
+                quote! {_proto.prop(#name,
+                        #lib_crate::object::Accessor::new_set(#set_name)
+                        #configurable
+                        #enumerable
+                )?;}
+            }
+            (None, None) => TokenStream::new(),
+        }
+    }
+}
+
 pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
     let ItemImpl {
         attrs,
@@ -197,13 +322,37 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         lib_crate: attr.crate_.unwrap_or_else(crate_ident),
     };
 
+    let mut accessors = HashMap::new();
     let mut functions = Vec::new();
     //let mut consts = Vec::new();
 
     for item in items {
         match item {
             syn::ImplItem::Const(_item) => {}
-            syn::ImplItem::Fn(item) => functions.push(JsMethod::parse_impl_fn(item, &self_ty)),
+            syn::ImplItem::Fn(item) => {
+                let function = JsMethod::parse_impl_fn(item, &self_ty);
+                if function.parse_attrs.get {
+                    let access = accessors.entry(function.name()).or_insert(Accessor {
+                        get: None,
+                        set: None,
+                    });
+                    if access.get.is_some() {
+                        emit_warning!(function.sig, "redefined a getter for `{}`", function.name());
+                    }
+                    access.get = Some(function);
+                } else if function.parse_attrs.set {
+                    let access = accessors.entry(function.name()).or_insert(Accessor {
+                        get: None,
+                        set: None,
+                    });
+                    if access.set.is_some() {
+                        emit_warning!(function.sig, "redefined a setter for `{}`", function.name());
+                    }
+                    access.set = Some(function.clone());
+                } else {
+                    functions.push(function)
+                }
+            }
             _ => {}
         }
     }
@@ -212,11 +361,16 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         prefix: "__impl_".to_string(),
         lib_crate: common.lib_crate.clone(),
     };
+
     let function_impls = functions.iter().map(|func| func.expand_impl());
+    let accessor_impls = accessors.values().map(|access| access.expand_impl());
 
     let function_js_impls = functions
         .iter()
         .map(|func| func.expand_js_impl(&func_common));
+    let accessor_js_impls = accessors
+        .values()
+        .map(|access| access.expand_js_impl(&common));
 
     let lib_crate = &common.lib_crate;
 
@@ -227,14 +381,19 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
     let function_apply_proto = functions
         .iter()
         .map(|func| func.expand_apply_to_proto(&common, &self_ty));
+    let accessor_apply_proto = accessors
+        .values()
+        .map(|access| access.expand_apply_to_proto(&common.lib_crate));
 
     quote! {
         #(#attrs)*
         #impl_token #generics #self_ty {
             #(#function_impls)*
+            #(#accessor_impls)*
         }
 
         #(#function_js_impls)*
+        #(#accessor_js_impls)*
 
         #[allow(non_upper_case_globals)]
         impl #self_ty{
@@ -243,8 +402,8 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
         impl #lib_crate::class::impl_::MethodImplementor<#self_ty> for #lib_crate::class::impl_::MethodImpl<#self_ty> {
             fn implement<'js>(&self, _proto: &#lib_crate::Object<'js>) -> #lib_crate::Result<()>{
-                dbg!("CALLED");
                 #(#function_apply_proto)*
+                #(#accessor_apply_proto)*
                 Ok(())
             }
         }

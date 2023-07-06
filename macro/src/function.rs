@@ -43,7 +43,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct JsFunction {
     pub vis: Visibility,
     pub name: Ident,
@@ -181,17 +181,12 @@ impl JsFunction {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct JsParams {
     pub params: Vec<JsParam>,
 }
 
 impl JsParams {
-    pub fn expand_binding(&self) -> TokenStream {
-        let iter = self.params.iter().map(|x| x.expand_binding());
-        quote! { #(#iter),* }
-    }
-
     pub fn expand_apply(&self) -> TokenStream {
         let iter = self.params.iter().map(|x| x.expand_apply());
         quote! { #(#iter),* }
@@ -217,7 +212,7 @@ pub(crate) enum ParamKind {
     BorrowMut,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct JsParam {
     kind: ParamKind,
     number: usize,

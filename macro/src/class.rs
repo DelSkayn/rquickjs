@@ -87,6 +87,20 @@ impl Field {
         res
     }
 
+    pub fn expand_trace_body(&self, lib_crate: &Ident, which: usize) -> TokenStream {
+        if self.skip_trace {
+            return TokenStream::new();
+        }
+        let field = self
+            .ident
+            .clone()
+            .unwrap_or_else(|| format_ident!("{}", which));
+
+        quote! {
+            #lib_crate::class::Trace::<'js>::trace(&self.#field,_tracer);
+        }
+    }
+
     pub fn expand_property(&self, lib_crate: &Ident, which: usize) -> TokenStream {
         let accessor = if self.get && self.set {
             let field = self
@@ -205,6 +219,10 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
         }
         Fields::Unit => todo!(),
     };
+    let trace_impls = prop_fields
+        .iter()
+        .enumerate()
+        .map(|(idx, x)| x.expand_trace_body(&lib_crate, idx));
 
     // TODO properly figure out generics.
     quote! {
@@ -228,7 +246,8 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
             }
 
             impl<'js> #generics #lib_crate::class::Trace<'js> for #ident #generics{
-                fn trace<'a>(&self, _: #lib_crate::class::Tracer<'a,'js>){
+                fn trace<'a>(&self, _tracer: #lib_crate::class::Tracer<'a,'js>){
+                    #(#trace_impls)*
                 }
             }
 
@@ -248,7 +267,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
                     let proto = #lib_crate::Object::new(ctx)?;
                     #(#props)*
                     let implementor = #lib_crate::class::impl_::MethodImpl::<#ident>::new();
-                    (&&implementor).implement(&proto)?;
+                    (&implementor).implement(&proto)?;
                     Ok(Some(proto))
                 }
             }
