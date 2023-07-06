@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use crate::{Object, Result};
 
 /// Trait used for borrow specialization for implementing methods without access to the class.
-pub trait MethodImplementor<T> {
+pub trait MethodImplementor<T>: Sized {
     fn implement<'js>(&self, _proto: &Object<'js>) -> Result<()> {
         Ok(())
     }
@@ -19,11 +19,24 @@ impl<T> MethodImpl<T> {
     }
 }
 
+/// Specialization isn't stablized yet so in the macro we can't normally have a default
+/// implementation for class prototypes if it doesn't have an associated impl item.
+///
+/// We would need this default implementation because it is not possible to know in class macro if
+/// the method macro is triggered for a impl body of the same class.
+///
+/// We can get around this by using a bit of a heck called autoref-specialization.
+///
 /// MethodImplementor is implemented for a borrowed value generic over any T;
+/// This means you will always be able to call `(&&MethodImpl<T>).implement(proto)` because it is
+/// implemented for all &MethodImpl<T>.
 ///
-/// However if someone decides to implement it for a non borrowed value for a specific T.
-/// Calling `MethodImplementor::implement(&MethodImpl<T>,proto)` will result in specialization in
-/// the for of rust using the non borrowed implementation over the borrowed.
+/// However it the trait is also implemented for MethodImpl<Foo> for some specific class Foo the
+/// compiler will automaticall deref the first reference and call the method for the type
+/// MethodImpl<Foo> instead of the general on.
 ///
-/// Originally described by .. TODO: Lookup
+/// This allows us to provide a default implementation if no implementation of MethodImplementor is
+/// present for T.
+///
+/// Originally described by dtolnay
 impl<T> MethodImplementor<T> for &MethodImpl<T> {}

@@ -16,11 +16,15 @@ pub(crate) struct AttrItem {
 
 #[derive(Debug, FromAttributes, Default)]
 #[darling(default)]
-#[darling(attributes(quickjs))]
+#[darling(attributes(qjs))]
 pub(crate) struct MethodAttr {
     new: bool,
     skip: bool,
     r#static: bool,
+    configurable: bool,
+    enumerable: bool,
+    get: bool,
+    set: bool,
     rename: Option<String>,
 }
 
@@ -51,11 +55,46 @@ impl JsMethod {
             }
         };
 
-        if let Some(d) = defaultness {
-            abort!(d, "default fn's are not supported.")
+        if parse_attrs.get && parse_attrs.set {
+            abort!(
+                attrs[0],
+                "a function can't both be a setter and a getter at the same time."
+            )
         }
 
-        attrs.retain(|x| !x.path().is_ident("quickjs"));
+        if parse_attrs.new && parse_attrs.get {
+            abort!(
+                attrs[0],
+                "a function can't both be a getter and a constructor at the same time."
+            )
+        }
+
+        if parse_attrs.new && parse_attrs.set {
+            abort!(
+                attrs[0],
+                "a function can't both be a setter and a constructor at the same time."
+            )
+        }
+
+        if parse_attrs.configurable && !(parse_attrs.get || parse_attrs.set) {
+            abort!(
+                attrs[0],
+                "configurable can only be set for getters and setters."
+            )
+        }
+
+        if parse_attrs.enumerable && !(parse_attrs.get || parse_attrs.set) {
+            abort!(
+                attrs[0],
+                "enumerable can only be set for getters and setters."
+            )
+        }
+
+        if let Some(d) = defaultness {
+            abort!(d, "specialized fn's are not supported.")
+        }
+
+        attrs.retain(|x| !x.path().is_ident("qjs"));
 
         let function = JsFunction::new(vis.clone(), &sig, Some(self_ty));
 
@@ -97,11 +136,15 @@ impl JsMethod {
         }
     }
 
-    pub(crate) fn expand_associated_type(&self, common: &Common) -> TokenStream {
+    pub(crate) fn expand_associated_type(
+        &self,
+        associated_common: &Common,
+        common: &Common,
+    ) -> TokenStream {
         if self.parse_attrs.skip {
             return TokenStream::new();
         }
-        let associated_name = self.function.expand_carry_type_name(common);
+        let associated_name = self.function.expand_carry_type_name(associated_common);
         let impl_name = self.function.expand_carry_type_name(common);
         let vis = &self.vis;
 
@@ -143,7 +186,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
     }
 
     if let Some(d) = defaultness {
-        abort!(d, "default impl's are not supported.")
+        abort!(d, "specialized impl's are not supported.")
     }
     if let Some(u) = unsafety {
         abort!(u, "unsafe impl's are not supported.")
@@ -179,7 +222,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
     let associated_types = functions
         .iter()
-        .map(|func| func.expand_associated_type(&func_common));
+        .map(|func| func.expand_associated_type(&common, &func_common));
 
     let function_apply_proto = functions
         .iter()
@@ -200,6 +243,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
         impl #lib_crate::class::impl_::MethodImplementor<#self_ty> for #lib_crate::class::impl_::MethodImpl<#self_ty> {
             fn implement<'js>(&self, _proto: &#lib_crate::Object<'js>) -> #lib_crate::Result<()>{
+                dbg!("CALLED");
                 #(#function_apply_proto)*
                 Ok(())
             }

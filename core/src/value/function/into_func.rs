@@ -19,8 +19,8 @@ macro_rules! impl_to_js_function {
             R: IntoJs<'js> + 'js,
         {
 
-            fn param_requirement() -> ParamRequirement {
-                <($($t,)*)>::params_requirement()
+            fn param_requirements() -> ParamRequirement {
+                <($($t,)*)>::param_requirements()
             }
 
             #[allow(non_snake_case)]
@@ -41,8 +41,8 @@ macro_rules! impl_to_js_function {
             R: IntoJs<'js> + 'js,
         {
 
-            fn param_requirement() -> ParamRequirement {
-                <($($t,)*)>::params_requirement()
+            fn param_requirements() -> ParamRequirement {
+                <($($t,)*)>::param_requirements()
             }
 
             #[allow(non_snake_case)]
@@ -62,8 +62,8 @@ macro_rules! impl_to_js_function {
             R: IntoJs<'js> + 'js,
         {
 
-            fn param_requirement() -> ParamRequirement {
-                <($($t,)*)>::params_requirement()
+            fn param_requirements() -> ParamRequirement {
+                <($($t,)*)>::param_requirements()
             }
 
             #[allow(non_snake_case)]
@@ -85,8 +85,8 @@ macro_rules! impl_to_js_function {
             R: IntoJs<'js> + 'js,
         {
 
-            fn param_requirement() -> ParamRequirement {
-                <($($t,)*)>::params_requirement()
+            fn param_requirements() -> ParamRequirement {
+                <($($t,)*)>::param_requirements()
             }
 
             #[allow(non_snake_case)]
@@ -106,8 +106,8 @@ macro_rules! impl_to_js_function {
             R: IntoJs<'js> + 'js,
         {
 
-            fn param_requirement() -> ParamRequirement {
-                <($($t,)*)>::params_requirement()
+            fn param_requirements() -> ParamRequirement {
+                <($($t,)*)>::param_requirements()
             }
 
             #[allow(non_snake_case)]
@@ -129,8 +129,8 @@ macro_rules! impl_to_js_function {
             R: IntoJs<'js> + 'js,
         {
 
-            fn param_requirement() -> ParamRequirement {
-                <($($t,)*)>::params_requirement()
+            fn param_requirements() -> ParamRequirement {
+                <($($t,)*)>::param_requirements()
             }
 
             #[allow(non_snake_case)]

@@ -20,7 +20,7 @@ pub use types::{Exhaustive, Flat, Mut, Null, Once, Opt, Rest, This, ThisFunc};
 pub trait IntoJsFunc<'js, P> {
     /// Returns the requirements this function has for the set of arguments used to call this
     /// function.
-    fn param_requirement() -> ParamRequirement;
+    fn param_requirements() -> ParamRequirement;
 
     /// Call the function with the given parameters.
     fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
@@ -48,7 +48,7 @@ impl<'js> Function<'js> {
 
         let cls = Class::instance(ctx, RustFunction(func))?;
         debug_assert!(cls.is_function());
-        Function(cls.into_object()).with_length(F::param_requirement().min())
+        Function(cls.into_object()).with_length(F::param_requirements().min())
     }
 
     /// Call the function with given arguments.

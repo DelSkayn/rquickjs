@@ -126,17 +126,15 @@ impl JsFunction {
 
     pub fn expand_to_js_function_body(&self, common: &Common) -> TokenStream {
         let lib_crate = &common.lib_crate;
-        let arg_types = self.params.expand_type(lib_crate);
-        let arg_bindings = self.params.expand_binding();
+        let arg_extract = self.params.expand_extract(lib_crate);
         let arg_apply = self.params.expand_apply();
         let rust_function = &self.rust_function;
 
         if self.is_async {
             quote! {
-                let params = <#arg_types as #lib_crate::function::FromParams>::from_params(&mut params.access())?;
+                #arg_extract
 
                 let fut = async move {
-                    let (#arg_bindings) = params;
                     #rust_function(#arg_apply).await
                 };
 
@@ -144,7 +142,7 @@ impl JsFunction {
             }
         } else {
             quote! {
-                let (#arg_bindings) = <#arg_types as #lib_crate::function::FromParams>::from_params(&mut params.access())?;
+                #arg_extract
                 let res = #rust_function(#arg_apply);
                 #lib_crate::IntoJs::into_js(res,ctx)
             }
@@ -155,23 +153,27 @@ impl JsFunction {
         let body = self.expand_to_js_function_body(common);
         let lib_crate = &common.lib_crate;
         let arg_types = self.params.expand_type(lib_crate);
+        let arg_type_requirements = arg_types.iter().map(|ty| {
+            quote! {
+                .combine(<#ty as #lib_crate::function::FromParam>::param_requirement())
+            }
+        });
+        let arg_type_tuple = quote!((#(#arg_types,)*));
         let js_name = self.expand_carry_type_name(common);
 
         quote! {
-            impl<'js> #lib_crate::function::ToJsFunction<'js,#arg_types> for #js_name{
+            impl<'js> #lib_crate::function::IntoJsFunc<'js,#arg_type_tuple> for #js_name{
 
-                fn param_requirements() -> #lib_crate::function::ParamReq {
-                    <#arg_types as #lib_crate::function::FromParams>::params_required()
+                fn param_requirements() -> #lib_crate::function::ParamRequirement {
+                    #lib_crate::function::ParamRequirement::none()
+                    #(#arg_type_requirements)*
                 }
 
-                fn to_js_function(self) -> Box<dyn #lib_crate::function::JsFunction<'js> + 'js>{
-                    fn __inner<'js>(params: #lib_crate::function::Params<'_,'js>) -> #lib_crate::Result<rquickjs::Value<'js>>{
-                        let ctx = params.ctx();
-                        params.check_params(<#arg_types as #lib_crate::function::FromParams>::params_required())?;
-                        #body
-                    }
-
-                    Box::new(__inner)
+                fn call<'a>(&self, params: #lib_crate::function::Params<'a,'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                    let ctx = params.ctx();
+                    params.check_params(Self::param_requirements())?;
+                    let mut _params = params.access();
+                    #body
                 }
 
             }
@@ -195,9 +197,16 @@ impl JsParams {
         quote! { #(#iter),* }
     }
 
-    pub fn expand_type(&self, lib_crate: &Ident) -> TokenStream {
-        let iter = self.params.iter().map(|x| x.expand_type(lib_crate));
-        quote! { (#(#iter,)*) }
+    pub fn expand_type(&self, lib_crate: &Ident) -> Vec<TokenStream> {
+        self.params
+            .iter()
+            .map(|x| x.expand_type(lib_crate))
+            .collect()
+    }
+
+    pub fn expand_extract(&self, lib_crate: &Ident) -> TokenStream {
+        let res = self.params.iter().map(|x| x.expand_extract(lib_crate));
+        quote!(#(#res)*)
     }
 }
 
@@ -253,6 +262,14 @@ impl JsParam {
             )
         } else {
             ty
+        }
+    }
+
+    pub fn expand_extract(&self, lib_crate: &Ident) -> TokenStream {
+        let ty = self.expand_type(lib_crate);
+        let binding = self.expand_binding();
+        quote! {
+            let #binding = <#ty as #lib_crate::function::FromParam>::from_param(&mut _params)?;
         }
     }
 }

@@ -308,7 +308,7 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for Rest<T> {
 
 impl<'js, T: FromParams<'js>> FromParam<'js> for Flat<T> {
     fn param_requirement() -> ParamRequirement {
-        T::params_requirement()
+        T::param_requirements()
     }
 
     fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
@@ -329,7 +329,7 @@ impl<'js> FromParam<'js> for Exhaustive {
 /// A trait to extract a tuple of argument values.
 pub trait FromParams<'js>: Sized {
     /// The parameters requirements this value requires.
-    fn params_requirement() -> ParamRequirement;
+    fn param_requirements() -> ParamRequirement;
 
     /// Convert from a parameter value.
     fn from_params<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self>;
@@ -343,7 +343,7 @@ macro_rules! impl_from_params{
             $($t : FromParam<'js>,)*
         {
 
-            fn params_requirement() -> ParamRequirement{
+            fn param_requirements() -> ParamRequirement{
                 ParamRequirement::none()
                     $(.combine($t::param_requirement()))*
             }
