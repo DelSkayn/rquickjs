@@ -110,6 +110,10 @@ impl<'js> JsClass<'js> for RustFunction<'js> {
         Ok(Some(Function::prototype(ctx)))
     }
 
+    fn constructor(_ctx: crate::Ctx<'js>) -> Result<Option<super::Constructor<'js>>> {
+        Ok(None)
+    }
+
     fn function() -> Option<StaticJsFn> {
         Some(static_fn!(call_rust_func_class))
     }

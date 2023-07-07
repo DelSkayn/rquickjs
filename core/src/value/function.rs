@@ -179,7 +179,10 @@ pub struct Constructor<'js>(pub(crate) Function<'js>);
 
 impl<'js> Constructor<'js> {
     /// Creates a rust constructor function for a rust class.
-    pub fn new<C, F, P>(ctx: Ctx<'js>, f: F) -> Result<Self>
+    ///
+    /// Note that this function creates a constructor from a given function, the returned constructor
+    /// is thus not the same as the one returned from [`JsClass::constructor`].
+    pub fn new_class<C, F, P>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
         F: IntoJsFunc<'js, P> + 'js,
         C: JsClass<'js>,

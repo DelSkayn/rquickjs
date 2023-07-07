@@ -84,7 +84,7 @@ impl JsFunction {
         let params = JsParams::from_input(inputs, self_type);
 
         let rust_function = if let Some(self_type) = self_type {
-            quote! {  <#self_type>::#ident }
+            quote! {  <#self_type >::#ident }
         } else {
             quote!( #ident )
         };

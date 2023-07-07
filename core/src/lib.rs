@@ -67,6 +67,7 @@ pub use value::{
 };
 
 pub mod class;
+pub use class::Class;
 
 #[cfg(feature = "array-buffer")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
@@ -95,7 +96,7 @@ pub mod prelude {
     pub use crate::promise::{Promise, Promised};
     pub use crate::{
         convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs},
-        function::{IntoArg, IntoArgs},
+        function::{IntoArg, IntoArgs, Opt},
         result::{CatchResultExt, ThrowResultExt},
     };
 }

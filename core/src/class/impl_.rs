@@ -1,11 +1,18 @@
 use std::marker::PhantomData;
 
-use crate::{Object, Result};
+use crate::{value::Constructor, Ctx, Object, Result};
 
 /// Trait used for borrow specialization for implementing methods without access to the class.
 pub trait MethodImplementor<T>: Sized {
     fn implement<'js>(&self, _proto: &Object<'js>) -> Result<()> {
         Ok(())
+    }
+}
+
+/// Trait used for borrow specialization for creating constructors without access to the class.
+pub trait ConstructorCreator<'js, T>: Sized {
+    fn create_constructor(&self, _ctx: Ctx<'js>) -> Result<Option<Constructor<'js>>> {
+        Ok(None)
     }
 }
 
@@ -16,6 +23,16 @@ pub struct MethodImpl<T>(PhantomData<T>);
 impl<T> MethodImpl<T> {
     pub fn new() -> Self {
         MethodImpl(PhantomData)
+    }
+}
+
+/// A helper type for borrow specialization
+#[derive(Default)]
+pub struct ConstructorCreate<T>(PhantomData<T>);
+
+impl<T> ConstructorCreate<T> {
+    pub fn new() -> Self {
+        ConstructorCreate(PhantomData)
     }
 }
 
@@ -40,3 +57,5 @@ impl<T> MethodImpl<T> {
 ///
 /// Originally described by dtolnay
 impl<T> MethodImplementor<T> for &MethodImpl<T> {}
+
+impl<'js, T> ConstructorCreator<'js, T> for &ConstructorCreate<T> {}

@@ -7,6 +7,7 @@ use quote::format_ident;
 use syn::{parse_macro_input, DeriveInput, Item};
 
 mod class;
+mod fields;
 mod function;
 mod method;
 mod trace;
@@ -93,7 +94,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     }
 }
 
-#[proc_macro_derive(Trace)]
+#[proc_macro_derive(Trace, attributes(qjs))]
 #[proc_macro_error]
 pub fn trace(stream: TokenStream1) -> TokenStream1 {
     let derive_input = parse_macro_input!(stream as DeriveInput);

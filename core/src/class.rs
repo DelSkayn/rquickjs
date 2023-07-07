@@ -1,5 +1,6 @@
 use crate::{
-    function::StaticJsFn, qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value,
+    function::StaticJsFn, module::Exports, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs,
+    Object, Outlive, Result, Value,
 };
 use std::{
     ffi::CString,
@@ -31,8 +32,11 @@ pub trait JsClass<'js>: Trace<'js> {
     /// A unique id for the class.
     fn class_id() -> &'static ClassId;
 
-    /// The class prototype,
+    /// Returns the class prototype,
     fn prototype(ctx: Ctx<'js>) -> Result<Option<Object<'js>>>;
+
+    /// Returns a predefined constructor for this specific class type if there is one.
+    fn constructor(ctx: Ctx<'js>) -> Result<Option<Constructor<'js>>>;
 
     /// A possible call function.
     ///
@@ -128,6 +132,19 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
                 .into_object()
                 .expect("class prototype wasn't an object"),
         )
+    }
+
+    pub fn create_constructor(ctx: Ctx<'js>) -> Result<Option<Constructor<'js>>> {
+        Self::register(ctx)?;
+        C::constructor(ctx)
+    }
+
+    /// Defines the predefined constructor of this class, if there is one, onto the given object.
+    pub fn define(object: Object<'js>) -> Result<()> {
+        if let Some(constructor) = Self::create_constructor(object.ctx())? {
+            object.set(C::NAME, constructor)?;
+        }
+        Ok(())
     }
 
     /// Returns if the class is registered in the runtime.

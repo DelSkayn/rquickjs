@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
 use darling::{FromAttributes, FromMeta};
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_error::{abort, emit_warning};
 use quote::quote;
 use syn::{spanned::Spanned, Attribute, Block, ImplItemFn, ItemImpl, Signature, Type, Visibility};
 
-use crate::{crate_ident, function::JsFunction, Common};
+use crate::{class::add_js_lifetime, crate_ident, function::JsFunction, Common};
 
 #[derive(Debug, FromMeta, Default)]
 #[darling(default)]
@@ -20,7 +20,7 @@ pub(crate) struct AttrItem {
 #[darling(default)]
 #[darling(attributes(qjs))]
 pub(crate) struct MethodAttr {
-    new: bool,
+    constructor: bool,
     skip: bool,
     r#static: bool,
     configurable: bool,
@@ -31,13 +31,14 @@ pub(crate) struct MethodAttr {
 }
 
 #[derive(Debug, Clone)]
-pub struct JsMethod {
-    parse_attrs: MethodAttr,
-    function: JsFunction,
-    attrs: Vec<Attribute>,
-    vis: Visibility,
-    sig: Signature,
-    block: Block,
+pub(crate) struct JsMethod {
+    pub attr_span: Span,
+    pub parse_attrs: MethodAttr,
+    pub function: JsFunction,
+    pub attrs: Vec<Attribute>,
+    pub vis: Visibility,
+    pub sig: Signature,
+    pub block: Block,
 }
 
 impl JsMethod {
@@ -56,38 +57,46 @@ impl JsMethod {
                 abort!(span, "{}", e);
             }
         };
+        let attr_span = attrs
+            .is_empty()
+            .then_some(span)
+            .unwrap_or_else(|| attrs[0].span());
 
         if parse_attrs.get && parse_attrs.set {
             abort!(
-                attrs[0],
+                attr_span,
                 "a function can't both be a setter and a getter at the same time."
             )
         }
 
-        if parse_attrs.new && parse_attrs.get {
+        if parse_attrs.constructor && parse_attrs.rename.is_some() {
+            emit_warning!(attr_span, "renaming a constructor has no effect")
+        }
+
+        if parse_attrs.constructor && parse_attrs.get {
             abort!(
-                attrs[0],
+                attr_span,
                 "a function can't both be a getter and a constructor at the same time."
             )
         }
 
-        if parse_attrs.new && parse_attrs.set {
+        if parse_attrs.constructor && parse_attrs.set {
             abort!(
-                attrs[0],
+                attr_span,
                 "a function can't both be a setter and a constructor at the same time."
             )
         }
 
         if parse_attrs.configurable && !(parse_attrs.get || parse_attrs.set) {
             abort!(
-                attrs[0],
+                attr_span,
                 "configurable can only be set for getters and setters."
             )
         }
 
         if parse_attrs.enumerable && !(parse_attrs.get || parse_attrs.set) {
             abort!(
-                attrs[0],
+                attr_span,
                 "enumerable can only be set for getters and setters."
             )
         }
@@ -101,6 +110,7 @@ impl JsMethod {
         let function = JsFunction::new(vis.clone(), &sig, Some(self_ty));
 
         JsMethod {
+            attr_span,
             parse_attrs,
             function,
             attrs,
@@ -168,10 +178,10 @@ impl JsMethod {
         if self.parse_attrs.skip {
             return TokenStream::new();
         }
-        let func_name_str = &self.function.name;
+        let func_name_str = self.function.name.to_string();
         let js_func_name = self.function.expand_carry_type_name(common);
         quote! {
-            _proto.set(stringify!(#func_name_str),#self_ty::#js_func_name)?;
+            _proto.set(#func_name_str,<#self_ty>::#js_func_name)?;
         }
     }
 }
@@ -324,6 +334,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
     let mut accessors = HashMap::new();
     let mut functions = Vec::new();
+    let mut constructor: Option<JsMethod> = None;
     //let mut consts = Vec::new();
 
     for item in items {
@@ -336,8 +347,12 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
                         get: None,
                         set: None,
                     });
-                    if access.get.is_some() {
-                        emit_warning!(function.sig, "redefined a getter for `{}`", function.name());
+                    if let Some(first) = access.get.take() {
+                        let first_span = first.attr_span;
+                        emit_warning!(
+                            function.attr_span, "Redefined a getter for `{}`.", function.name();
+                            hint = first_span => "Getter first defined here."
+                        );
                     }
                     access.get = Some(function);
                 } else if function.parse_attrs.set {
@@ -345,10 +360,24 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
                         get: None,
                         set: None,
                     });
-                    if access.set.is_some() {
-                        emit_warning!(function.sig, "redefined a setter for `{}`", function.name());
+                    if let Some(first) = access.set.take() {
+                        let first_span = first.attr_span;
+                        emit_warning!(
+                            function.attr_span, "Redefined a setter for `{}`", function.name();
+                            hint = first_span => "Setter first defined here"
+                        );
                     }
                     access.set = Some(function.clone());
+                } else if function.parse_attrs.constructor {
+                    if let Some(first) = constructor.as_ref() {
+                        let first_span = first.attr_span;
+                        abort!(
+                            function.attr_span,
+                            "A class can only have a single constructor";
+                            hint = first_span => "First constructor defined here"
+                        );
+                    }
+                    constructor = Some(function);
                 } else {
                     functions.push(function)
                 }
@@ -364,6 +393,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
     let function_impls = functions.iter().map(|func| func.expand_impl());
     let accessor_impls = accessors.values().map(|access| access.expand_impl());
+    let constructor_impl = constructor.as_ref().map(|constr| constr.expand_impl());
 
     let function_js_impls = functions
         .iter()
@@ -371,6 +401,9 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
     let accessor_js_impls = accessors
         .values()
         .map(|access| access.expand_js_impl(&common));
+    let constructor_js_impl = constructor
+        .as_ref()
+        .map(|constr| constr.expand_js_impl(&func_common));
 
     let lib_crate = &common.lib_crate;
 
@@ -385,27 +418,46 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         .values()
         .map(|access| access.expand_apply_to_proto(&common.lib_crate));
 
+    let constructor_create = constructor.as_ref().map(|c|{
+        let name = c.function.expand_carry_type_name(&func_common);
+
+        let js_added_generics = add_js_lifetime(&generics);
+
+        quote! {
+            impl #js_added_generics #lib_crate::class::impl_::ConstructorCreator<'js,#self_ty> for #lib_crate::class::impl_::ConstructorCreate<#self_ty> {
+                fn create_constructor(&self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::function::Constructor<'js>>>{
+                    let constr = #lib_crate::function::Constructor::new_class::<#self_ty,_,_>(ctx,#name)?;
+                    Ok(Some(constr))
+                }
+            }
+        }
+    });
+
     quote! {
         #(#attrs)*
         #impl_token #generics #self_ty {
             #(#function_impls)*
             #(#accessor_impls)*
+            #constructor_impl
         }
 
         #(#function_js_impls)*
         #(#accessor_js_impls)*
+        #constructor_js_impl
 
         #[allow(non_upper_case_globals)]
-        impl #self_ty{
+        impl #generics #self_ty{
             #(#associated_types)*
         }
 
-        impl #lib_crate::class::impl_::MethodImplementor<#self_ty> for #lib_crate::class::impl_::MethodImpl<#self_ty> {
-            fn implement<'js>(&self, _proto: &#lib_crate::Object<'js>) -> #lib_crate::Result<()>{
+        impl #generics #lib_crate::class::impl_::MethodImplementor<#self_ty> for #lib_crate::class::impl_::MethodImpl<#self_ty> {
+            fn implement(&self, _proto: &#lib_crate::Object<'_>) -> #lib_crate::Result<()>{
                 #(#function_apply_proto)*
                 #(#accessor_apply_proto)*
                 Ok(())
             }
         }
+
+        #constructor_create
     }
 }
