@@ -357,6 +357,7 @@ impl<'js> Value<'js> {
         T::from_js(self.ctx, self.clone())
     }
 
+    /// Get reference count of value
     #[inline]
     pub fn ref_count(&self) -> i32 {
         unsafe { qjs::JS_ValueRefCount(self.value) }
