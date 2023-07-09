@@ -356,6 +356,11 @@ impl<'js> Value<'js> {
     pub fn get<T: FromJs<'js>>(&self) -> Result<T> {
         T::from_js(self.ctx, self.clone())
     }
+
+    #[inline]
+    pub fn ref_count(&self) -> i32 {
+        unsafe { qjs::JS_ValueRefCount(self.value) }
+    }
 }
 
 impl<'js> AsRef<Value<'js>> for Value<'js> {
