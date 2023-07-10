@@ -14,7 +14,7 @@ mod types;
 pub use args::{Args, IntoArg, IntoArgs};
 pub use ffi::{RustFunction, StaticJsFn};
 pub use params::{FromParam, FromParams, ParamRequirement, Params, ParamsAccessor};
-pub use types::{Exhaustive, Flat, Mut, Null, Once, Opt, Rest, This, ThisFunc};
+pub use types::{Exhaustive, Flat, Func, FuncArg, Mut, Null, Once, Opt, Rest, This};
 
 /// A trait for converting a rust function to a javascript function.
 pub trait IntoJsFunc<'js, P> {

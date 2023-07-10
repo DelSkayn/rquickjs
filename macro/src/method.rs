@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use darling::{FromAttributes, FromMeta};
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_error::{abort, emit_warning};
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{spanned::Spanned, Attribute, Block, ImplItemFn, ItemImpl, Signature, Type, Visibility};
 
 use crate::{class::add_js_lifetime, crate_ident, function::JsFunction, Common};
@@ -174,14 +174,19 @@ impl JsMethod {
         }
     }
 
-    pub(crate) fn expand_apply_to_proto(&self, common: &Common, self_ty: &Type) -> TokenStream {
+    pub(crate) fn expand_apply_to_object(
+        &self,
+        common: &Common,
+        self_ty: &Type,
+        object_name: &Ident,
+    ) -> TokenStream {
         if self.parse_attrs.skip {
             return TokenStream::new();
         }
         let func_name_str = self.function.name.to_string();
         let js_func_name = self.function.expand_carry_type_name(common);
         quote! {
-            _proto.set(#func_name_str,<#self_ty>::#js_func_name)?;
+            #object_name.set(#func_name_str,<#self_ty>::#js_func_name)?;
         }
     }
 }
@@ -411,27 +416,46 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         .iter()
         .map(|func| func.expand_associated_type(&common, &func_common));
 
-    let function_apply_proto = functions
-        .iter()
-        .map(|func| func.expand_apply_to_proto(&common, &self_ty));
+    let proto_ident = format_ident!("_proto");
+    let function_apply_proto = functions.iter().filter_map(|func| {
+        dbg!(func);
+        (!func.parse_attrs.r#static)
+            .then(|| func.expand_apply_to_object(&common, &self_ty, &proto_ident))
+    });
     let accessor_apply_proto = accessors
         .values()
         .map(|access| access.expand_apply_to_proto(&common.lib_crate));
 
-    let constructor_create = constructor.as_ref().map(|c|{
+    let constructor_ident = format_ident!("constr");
+
+    let constructor_create = if let Some(c) = constructor.as_ref() {
         let name = c.function.expand_carry_type_name(&func_common);
 
         let js_added_generics = add_js_lifetime(&generics);
+
+        let static_function_apply = functions.iter().filter_map(|func| {
+            func.parse_attrs
+                .r#static
+                .then(|| func.expand_apply_to_object(&common, &self_ty, &constructor_ident))
+        });
 
         quote! {
             impl #js_added_generics #lib_crate::class::impl_::ConstructorCreator<'js,#self_ty> for #lib_crate::class::impl_::ConstructorCreate<#self_ty> {
                 fn create_constructor(&self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::function::Constructor<'js>>>{
                     let constr = #lib_crate::function::Constructor::new_class::<#self_ty,_,_>(ctx,#name)?;
+                    #(#static_function_apply)*
                     Ok(Some(constr))
                 }
             }
         }
-    });
+    } else {
+        if let Some(x) = functions.iter().find(|x| x.parse_attrs.r#static) {
+            abort!(x.attr_span,"Defined a static method on an class without a constructor"; 
+                hint = "Static methods are defined on constructors");
+        }
+
+        TokenStream::new()
+    };
 
     quote! {
         #(#attrs)*

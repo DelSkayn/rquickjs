@@ -8,6 +8,15 @@ use super::IntoJsFunc;
 /// Helper type to implement ToJsFunction for closure by constraining arguments.
 pub struct Func<T, P>(T, PhantomData<P>);
 
+impl<'js, T, P> Func<T, P>
+where
+    T: IntoJsFunc<'js, P>,
+{
+    pub fn new(t: T) -> Self {
+        Func(t, PhantomData)
+    }
+}
+
 impl<'js, T, P> From<T> for Func<T, P>
 where
     T: IntoJsFunc<'js, P>,
@@ -21,7 +30,7 @@ where
 pub struct This<T>(pub T);
 
 /// helper type for retrieving function object on which a function is called..
-pub struct ThisFunc<T>(pub T);
+pub struct FuncArg<T>(pub T);
 
 /// Helper type for optional paramaters.
 pub struct Opt<T>(pub Option<T>);

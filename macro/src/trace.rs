@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
-use proc_macro_error::{abort, emit_warning};
+use proc_macro_error::abort;
 use quote::quote;
-use syn::{Data, DataStruct, DeriveInput, ItemStruct};
+use syn::{Data, DataStruct, DeriveInput};
 
 use crate::{class::add_js_lifetime, crate_ident, fields::Field};
 

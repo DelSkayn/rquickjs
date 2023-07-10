@@ -1,5 +1,5 @@
 use crate::{
-    function::{Exhaustive, Flat, Opt, Rest, This, ThisFunc},
+    function::{Exhaustive, Flat, Opt, Rest, This, FuncArg},
     qjs, Ctx, FromJs, Result, Value,
 };
 use std::slice;
@@ -281,13 +281,13 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for This<T> {
     }
 }
 
-impl<'js, T: FromJs<'js>> FromParam<'js> for ThisFunc<T> {
+impl<'js, T: FromJs<'js>> FromParam<'js> for FuncArg<T> {
     fn param_requirement() -> ParamRequirement {
         ParamRequirement::any()
     }
 
     fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
-        T::from_js(params.ctx(), params.function()).map(ThisFunc)
+        T::from_js(params.ctx(), params.function()).map(FuncArg)
     }
 }
 

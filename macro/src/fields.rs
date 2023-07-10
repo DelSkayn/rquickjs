@@ -1,8 +1,8 @@
 use darling::FromField;
 use proc_macro2::TokenStream;
-use proc_macro_error::{abort, emit_warning};
+use proc_macro_error::abort;
 use quote::{format_ident, quote};
-use syn::{Attribute, Fields, Ident, Token, Type, Visibility};
+use syn::{Attribute, Fields, Ident, Type, Visibility};
 
 #[derive(Debug, FromField)]
 #[darling(attributes(qjs))]

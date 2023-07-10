@@ -1,6 +1,6 @@
 use crate::{
-    function::StaticJsFn, module::Exports, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs,
-    Object, Outlive, Result, Value,
+    function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs, Object, Outlive,
+    Result, Value,
 };
 use std::{
     ffi::CString,

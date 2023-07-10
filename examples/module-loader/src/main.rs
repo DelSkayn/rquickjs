@@ -1,5 +1,5 @@
 use rquickjs::{
-    function::ThisFunc,
+    function::FuncArg,
     loader::{
         BuiltinLoader, BuiltinResolver, FileResolver, ModuleLoader, NativeLoader, ScriptLoader,
     },
@@ -36,7 +36,7 @@ fn main() {
     rt.set_loader(resolver, loader);
     ctx.with(|ctx| {
         let global = ctx.globals();
-        global.set("print", ThisFunc::new("print", print)).unwrap();
+        global.set("print", Func::new("print", print)).unwrap();
 
         println!("import script module");
         let _ = ctx

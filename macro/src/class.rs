@@ -15,8 +15,8 @@ pub(crate) struct AttrItem {
 
 pub fn add_js_lifetime(generics: &Generics) -> Generics {
     let mut generics = generics.clone();
-    let has_js_lifetime = generics.lifetimes().any(|lt| lt.lifetime.ident == "'js");
-    if has_js_lifetime {
+    let has_js_lifetime = generics.lifetimes().any(|lt| lt.lifetime.ident == "js");
+    if !has_js_lifetime {
         generics.params.insert(
             0,
             syn::GenericParam::Lifetime(LifetimeParam::new(Lifetime::new(
@@ -72,11 +72,6 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
         }
         Fields::Unit => todo!(),
     };
-
-    let trace_impls = prop_fields
-        .iter()
-        .enumerate()
-        .map(|(idx, x)| x.expand_trace_body(&lib_crate, idx));
 
     let lifetime_generics = add_js_lifetime(generics);
 

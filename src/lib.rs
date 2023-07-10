@@ -127,7 +127,14 @@ pub use rquickjs_core::*;
 
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
 #[cfg(feature = "macro")]
-pub use rquickjs_macro::{class, function, methods, Trace};
+pub use rquickjs_macro::{class, function, methods};
+
+pub mod class {
+    pub use rquickjs_core::class::*;
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
+    #[cfg(feature = "macro")]
+    pub use rquickjs_macro::Trace;
+}
 
 // The following imports needed to linking docs
 
