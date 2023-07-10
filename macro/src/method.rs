@@ -418,7 +418,6 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
     let proto_ident = format_ident!("_proto");
     let function_apply_proto = functions.iter().filter_map(|func| {
-        dbg!(func);
         (!func.parse_attrs.r#static)
             .then(|| func.expand_apply_to_object(&common, &self_ty, &proto_ident))
     });

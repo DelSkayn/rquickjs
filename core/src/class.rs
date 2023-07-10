@@ -140,7 +140,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     }
 
     /// Defines the predefined constructor of this class, if there is one, onto the given object.
-    pub fn define(object: Object<'js>) -> Result<()> {
+    pub fn define(object: &Object<'js>) -> Result<()> {
         if let Some(constructor) = Self::create_constructor(object.ctx())? {
             object.set(C::NAME, constructor)?;
         }
@@ -196,7 +196,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Returns a reference to the underlying object contained in a cell.
     #[inline]
-    pub fn as_class<'a>(&self) -> &'a JsCell<'js, C> {
+    pub fn get_cell<'a>(&self) -> &'a JsCell<'js, C> {
         unsafe { self.get_class_ptr().as_ref() }
     }
 
@@ -209,7 +209,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// This function panics if the class is already borrowed mutably
     #[inline]
     pub fn borrow<'a>(&'a self) -> Borrow<'a, 'js, C> {
-        self.as_class().borrow()
+        self.get_cell().borrow()
     }
 
     /// Borrow the rust class type mutably.
@@ -222,7 +222,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// can't be borrowed mutably.
     #[inline]
     pub fn borrow_mut<'a>(&'a self) -> BorrowMut<'a, 'js, C> {
-        self.as_class().borrow_mut()
+        self.get_cell().borrow_mut()
     }
 
     /// Try to borrow the rust class type.
@@ -233,7 +233,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// This returns an error when the class is already borrowed mutably.
     #[inline]
     pub fn try_borrow<'a>(&'a self) -> Result<Borrow<'a, 'js, C>> {
-        self.as_class().try_borrow().map_err(Error::ClassBorrow)
+        self.get_cell().try_borrow().map_err(Error::ClassBorrow)
     }
 
     /// Try to borrow the rust class type mutably.
@@ -245,7 +245,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// can't be borrowed mutably.
     #[inline]
     pub fn try_borrow_mut<'a>(&'a self) -> Result<BorrowMut<'a, 'js, C>> {
-        self.as_class().try_borrow_mut().map_err(Error::ClassBorrow)
+        self.get_cell().try_borrow_mut().map_err(Error::ClassBorrow)
     }
 
     /// returns a pointer to the class object.
@@ -268,14 +268,20 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     }
 
     /// Converts a generic object into a class if the object is of the right class.
+    #[inline]
     pub fn from_object(object: Object<'js>) -> Option<Self> {
         object.into_class().ok()
+    }
+
+    #[inline]
+    pub fn into_value(self) -> Value<'js> {
+        self.0.into_value()
     }
 }
 
 impl<'js> Object<'js> {
     /// Returns if the object is of a certain rust class.
-    pub fn is_class<C: JsClass<'js>>(&self) -> bool {
+    pub fn instance_of<C: JsClass<'js>>(&self) -> bool {
         if !Class::<C>::is_registered(self.ctx) {
             return false;
         }
@@ -292,7 +298,7 @@ impl<'js> Object<'js> {
 
     /// Turn the object into the class if it is an instance of that class.
     pub fn into_class<C: JsClass<'js>>(self) -> std::result::Result<Class<'js, C>, Self> {
-        if self.is_class::<C>() {
+        if self.instance_of::<C>() {
             Ok(Class(self, PhantomData))
         } else {
             Err(self)

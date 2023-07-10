@@ -91,15 +91,18 @@ pub mod prelude {
     //! A group of often used types.
     #[cfg(feature = "multi-ctx")]
     pub use crate::context::MultiWith;
-    #[cfg(feature = "futures")]
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-    pub use crate::promise::{Promise, Promised};
     pub use crate::{
-        convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs},
+        convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs, List},
         function::{
-            Exhaustive, Flat, Func, FuncArg, IntoArg, IntoArgs, Mut, Once, Opt, Rest, This,
+            Exhaustive, Flat, Func, FuncArg, IntoArg, IntoArgs, MutFn, OnceFn, Opt, Rest, This,
         },
         result::{CatchResultExt, ThrowResultExt},
+    };
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub use crate::{
+        function::Async,
+        promise::{Promise, Promised},
     };
 }
 

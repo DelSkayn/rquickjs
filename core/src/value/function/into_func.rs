@@ -1,12 +1,12 @@
 use super::{FromParams, IntoJsFunc, ParamRequirement, Params};
 use crate::{
-    function::types::{Async, Mut, Once},
+    function::types::{MutFn, OnceFn},
     result::{BorrowError, Error},
     IntoJs, Result, Value,
 };
 
 #[cfg(feature = "futures")]
-use crate::promise::Promised;
+use crate::{function::types::Async, promise::Promised};
 #[cfg(feature = "futures")]
 use std::future::Future;
 
@@ -55,7 +55,7 @@ macro_rules! impl_to_js_function {
         }
 
 
-        impl<'js, R, Fun $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for Mut<Fun>
+        impl<'js, R, Fun $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for MutFn<Fun>
         where
             Fun: FnMut($($t),*) -> R + 'js,
             ($($t,)*): FromParams<'js> + 'js,
@@ -77,7 +77,7 @@ macro_rules! impl_to_js_function {
         }
 
         #[cfg(feature = "futures")]
-        impl<'js, R, Fun, Fut $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for Async<Mut<Fun>>
+        impl<'js, R, Fun, Fut $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for Async<MutFn<Fun>>
         where
             Fun: FnMut($($t),*) -> Fut + 'js,
             ($($t,)*): FromParams<'js> + 'js,
@@ -99,7 +99,7 @@ macro_rules! impl_to_js_function {
             }
         }
 
-        impl<'js, R, Fun $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for Once<Fun>
+        impl<'js, R, Fun $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for OnceFn<Fun>
         where
             Fun: FnOnce($($t),*) -> R + 'js,
             ($($t,)*): FromParams<'js> + 'js,
@@ -121,7 +121,7 @@ macro_rules! impl_to_js_function {
         }
 
         #[cfg(feature = "futures")]
-        impl<'js, R, Fun, Fut $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for Async<Once<Fun>>
+        impl<'js, R, Fun, Fut $(,$t)*> IntoJsFunc<'js, ($($t,)*)> for Async<OnceFn<Fun>>
         where
             Fun: FnOnce($($t),*) -> Fut + 'js,
             ($($t,)*): FromParams<'js> + 'js,

@@ -164,7 +164,7 @@ impl<'js, T> TypedArray<'js, T> {
             ctx.handle_exception(val)?;
             Value::from_js_value(ctx, val)
         };
-        ArrayBuffer::from_value(buf)
+        ArrayBuffer::from_js(ctx, buf)
     }
 
     /// Convert from an ArrayBuffer

@@ -309,14 +309,14 @@ impl<'js, T: JsClass<'js> + 'js> OwnedBorrow<'js, T> {
     /// Try to borrow a class owned.
     pub fn try_from_class(class: Class<'js, T>) -> Result<Self, BorrowError> {
         unsafe {
-            <T::Mutable as Mutability>::borrow(&class.as_class().cell)?;
+            <T::Mutable as Mutability>::borrow(&class.get_cell().cell)?;
         }
         Ok(OwnedBorrow(ManuallyDrop::new(class)))
     }
 
     /// Turn the owned borrow back into the class releasing the borrow.
     pub fn into_inner(mut self) -> Class<'js, T> {
-        unsafe { <T::Mutable as Mutability>::unborrow(&self.0.as_class().cell) };
+        unsafe { <T::Mutable as Mutability>::unborrow(&self.0.get_cell().cell) };
         let res = unsafe { ManuallyDrop::take(&mut self.0) };
         std::mem::forget(self);
         res
@@ -326,7 +326,7 @@ impl<'js, T: JsClass<'js> + 'js> OwnedBorrow<'js, T> {
 impl<'js, T: JsClass<'js> + 'js> Drop for OwnedBorrow<'js, T> {
     fn drop(&mut self) {
         unsafe {
-            <T::Mutable as Mutability>::unborrow(&self.0.as_class().cell);
+            <T::Mutable as Mutability>::unborrow(&self.0.get_cell().cell);
             ManuallyDrop::drop(&mut self.0)
         }
     }
@@ -335,7 +335,7 @@ impl<'js, T: JsClass<'js> + 'js> Drop for OwnedBorrow<'js, T> {
 impl<'js, T: JsClass<'js> + 'js> Deref for OwnedBorrow<'js, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { <T::Mutable as Mutability>::deref(&self.0.as_class().cell) }
+        unsafe { <T::Mutable as Mutability>::deref(&self.0.get_cell().cell) }
     }
 }
 
@@ -367,14 +367,14 @@ impl<'js, T: JsClass<'js> + 'js> OwnedBorrowMut<'js, T> {
     /// Try to borrow a class mutably owned.
     pub fn try_from_class(class: Class<'js, T>) -> Result<Self, BorrowError> {
         unsafe {
-            <T::Mutable as Mutability>::borrow_mut(&class.as_class().cell)?;
+            <T::Mutable as Mutability>::borrow_mut(&class.get_cell().cell)?;
         }
         Ok(OwnedBorrowMut(ManuallyDrop::new(class)))
     }
 
     /// Turn the owned borrow back into the class releasing the borrow.
     pub fn into_inner(mut self) -> Class<'js, T> {
-        unsafe { <T::Mutable as Mutability>::unborrow_mut(&self.0.as_class().cell) };
+        unsafe { <T::Mutable as Mutability>::unborrow_mut(&self.0.get_cell().cell) };
         let res = unsafe { ManuallyDrop::take(&mut self.0) };
         std::mem::forget(self);
         res
@@ -384,7 +384,7 @@ impl<'js, T: JsClass<'js> + 'js> OwnedBorrowMut<'js, T> {
 impl<'js, T: JsClass<'js> + 'js> Drop for OwnedBorrowMut<'js, T> {
     fn drop(&mut self) {
         unsafe {
-            <T::Mutable as Mutability>::unborrow_mut(&self.0.as_class().cell);
+            <T::Mutable as Mutability>::unborrow_mut(&self.0.get_cell().cell);
             ManuallyDrop::drop(&mut self.0)
         }
     }
@@ -393,13 +393,13 @@ impl<'js, T: JsClass<'js> + 'js> Drop for OwnedBorrowMut<'js, T> {
 impl<'js, T: JsClass<'js> + 'js> Deref for OwnedBorrowMut<'js, T> {
     type Target = T;
     fn deref(&self) -> &Self::Target {
-        unsafe { <T::Mutable as Mutability>::deref(&self.0.as_class().cell) }
+        unsafe { <T::Mutable as Mutability>::deref(&self.0.get_cell().cell) }
     }
 }
 
 impl<'js, T: JsClass<'js> + 'js> DerefMut for OwnedBorrowMut<'js, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        unsafe { <T::Mutable as Mutability>::deref_mut(&self.0.as_class().cell) }
+        unsafe { <T::Mutable as Mutability>::deref_mut(&self.0.get_cell().cell) }
     }
 }
 

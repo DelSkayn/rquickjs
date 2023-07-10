@@ -115,8 +115,8 @@ impl<'js> ArrayBuffer<'js> {
     }
 
     /// Convert from value
-    pub fn from_value(value: Value<'js>) -> Result<Self> {
-        Self::from_object(Object::from_value(value)?)
+    pub fn from_value(value: Value<'js>) -> Option<Self> {
+        Self::from_object(Object::from_value(value).ok()?)
     }
 
     /// Reference as an object
@@ -132,11 +132,11 @@ impl<'js> ArrayBuffer<'js> {
     }
 
     /// Convert from an object
-    pub fn from_object(object: Object<'js>) -> Result<Self> {
+    pub fn from_object(object: Object<'js>) -> Option<Self> {
         if Self::get_raw(&object.0).is_some() {
-            Ok(Self(object))
+            Some(Self(object))
         } else {
-            Err(Error::new_from_js("object", "ArrayBuffer"))
+            None
         }
     }
 
@@ -185,7 +185,12 @@ impl<'js> AsRef<Value<'js>> for ArrayBuffer<'js> {
 
 impl<'js> FromJs<'js> for ArrayBuffer<'js> {
     fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        Self::from_value(value)
+        let ty_name = value.type_name();
+        if let Some(v) = Self::from_value(value) {
+            Ok(v)
+        } else {
+            Err(Error::new_from_js(ty_name, "ArrayBuffer"))
+        }
     }
 }
 

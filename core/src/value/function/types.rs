@@ -1,7 +1,10 @@
 use std::{
     cell::{Cell, RefCell},
     marker::PhantomData,
+    ops::{Deref, DerefMut},
 };
+
+use crate::{Ctx, Function, IntoJs, Result, Value};
 
 use super::IntoJsFunc;
 
@@ -23,6 +26,16 @@ where
 {
     fn from(value: T) -> Self {
         Func(value, PhantomData)
+    }
+}
+
+impl<'js, T, P> IntoJs<'js> for Func<T, P>
+where
+    T: IntoJsFunc<'js, P> + 'js,
+{
+    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+        let function = Function::new(ctx, self.0);
+        function.into_js(ctx)
     }
 }
 
@@ -58,10 +71,93 @@ pub struct Async<T>(pub T);
 ///
 /// When called through [`CellFn`] will try to borrow the internal [`RefCell`], if this is not
 /// possible it will return an error.
-pub struct Mut<T>(pub RefCell<T>);
+pub struct MutFn<T>(pub RefCell<T>);
 
 /// Helper type for creating a function from a closure which implements FnMut
 ///
 /// When called through [`CellFn`] will take the internal value leaving it empty. If the internal
 /// value was already empty it will return a error.
-pub struct Once<T>(pub Cell<Option<T>>);
+pub struct OnceFn<T>(pub Cell<Option<T>>);
+
+macro_rules! type_impls {
+	  ($($type:ident <$($params:ident),*>($($fields:tt)*): $($impls:ident)*;)*) => {
+        $(type_impls!{@impls $type [$($params)*]($($fields)*) $($impls)*})*
+	  };
+
+    (@impls $type:ident[$($params:ident)*]($($fields:tt)*) $impl:ident $($impls:ident)*) => {
+        type_impls!{@impl $impl($($fields)*) $type $($params)*}
+        type_impls!{@impls $type[$($params)*]($($fields)*) $($impls)*}
+    };
+
+    (@impls $type:ident[$($params:ident)*]($($fields:tt)*)) => {};
+
+    (@impl into_inner($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> $type<$param $(, $params)*> {
+            pub fn into_inner(self) -> $field {
+                self.0
+            }
+        }
+    };
+
+    (@impl Into($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> From<$type<$param $(, $params)*>> for $field {
+            fn from(this: $type<$param $(, $params)*>) -> Self {
+                this.0
+            }
+        }
+    };
+
+    (@impl From($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> From<$field> for $type<$param $(, $params)*> {
+            fn from(value: $field) -> Self {
+                Self(value $(, type_impls!(@def $fields))*)
+            }
+        }
+    };
+
+    (@impl AsRef($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> AsRef<$field> for $type<$param $(, $params)*> {
+            fn as_ref(&self) -> &$field {
+                &self.0
+            }
+        }
+    };
+
+    (@impl AsMut($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> AsMut<$field> for $type<$param $(, $params)*> {
+            fn as_mut(&mut self) -> &mut $field {
+                &mut self.0
+            }
+        }
+    };
+
+    (@impl Deref($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> Deref for $type<$param $(, $params)*> {
+            type Target = $field;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+    };
+
+    (@impl DerefMut($field:ty $(, $fields:tt)*) $type:ident $param:ident $($params:ident)*) => {
+        impl<$param $(, $params)*> DerefMut for $type<$param $(, $params)*> {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+    };
+
+    (@def $($t:tt)*) => { Default::default() };
+}
+
+type_impls! {
+    MutFn<F>(RefCell<F>): AsRef Deref;
+    OnceFn<F>(Cell<Option<F>>): AsRef Deref;
+    This<T>(T): into_inner From AsRef AsMut Deref DerefMut;
+    FuncArg<T>(T): into_inner From AsRef AsMut Deref DerefMut;
+    Opt<T>(Option<T>): into_inner From AsRef AsMut Deref DerefMut;
+    Rest<T>(Vec<T>): into_inner From AsRef AsMut Deref DerefMut;
+    Flat<T>(T): into_inner From AsRef AsMut Deref DerefMut;
+}
