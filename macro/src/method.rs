@@ -183,7 +183,7 @@ impl JsMethod {
         if self.parse_attrs.skip {
             return TokenStream::new();
         }
-        let func_name_str = self.function.name.to_string();
+        let func_name_str = self.name();
         let js_func_name = self.function.expand_carry_type_name(common);
         quote! {
             #object_name.set(#func_name_str,<#self_ty>::#js_func_name)?;
