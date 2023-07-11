@@ -237,17 +237,17 @@ macro_rules! loader_impls {
                 }
             }
 
-            impl< $($t,)*> $crate::loader::Loader for ($($t,)*)
+            unsafe impl< $($t,)*> $crate::loader::RawLoader for ($($t,)*)
             where
-                $($t: $crate::loader::Loader,)*
+                $($t: $crate::loader::RawLoader,)*
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
+                unsafe fn raw_load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
                     let mut messages = Vec::<std::string::String>::new();
                     let ($($t,)*) = self;
                     $(
-                        match $t.load(_ctx, name) {
+                        match $t.raw_load(_ctx, name) {
                             // Still could try the next loader
                             Err($crate::Error::Loading { message, .. }) => {
                                 message.map(|message| messages.push(message));
