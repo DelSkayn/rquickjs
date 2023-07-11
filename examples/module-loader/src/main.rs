@@ -3,7 +3,7 @@ use rquickjs::{
     loader::{
         BuiltinLoader, BuiltinResolver, FileResolver, ModuleLoader, NativeLoader, ScriptLoader,
     },
-    Context, Runtime,
+    Context, Function, Runtime,
 };
 
 mod bundle;
@@ -36,7 +36,15 @@ fn main() {
     rt.set_loader(resolver, loader);
     ctx.with(|ctx| {
         let global = ctx.globals();
-        global.set("print", Func::new("print", print)).unwrap();
+        global
+            .set(
+                "print",
+                Function::new(ctx, print)
+                    .unwrap()
+                    .with_name("print")
+                    .unwrap(),
+            )
+            .unwrap();
 
         println!("import script module");
         let _ = ctx

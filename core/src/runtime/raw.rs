@@ -100,8 +100,6 @@ impl RawRuntime {
         let rt = qjs::JS_NewRuntime();
         let rt = NonNull::new(rt)?;
 
-        Self::init_raw(rt.as_ptr());
-
         let opaque = Box::into_raw(Box::new(opaque));
         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
 
@@ -127,8 +125,6 @@ impl RawRuntime {
         let rt = qjs::JS_NewRuntime2(&functions, opaque_ptr as _);
         let rt = NonNull::new(rt)?;
 
-        Self::init_raw(rt.as_ptr());
-
         let opaque = Box::into_raw(Box::new(opaque));
         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
 
@@ -139,10 +135,6 @@ impl RawRuntime {
             #[cfg(feature = "loader")]
             loader: None,
         })
-    }
-
-    pub(crate) unsafe fn init_raw(rt: *mut qjs::JSRuntime) {
-        /*Function::init_raw(rt);*/
     }
 
     pub fn update_stack_top(&self) {

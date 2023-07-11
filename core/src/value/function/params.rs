@@ -1,5 +1,5 @@
 use crate::{
-    function::{Exhaustive, Flat, Opt, Rest, This, FuncArg},
+    function::{Exhaustive, Flat, FuncArg, Opt, Rest, This},
     qjs, Ctx, FromJs, Result, Value,
 };
 use std::slice;
