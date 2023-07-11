@@ -13,18 +13,20 @@ use std::{
 ///
 /// `Outlive<'js>` must be implemented for types the same, specific, lifetime 'js.
 /// For example the following is unsound:
-/// ```rust
+/// ```no_run
+/// # use rquickjs::Outlive;
 /// struct Container<'js>(rquickjs::Object<'js>);
 ///
-/// unsafe impl<'a,'js> Outlive<'js> for Object<'a>{
+/// unsafe impl<'a,'js> Outlive<'js> for Container<'a>{
 ///     type Target<'to> = Container<'to>;
 /// }
 /// ```
 /// Instead it must be implemented as following
 /// ```
+/// # use rquickjs::Outlive;
 /// struct Container<'js>(rquickjs::Object<'js>);
 ///
-/// unsafe impl<'js> Outlive<'js> for Object<'js>{
+/// unsafe impl<'js> Outlive<'js> for Container<'js>{
 ///     type Target<'to> = Container<'to>;
 /// }
 /// ```

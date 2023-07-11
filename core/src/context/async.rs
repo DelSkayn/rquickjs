@@ -81,7 +81,10 @@ unsafe impl<R> Send for WithFuture<'_, R> {}
 ///     // With the macro you can borrow the environment.
 ///     *some_var_ref += 1;
 ///
-///     let delay = Func::new("delay", Async(delay));
+///     let delay = Function::new(ctx,Async(delay))
+///         .unwrap()
+///         .with_name("print")
+///         .unwrap();
 ///
 ///     let global = ctx.globals();
 ///     global.set("print",Func::from(print)).unwrap();
