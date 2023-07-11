@@ -8,431 +8,431 @@ use crate::qjs;
 #[repr(u32)]
 pub enum PredefinedAtom {
     /// "null"
-    Null = qjs::JS_ATOM_null, /* must be first */
+    Null = qjs::JS_ATOM_null as u32, /* must be first */
     /// "false"
-    False = qjs::JS_ATOM_false,
+    False = qjs::JS_ATOM_false as u32,
     /// "true"
-    True = qjs::JS_ATOM_true,
+    True = qjs::JS_ATOM_true as u32,
     /// "if"
-    If = qjs::JS_ATOM_if,
+    If = qjs::JS_ATOM_if as u32,
     /// "else"
-    Else = qjs::JS_ATOM_else,
+    Else = qjs::JS_ATOM_else as u32,
     /// "return"
-    Return = qjs::JS_ATOM_return,
+    Return = qjs::JS_ATOM_return as u32,
     /// "var"
-    Var = qjs::JS_ATOM_var,
+    Var = qjs::JS_ATOM_var as u32,
     /// "this"
-    This = qjs::JS_ATOM_this,
+    This = qjs::JS_ATOM_this as u32,
     /// "delete"
-    Delete = qjs::JS_ATOM_delete,
+    Delete = qjs::JS_ATOM_delete as u32,
     /// "void"
-    Void = qjs::JS_ATOM_void,
+    Void = qjs::JS_ATOM_void as u32,
     /// "typeof"
-    Typeof = qjs::JS_ATOM_typeof,
+    Typeof = qjs::JS_ATOM_typeof as u32,
     /// "new"
-    New = qjs::JS_ATOM_new,
+    New = qjs::JS_ATOM_new as u32,
     /// "in"
-    In = qjs::JS_ATOM_in,
+    In = qjs::JS_ATOM_in as u32,
     /// "instanceof"
-    Instanceof = qjs::JS_ATOM_instanceof,
+    Instanceof = qjs::JS_ATOM_instanceof as u32,
     /// "do"
-    Do = qjs::JS_ATOM_do,
+    Do = qjs::JS_ATOM_do as u32,
     /// "while"
-    While = qjs::JS_ATOM_while,
+    While = qjs::JS_ATOM_while as u32,
     /// "for"
-    For = qjs::JS_ATOM_for,
+    For = qjs::JS_ATOM_for as u32,
     /// "break"
-    Break = qjs::JS_ATOM_break,
+    Break = qjs::JS_ATOM_break as u32,
     /// "continue"
-    Continue = qjs::JS_ATOM_continue,
+    Continue = qjs::JS_ATOM_continue as u32,
     /// "switch"
-    Switch = qjs::JS_ATOM_switch,
+    Switch = qjs::JS_ATOM_switch as u32,
     /// "case"
-    Case = qjs::JS_ATOM_case,
+    Case = qjs::JS_ATOM_case as u32,
     /// "default"
-    Default = qjs::JS_ATOM_default,
+    Default = qjs::JS_ATOM_default as u32,
     /// "throw"
-    Throw = qjs::JS_ATOM_throw,
+    Throw = qjs::JS_ATOM_throw as u32,
     /// "try"
-    Try = qjs::JS_ATOM_try,
+    Try = qjs::JS_ATOM_try as u32,
     /// "catch"
-    Catch = qjs::JS_ATOM_catch,
+    Catch = qjs::JS_ATOM_catch as u32,
     /// "finally"
-    Finally = qjs::JS_ATOM_finally,
+    Finally = qjs::JS_ATOM_finally as u32,
     /// "function"
-    FunctionKw = qjs::JS_ATOM_function,
+    FunctionKw = qjs::JS_ATOM_function as u32,
     /// "debugger"
-    Debugger = qjs::JS_ATOM_debugger,
+    Debugger = qjs::JS_ATOM_debugger as u32,
     /// "with"
-    With = qjs::JS_ATOM_with,
+    With = qjs::JS_ATOM_with as u32,
     /// "class"
-    Class = qjs::JS_ATOM_class,
+    Class = qjs::JS_ATOM_class as u32,
     /// "const"
-    Const = qjs::JS_ATOM_const,
+    Const = qjs::JS_ATOM_const as u32,
     /// "enum"
-    Enum = qjs::JS_ATOM_enum,
+    Enum = qjs::JS_ATOM_enum as u32,
     /// "export"
-    Export = qjs::JS_ATOM_export,
+    Export = qjs::JS_ATOM_export as u32,
     /// "extends"
-    Extends = qjs::JS_ATOM_extends,
+    Extends = qjs::JS_ATOM_extends as u32,
     /// "import"
-    Import = qjs::JS_ATOM_import,
+    Import = qjs::JS_ATOM_import as u32,
     /// "super"
-    Super = qjs::JS_ATOM_super,
+    Super = qjs::JS_ATOM_super as u32,
     /// "implements"
-    Implements = qjs::JS_ATOM_implements,
+    Implements = qjs::JS_ATOM_implements as u32,
     /// "interface"
-    Interface = qjs::JS_ATOM_interface,
+    Interface = qjs::JS_ATOM_interface as u32,
     /// "let"
-    Let = qjs::JS_ATOM_let,
+    Let = qjs::JS_ATOM_let as u32,
     /// "package"
-    Package = qjs::JS_ATOM_package,
+    Package = qjs::JS_ATOM_package as u32,
     /// "private"
-    Private = qjs::JS_ATOM_private,
+    Private = qjs::JS_ATOM_private as u32,
     /// "protected"
-    Protected = qjs::JS_ATOM_protected,
+    Protected = qjs::JS_ATOM_protected as u32,
     /// "public"
-    Public = qjs::JS_ATOM_public,
+    Public = qjs::JS_ATOM_public as u32,
     /// "static"
-    Static = qjs::JS_ATOM_static,
+    Static = qjs::JS_ATOM_static as u32,
     /// "yield"
-    Yield = qjs::JS_ATOM_yield,
+    Yield = qjs::JS_ATOM_yield as u32,
     /// "await"
-    Await = qjs::JS_ATOM_await,
+    Await = qjs::JS_ATOM_await as u32,
 
     /// ""
-    Empty = qjs::JS_ATOM_empty_string,
+    Empty = qjs::JS_ATOM_empty_string as u32,
     /// "length"
-    Length = qjs::JS_ATOM_length,
+    Length = qjs::JS_ATOM_length as u32,
     /// "fileName"
-    FileName = qjs::JS_ATOM_fileName,
+    FileName = qjs::JS_ATOM_fileName as u32,
     /// "lineNumber"
-    LineNumber = qjs::JS_ATOM_lineNumber,
+    LineNumber = qjs::JS_ATOM_lineNumber as u32,
     /// "message"
-    Message = qjs::JS_ATOM_message,
+    Message = qjs::JS_ATOM_message as u32,
     /// "errors"
-    Errors = qjs::JS_ATOM_errors,
+    Errors = qjs::JS_ATOM_errors as u32,
     /// "stack"
-    Stack = qjs::JS_ATOM_stack,
+    Stack = qjs::JS_ATOM_stack as u32,
     /// "name"
-    Name = qjs::JS_ATOM_name,
+    Name = qjs::JS_ATOM_name as u32,
     /// "toString"
-    ToString = qjs::JS_ATOM_toString,
+    ToString = qjs::JS_ATOM_toString as u32,
     /// "toLocaleString"
-    ToLocaleString = qjs::JS_ATOM_toLocaleString,
+    ToLocaleString = qjs::JS_ATOM_toLocaleString as u32,
     /// "valueOf"
-    ValueOf = qjs::JS_ATOM_valueOf,
+    ValueOf = qjs::JS_ATOM_valueOf as u32,
     /// "eval"
-    Eval = qjs::JS_ATOM_eval,
+    Eval = qjs::JS_ATOM_eval as u32,
     /// "prototype"
-    Prototype = qjs::JS_ATOM_prototype,
+    Prototype = qjs::JS_ATOM_prototype as u32,
     /// "constructor"
-    Constructor = qjs::JS_ATOM_constructor,
+    Constructor = qjs::JS_ATOM_constructor as u32,
     /// "configurable"
-    Configurable = qjs::JS_ATOM_configurable,
+    Configurable = qjs::JS_ATOM_configurable as u32,
     /// "writable"
-    Writable = qjs::JS_ATOM_writable,
+    Writable = qjs::JS_ATOM_writable as u32,
     /// "enumerable"
-    Enumerable = qjs::JS_ATOM_enumerable,
+    Enumerable = qjs::JS_ATOM_enumerable as u32,
     /// "value"
-    Value = qjs::JS_ATOM_value,
+    Value = qjs::JS_ATOM_value as u32,
     /// "get"
-    Getter = qjs::JS_ATOM_get,
+    Getter = qjs::JS_ATOM_get as u32,
     /// "set"
-    Setter = qjs::JS_ATOM_set,
+    Setter = qjs::JS_ATOM_set as u32,
     /// "of"
-    Of = qjs::JS_ATOM_of,
+    Of = qjs::JS_ATOM_of as u32,
     /// "__proto__"
-    UnderscoreProto = qjs::JS_ATOM___proto__,
+    UnderscoreProto = qjs::JS_ATOM___proto__ as u32,
     /// "undefined"
-    Undefined = qjs::JS_ATOM_undefined,
+    Undefined = qjs::JS_ATOM_undefined as u32,
     /// "number"
-    NumberLower = qjs::JS_ATOM_number,
+    NumberLower = qjs::JS_ATOM_number as u32,
     /// "boolean"
-    BooleanLower = qjs::JS_ATOM_boolean,
+    BooleanLower = qjs::JS_ATOM_boolean as u32,
     /// "string"
-    StringLower = qjs::JS_ATOM_string,
+    StringLower = qjs::JS_ATOM_string as u32,
     /// "object"
-    ObjectLower = qjs::JS_ATOM_object,
+    ObjectLower = qjs::JS_ATOM_object as u32,
     /// "symbol"
-    SymbolLower = qjs::JS_ATOM_symbol,
+    SymbolLower = qjs::JS_ATOM_symbol as u32,
     /// "integer"
-    Integer = qjs::JS_ATOM_integer,
+    Integer = qjs::JS_ATOM_integer as u32,
     /// "unknown"
-    Unknown = qjs::JS_ATOM_unknown,
+    Unknown = qjs::JS_ATOM_unknown as u32,
     /// "arguments"
-    ArgumentsLower = qjs::JS_ATOM_arguments,
+    ArgumentsLower = qjs::JS_ATOM_arguments as u32,
     /// "callee"
-    Callee = qjs::JS_ATOM_callee,
+    Callee = qjs::JS_ATOM_callee as u32,
     /// "caller"
-    Caller = qjs::JS_ATOM_caller,
+    Caller = qjs::JS_ATOM_caller as u32,
     /// "lastIndex"
-    LastIndex = qjs::JS_ATOM_lastIndex,
+    LastIndex = qjs::JS_ATOM_lastIndex as u32,
     /// "target"
-    Target = qjs::JS_ATOM_target,
+    Target = qjs::JS_ATOM_target as u32,
     /// "index"
-    Index = qjs::JS_ATOM_index,
+    Index = qjs::JS_ATOM_index as u32,
     /// "input"
-    Input = qjs::JS_ATOM_input,
+    Input = qjs::JS_ATOM_input as u32,
     /// "defineProperties"
-    DefineProperties = qjs::JS_ATOM_defineProperties,
+    DefineProperties = qjs::JS_ATOM_defineProperties as u32,
     /// "apply"
-    Apply = qjs::JS_ATOM_apply,
+    Apply = qjs::JS_ATOM_apply as u32,
     /// "join"
-    Join = qjs::JS_ATOM_join,
+    Join = qjs::JS_ATOM_join as u32,
     /// "concat"
-    Concat = qjs::JS_ATOM_concat,
+    Concat = qjs::JS_ATOM_concat as u32,
     /// "split"
-    Split = qjs::JS_ATOM_split,
+    Split = qjs::JS_ATOM_split as u32,
     /// "construct"
-    Construct = qjs::JS_ATOM_construct,
+    Construct = qjs::JS_ATOM_construct as u32,
     /// "getPrototypeOf"
-    GetPrototypeOf = qjs::JS_ATOM_getPrototypeOf,
+    GetPrototypeOf = qjs::JS_ATOM_getPrototypeOf as u32,
     /// "setPrototypeOf"
-    SetPrototypeOf = qjs::JS_ATOM_setPrototypeOf,
+    SetPrototypeOf = qjs::JS_ATOM_setPrototypeOf as u32,
     /// "isExtensible"
-    IsExtensible = qjs::JS_ATOM_isExtensible,
+    IsExtensible = qjs::JS_ATOM_isExtensible as u32,
     /// "preventExtensions"
-    PreventExtensions = qjs::JS_ATOM_preventExtensions,
+    PreventExtensions = qjs::JS_ATOM_preventExtensions as u32,
     /// "has"
-    Has = qjs::JS_ATOM_has,
+    Has = qjs::JS_ATOM_has as u32,
     /// "deleteProperty"
-    DeleteProperty = qjs::JS_ATOM_deleteProperty,
+    DeleteProperty = qjs::JS_ATOM_deleteProperty as u32,
     /// "defineProperty"
-    DefineProperty = qjs::JS_ATOM_defineProperty,
+    DefineProperty = qjs::JS_ATOM_defineProperty as u32,
     /// "getOwnPropertyDescriptor"
-    GetOwnPropertyDescriptor = qjs::JS_ATOM_getOwnPropertyDescriptor,
+    GetOwnPropertyDescriptor = qjs::JS_ATOM_getOwnPropertyDescriptor as u32,
     /// "ownKeys"
-    OwnKeys = qjs::JS_ATOM_ownKeys,
+    OwnKeys = qjs::JS_ATOM_ownKeys as u32,
     /// "add"
-    Add = qjs::JS_ATOM_add,
+    Add = qjs::JS_ATOM_add as u32,
     /// "done"
-    Done = qjs::JS_ATOM_done,
+    Done = qjs::JS_ATOM_done as u32,
     /// "next"
-    Next = qjs::JS_ATOM_next,
+    Next = qjs::JS_ATOM_next as u32,
     /// "values"
-    Values = qjs::JS_ATOM_values,
+    Values = qjs::JS_ATOM_values as u32,
     /// "source"
-    Source = qjs::JS_ATOM_source,
+    Source = qjs::JS_ATOM_source as u32,
     /// "flags"
-    Flags = qjs::JS_ATOM_flags,
+    Flags = qjs::JS_ATOM_flags as u32,
     /// "global"
-    Global = qjs::JS_ATOM_global,
+    Global = qjs::JS_ATOM_global as u32,
     /// "unicode"
-    Unicode = qjs::JS_ATOM_unicode,
+    Unicode = qjs::JS_ATOM_unicode as u32,
     /// "raw"
-    Raw = qjs::JS_ATOM_raw,
+    Raw = qjs::JS_ATOM_raw as u32,
     /// "new.target"
-    NewTarget = qjs::JS_ATOM_new_target,
+    NewTarget = qjs::JS_ATOM_new_target as u32,
     /// "this.active_func"
-    ThisActiveFunc = qjs::JS_ATOM_this_active_func,
+    ThisActiveFunc = qjs::JS_ATOM_this_active_func as u32,
     /// "<home_object>"
-    HomeObject = qjs::JS_ATOM_home_object,
+    HomeObject = qjs::JS_ATOM_home_object as u32,
     /// "<computed_field>"
-    ComputedField = qjs::JS_ATOM_computed_field,
+    ComputedField = qjs::JS_ATOM_computed_field as u32,
     /// "<static_computed_field>"
-    StaticComputedField = qjs::JS_ATOM_static_computed_field, /* must come after computed_fields */
+    StaticComputedField = qjs::JS_ATOM_static_computed_field as u32, /* must come after computed_fields */
     /// "<class_fields_init>"
-    ClassFieldsInit = qjs::JS_ATOM_class_fields_init,
+    ClassFieldsInit = qjs::JS_ATOM_class_fields_init as u32,
     /// "<brand>"
-    Brand = qjs::JS_ATOM_brand,
+    Brand = qjs::JS_ATOM_brand as u32,
     /// "#constructor"
-    HashConstructor = qjs::JS_ATOM_hash_constructor,
+    HashConstructor = qjs::JS_ATOM_hash_constructor as u32,
     /// "as"
-    As = qjs::JS_ATOM_as,
+    As = qjs::JS_ATOM_as as u32,
     /// "from"
-    From = qjs::JS_ATOM_from,
+    From = qjs::JS_ATOM_from as u32,
     /// "meta"
-    Meta = qjs::JS_ATOM_meta,
+    Meta = qjs::JS_ATOM_meta as u32,
     /// "*default*"
-    StarDefault = qjs::JS_ATOM__default_,
+    StarDefault = qjs::JS_ATOM__default_ as u32,
     /// "*"
-    Star = qjs::JS_ATOM__star_,
+    Star = qjs::JS_ATOM__star_ as u32,
     /// "Module"
-    Module = qjs::JS_ATOM_Module,
+    Module = qjs::JS_ATOM_Module as u32,
     /// "then"
-    Then = qjs::JS_ATOM_then,
+    Then = qjs::JS_ATOM_then as u32,
     /// "resolve"
-    Resolve = qjs::JS_ATOM_resolve,
+    Resolve = qjs::JS_ATOM_resolve as u32,
     /// "reject"
-    Reject = qjs::JS_ATOM_reject,
+    Reject = qjs::JS_ATOM_reject as u32,
     /// "promise"
-    PromiseLower = qjs::JS_ATOM_promise,
+    PromiseLower = qjs::JS_ATOM_promise as u32,
     /// "proxy"
-    ProxyLower = qjs::JS_ATOM_proxy,
+    ProxyLower = qjs::JS_ATOM_proxy as u32,
     /// "revoke"
-    Revoke = qjs::JS_ATOM_revoke,
+    Revoke = qjs::JS_ATOM_revoke as u32,
     /// "async"
-    Async = qjs::JS_ATOM_async,
+    Async = qjs::JS_ATOM_async as u32,
     /// "exec"
-    Exec = qjs::JS_ATOM_exec,
+    Exec = qjs::JS_ATOM_exec as u32,
     /// "groups"
-    Groups = qjs::JS_ATOM_groups,
+    Groups = qjs::JS_ATOM_groups as u32,
     /// "status"
-    Status = qjs::JS_ATOM_status,
+    Status = qjs::JS_ATOM_status as u32,
     /// "reason"
-    Reason = qjs::JS_ATOM_reason,
+    Reason = qjs::JS_ATOM_reason as u32,
     /// "globalThis"
-    GlobalThis = qjs::JS_ATOM_globalThis,
+    GlobalThis = qjs::JS_ATOM_globalThis as u32,
     /// "bigint"
-    Bigint = qjs::JS_ATOM_bigint,
+    Bigint = qjs::JS_ATOM_bigint as u32,
     /// "bigfloat"
-    Bigfloat = qjs::JS_ATOM_bigfloat,
+    Bigfloat = qjs::JS_ATOM_bigfloat as u32,
     /// "bigdecimal"
-    Bigdecimal = qjs::JS_ATOM_bigdecimal,
+    Bigdecimal = qjs::JS_ATOM_bigdecimal as u32,
     /// "roundingMode"
-    RoundingMode = qjs::JS_ATOM_roundingMode,
+    RoundingMode = qjs::JS_ATOM_roundingMode as u32,
     /// "maximumSignificantDigits"
-    MaximumSignificantDigits = qjs::JS_ATOM_maximumSignificantDigits,
+    MaximumSignificantDigits = qjs::JS_ATOM_maximumSignificantDigits as u32,
     /// "maximumFractionDigits"
-    MaximumFractionDigits = qjs::JS_ATOM_maximumFractionDigits,
+    MaximumFractionDigits = qjs::JS_ATOM_maximumFractionDigits as u32,
     /// "toJSON"
-    ToJSON = qjs::JS_ATOM_toJSON,
+    ToJSON = qjs::JS_ATOM_toJSON as u32,
     /// "Object"
-    Object = qjs::JS_ATOM_Object,
+    Object = qjs::JS_ATOM_Object as u32,
     /// "Array"
-    Array = qjs::JS_ATOM_Array,
+    Array = qjs::JS_ATOM_Array as u32,
     /// "Error"
-    Error = qjs::JS_ATOM_Error,
+    Error = qjs::JS_ATOM_Error as u32,
     /// "Number"
-    Number = qjs::JS_ATOM_Number,
+    Number = qjs::JS_ATOM_Number as u32,
     /// "String"
-    String = qjs::JS_ATOM_String,
+    String = qjs::JS_ATOM_String as u32,
     /// "Boolean"
-    Boolean = qjs::JS_ATOM_Boolean,
+    Boolean = qjs::JS_ATOM_Boolean as u32,
     /// "Symbol"
-    Symbol = qjs::JS_ATOM_Symbol,
+    Symbol = qjs::JS_ATOM_Symbol as u32,
     /// "Arguments"
-    Arguments = qjs::JS_ATOM_Arguments,
+    Arguments = qjs::JS_ATOM_Arguments as u32,
     /// "Math"
-    Math = qjs::JS_ATOM_Math,
+    Math = qjs::JS_ATOM_Math as u32,
     /// "JSON"
-    JSON = qjs::JS_ATOM_JSON,
+    JSON = qjs::JS_ATOM_JSON as u32,
     /// "Date"
-    Date = qjs::JS_ATOM_Date,
+    Date = qjs::JS_ATOM_Date as u32,
     /// "Function"
-    Function = qjs::JS_ATOM_Function,
+    Function = qjs::JS_ATOM_Function as u32,
     /// "GeneratorFunction"
-    GeneratorFunction = qjs::JS_ATOM_GeneratorFunction,
+    GeneratorFunction = qjs::JS_ATOM_GeneratorFunction as u32,
     /// "ForInIterator"
-    ForInIterator = qjs::JS_ATOM_ForInIterator,
+    ForInIterator = qjs::JS_ATOM_ForInIterator as u32,
     /// "RegExp"
-    RegExp = qjs::JS_ATOM_RegExp,
+    RegExp = qjs::JS_ATOM_RegExp as u32,
     /// "ArrayBuffer"
-    ArrayBuffer = qjs::JS_ATOM_ArrayBuffer,
+    ArrayBuffer = qjs::JS_ATOM_ArrayBuffer as u32,
     /// "SharedArrayBuffer"
-    SharedArrayBuffer = qjs::JS_ATOM_SharedArrayBuffer,
+    SharedArrayBuffer = qjs::JS_ATOM_SharedArrayBuffer as u32,
     /* must keep same order as class IDs for typed arrays */
     /// "Uint8ClampedArray"
-    Uint8ClampedArray = qjs::JS_ATOM_Uint8ClampedArray,
+    Uint8ClampedArray = qjs::JS_ATOM_Uint8ClampedArray as u32,
     /// "Int8Array"
-    Int8Array = qjs::JS_ATOM_Int8Array,
+    Int8Array = qjs::JS_ATOM_Int8Array as u32,
     /// "Uint8Array"
-    Uint8Array = qjs::JS_ATOM_Uint8Array,
+    Uint8Array = qjs::JS_ATOM_Uint8Array as u32,
     /// "Int16Array"
-    Int16Array = qjs::JS_ATOM_Int16Array,
+    Int16Array = qjs::JS_ATOM_Int16Array as u32,
     /// "Uint16Array"
-    Uint16Array = qjs::JS_ATOM_Uint16Array,
+    Uint16Array = qjs::JS_ATOM_Uint16Array as u32,
     /// "Int32Array"
-    Int32Array = qjs::JS_ATOM_Int32Array,
+    Int32Array = qjs::JS_ATOM_Int32Array as u32,
     /// "Uint32Array"
-    Uint32Array = qjs::JS_ATOM_Uint32Array,
+    Uint32Array = qjs::JS_ATOM_Uint32Array as u32,
     /// "BigInt64Array"
-    BigInt64Array = qjs::JS_ATOM_BigInt64Array,
+    BigInt64Array = qjs::JS_ATOM_BigInt64Array as u32,
     /// "BigUint64Array"
-    BigUint64Array = qjs::JS_ATOM_BigUint64Array,
+    BigUint64Array = qjs::JS_ATOM_BigUint64Array as u32,
     /// "Float32Array"
-    Float32Array = qjs::JS_ATOM_Float32Array,
+    Float32Array = qjs::JS_ATOM_Float32Array as u32,
     /// "Float64Array"
-    Float64Array = qjs::JS_ATOM_Float64Array,
+    Float64Array = qjs::JS_ATOM_Float64Array as u32,
     /// "DataView"
-    DataView = qjs::JS_ATOM_DataView,
+    DataView = qjs::JS_ATOM_DataView as u32,
     /// "BigInt"
-    BigInt = qjs::JS_ATOM_BigInt,
+    BigInt = qjs::JS_ATOM_BigInt as u32,
     /// "BigFloat"
-    BigFloat = qjs::JS_ATOM_BigFloat,
+    BigFloat = qjs::JS_ATOM_BigFloat as u32,
     /// "BigFloatEnv"
-    BigFloatEnv = qjs::JS_ATOM_BigFloatEnv,
+    BigFloatEnv = qjs::JS_ATOM_BigFloatEnv as u32,
     /// "BigDecimal"
-    BigDecimal = qjs::JS_ATOM_BigDecimal,
+    BigDecimal = qjs::JS_ATOM_BigDecimal as u32,
     /// "OperatorSet"
-    OperatorSet = qjs::JS_ATOM_OperatorSet,
+    OperatorSet = qjs::JS_ATOM_OperatorSet as u32,
     /// "Operators"
-    Operators = qjs::JS_ATOM_Operators,
+    Operators = qjs::JS_ATOM_Operators as u32,
     /// "Map"
-    Map = qjs::JS_ATOM_Map,
+    Map = qjs::JS_ATOM_Map as u32,
     /// "Set"
-    Set = qjs::JS_ATOM_Set, /* Map + 1 */
+    Set = qjs::JS_ATOM_Set as u32, /* Map + 1 */
     /// "WeakMap"
-    WeakMap = qjs::JS_ATOM_WeakMap, /* Map + 2 */
+    WeakMap = qjs::JS_ATOM_WeakMap as u32, /* Map + 2 */
     /// "WeakSet"
-    WeakSet = qjs::JS_ATOM_WeakSet, /* Map + 3 */
+    WeakSet = qjs::JS_ATOM_WeakSet as u32, /* Map + 3 */
     /// "Map Iterator"
-    MapIterator = qjs::JS_ATOM_Map_Iterator,
+    MapIterator = qjs::JS_ATOM_Map_Iterator as u32,
     /// "Set Iterator"
-    SetIterator = qjs::JS_ATOM_Set_Iterator,
+    SetIterator = qjs::JS_ATOM_Set_Iterator as u32,
     /// "Array Iterator"
-    ArrayIterator = qjs::JS_ATOM_Array_Iterator,
+    ArrayIterator = qjs::JS_ATOM_Array_Iterator as u32,
     /// "String Iterator"
-    StringIterator = qjs::JS_ATOM_String_Iterator,
+    StringIterator = qjs::JS_ATOM_String_Iterator as u32,
     /// "RegExp String Iterator"
-    RegExpStringIterator = qjs::JS_ATOM_RegExp_String_Iterator,
+    RegExpStringIterator = qjs::JS_ATOM_RegExp_String_Iterator as u32,
     /// "Generator"
-    Generator = qjs::JS_ATOM_Generator,
+    Generator = qjs::JS_ATOM_Generator as u32,
     /// "Proxy"
-    Proxy = qjs::JS_ATOM_Proxy,
+    Proxy = qjs::JS_ATOM_Proxy as u32,
     /// "Promise"
-    Promise = qjs::JS_ATOM_Promise,
+    Promise = qjs::JS_ATOM_Promise as u32,
     /// "PromiseResolveFunction"
-    PromiseResolveFunction = qjs::JS_ATOM_PromiseResolveFunction,
+    PromiseResolveFunction = qjs::JS_ATOM_PromiseResolveFunction as u32,
     /// "PromiseRejectFunction"
-    PromiseRejectFunction = qjs::JS_ATOM_PromiseRejectFunction,
+    PromiseRejectFunction = qjs::JS_ATOM_PromiseRejectFunction as u32,
     /// "AsyncFunction"
-    AsyncFunction = qjs::JS_ATOM_AsyncFunction,
+    AsyncFunction = qjs::JS_ATOM_AsyncFunction as u32,
     /// "AsyncFunctionResolve"
-    AsyncFunctionResolve = qjs::JS_ATOM_AsyncFunctionResolve,
+    AsyncFunctionResolve = qjs::JS_ATOM_AsyncFunctionResolve as u32,
     /// "AsyncFunctionReject"
-    AsyncFunctionReject = qjs::JS_ATOM_AsyncFunctionReject,
+    AsyncFunctionReject = qjs::JS_ATOM_AsyncFunctionReject as u32,
     /// "AsyncGeneratorFunction"
-    AsyncGeneratorFunction = qjs::JS_ATOM_AsyncGeneratorFunction,
+    AsyncGeneratorFunction = qjs::JS_ATOM_AsyncGeneratorFunction as u32,
     /// "AsyncGenerator"
-    AsyncGenerator = qjs::JS_ATOM_AsyncGenerator,
+    AsyncGenerator = qjs::JS_ATOM_AsyncGenerator as u32,
     /// "EvalError"
-    EvalError = qjs::JS_ATOM_EvalError,
+    EvalError = qjs::JS_ATOM_EvalError as u32,
     /// "RangeError"
-    RangeError = qjs::JS_ATOM_RangeError,
+    RangeError = qjs::JS_ATOM_RangeError as u32,
     /// "ReferenceError"
-    ReferenceError = qjs::JS_ATOM_ReferenceError,
+    ReferenceError = qjs::JS_ATOM_ReferenceError as u32,
     /// "SyntaxError"
-    SyntaxError = qjs::JS_ATOM_SyntaxError,
+    SyntaxError = qjs::JS_ATOM_SyntaxError as u32,
     /// "TypeError"
-    TypeError = qjs::JS_ATOM_TypeError,
+    TypeError = qjs::JS_ATOM_TypeError as u32,
     /// "URIError"
-    URIError = qjs::JS_ATOM_URIError,
+    URIError = qjs::JS_ATOM_URIError as u32,
     /// "InternalError"
-    InternalError = qjs::JS_ATOM_InternalError,
+    InternalError = qjs::JS_ATOM_InternalError as u32,
     /// "Symbol.iterator"
-    SymbolIterator = qjs::JS_ATOM_Symbol_iterator,
+    SymbolIterator = qjs::JS_ATOM_Symbol_iterator as u32,
     /// "Symbol.match"
-    SymbolMatch = qjs::JS_ATOM_Symbol_match,
+    SymbolMatch = qjs::JS_ATOM_Symbol_match as u32,
     /// "Symbol.matchAll"
-    SymbolMatchAll = qjs::JS_ATOM_Symbol_matchAll,
+    SymbolMatchAll = qjs::JS_ATOM_Symbol_matchAll as u32,
     /// "Symbol.replace"
-    SymbolReplace = qjs::JS_ATOM_Symbol_replace,
+    SymbolReplace = qjs::JS_ATOM_Symbol_replace as u32,
     /// "Symbol.search"
-    SymbolSearch = qjs::JS_ATOM_Symbol_search,
+    SymbolSearch = qjs::JS_ATOM_Symbol_search as u32,
     /// "Symbol.split"
-    SymbolSplit = qjs::JS_ATOM_Symbol_split,
+    SymbolSplit = qjs::JS_ATOM_Symbol_split as u32,
     /// "Symbol.toStringTag"
-    SymbolToStringTag = qjs::JS_ATOM_Symbol_toStringTag,
+    SymbolToStringTag = qjs::JS_ATOM_Symbol_toStringTag as u32,
     /// "Symbol.isConcatSpreadable"
-    SymbolIsConcatSpreadable = qjs::JS_ATOM_Symbol_isConcatSpreadable,
+    SymbolIsConcatSpreadable = qjs::JS_ATOM_Symbol_isConcatSpreadable as u32,
     /// "Symbol.hasInstance"
-    SymbolHasInstance = qjs::JS_ATOM_Symbol_hasInstance,
+    SymbolHasInstance = qjs::JS_ATOM_Symbol_hasInstance as u32,
     /// "Symbol.species"
-    SymbolSpecies = qjs::JS_ATOM_Symbol_species,
+    SymbolSpecies = qjs::JS_ATOM_Symbol_species as u32,
     /// "Symbol.unscopables"
-    SymbolUnscopables = qjs::JS_ATOM_Symbol_unscopables,
+    SymbolUnscopables = qjs::JS_ATOM_Symbol_unscopables as u32,
 }
 
 impl PredefinedAtom {

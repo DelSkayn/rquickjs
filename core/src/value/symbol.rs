@@ -30,7 +30,7 @@ macro_rules! impl_symbols {
             pub fn $fn_name(ctx: Ctx<'js>) -> Self {
                 // No-op in most cases but with certain dump flags static symbols maintain a ref count.
                 let v = unsafe {
-                    let v = qjs::JS_AtomToValue(ctx.as_ptr(),qjs::$const_name);
+                    let v = qjs::JS_AtomToValue(ctx.as_ptr(),qjs::$const_name as qjs::JSAtom);
                     Value::from_js_value(ctx, v)
                 };
 
