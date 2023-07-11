@@ -12,10 +12,18 @@ pub use predefined::PredefinedAtom;
 /// a normal number.
 /// However when the atom represents a string link index like `object["foo"]` or `object.foo`
 /// the atom represents a value in a hashmap.
+#[derive(Debug)]
 pub struct Atom<'js> {
     pub(crate) atom: qjs::JSAtom,
     ctx: Ctx<'js>,
 }
+
+impl<'js> PartialEq for Atom<'js> {
+    fn eq(&self, other: &Self) -> bool {
+        self.atom == other.atom
+    }
+}
+impl<'js> Eq for Atom<'js> {}
 
 impl<'js> Atom<'js> {
     /// Create a atom from a javascript value.

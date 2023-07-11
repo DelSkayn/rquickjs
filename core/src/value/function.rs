@@ -176,6 +176,7 @@ impl<'js> Function<'js> {
     }
 }
 
+#[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct Constructor<'js>(pub(crate) Function<'js>);
 

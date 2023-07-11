@@ -4,6 +4,7 @@ use crate::{
 };
 use std::{
     convert::{TryFrom, TryInto},
+    fmt,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
@@ -57,12 +58,29 @@ typedarray_items! {
 /// | `BigUint64Array`   | [`TypedArray<u64>`]   |
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
-#[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
 pub struct TypedArray<'js, T>(pub(crate) Object<'js>, PhantomData<T>);
 
 unsafe impl<'js, T> Outlive<'js> for TypedArray<'js, T> {
     type Target<'to> = TypedArray<'to, T>;
+}
+
+impl<'js, T> fmt::Debug for TypedArray<'js, T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_tuple("TypedArray").field(&self.0).finish()
+    }
+}
+
+impl<'js, T> PartialEq for TypedArray<'js, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<'js, T> Clone for TypedArray<'js, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<'js, T> TypedArray<'js, T> {
@@ -173,8 +191,8 @@ impl<'js, T> TypedArray<'js, T> {
         T: TypedArrayItem,
     {
         let ctx = arraybuffer.0.ctx;
-        let ctor: Constructor = ctx.globals().get(T::CLASS_NAME)?;
-        ctor.construct((arraybuffer,))
+        let ctor: Constructor = dbg!(ctx.globals().get(T::CLASS_NAME)?);
+        dbg!(ctor.construct((arraybuffer,)))
     }
 
     pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {

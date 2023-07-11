@@ -436,6 +436,23 @@ pub enum PredefinedAtom {
 }
 
 impl PredefinedAtom {
+    pub const fn is_symbol(self) -> bool {
+        matches!(
+            self,
+            PredefinedAtom::SymbolIterator
+                | PredefinedAtom::SymbolMatch
+                | PredefinedAtom::SymbolMatchAll
+                | PredefinedAtom::SymbolReplace
+                | PredefinedAtom::SymbolSearch
+                | PredefinedAtom::SymbolSplit
+                | PredefinedAtom::SymbolToStringTag
+                | PredefinedAtom::SymbolIsConcatSpreadable
+                | PredefinedAtom::SymbolHasInstance
+                | PredefinedAtom::SymbolSpecies
+                | PredefinedAtom::SymbolUnscopables
+        )
+    }
+
     pub const fn to_str(self) -> &'static str {
         match self {
             PredefinedAtom::Null => "null",
@@ -656,9 +673,10 @@ impl PredefinedAtom {
 
 #[cfg(test)]
 mod test {
-    use crate::{Context, IntoAtom, Runtime};
+    use crate::{Atom, Context, IntoAtom, Runtime};
 
     use super::PredefinedAtom;
+    #[test]
     fn string_correct() {
         static ALL_PREDEFS: &[PredefinedAtom] = &[
             PredefinedAtom::Null,
@@ -880,7 +898,20 @@ mod test {
         context.with(|ctx| {
             for predef in ALL_PREDEFS {
                 let atom = predef.into_atom(ctx).unwrap();
-                assert_eq!(atom.to_string().unwrap().as_str(), predef.to_str())
+                assert_eq!(atom.to_string().unwrap().as_str(), predef.to_str());
+
+                // the string of a symbol doesn't convert to the same atom.
+                if predef.is_symbol() {
+                    continue;
+                }
+
+                let from_str = Atom::from_str(ctx, predef.to_str()).unwrap();
+                assert_eq!(
+                    atom,
+                    from_str,
+                    "Atom `{}` from str and from redefined not equal",
+                    predef.to_str()
+                )
             }
         })
     }
