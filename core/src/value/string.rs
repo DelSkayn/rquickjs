@@ -56,6 +56,5 @@ mod test {
             let text: StdString = (string,).apply(&func).unwrap();
             assert_eq!(text, "foobar".to_string());
         });
-        todo!()
     }
 }

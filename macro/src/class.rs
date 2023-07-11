@@ -70,7 +70,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
             ( #(#fields),*)
             )
         }
-        Fields::Unit => todo!(),
+        Fields::Unit => TokenStream::new(),
     };
 
     let lifetime_generics = add_js_lifetime(generics);
