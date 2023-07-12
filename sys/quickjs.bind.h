@@ -3,7 +3,7 @@
 #include "quickjs.h";
 
 
-#if !defined(EMSCRIPTEN)
+#if !defined(EMSCRIPTEN) && !defined(_MSC_VER)
 #define CONFIG_ATOMICS
 #endif
 
