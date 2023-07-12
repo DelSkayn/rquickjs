@@ -28,7 +28,7 @@ impl<'js> Array<'js> {
 
     /// Get the lenght of the javascript array.
     pub fn len(&self) -> usize {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let value = self.0.as_js_value();
         unsafe {
             let val = qjs::JS_GetProperty(ctx.as_ptr(), value, PredefinedAtom::Length as _);
@@ -49,7 +49,7 @@ impl<'js> Array<'js> {
         let val = unsafe {
             let val = qjs::JS_GetPropertyUint32(ctx.as_ptr(), obj, idx as _);
             let val = ctx.handle_exception(val)?;
-            Value::from_js_value(ctx, val)
+            Value::from_js_value(ctx.clone(), val)
         };
         V::from_js(ctx, val)
     }
@@ -164,11 +164,11 @@ where
 {
     type Item = Value<'js>;
 
-    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    fn from_iter_js<T>(ctx: &Ctx<'js>, iter: T) -> Result<Self>
     where
         T: IntoIterator<Item = A>,
     {
-        let array = Array::new(ctx)?;
+        let array = Array::new(ctx.clone())?;
         for (idx, item) in iter.into_iter().enumerate() {
             let item = item.into_js(ctx)?;
             array.set(idx as _, item)?;
@@ -230,9 +230,9 @@ mod test {
                 .unwrap();
             let elems: Vec<_> = val.into_iter().collect::<Result<_>>().unwrap();
             assert_eq!(elems.len(), 3);
-            assert_eq!(i8::from_js(ctx, elems[0].clone()).unwrap(), 1);
-            assert_eq!(StdString::from_js(ctx, elems[1].clone()).unwrap(), "abcd");
-            assert!(bool::from_js(ctx, elems[2].clone()).unwrap());
+            assert_eq!(i8::from_js(&ctx, elems[0].clone()).unwrap(), 1);
+            assert_eq!(StdString::from_js(&ctx, elems[1].clone()).unwrap(), "abcd");
+            assert!(bool::from_js(&ctx, elems[2].clone()).unwrap());
         })
     }
 
@@ -261,12 +261,12 @@ mod test {
             let array = [1i32, 2, 3]
                 .iter()
                 .cloned()
-                .collect_js::<Array>(ctx)
+                .collect_js::<Array>(&ctx)
                 .unwrap();
             assert_eq!(array.len(), 3);
-            assert_eq!(i32::from_js(ctx, array.get(0).unwrap()).unwrap(), 1);
-            assert_eq!(i32::from_js(ctx, array.get(1).unwrap()).unwrap(), 2);
-            assert_eq!(i32::from_js(ctx, array.get(2).unwrap()).unwrap(), 3);
+            assert_eq!(i32::from_js(&ctx, array.get(0).unwrap()).unwrap(), 1);
+            assert_eq!(i32::from_js(&ctx, array.get(1).unwrap()).unwrap(), 2);
+            assert_eq!(i32::from_js(&ctx, array.get(2).unwrap()).unwrap(), 3);
         })
     }
 }

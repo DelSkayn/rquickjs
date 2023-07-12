@@ -4,9 +4,11 @@ use crate::{
     class::{Class, ClassId, JsClass, Readable, Trace, Tracer},
     qjs,
     value::function::{Params, StaticJsFunction},
-    FromJs, Function, Outlive, Result, Value,
+    Ctx, FromJs, Function, Object, Outlive, Result, Value,
 };
 pub use mac::static_fn;
+
+use super::Constructor;
 
 ///. The C side callback
 pub unsafe extern "C" fn js_callback_class<F: StaticJsFunction>(
@@ -18,12 +20,12 @@ pub unsafe extern "C" fn js_callback_class<F: StaticJsFunction>(
     _flags: qjs::c_int,
 ) -> qjs::JSValue {
     let args = Params::from_ffi_class(ctx, function, this, argc, argv, _flags);
-    let ctx = args.ctx();
+    let ctx = args.ctx().clone();
 
     ctx.handle_panic(AssertUnwindSafe(|| {
         let value = F::call(args)
             .map(Value::into_js_value)
-            .unwrap_or_else(|error| error.throw(ctx));
+            .unwrap_or_else(|error| error.throw(&ctx));
         value
     }))
 }
@@ -106,11 +108,11 @@ impl<'js> JsClass<'js> for RustFunction<'js> {
         &ID
     }
 
-    fn prototype(ctx: crate::Ctx<'js>) -> Result<Option<crate::Object<'js>>> {
-        Ok(Some(Function::prototype(ctx)))
+    fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
+        Ok(Some(Function::prototype(ctx.clone())))
     }
 
-    fn constructor(_ctx: crate::Ctx<'js>) -> Result<Option<super::Constructor<'js>>> {
+    fn constructor(_ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>> {
         Ok(None)
     }
 

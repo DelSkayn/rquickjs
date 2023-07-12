@@ -26,7 +26,7 @@ impl BuiltinResolver {
 }
 
 impl Resolver for BuiltinResolver {
-    fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
         let full = if !name.starts_with('.') {
             name.to_string()
         } else {

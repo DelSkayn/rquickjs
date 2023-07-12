@@ -52,25 +52,25 @@ impl<'a, 'js> Params<'a, 'js> {
     }
 
     /// Returns the context assiociated with call.
-    pub fn ctx(&self) -> Ctx<'js> {
-        self.ctx
+    pub fn ctx(&self) -> &Ctx<'js> {
+        &self.ctx
     }
 
     /// Returns the value on which this function called. i.e. in `bla.foo()` the `foo` value.
     pub fn function(&self) -> Value<'js> {
-        unsafe { Value::from_js_value_const(self.ctx, self.function) }
+        unsafe { Value::from_js_value_const(self.ctx.clone(), self.function) }
     }
 
     /// Returns the this on which this function called. i.e. in `bla.foo()` the `bla` value.
     pub fn this(&self) -> Value<'js> {
-        unsafe { Value::from_js_value_const(self.ctx, self.this) }
+        unsafe { Value::from_js_value_const(self.ctx.clone(), self.this) }
     }
 
     /// Returns the argument at a given index..
     pub fn arg(&self, index: usize) -> Option<Value<'js>> {
         self.args
             .get(index)
-            .map(|arg| unsafe { Value::from_js_value_const(self.ctx, *arg) })
+            .map(|arg| unsafe { Value::from_js_value_const(self.ctx.clone(), *arg) })
     }
 
     /// Returns the number of arguments.
@@ -106,7 +106,7 @@ pub struct ParamsAccessor<'a, 'js> {
 
 impl<'a, 'js> ParamsAccessor<'a, 'js> {
     /// Returns the context associated with the params.
-    pub fn ctx(&self) -> Ctx<'js> {
+    pub fn ctx(&self) -> &Ctx<'js> {
         self.params.ctx()
     }
 
@@ -134,7 +134,7 @@ impl<'a, 'js> ParamsAccessor<'a, 'js> {
         let res = self.params.args[self.offset];
         self.offset += 1;
         // TODO: figure out ownership
-        unsafe { Value::from_js_value_const(self.params.ctx, res) }
+        unsafe { Value::from_js_value_const(self.params.ctx.clone(), res) }
     }
 
     /// returns the number of arguments remaining
@@ -243,7 +243,8 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for T {
     }
 
     fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
-        T::from_js(params.ctx(), params.arg())
+        let ctx = params.ctx().clone();
+        T::from_js(&ctx, params.arg())
     }
 }
 
@@ -253,7 +254,7 @@ impl<'js> FromParam<'js> for Ctx<'js> {
     }
 
     fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
-        Ok(params.ctx())
+        Ok(params.ctx().clone())
     }
 }
 
@@ -264,7 +265,8 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for Opt<T> {
 
     fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
         if !params.is_empty() {
-            Ok(Opt(Some(T::from_js(params.ctx(), params.arg())?)))
+            let ctx = params.ctx().clone();
+            Ok(Opt(Some(T::from_js(&ctx, params.arg())?)))
         } else {
             Ok(Opt(None))
         }

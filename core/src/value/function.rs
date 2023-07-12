@@ -59,9 +59,9 @@ impl<'js> Function<'js> {
         A: IntoArgs<'js>,
         R: FromJs<'js>,
     {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let num = args.num_args();
-        let mut accum_args = Args::new(ctx, num);
+        let mut accum_args = Args::new(ctx.clone(), num);
         args.into_args(&mut accum_args)?;
         self.call_arg(accum_args)
     }
@@ -83,16 +83,16 @@ impl<'js> Function<'js> {
         A: IntoArgs<'js>,
         R: FromJs<'js>,
     {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let num = args.num_args();
-        let mut accum_args = Args::new(ctx, num);
+        let mut accum_args = Args::new(ctx.clone(), num);
         args.into_args(&mut accum_args)?;
         self.call_arg(accum_args)
     }
 
     /// Set the `name` property of this function
     pub fn set_name<S: AsRef<str>>(&self, name: S) -> Result<()> {
-        let name = name.as_ref().into_js(self.0.ctx)?;
+        let name = name.as_ref().into_js(self.ctx())?;
         unsafe {
             let res = qjs::JS_DefinePropertyValue(
                 self.0.ctx.as_ptr(),
@@ -116,7 +116,7 @@ impl<'js> Function<'js> {
 
     /// Sets the `length` property of the function.
     pub fn set_length(&self, len: usize) -> Result<()> {
-        let len = len.into_js(self.0.ctx)?;
+        let len = len.into_js(self.ctx())?;
         unsafe {
             let res = qjs::JS_DefinePropertyValue(
                 self.0.ctx.as_ptr(),
@@ -142,10 +142,8 @@ impl<'js> Function<'js> {
     /// `Function.prototype`.
     pub fn prototype(ctx: Ctx<'js>) -> Object<'js> {
         let res = unsafe {
-            Value::from_js_value(
-                ctx,
-                qjs::JS_DupValue(qjs::JS_GetFunctionProto(ctx.as_ptr())),
-            )
+            let v = qjs::JS_DupValue(qjs::JS_GetFunctionProto(ctx.as_ptr()));
+            Value::from_js_value(ctx, v)
         };
         // as far is I know this should always be an object.
         res.into_object()
@@ -192,10 +190,11 @@ impl<'js> Constructor<'js> {
     {
         let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
             let this = params.this();
+            let ctx = params.ctx().clone();
             let proto = this
                 .into_function()
                 .map(|func| func.get(PredefinedAtom::Prototype))
-                .unwrap_or_else(|| Ok(Class::<C>::prototype(ctx)))?;
+                .unwrap_or_else(|| Ok(Class::<C>::prototype(ctx.clone())))?;
 
             let res = f.call(params)?;
             res.as_object()
@@ -207,7 +206,7 @@ impl<'js> Constructor<'js> {
                 .set_prototype(proto.as_ref())?;
             Ok(res)
         });
-        let func = Function(Class::instance(ctx, RustFunction(func))?.into_object())
+        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_object())
             .with_constructor(true);
         unsafe {
             qjs::JS_SetConstructor(
@@ -225,7 +224,7 @@ impl<'js> Constructor<'js> {
     /// Create a new rust constructor function with a given prototype.
     ///
     /// Usefull if the function does not return a rust class.
-    pub fn new_prototype<F, P>(ctx: Ctx<'js>, prototype: Object<'js>, f: F) -> Result<Self>
+    pub fn new_prototype<F, P>(ctx: &Ctx<'js>, prototype: Object<'js>, f: F) -> Result<Self>
     where
         F: IntoJsFunc<'js, P> + 'js,
     {
@@ -247,7 +246,7 @@ impl<'js> Constructor<'js> {
                 .set_prototype(proto.as_ref())?;
             Ok(res)
         });
-        let func = Function(Class::instance(ctx, RustFunction(func))?.into_object())
+        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_object())
             .with_constructor(true);
         unsafe {
             qjs::JS_SetConstructor(ctx.as_ptr(), func.as_js_value(), prototype.as_js_value())
@@ -260,9 +259,9 @@ impl<'js> Constructor<'js> {
         A: IntoArgs<'js>,
         R: FromJs<'js>,
     {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let num = args.num_args();
-        let mut accum_args = Args::new(ctx, num);
+        let mut accum_args = Args::new(ctx.clone(), num);
         args.into_args(&mut accum_args)?;
         self.construct_args(accum_args)
     }

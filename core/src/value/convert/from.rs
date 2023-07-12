@@ -18,20 +18,20 @@ use either::{Either, Left, Right};
 use indexmap::{IndexMap, IndexSet};
 
 impl<'js> FromJs<'js> for Value<'js> {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Ok(value)
     }
 }
 
 impl<'js> FromJs<'js> for StdString {
-    fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         String::from_value(value).and_then(|string| string.to_string())
     }
 }
 
 /// Convert from JS as any
 impl<'js> FromJs<'js> for () {
-    fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
+    fn from_js(_: &Ctx<'js>, _: Value<'js>) -> Result<Self> {
         Ok(())
     }
 }
@@ -41,7 +41,7 @@ impl<'js, T> FromJs<'js> for Option<T>
 where
     T: FromJs<'js>,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         if value.type_of().is_void() {
             Ok(None)
         } else {
@@ -57,10 +57,10 @@ where
 {
     // TODO this function seems a bit hacky.
     // Expections are generally by the marshalling handled when returned callback.
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         unsafe {
             match ctx.handle_exception(value.into_js_value()) {
-                Ok(val) => T::from_js(ctx, Value::from_js_value(ctx, val)).map(Ok),
+                Ok(val) => T::from_js(ctx, Value::from_js_value(ctx.clone(), val)).map(Ok),
                 Err(error) => Ok(Err(error)),
             }
         }
@@ -75,7 +75,7 @@ where
     L: FromJs<'js>,
     R: FromJs<'js>,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         L::from_js(ctx, value.clone()).map(Left).or_else(|error| {
             if error.is_from_js() {
                 R::from_js(ctx, value).map(Right)
@@ -127,7 +127,7 @@ macro_rules! from_js_impls {
             where
                 T: FromJs<'js>,
             {
-                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     T::from_js(ctx, value).map($type::new)
                 }
             }
@@ -141,7 +141,7 @@ macro_rules! from_js_impls {
             where
                 $($type: FromJs<'js>,)*
             {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let array = Array::from_value(value)?;
 
                     let tuple_len = 0 $(+ from_js_impls!(@one $type))*;
@@ -165,7 +165,7 @@ macro_rules! from_js_impls {
                 T: FromJs<'js> $(+ $($guard)*)*,
                 $($param: $($pguard)*,)*
             {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let array = Array::from_value(value)?;
                     array.iter().collect::<Result<_>>()
                 }
@@ -183,7 +183,7 @@ macro_rules! from_js_impls {
                 V: FromJs<'js>,
                 $($param: $($pguard)*,)*
             {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let object = Object::from_value(value)?;
                     object.props().collect::<Result<_>>()
                 }
@@ -196,7 +196,7 @@ macro_rules! from_js_impls {
     (val: $($type:ty => $($jstype:ident $getfn:ident)*,)*) => {
         $(
             impl<'js> FromJs<'js> for $type {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let type_ = value.type_of();
                     match type_ {
                         $(Type::$jstype => Ok(unsafe { value.$getfn() } as _),)*
@@ -212,7 +212,7 @@ macro_rules! from_js_impls {
         $(
             $(
                 impl<'js> FromJs<'js> for $type {
-                    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                         let num = <$base>::from_js(ctx, value)?;
                         number_match_range(num, $type::MIN as $base, $type::MAX as $base, stringify!($base), stringify!($type))?;
                         Ok(num as $type)
@@ -317,12 +317,12 @@ from_js_impls! {
 }
 
 impl<'js> FromJs<'js> for f32 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         f64::from_js(ctx, value).map(|value| value as _)
     }
 }
 
-fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
+fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>) -> Result<i64> {
     let global = ctx.globals();
     let date_ctor: Object = global.get("Date")?;
 
@@ -338,7 +338,7 @@ fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
 }
 
 impl<'js> FromJs<'js> for SystemTime {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
         let millis = date_to_millis(ctx, value)?;
 
         if millis >= 0 {
@@ -364,7 +364,7 @@ macro_rules! chrono_from_js_impls {
         $(
             #[cfg(feature = "chrono")]
             impl<'js> FromJs<'js> for chrono::DateTime<chrono::$type> {
-                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::$type>> {
+                fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::$type>> {
                     use chrono::TimeZone;
 
                     let millis = date_to_millis(ctx, value)?;

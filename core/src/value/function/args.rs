@@ -49,13 +49,13 @@ impl<'js> Args<'js> {
     }
 
     /// Returns the context associated with these arguments.
-    pub fn ctx(&self) -> Ctx<'js> {
-        self.ctx
+    pub fn ctx(&self) -> &Ctx<'js> {
+        &self.ctx
     }
 
     /// Add an argument to the list.
     pub fn push_arg<T: IntoJs<'js>>(&mut self, arg: T) -> Result<()> {
-        let v = arg.into_js(self.ctx)?;
+        let v = arg.into_js(&self.ctx)?;
 
         match self.args {
             ArgsSlice::Stack {
@@ -91,7 +91,7 @@ impl<'js> Args<'js> {
     where
         T: IntoJs<'js>,
     {
-        let v = this.into_js(self.ctx)?;
+        let v = this.into_js(&self.ctx)?;
         let v = std::mem::replace(&mut self.this, v.into_js_value());
         unsafe { qjs::JS_FreeValue(self.ctx.as_ptr(), v) };
         Ok(())
@@ -101,7 +101,7 @@ impl<'js> Args<'js> {
     pub fn take_this(&mut self) -> Value<'js> {
         let value = std::mem::replace(&mut self.this, qjs::JS_UNDEFINED);
         Value {
-            ctx: self.ctx(),
+            ctx: self.ctx().clone(),
             value,
         }
     }
@@ -135,16 +135,16 @@ impl<'js> Args<'js> {
                 self.as_ptr() as _,
             );
             let val = self.ctx.handle_exception(val)?;
-            Value::from_js_value(self.ctx, val)
+            Value::from_js_value(self.ctx.clone(), val)
         };
-        R::from_js(self.ctx, val)
+        R::from_js(&self.ctx, val)
     }
 
     pub fn defer(mut self, func: Function<'js>) -> Result<()> {
-        let ctx = self.ctx();
         let this = self.take_this();
         self.push_arg(this)?;
         self.push_arg(func)?;
+        let ctx = self.ctx();
         unsafe {
             if qjs::JS_EnqueueJob(
                 ctx.as_ptr(),
@@ -184,7 +184,8 @@ impl<'js> Args<'js> {
             }
         };
         let value = unsafe { self.ctx.handle_exception(value)? };
-        R::from_js(self.ctx, unsafe { Value::from_js_value(self.ctx, value) })
+        let v = unsafe { Value::from_js_value(self.ctx.clone(), value) };
+        R::from_js(&self.ctx, v)
     }
 }
 
@@ -226,7 +227,7 @@ pub trait IntoArgs<'js> {
         R: FromJs<'js>,
         Self: Sized,
     {
-        let mut args = Args::new(function.ctx(), self.num_args());
+        let mut args = Args::new(function.ctx().clone(), self.num_args());
         self.into_args(&mut args)?;
         args.apply(function)
     }
@@ -235,7 +236,7 @@ pub trait IntoArgs<'js> {
     where
         Self: Sized,
     {
-        let mut args = Args::new(function.ctx(), self.num_args());
+        let mut args = Args::new(function.ctx().clone(), self.num_args());
         self.into_args(&mut args)?;
         args.defer(function)
     }
@@ -244,7 +245,7 @@ pub trait IntoArgs<'js> {
     where
         Self: Sized,
     {
-        let mut args = Args::new(function.ctx(), self.num_args());
+        let mut args = Args::new(function.ctx().clone(), self.num_args());
         self.into_args(&mut args)?;
         args.construct(function)
     }

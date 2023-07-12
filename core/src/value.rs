@@ -42,7 +42,7 @@ pub struct Value<'js> {
 
 impl<'js> Clone for Value<'js> {
     fn clone(&self) -> Self {
-        let ctx = self.ctx;
+        let ctx = self.ctx.clone();
         let value = unsafe { qjs::JS_DupValue(self.value) };
         Self { ctx, value }
     }
@@ -167,8 +167,8 @@ impl<'js> Value<'js> {
 
     /// Returns the Ctx object associated with this value.
     #[inline]
-    pub fn ctx(&self) -> Ctx<'js> {
-        self.ctx
+    pub fn ctx(&self) -> &Ctx<'js> {
+        &self.ctx
     }
 
     // unsafe because no type checking
@@ -376,7 +376,7 @@ impl<'js> Value<'js> {
 
     /// Convert from value to specified type
     pub fn get<T: FromJs<'js>>(&self) -> Result<T> {
-        T::from_js(self.ctx, self.clone())
+        T::from_js(self.ctx(), self.clone())
     }
 }
 
@@ -510,7 +510,7 @@ macro_rules! sub_types {
                 }
 
                 /// Returns the [`Ctx`] object associated with this value
-                pub fn ctx(&self) -> Ctx<'js>{
+                pub fn ctx(&self) -> &Ctx<'js>{
                     self.0.ctx()
                 }
 
@@ -605,20 +605,20 @@ macro_rules! sub_types {
             }
 
             impl<'js> FromJs<'js> for $head<'js> {
-                fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     Self::from_value(value)
                 }
             }
 
             impl<'js> IntoJs<'js> for $head<'js> {
-                fn into_js(self, _ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, _ctx: &Ctx<'js>) -> Result<Value<'js>> {
                     Ok(self.into_value())
                 }
             }
 
             impl<'js> IntoAtom<'js> for $head<'js>{
-                fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-                    Atom::from_value(ctx, &self.into_value())
+                fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+                    Atom::from_value(ctx.clone(), &self.into_value())
                 }
             }
         )*
@@ -689,14 +689,14 @@ macro_rules! void_types {
             }
 
             impl<'js> FromJs<'js> for $type {
-                fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     Self::from_value(value)
                 }
             }
 
             impl<'js> IntoJs<'js> for $type {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                    Ok(self.into_value(ctx))
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+                    Ok(self.into_value(ctx.clone()))
                 }
             }
         )*

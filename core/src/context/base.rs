@@ -109,7 +109,7 @@ impl Context {
     }
 
     pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
-        Class::<RustFunction>::register(Ctx::from_ptr(ctx))
+        Class::<RustFunction>::register(&Ctx::from_ptr(ctx))
             .expect("failed to initialized callback class");
     }
 }
@@ -160,7 +160,7 @@ mod test {
             let val: Value = ctx.eval(r#"1+1"#).unwrap();
 
             assert_eq!(val.type_of(), Type::Int);
-            assert_eq!(i32::from_js(ctx, val).unwrap(), 2);
+            assert_eq!(i32::from_js(&ctx, val).unwrap(), 2);
             println!("{:?}", ctx.globals());
         });
     }
@@ -223,7 +223,7 @@ mod test {
     )]
     fn exception() {
         test_with(|ctx| {
-            let val = ctx.eval::<(), _>("bla?#@!@ ").catch(ctx);
+            let val = ctx.eval::<(), _>("bla?#@!@ ").catch(&ctx);
             if let Err(e) = val {
                 assert!(e.is_exception());
                 panic!("{}", e);

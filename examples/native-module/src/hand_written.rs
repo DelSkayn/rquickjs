@@ -1,4 +1,4 @@
-use rquickjs::{module::ModuleDef, Function};
+use rquickjs::{module::ModuleDef, Ctx, Function};
 
 pub struct NativeModule;
 
@@ -11,14 +11,14 @@ impl ModuleDef for NativeModule {
     }
 
     fn evaluate<'js>(
-        ctx: rquickjs::Ctx<'js>,
+        ctx: &Ctx<'js>,
         exports: &mut rquickjs::module::Exports<'js>,
     ) -> rquickjs::Result<()> {
         exports.export("n", 123)?;
         exports.export("s", "abc")?;
         exports.export(
             "f",
-            Function::new(ctx, |a: f64, b: f64| (a + b) * 0.5)?.with_name("f"),
+            Function::new(ctx.clone(), |a: f64, b: f64| (a + b) * 0.5)?.with_name("f"),
         )?;
         Ok(())
     }

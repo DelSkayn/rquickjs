@@ -33,8 +33,8 @@ impl<'js, T, P> IntoJs<'js> for Func<T, P>
 where
     T: IntoJsFunc<'js, P> + 'js,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let function = Function::new(ctx, self.0);
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        let function = Function::new(ctx.clone(), self.0);
         function.into_js(ctx)
     }
 }

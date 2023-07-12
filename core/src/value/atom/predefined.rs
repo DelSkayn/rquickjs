@@ -6,6 +6,7 @@ use crate::qjs;
 /// in a hashmap.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 #[repr(u32)]
+#[allow(clippy::unnecessary_cast)]
 pub enum PredefinedAtom {
     /// "null"
     Null = qjs::JS_ATOM_null as u32, /* must be first */
@@ -897,7 +898,7 @@ mod test {
         let context = Context::full(&rt).unwrap();
         context.with(|ctx| {
             for predef in ALL_PREDEFS {
-                let atom = predef.into_atom(ctx).unwrap();
+                let atom = predef.into_atom(&ctx).unwrap();
                 assert_eq!(atom.to_string().unwrap().as_str(), predef.to_str());
 
                 // the string of a symbol doesn't convert to the same atom.
@@ -905,7 +906,7 @@ mod test {
                     continue;
                 }
 
-                let from_str = Atom::from_str(ctx, predef.to_str()).unwrap();
+                let from_str = Atom::from_str(ctx.clone(), predef.to_str()).unwrap();
                 assert_eq!(
                     atom,
                     from_str,

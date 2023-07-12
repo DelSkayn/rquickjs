@@ -27,38 +27,38 @@ impl<'js> FromAtom<'js> for StdString {
 }
 
 impl<'js> IntoAtom<'js> for PredefinedAtom {
-    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-        Ok(unsafe { Atom::from_atom_val_dup(ctx, self as qjs::JSAtom) })
+    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+        Ok(unsafe { Atom::from_atom_val_dup(ctx.clone(), self as qjs::JSAtom) })
     }
 }
 
 impl<'js> IntoAtom<'js> for Atom<'js> {
-    fn into_atom(self, _: Ctx<'js>) -> Result<Atom<'js>> {
+    fn into_atom(self, _: &Ctx<'js>) -> Result<Atom<'js>> {
         Ok(self)
     }
 }
 
 impl<'js> IntoAtom<'js> for Value<'js> {
-    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-        Atom::from_value(ctx, &self)
+    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+        Atom::from_value(ctx.clone(), &self)
     }
 }
 
 impl<'js> IntoAtom<'js> for &str {
-    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-        Atom::from_str(ctx, self)
+    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+        Atom::from_str(ctx.clone(), self)
     }
 }
 
 impl<'js> IntoAtom<'js> for StdString {
-    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-        Atom::from_str(ctx, &self)
+    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+        Atom::from_str(ctx.clone(), &self)
     }
 }
 
 impl<'js> IntoAtom<'js> for &StdString {
-    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-        Atom::from_str(ctx, self)
+    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+        Atom::from_str(ctx.clone(), self)
     }
 }
 
@@ -67,8 +67,8 @@ macro_rules! into_atom_impls {
 		    $(
             $(
                 impl<'js> IntoAtom<'js> for $type {
-                    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-                        Atom::$from(ctx, self as _)
+                    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+                        Atom::$from(ctx.clone(), self as _)
                     }
                 }
             )*

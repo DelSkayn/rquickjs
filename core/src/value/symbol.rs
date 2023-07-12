@@ -8,17 +8,18 @@ pub struct Symbol<'js>(pub(crate) Value<'js>);
 impl<'js> Symbol<'js> {
     /// Get the symbol description
     pub fn description(&self) -> Result<String<'js>> {
-        let atom = Atom::from_str(self.0.ctx, "description")?;
+        let atom = Atom::from_str(self.0.ctx.clone(), "description")?;
         unsafe {
             let val = qjs::JS_GetProperty(self.0.ctx.as_ptr(), self.0.as_js_value(), atom.atom);
             let val = self.0.ctx.handle_exception(val)?;
-            Ok(String::from_js_value(self.0.ctx, val))
+            Ok(String::from_js_value(self.0.ctx.clone(), val))
         }
     }
 
     /// Convert a symbol into a atom.
     pub fn as_atom(&self) -> Atom<'js> {
-        Atom::from_value(self.0.ctx(), &self.0).expect("symbols should always convert to atoms")
+        Atom::from_value(self.0.ctx().clone(), &self.0)
+            .expect("symbols should always convert to atoms")
     }
 }
 

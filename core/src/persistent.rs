@@ -209,7 +209,7 @@ impl<T> Persistent<T> {
     }
 
     /// Save the value of an arbitrary type
-    pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target<'static>>
+    pub fn save<'js>(ctx: &Ctx<'js>, val: T) -> Persistent<T::Target<'static>>
     where
         T: Outlive<'js>,
     {
@@ -223,7 +223,7 @@ impl<T> Persistent<T> {
     }
 
     /// Restore the value of an arbitrary type
-    pub fn restore<'js>(self, ctx: Ctx<'js>) -> Result<T::Target<'js>>
+    pub fn restore<'js>(self, ctx: &Ctx<'js>) -> Result<T::Target<'js>>
     where
         T: Outlive<'static>,
     {
@@ -240,7 +240,7 @@ where
     R: Outlive<'static, Target<'js> = T>,
     T: Outlive<'js, Target<'static> = R> + FromJs<'js>,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Persistent<R>> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Persistent<R>> {
         let value = T::from_js(ctx, value)?;
         Ok(Persistent::save(ctx, value))
     }
@@ -251,7 +251,7 @@ where
     T: Outlive<'static>,
     T::Target<'js>: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.restore(ctx)?.into_js(ctx)
     }
 }
@@ -271,13 +271,13 @@ mod test {
 
         let persistent_v = ctx.with(|ctx| {
             let v: Value = ctx.eval("1").unwrap();
-            Persistent::save(ctx, v)
+            Persistent::save(&ctx, v)
         });
 
         let rt2 = Runtime::new().unwrap();
         let ctx = Context::full(&rt2).unwrap();
         ctx.with(|ctx| {
-            let _ = persistent_v.clone().restore(ctx).unwrap();
+            let _ = persistent_v.clone().restore(&ctx).unwrap();
         });
     }
 
@@ -288,18 +288,18 @@ mod test {
 
         let func = ctx.with(|ctx| {
             let func: Function = ctx.eval("a => a + 1").unwrap();
-            Persistent::save(ctx, func)
+            Persistent::save(&ctx, func)
         });
 
         let res: i32 = ctx.with(|ctx| {
-            let func = func.clone().restore(ctx).unwrap();
+            let func = func.clone().restore(&ctx).unwrap();
             func.call((2,)).unwrap()
         });
         assert_eq!(res, 3);
 
         let ctx2 = Context::full(&rt).unwrap();
         let res: i32 = ctx2.with(|ctx| {
-            let func = func.restore(ctx).unwrap();
+            let func = func.restore(&ctx).unwrap();
             func.call((0,)).unwrap()
         });
         assert_eq!(res, 1);
@@ -312,11 +312,11 @@ mod test {
 
         let persistent_v = ctx.with(|ctx| {
             let v: Value = ctx.eval("1").unwrap();
-            Persistent::save(ctx, v)
+            Persistent::save(&ctx, v)
         });
 
         ctx.with(|ctx| {
-            let v = persistent_v.clone().restore(ctx).unwrap();
+            let v = persistent_v.clone().restore(&ctx).unwrap();
             ctx.globals().set("v", v).unwrap();
             let eq: Value = ctx.eval("v == 1").unwrap();
             assert!(eq.as_bool().unwrap());

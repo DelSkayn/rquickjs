@@ -33,7 +33,7 @@ impl ModuleLoader {
 }
 
 impl Loader for ModuleLoader {
-    fn load<'js>(&mut self, _ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
+    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
         self.modules
             .remove(path)
             .ok_or_else(|| Error::new_loading(path))

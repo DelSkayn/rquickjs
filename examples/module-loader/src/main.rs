@@ -39,7 +39,7 @@ fn main() {
         global
             .set(
                 "print",
-                Function::new(ctx, print)
+                Function::new(ctx.clone(), print)
                     .unwrap()
                     .with_name("print")
                     .unwrap(),
@@ -48,6 +48,7 @@ fn main() {
 
         println!("import script module");
         let _ = ctx
+            .clone()
             .compile(
                 "test",
                 r#"
@@ -61,6 +62,7 @@ print(`f(2, 4) = ${f(2, 4)}`);
 
         println!("import native module");
         let _ = ctx
+            .clone()
             .compile(
                 "test",
                 r#"
@@ -74,6 +76,7 @@ print(`f(2, 4) = ${f(2, 4)}`);
 
         println!("import bundled script module");
         let _ = ctx
+            .clone()
             .compile(
                 "test",
                 r#"

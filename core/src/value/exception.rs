@@ -125,19 +125,19 @@ impl<'js> Exception<'js> {
     /// # };
     /// # })
     /// ```
-    pub fn throw_message(ctx: Ctx<'js>, message: &str) -> Error {
-        let (Ok(e) | Err(e)) = Self::from_message(ctx, message).map(|x| x.throw());
+    pub fn throw_message(ctx: &Ctx<'js>, message: &str) -> Error {
+        let (Ok(e) | Err(e)) = Self::from_message(ctx.clone(), message).map(|x| x.throw());
         e
     }
     /// Throws a new generic error with a file name and line number.
-    pub fn throw_message_location(ctx: Ctx<'js>, message: &str, file: &str, line: i32) -> Error {
+    pub fn throw_message_location(ctx: &Ctx<'js>, message: &str, file: &str, line: i32) -> Error {
         let (Ok(e) | Err(e)) =
-            Self::from_message_location(ctx, message, file, line).map(|x| x.throw());
+            Self::from_message_location(ctx.clone(), message, file, line).map(|x| x.throw());
         e
     }
 
     /// Throws a new syntax error.
-    pub fn throw_syntax(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_syntax(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
         // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
@@ -153,7 +153,7 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new type error.
-    pub fn throw_type(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_type(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
         // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
@@ -173,7 +173,7 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new reference error.
-    pub fn throw_reference(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_reference(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
         // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
@@ -193,7 +193,7 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new range error.
-    pub fn throw_range(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_range(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
         // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
@@ -213,7 +213,7 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new internal error.
-    pub fn throw_internal(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_internal(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
         // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
@@ -234,7 +234,8 @@ impl<'js> Exception<'js> {
 
     /// Sets the exception as the current error an returns `Error::Exception`
     pub fn throw(self) -> Error {
-        self.0.ctx.throw(self.0.into_value())
+        let ctx = self.ctx().clone();
+        ctx.throw(self.0.into_value())
     }
 }
 

@@ -48,7 +48,7 @@ pub struct Coerced<T>(pub T);
 /// represented as an object, like [`Array`](crate::Array)
 /// to one if it is required.
 pub trait FromJs<'js>: Sized {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self>;
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self>;
 }
 
 /// Trait for converting values from atoms.
@@ -60,24 +60,24 @@ pub trait FromAtom<'js>: Sized {
 pub trait FromIteratorJs<'js, A>: Sized {
     type Item;
 
-    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    fn from_iter_js<T>(ctx: &Ctx<'js>, iter: T) -> Result<Self>
     where
         T: IntoIterator<Item = A>;
 }
 
 /// For converting rust values to javascript values
 pub trait IntoJs<'js> {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>>;
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>>;
 }
 
 /// Trait for converting values to atoms.
 pub trait IntoAtom<'js> {
-    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>>;
+    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>>;
 }
 
 /// The Rust's [`Iterator`] trait extension which works with [`Ctx`]
 pub trait IteratorJs<'js, A> {
-    fn collect_js<B>(self, ctx: Ctx<'js>) -> Result<B>
+    fn collect_js<B>(self, ctx: &Ctx<'js>) -> Result<B>
     where
         B: FromIteratorJs<'js, A>;
 }
@@ -86,7 +86,7 @@ impl<'js, T, A> IteratorJs<'js, A> for T
 where
     T: Iterator<Item = A>,
 {
-    fn collect_js<B>(self, ctx: Ctx<'js>) -> Result<B>
+    fn collect_js<B>(self, ctx: &Ctx<'js>) -> Result<B>
     where
         B: FromIteratorJs<'js, A>,
     {

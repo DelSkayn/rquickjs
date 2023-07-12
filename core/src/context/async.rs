@@ -220,7 +220,7 @@ impl AsyncContext {
     /// future.
     pub async fn async_with<F, R>(&self, f: F) -> R
     where
-        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
+        F: for<'a, 'js> FnOnce(&'a Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
             + ParallelSend,
         R: ParallelSend,
     {
@@ -228,7 +228,7 @@ impl AsyncContext {
             let guard = self.rt.inner.lock().await;
             guard.update_stack_top();
             let ctx = unsafe { Ctx::new_async(self) };
-            f(ctx)
+            f(&ctx)
         };
         WithFuture {
             future,

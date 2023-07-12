@@ -115,7 +115,7 @@ impl<'js> Atom<'js> {
         unsafe {
             let val = qjs::JS_AtomToString(self.ctx.as_ptr(), self.atom);
             let val = self.ctx.handle_exception(val)?;
-            Ok(String::from_js_value(self.ctx, val))
+            Ok(String::from_js_value(self.ctx.clone(), val))
         }
     }
 
@@ -139,7 +139,7 @@ impl<'js> Clone for Atom<'js> {
         let atom = unsafe { qjs::JS_DupAtom(self.ctx.as_ptr(), self.atom) };
         Atom {
             atom,
-            ctx: self.ctx,
+            ctx: self.ctx.clone(),
         }
     }
 }

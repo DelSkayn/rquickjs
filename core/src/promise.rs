@@ -49,7 +49,7 @@ impl<'js, T> FromJs<'js> for Promise<'js, T>
 where
     T: FromJs<'js> + 'js,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         let promise = Object::from_js(ctx, value)?;
         let state = Ref::new(State {
             waker: Cell::new(None),
@@ -75,13 +75,12 @@ where
         if self.state.poll(cx.waker().clone()).is_none() {
             let then: Function = self.promise.get(PredefinedAtom::Then)?;
             let state = self.state.clone();
-            let resolve = Function::new(ctx, move |value: Value<'js>| {
-                let ctx = value.ctx();
-                let t = T::from_js(ctx, value).catch(ctx);
+            let resolve = Function::new(ctx.clone(), move |ctx: Ctx<'js>, value: Value<'js>| {
+                let t = T::from_js(&ctx, value).catch(&ctx);
                 state.resolve(t);
             });
             let state = self.state.clone();
-            let reject = Function::new(ctx, move |value: Value<'js>| {
+            let reject = Function::new(ctx.clone(), move |value: Value<'js>| {
                 let e =
                     if let Some(e) = value.clone().into_object().and_then(Exception::from_object) {
                         CaughtError::Exception(e)
@@ -112,19 +111,20 @@ where
     T: Future<Output = R> + 'js,
     R: IntoJs<'js> + 'js,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         let (promise, resolve, reject) = ctx.promise()?;
+        let ctx_clone = ctx.clone();
 
         let future = async move {
-            let err = match self.0.await.into_js(ctx).catch(ctx) {
+            let err = match self.0.await.into_js(&ctx_clone).catch(&ctx_clone) {
                 Ok(x) => resolve.call::<_, ()>((x,)),
                 Err(e) => match e {
                     CaughtError::Exception(e) => reject.call::<_, ()>((e,)),
                     CaughtError::Value(e) => reject.call::<_, ()>((e,)),
                     CaughtError::Error(e) => {
-                        let is_exception = unsafe { qjs::JS_IsException(e.throw(ctx)) };
+                        let is_exception = unsafe { qjs::JS_IsException(e.throw(&ctx_clone)) };
                         debug_assert!(is_exception);
-                        let e = ctx.catch();
+                        let e = ctx_clone.catch();
                         reject.call::<_, ()>((e,))
                     }
                 },

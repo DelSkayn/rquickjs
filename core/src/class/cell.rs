@@ -5,7 +5,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::{result::BorrowError, Error, FromJs, IntoJs};
+use crate::{result::BorrowError, Ctx, Error, FromJs, IntoJs, Value};
 
 use super::{Class, JsClass};
 
@@ -340,14 +340,14 @@ impl<'js, T: JsClass<'js> + 'js> Deref for OwnedBorrow<'js, T> {
 }
 
 impl<'js, T: JsClass<'js>> FromJs<'js> for OwnedBorrow<'js, T> {
-    fn from_js(ctx: crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self, Error> {
         let cls = Class::from_js(ctx, value)?;
         OwnedBorrow::try_from_class(cls).map_err(Error::ClassBorrow)
     }
 }
 
 impl<'js, T: JsClass<'js>> IntoJs<'js> for OwnedBorrow<'js, T> {
-    fn into_js(self, ctx: crate::Ctx<'js>) -> crate::Result<crate::Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>, Error> {
         self.into_inner().into_js(ctx)
     }
 }
@@ -404,14 +404,14 @@ impl<'js, T: JsClass<'js> + 'js> DerefMut for OwnedBorrowMut<'js, T> {
 }
 
 impl<'js, T: JsClass<'js>> FromJs<'js> for OwnedBorrowMut<'js, T> {
-    fn from_js(ctx: crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self, Error> {
         let cls = Class::from_js(ctx, value)?;
         OwnedBorrowMut::try_from_class(cls).map_err(Error::ClassBorrow)
     }
 }
 
 impl<'js, T: JsClass<'js>> IntoJs<'js> for OwnedBorrowMut<'js, T> {
-    fn into_js(self, ctx: crate::Ctx<'js>) -> crate::Result<crate::Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>, Error> {
         self.into_inner().into_js(ctx)
     }
 }

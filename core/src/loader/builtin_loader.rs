@@ -29,7 +29,7 @@ impl BuiltinLoader {
 }
 
 impl Loader for BuiltinLoader {
-    fn load<'js>(&mut self, _ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
+    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
         match self.modules.remove(path) {
             Some(source) => Ok(ModuleData::source(path, source)),
             _ => Err(Error::new_loading(path)),

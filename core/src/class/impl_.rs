@@ -11,7 +11,7 @@ pub trait MethodImplementor<T>: Sized {
 
 /// Trait used for borrow specialization for creating constructors without access to the class.
 pub trait ConstructorCreator<'js, T>: Sized {
-    fn create_constructor(&self, _ctx: Ctx<'js>) -> Result<Option<Constructor<'js>>> {
+    fn create_constructor(&self, _ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>> {
         Ok(None)
     }
 }

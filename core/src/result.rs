@@ -262,7 +262,7 @@ impl Error {
     }
 
     /// Throw an exception
-    pub(crate) fn throw(&self, ctx: Ctx) -> qjs::JSValue {
+    pub(crate) fn throw(&self, ctx: &Ctx) -> qjs::JSValue {
         use Error::*;
         match self {
             Exception => qjs::JS_EXCEPTION,
@@ -293,7 +293,7 @@ impl Error {
                         //return
                         return value;
                     }
-                    let obj = Object::from_js_value(ctx, value);
+                    let obj = Object::from_js_value(ctx.clone(), value);
                     match obj.set(PredefinedAtom::Message, error.to_string()) {
                         Ok(_) => {}
                         Err(Error::Exception) => return qjs::JS_EXCEPTION,
@@ -476,7 +476,7 @@ impl<'js> StdError for CaughtError<'js> {}
 impl<'js> CaughtError<'js> {
     /// Create a `CaughtError` from an [`Error`], retrieving the error value from `Ctx` if there
     /// was one.
-    pub fn from_error(ctx: Ctx<'js>, error: Error) -> Self {
+    pub fn from_error(ctx: &Ctx<'js>, error: Error) -> Self {
         if let Error::Exception = error {
             let value = ctx.catch();
             if let Some(ex) = value
@@ -494,12 +494,12 @@ impl<'js> CaughtError<'js> {
 
     /// Turn a `Result` with [`Error`] into a result with [`CaughtError`] retrieving the error
     /// value from the context if there was one.
-    pub fn catch<T>(ctx: Ctx<'js>, error: Result<T>) -> CaughtResult<'js, T> {
+    pub fn catch<T>(ctx: &Ctx<'js>, error: Result<T>) -> CaughtResult<'js, T> {
         error.map_err(|error| Self::from_error(ctx, error))
     }
 
     /// Put the possible caught value back as the current error and turn the [`CaughtError`] into [`Error`]
-    pub fn throw(self, ctx: Ctx<'js>) -> Error {
+    pub fn throw(self, ctx: &Ctx<'js>) -> Error {
         match self {
             CaughtError::Error(e) => e,
             CaughtError::Exception(ex) => ctx.throw(ex.into_value()),
@@ -535,11 +535,11 @@ impl<'js> CaughtError<'js> {
 /// # });
 /// ```
 pub trait CatchResultExt<'js, T> {
-    fn catch(self, ctx: Ctx<'js>) -> CaughtResult<'js, T>;
+    fn catch(self, ctx: &Ctx<'js>) -> CaughtResult<'js, T>;
 }
 
 impl<'js, T> CatchResultExt<'js, T> for Result<T> {
-    fn catch(self, ctx: Ctx<'js>) -> CaughtResult<'js, T> {
+    fn catch(self, ctx: &Ctx<'js>) -> CaughtResult<'js, T> {
         CaughtError::catch(ctx, self)
     }
 }
@@ -549,11 +549,11 @@ impl<'js, T> CatchResultExt<'js, T> for Result<T> {
 /// Calling throw on a `CaughtError` will set the current error to the one contained in
 /// `CaughtError` if such a value exists and then turn `CaughtError` into `Error`.
 pub trait ThrowResultExt<'js, T> {
-    fn throw(self, ctx: Ctx<'js>) -> Result<T>;
+    fn throw(self, ctx: &Ctx<'js>) -> Result<T>;
 }
 
 impl<'js, T> ThrowResultExt<'js, T> for CaughtResult<'js, T> {
-    fn throw(self, ctx: Ctx<'js>) -> Result<T> {
+    fn throw(self, ctx: &Ctx<'js>) -> Result<T> {
         self.map_err(|e| e.throw(ctx))
     }
 }
@@ -608,7 +608,7 @@ impl Display for AsyncJobException {
 }
 
 impl<'js> Ctx<'js> {
-    pub(crate) fn handle_panic<F>(self, f: F) -> qjs::JSValue
+    pub(crate) fn handle_panic<F>(&self, f: F) -> qjs::JSValue
     where
         F: FnOnce() -> qjs::JSValue + UnwindSafe,
     {
@@ -616,7 +616,7 @@ impl<'js> Ctx<'js> {
             match panic::catch_unwind(f) {
                 Ok(x) => x,
                 Err(e) => {
-                    self.get_opaque().panic = Some(e);
+                    (*self.get_opaque()).panic = Some(e);
                     qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
                 }
             }
@@ -628,11 +628,11 @@ impl<'js> Ctx<'js> {
     ///
     /// # Safety
     /// Assumes to have ownership of the JSValue
-    pub(crate) unsafe fn handle_exception(self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
+    pub(crate) unsafe fn handle_exception(&self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
         if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
             Ok(js_val)
         } else {
-            if let Some(x) = self.get_opaque().panic.take() {
+            if let Some(x) = (*self.get_opaque()).panic.take() {
                 panic::resume_unwind(x)
             }
             Err(Error::Exception)
@@ -641,10 +641,10 @@ impl<'js> Ctx<'js> {
 
     /// Returns Error::Exception if there is no existing panic,
     /// otherwise continues panicking.
-    pub(crate) fn raise_exception(self) -> Error {
+    pub(crate) fn raise_exception(&self) -> Error {
         // Safety
         unsafe {
-            if let Some(x) = self.get_opaque().panic.take() {
+            if let Some(x) = (*self.get_opaque()).panic.take() {
                 panic::resume_unwind(x)
             }
             Error::Exception
