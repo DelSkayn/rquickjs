@@ -45,8 +45,10 @@ impl<'js> Function<'js> {
     where
         F: IntoJsFunc<'js, P> + 'js,
     {
-        let func =
-            Box::new(move |params: Params<'_, 'js>| f.call(params)) as Box<dyn RustFunc<'js> + 'js>;
+        let func = Box::new(move |params: Params<'_, 'js>| {
+            params.check_params(F::param_requirements())?;
+            f.call(params)
+        }) as Box<dyn RustFunc<'js> + 'js>;
 
         let cls = Class::instance(ctx, RustFunction(func))?;
         debug_assert!(cls.is_function());
@@ -189,6 +191,7 @@ impl<'js> Constructor<'js> {
         C: JsClass<'js>,
     {
         let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
+            params.check_params(F::param_requirements())?;
             let this = params.this();
             let ctx = params.ctx().clone();
             let proto = this
@@ -230,6 +233,7 @@ impl<'js> Constructor<'js> {
     {
         let proto_clone = prototype.clone();
         let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
+            params.check_params(F::param_requirements())?;
             let this = params.this();
             let proto = this
                 .as_function()
