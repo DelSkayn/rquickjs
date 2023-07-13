@@ -1,3 +1,4 @@
 target
 .ccls-cache
 Cargo.lock
+.gdb_history
