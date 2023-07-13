@@ -431,13 +431,13 @@ mod test {
 
         impl<'js> FromJs<'js> for Vec3 {
             fn from_js(ctx: &crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
-                Ok((*Class::<Vec3>::from_js(ctx, value)?.try_borrow()?).clone())
+                Ok(*Class::<Vec3>::from_js(ctx, value)?.try_borrow()?)
             }
         }
 
         impl<'js> IntoJs<'js> for Vec3 {
             fn into_js(self, ctx: &crate::Ctx<'js>) -> crate::Result<crate::Value<'js>> {
-                Class::instance(ctx.clone(), self).into_js(&ctx)
+                Class::instance(ctx.clone(), self).into_js(ctx)
             }
         }
 
