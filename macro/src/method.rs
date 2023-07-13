@@ -440,8 +440,8 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
         quote! {
             impl #js_added_generics #lib_crate::class::impl_::ConstructorCreator<'js,#self_ty> for #lib_crate::class::impl_::ConstructorCreate<#self_ty> {
-                fn create_constructor(&self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::function::Constructor<'js>>>{
-                    let constr = #lib_crate::function::Constructor::new_class::<#self_ty,_,_>(ctx,#name)?;
+                fn create_constructor(&self, ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::function::Constructor<'js>>>{
+                    let constr = #lib_crate::function::Constructor::new_class::<#self_ty,_,_>(ctx.clone(),#name)?;
                     #(#static_function_apply)*
                     Ok(Some(constr))
                 }
