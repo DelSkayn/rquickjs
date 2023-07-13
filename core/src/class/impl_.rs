@@ -1,3 +1,5 @@
+//! Helper classes and functions for use inside the macros.
+
 use std::marker::PhantomData;
 
 use crate::{value::Constructor, Ctx, Object, Result};

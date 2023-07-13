@@ -117,8 +117,8 @@ impl JsFunction {
         let lib_crate = &common.lib_crate;
         quote! {
             impl<'js> #lib_crate::IntoJs<'js> for #js_name{
-                fn into_js(self, ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
-                    #lib_crate::Function::new(ctx,#js_name)?.into_js(ctx)
+                fn into_js(self, ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                    #lib_crate::Function::new(ctx.clone(),#js_name)?.into_js(ctx)
                 }
             }
         }
@@ -138,13 +138,13 @@ impl JsFunction {
                     #rust_function(#arg_apply).await
                 };
 
-                #lib_crate::IntoJs::into_js(#lib_crate::promise::Promised(fut), ctx)
+                #lib_crate::IntoJs::into_js(#lib_crate::promise::Promised(fut), &ctx)
             }
         } else {
             quote! {
                 #arg_extract
                 let res = #rust_function(#arg_apply);
-                #lib_crate::IntoJs::into_js(res,ctx)
+                #lib_crate::IntoJs::into_js(res,&ctx)
             }
         }
     }
@@ -170,7 +170,7 @@ impl JsFunction {
                 }
 
                 fn call<'a>(&self, params: #lib_crate::function::Params<'a,'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
-                    let ctx = params.ctx();
+                    let ctx = params.ctx().clone();
                     params.check_params(Self::param_requirements())?;
                     let mut _params = params.access();
                     #body

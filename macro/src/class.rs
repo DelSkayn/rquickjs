@@ -106,17 +106,17 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
                     &ID
                 }
 
-                fn prototype(ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::Object<'js>>>{
+                fn prototype(ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::Object<'js>>>{
                     use #lib_crate::class::impl_::MethodImplementor;
 
-                    let proto = #lib_crate::Object::new(ctx)?;
+                    let proto = #lib_crate::Object::new(ctx.clone())?;
                     #(#props)*
                     let implementor = #lib_crate::class::impl_::MethodImpl::<Self>::new();
                     (&implementor).implement(&proto)?;
                     Ok(Some(proto))
                 }
 
-                fn constructor(ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::function::Constructor<'js>>>{
+                fn constructor(ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::function::Constructor<'js>>>{
                     use #lib_crate::class::impl_::ConstructorCreator;
 
                     let implementor = #lib_crate::class::impl_::ConstructorCreate::<Self>::new();
@@ -125,8 +125,9 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
             }
 
             impl #lifetime_generics #lib_crate::IntoJs<'js> for #ident #generics{
-                fn into_js(self,ctx: #lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
-                    #lib_crate::IntoJs::into_js(#lib_crate::class::Class::<Self>::instance(ctx,self)?, ctx)
+                fn into_js(self,ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                    let cls = #lib_crate::class::Class::<Self>::instance(ctx.clone(),self)?;
+                    #lib_crate::IntoJs::into_js(cls, ctx)
                 }
             }
 
@@ -134,7 +135,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
             where
                 for<'a> CloneWrapper<'a,Self>: CloneTrait<Self>,
             {
-                fn from_js(ctx: #lib_crate::Ctx<'js>, value: #lib_crate::Value<'js>) -> #lib_crate::Result<Self>{
+                fn from_js(ctx: &#lib_crate::Ctx<'js>, value: #lib_crate::Value<'js>) -> #lib_crate::Result<Self>{
                     let value = #lib_crate::class::Class::<Self>::from_js(ctx,value)?;
                     let borrow = value.try_borrow()?;
                     Ok(CloneWrapper(&*borrow).clone())
