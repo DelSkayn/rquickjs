@@ -486,9 +486,9 @@ mod test {
                 )
                 .unwrap();
 
-            assert!((v.x - 5.0).abs() < 0.00001);
-            assert!((v.y - 4.0).abs() < 0.00001);
-            assert!((v.z - 11.0).abs() < 0.00001);
+            approx::assert_abs_diff_eq!(v.x, 5.0);
+            approx::assert_abs_diff_eq!(v.y, 4.0);
+            approx::assert_abs_diff_eq!(v.z, 11.0);
         })
     }
 }

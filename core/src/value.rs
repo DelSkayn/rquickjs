@@ -510,6 +510,10 @@ macro_rules! sub_types {
                     self.0.into_value()
                 }
 
+                pub fn into_inner(self) -> sub_types!(@head_ty $($sub_type),*) {
+                    self.0
+                }
+
                 /// Returns the [`Ctx`] object associated with this value
                 pub fn ctx(&self) -> &Ctx<'js>{
                     self.0.ctx()
@@ -632,6 +636,13 @@ macro_rules! sub_types {
 
     (@wrap $type:ident$(->$rem:ident)+ $val:expr) => { $type(sub_types!(@wrap $($rem)->* $val)) };
     (@wrap Value $val:expr) => { $val };
+
+    /*
+    (@into_inner $head:ident->$inner:ident$(->$rem:ident)*) => {
+        impl<'js> $head<'js>{
+            pub fn into_inner($
+        }
+    }*/
 
     (@imp_as_ref $type:ident,Value) => {
         impl<'js> AsRef<Value<'js>> for $type<'js> {

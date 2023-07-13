@@ -73,11 +73,35 @@ pub struct Async<T>(pub T);
 /// possible it will return an error.
 pub struct MutFn<T>(pub RefCell<T>);
 
+impl<T> MutFn<T> {
+    pub fn new(t: T) -> Self {
+        MutFn(RefCell::new(t))
+    }
+}
+
+impl<T> From<T> for MutFn<T> {
+    fn from(value: T) -> Self {
+        MutFn::new(value)
+    }
+}
+
 /// Helper type for creating a function from a closure which implements FnMut
 ///
 /// When called through [`CellFn`] will take the internal value leaving it empty. If the internal
 /// value was already empty it will return a error.
 pub struct OnceFn<T>(pub Cell<Option<T>>);
+
+impl<T> OnceFn<T> {
+    pub fn new(t: T) -> Self {
+        Self(Cell::new(Some(t)))
+    }
+}
+
+impl<T> From<T> for OnceFn<T> {
+    fn from(value: T) -> Self {
+        OnceFn::new(value)
+    }
+}
 
 macro_rules! type_impls {
 	  ($($type:ident <$($params:ident),*>($($fields:tt)*): $($impls:ident)*;)*) => {
