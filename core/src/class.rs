@@ -173,7 +173,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
             let class_def = qjs::JSClassDef {
                 class_name: class_name.as_ptr(),
                 finalizer,
-                gc_mark: None,
+                gc_mark: Some(ffi::trace::<C>),
                 call,
                 exotic: ptr::null_mut(),
             };
@@ -322,5 +322,83 @@ impl<'js, C: JsClass<'js>> FromJs<'js> for Class<'js, C> {
 impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
     fn into_js(self, _ctx: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(self.0 .0)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    use crate::{
+        class::{ClassId, JsClass, Trace, Tracer, Writable},
+        Class, Context, Object, Runtime,
+    };
+
+    /// Test circlular references.
+    #[test]
+    fn trace() {
+        pub struct Container<'js> {
+            inner: Vec<Class<'js, Container<'js>>>,
+            test: Arc<AtomicBool>,
+        }
+
+        impl<'js> Drop for Container<'js> {
+            fn drop(&mut self) {
+                self.test.store(true, Ordering::SeqCst);
+            }
+        }
+
+        impl<'js> Trace<'js> for Container<'js> {
+            fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+                self.inner.iter().for_each(|x| x.trace(tracer))
+            }
+        }
+
+        impl<'js> JsClass<'js> for Container<'js> {
+            const NAME: &'static str = "Container";
+
+            type Mutable = Writable;
+
+            fn class_id() -> &'static crate::class::ClassId {
+                static ID: ClassId = ClassId::new();
+                &ID
+            }
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
+                Ok(Some(Object::new(ctx.clone())?))
+            }
+
+            fn constructor(
+                _ctx: &crate::Ctx<'js>,
+            ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
+                Ok(None)
+            }
+        }
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        let drop_test = Arc::new(AtomicBool::new(false));
+
+        ctx.with(|ctx| {
+            let cls = Class::instance(
+                ctx,
+                Container {
+                    inner: Vec::new(),
+                    test: drop_test.clone(),
+                },
+            )
+            .unwrap();
+            let cls_clone = cls.clone();
+            cls.borrow_mut().inner.push(cls_clone);
+        });
+        rt.run_gc();
+        rt.run_gc();
+        rt.run_gc();
+
+        assert!(drop_test.load(Ordering::SeqCst))
     }
 }

@@ -24,6 +24,20 @@ pub struct Tracer<'a, 'js> {
 }
 
 impl<'a, 'js> Tracer<'a, 'js> {
+    /// Create a tracer from the c implemention.
+    ///
+    /// # Safety
+    /// Caller must ensure that the trace doesn't outlive the lifetime of the mark_func and rt
+    /// pointer
+    pub unsafe fn from_ffi(rt: *mut qjs::JSRuntime, mark_func: qjs::JS_MarkFunc) -> Self {
+        Self {
+            rt,
+            mark_func,
+            _inv: Invariant::new(),
+            _marker: PhantomData,
+        }
+    }
+
     fn mark(self, value: &Value<'js>) {
         let value = value.as_js_value();
         if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(value) } {
