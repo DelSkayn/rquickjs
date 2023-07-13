@@ -342,14 +342,14 @@ impl<'js> FromJs<'js> for SystemTime {
         let millis = date_to_millis(ctx, value)?;
 
         if millis >= 0 {
-            /* since unix epoch */
+            // since unix epoch
             SystemTime::UNIX_EPOCH
                 .checked_add(Duration::from_millis(millis as _))
                 .ok_or_else(|| {
                     Error::new_from_js_message("Date", "SystemTime", "Timestamp too big")
                 })
         } else {
-            /* before unix epoch */
+            // before unix epoch
             SystemTime::UNIX_EPOCH
                 .checked_sub(Duration::from_millis((-millis) as _))
                 .ok_or_else(|| {

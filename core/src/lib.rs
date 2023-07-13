@@ -106,13 +106,6 @@ pub mod prelude {
     };
 }
 
-/*#[cfg(feature = "loader")]
-pub use loader::{
-    BuiltinLoader, BuiltinResolver, Bundle, Compile, FileResolver, HasByteCode, Loader,
-    ModuleLoader, Resolver, ScriptLoader,
-};
-*/
-
 #[cfg(test)]
 pub(crate) fn test_with<F, R>(func: F) -> R
 where

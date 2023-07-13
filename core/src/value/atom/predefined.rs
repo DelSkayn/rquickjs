@@ -9,7 +9,7 @@ use crate::qjs;
 #[allow(clippy::unnecessary_cast)]
 pub enum PredefinedAtom {
     /// "null"
-    Null = qjs::JS_ATOM_null as u32, /* must be first */
+    Null = qjs::JS_ATOM_null as u32, // must be first
     /// "false"
     False = qjs::JS_ATOM_false as u32,
     /// "true"
@@ -232,7 +232,7 @@ pub enum PredefinedAtom {
     /// "<computed_field>"
     ComputedField = qjs::JS_ATOM_computed_field as u32,
     /// "<static_computed_field>"
-    StaticComputedField = qjs::JS_ATOM_static_computed_field as u32, /* must come after computed_fields */
+    StaticComputedField = qjs::JS_ATOM_static_computed_field as u32, // must come after computed_fields
     /// "<class_fields_init>"
     ClassFieldsInit = qjs::JS_ATOM_class_fields_init as u32,
     /// "<brand>"
@@ -323,7 +323,6 @@ pub enum PredefinedAtom {
     ArrayBuffer = qjs::JS_ATOM_ArrayBuffer as u32,
     /// "SharedArrayBuffer"
     SharedArrayBuffer = qjs::JS_ATOM_SharedArrayBuffer as u32,
-    /* must keep same order as class IDs for typed arrays */
     /// "Uint8ClampedArray"
     Uint8ClampedArray = qjs::JS_ATOM_Uint8ClampedArray as u32,
     /// "Int8Array"
@@ -363,11 +362,11 @@ pub enum PredefinedAtom {
     /// "Map"
     Map = qjs::JS_ATOM_Map as u32,
     /// "Set"
-    Set = qjs::JS_ATOM_Set as u32, /* Map + 1 */
+    Set = qjs::JS_ATOM_Set as u32,
     /// "WeakMap"
-    WeakMap = qjs::JS_ATOM_WeakMap as u32, /* Map + 2 */
+    WeakMap = qjs::JS_ATOM_WeakMap as u32,
     /// "WeakSet"
-    WeakSet = qjs::JS_ATOM_WeakSet as u32, /* Map + 3 */
+    WeakSet = qjs::JS_ATOM_WeakSet as u32,
     /// "Map Iterator"
     MapIterator = qjs::JS_ATOM_Map_Iterator as u32,
     /// "Set Iterator"

@@ -1,11 +1,13 @@
 use crate::{
     convert::{IteratorJs, List},
+    value::Constructor,
     Array, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String, Value,
 };
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
     sync::{Mutex, RwLock},
+    time::SystemTime,
 };
 
 #[cfg(feature = "either")]
@@ -445,9 +447,8 @@ into_js_impls! {
     i32 f64 => i64 u32 u64 usize isize,
 }
 
-/*
 fn millis_to_date<'js>(ctx: &Ctx<'js>, millis: i64) -> Result<Value<'js>> {
-    let date_ctor: Function = ctx.globals().get("Date")?;
+    let date_ctor: Constructor = ctx.globals().get("Date")?;
 
     date_ctor.construct((millis,))
 }
@@ -455,7 +456,7 @@ fn millis_to_date<'js>(ctx: &Ctx<'js>, millis: i64) -> Result<Value<'js>> {
 impl<'js> IntoJs<'js> for SystemTime {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         let millis = match self.duration_since(SystemTime::UNIX_EPOCH) {
-            /* since unix epoch */
+            // since unix epoch
             Ok(duration) => {
                 let millis = duration.as_millis();
 
@@ -469,7 +470,7 @@ impl<'js> IntoJs<'js> for SystemTime {
 
                 millis as i64
             }
-            /* before unix epoch */
+            // before unix epoch
             Err(error) => {
                 let millis = error.duration().as_millis();
 
@@ -514,7 +515,7 @@ mod test {
 
         ctx.with(|ctx| {
             let globs = ctx.globals();
-            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
             let res: i64 = ctx.eval("ts.getTime()").unwrap();
             assert_eq!(millis, res as _);
         });
@@ -527,7 +528,7 @@ mod test {
 
         ctx.with(|ctx| {
             let globs = ctx.globals();
-            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
             let res: i64 = ctx.eval("ts.getTime()").unwrap();
             assert_eq!(-(millis as i64), res as _);
         });
@@ -547,10 +548,9 @@ mod test {
 
         ctx.with(|ctx| {
             let globs = ctx.globals();
-            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
             let res: i64 = ctx.eval("ts.getTime()").unwrap();
             assert_eq!(millis, res);
         });
     }
 }
-*/

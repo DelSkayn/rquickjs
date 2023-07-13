@@ -393,7 +393,6 @@ impl<'js> Ctx<'js> {
 #[cfg(test)]
 mod test {
 
-    /*
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
@@ -409,7 +408,6 @@ mod test {
             func.call::<(), ()>(()).unwrap();
         });
     }
-    */
 
     #[test]
     fn eval() {
