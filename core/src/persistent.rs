@@ -282,6 +282,25 @@ mod test {
     }
 
     #[test]
+    fn different_context() {
+        let rt1 = Runtime::new().unwrap();
+        let ctx1 = Context::full(&rt1).unwrap();
+        let ctx2 = Context::full(&rt1).unwrap();
+
+        let persistent_v = ctx1.with(|ctx| {
+            let v: Object = ctx.eval("({ a: 1 })").unwrap();
+            Persistent::save(&ctx, v)
+        });
+
+        std::mem::drop(ctx1);
+
+        ctx2.with(|ctx| {
+            let obj: Object = persistent_v.clone().restore(&ctx).unwrap();
+            assert_eq!(obj.get::<_, i32>("a").unwrap(), 1);
+        });
+    }
+
+    #[test]
     fn persistent_function() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
