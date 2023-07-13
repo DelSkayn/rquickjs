@@ -527,7 +527,7 @@ impl<'js> CaughtError<'js> {
 /// # ctx.with(|ctx|{
 /// use rquickjs::CatchResultExt;
 ///
-/// if let Err(CaughtError::Value(err)) = ctx.eval::<(),_>("throw 3").catch(ctx){
+/// if let Err(CaughtError::Value(err)) = ctx.eval::<(),_>("throw 3").catch(&ctx){
 ///     assert_eq!(err.as_int(),Some(3));
 /// # }else{
 /// #    panic!()

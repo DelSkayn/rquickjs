@@ -136,6 +136,7 @@ impl<'js> Value<'js> {
     #[inline]
     pub(crate) fn into_js_value(self) -> qjs::JSValue {
         let value = self.value;
+        unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) };
         mem::forget(self);
         value
     }

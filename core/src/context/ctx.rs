@@ -89,7 +89,6 @@ impl<'js> Ctx<'js> {
     /// lifetime which can't be coerced to a lifetime outside the scope of the lock of to the
     /// lifetime of another runtime.
     pub unsafe fn from_ptr_invariant(ctx: NonNull<qjs::JSContext>, inv: Invariant<'js>) -> Self {
-        dbg!("a");
         unsafe { qjs::JS_DupContext(ctx.as_ptr()) };
         Ctx { ctx, _marker: inv }
     }
@@ -99,7 +98,6 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn from_ptr(ctx: *mut qjs::JSContext) -> Self {
-        dbg!("b");
         unsafe { qjs::JS_DupContext(ctx) };
         let ctx = NonNull::new_unchecked(ctx);
         Ctx {
@@ -109,7 +107,7 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn new(ctx: &'js Context) -> Self {
-        dbg!("c");
+        unsafe { qjs::JS_DupContext(ctx.ctx.as_ptr()) };
         Ctx {
             ctx: ctx.ctx,
             _marker: Invariant::new(),
@@ -118,6 +116,7 @@ impl<'js> Ctx<'js> {
 
     #[cfg(feature = "futures")]
     pub(crate) unsafe fn new_async(ctx: &'js AsyncContext) -> Self {
+        unsafe { qjs::JS_DupContext(ctx.ctx.as_ptr()) };
         Ctx {
             ctx: ctx.ctx,
             _marker: Invariant::new(),

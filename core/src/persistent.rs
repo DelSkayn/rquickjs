@@ -134,15 +134,15 @@ impl_outlive!(
 /// # let rt = Runtime::new().unwrap();
 /// # let ctx = Context::full(&rt).unwrap();
 /// let func = ctx.with(|ctx| {
-///     Persistent::save(ctx, ctx.eval::<Function, _>("a => a + 1").unwrap())
+///     Persistent::save(&ctx, ctx.eval::<Function, _>("a => a + 1").unwrap())
 /// });
 /// let res: i32 = ctx.with(|ctx| {
-///     let func = func.clone().restore(ctx).unwrap();
+///     let func = func.clone().restore(&ctx).unwrap();
 ///     func.call((2,)).unwrap()
 /// });
 /// assert_eq!(res, 3);
 /// let res: i32 = ctx.with(|ctx| {
-///     let func = func.restore(ctx).unwrap();
+///     let func = func.restore(&ctx).unwrap();
 ///     func.call((0,)).unwrap()
 /// });
 /// assert_eq!(res, 1);
