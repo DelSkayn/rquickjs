@@ -36,7 +36,7 @@ impl Default for ScriptLoader {
 }
 
 impl Loader for ScriptLoader {
-    fn load<'js>(&mut self, _ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
+    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
         if !check_extensions(path, &self.extensions) {
             return Err(Error::new_loading(path));
         }

@@ -1,6 +1,7 @@
 use crate::{
-    convert::IteratorJs, Array, Ctx, Error, Function, IntoAtom, IntoJs, Object, Result, StdResult,
-    StdString, String, Value,
+    convert::{IteratorJs, List},
+    value::Constructor,
+    Array, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String, Value,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -16,32 +17,32 @@ use either::{Either, Left, Right};
 use indexmap::{IndexMap, IndexSet};
 
 impl<'js> IntoJs<'js> for Value<'js> {
-    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, _: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(self)
     }
 }
 
 impl<'js> IntoJs<'js> for &Value<'js> {
-    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, _: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(self.clone())
     }
 }
 
 impl<'js> IntoJs<'js> for StdString {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.as_str().into_js(ctx)
     }
 }
 
 impl<'js> IntoJs<'js> for &StdString {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.as_str().into_js(ctx)
     }
 }
 
 impl<'js> IntoJs<'js> for &str {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        String::from_str(ctx, self).map(|String(value)| value)
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        String::from_str(ctx.clone(), self).map(|String(value)| value)
     }
 }
 
@@ -49,20 +50,22 @@ impl<'js, T> IntoJs<'js> for &[T]
 where
     for<'a> &'a T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        self.iter().collect_js(ctx).map(|Array(value)| value)
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        self.iter()
+            .collect_js(ctx)
+            .map(|Array(value)| value.into_value())
     }
 }
 
 impl<'js> IntoJs<'js> for () {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Ok(Value::new_undefined(ctx))
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::new_undefined(ctx.clone()))
     }
 }
 
 impl<'js> IntoJs<'js> for &() {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        Ok(Value::new_undefined(ctx))
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        Ok(Value::new_undefined(ctx.clone()))
     }
 }
 
@@ -70,10 +73,10 @@ impl<'js, T> IntoJs<'js> for Option<T>
 where
     T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(match self {
             Some(value) => value.into_js(ctx)?,
-            _ => Value::new_undefined(ctx),
+            _ => Value::new_undefined(ctx.clone()),
         })
     }
 }
@@ -82,10 +85,10 @@ impl<'js, T> IntoJs<'js> for &Option<T>
 where
     for<'a> &'a T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(match self {
             Some(value) => value.into_js(ctx)?,
-            _ => Value::new_undefined(ctx),
+            _ => Value::new_undefined(ctx.clone()),
         })
     }
 }
@@ -95,7 +98,7 @@ where
     T: IntoJs<'js>,
     Error: From<E>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.map_err(Error::from)
             .and_then(|value| value.into_js(ctx))
     }
@@ -106,7 +109,7 @@ where
     for<'a> &'a T: IntoJs<'js>,
     for<'a> Error: From<&'a E>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.as_ref()
             .map_err(Error::from)
             .and_then(|value| value.into_js(ctx))
@@ -121,7 +124,7 @@ where
     L: IntoJs<'js>,
     R: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         match self {
             Left(value) => value.into_js(ctx),
             Right(value) => value.into_js(ctx),
@@ -137,7 +140,7 @@ where
     for<'a> &'a L: IntoJs<'js>,
     for<'a> &'a R: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         match self {
             Left(value) => value.into_js(ctx),
             Right(value) => value.into_js(ctx),
@@ -149,7 +152,7 @@ impl<'js, T> IntoJs<'js> for &Box<T>
 where
     for<'r> &'r T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.as_ref().into_js(ctx)
     }
 }
@@ -158,7 +161,7 @@ impl<'js, T> IntoJs<'js> for Box<T>
 where
     T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         (*self).into_js(ctx)
     }
 }
@@ -167,7 +170,7 @@ impl<'js, T> IntoJs<'js> for &Cell<T>
 where
     T: IntoJs<'js> + Copy,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.get().into_js(ctx)
     }
 }
@@ -176,7 +179,7 @@ impl<'js, T> IntoJs<'js> for &RefCell<T>
 where
     for<'r> &'r T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.borrow().into_js(ctx)
     }
 }
@@ -185,7 +188,7 @@ impl<'js, T> IntoJs<'js> for Mutex<T>
 where
     T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         // TODO: determine we should panic her or just unpack the value.
         self.into_inner().expect("mutex was poisoned").into_js(ctx)
     }
@@ -195,7 +198,7 @@ impl<'js, T> IntoJs<'js> for &Mutex<T>
 where
     for<'r> &'r T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         // TODO: determine we should panic her or just unpack the value.
         self.lock().expect("mutex was poisoned").into_js(ctx)
     }
@@ -205,7 +208,7 @@ impl<'js, T> IntoJs<'js> for RwLock<T>
 where
     T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         // TODO: determine we should panic her or just unpack the value.
         self.into_inner().expect("lock was poisoned").into_js(ctx)
     }
@@ -215,7 +218,7 @@ impl<'js, T> IntoJs<'js> for &RwLock<T>
 where
     for<'r> &'r T: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         // TODO: determine we should panic her or just unpack the value.
         self.read().expect("lock was poisoned").into_js(ctx)
     }
@@ -229,7 +232,7 @@ macro_rules! into_js_impls {
             where
                 T: IntoJs<'js>,
             {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                     self.into_inner().into_js(ctx)
                 }
             }
@@ -239,16 +242,16 @@ macro_rules! into_js_impls {
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
         $(
-            impl<'js, $($type,)*> IntoJs<'js> for ($($type,)*)
+            impl<'js, $($type,)*> IntoJs<'js> for List<($($type,)*)>
             where
                 $($type: IntoJs<'js>,)*
             {
                 #[allow(non_snake_case)]
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                    let ($($type,)*) = self;
-                    let array = Array::new(ctx)?;
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+                    let ($($type,)*) = self.0;
+                    let array = Array::new(ctx.clone())?;
                     $(array.set(into_js_impls!(@idx $type), $type)?;)*
-                    Ok(array.0)
+                    Ok(array.into_value())
                 }
             }
         )*
@@ -262,10 +265,10 @@ macro_rules! into_js_impls {
             where
                 T: IntoJs<'js>,
             {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js(ctx)
-                        .map(|Array(value)| value)
+                        .map(|Array(value)| value.into_value())
                 }
             }
 
@@ -274,10 +277,10 @@ macro_rules! into_js_impls {
             where
                 for<'a> &'a T: IntoJs<'js>,
             {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js(ctx)
-                        .map(|Array(value)| value)
+                        .map(|Array(value)| value.into_value())
                 }
             }
         )*
@@ -292,7 +295,7 @@ macro_rules! into_js_impls {
                 K: IntoAtom<'js>,
                 V: IntoJs<'js>,
             {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js(ctx)
                         .map(|Object(value)| value)
@@ -305,7 +308,7 @@ macro_rules! into_js_impls {
                 for<'a> &'a K: IntoAtom<'js>,
                 for<'a> &'a V: IntoJs<'js>,
             {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                     self.into_iter()
                         .collect_js(ctx)
                         .map(|Object(value)| value)
@@ -319,13 +322,13 @@ macro_rules! into_js_impls {
         $(
             $(
                 impl<'js> IntoJs<'js> for $type {
-                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                        Ok(Value::$new(ctx, self as _))
+                    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+                        Ok(Value::$new(ctx.clone(), self as _))
                     }
                 }
 
                 impl<'js> IntoJs<'js> for &$type {
-                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                         (*self).into_js(ctx)
                     }
                 }
@@ -339,7 +342,7 @@ macro_rules! into_js_impls {
         $(
             $(
                 impl<'js> IntoJs<'js> for $type {
-                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                         let val = self as $alt1;
                         if val as $type == self {
                             val.into_js(ctx)
@@ -350,7 +353,7 @@ macro_rules! into_js_impls {
                 }
 
                 impl<'js> IntoJs<'js> for &$type {
-                    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+                    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
                         (*self).into_js(ctx)
                     }
                 }
@@ -444,16 +447,16 @@ into_js_impls! {
     i32 f64 => i64 u32 u64 usize isize,
 }
 
-fn millis_to_date<'js>(ctx: Ctx<'js>, millis: i64) -> Result<Value<'js>> {
-    let date_ctor: Function = ctx.globals().get("Date")?;
+fn millis_to_date<'js>(ctx: &Ctx<'js>, millis: i64) -> Result<Value<'js>> {
+    let date_ctor: Constructor = ctx.globals().get("Date")?;
 
     date_ctor.construct((millis,))
 }
 
 impl<'js> IntoJs<'js> for SystemTime {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         let millis = match self.duration_since(SystemTime::UNIX_EPOCH) {
-            /* since unix epoch */
+            // since unix epoch
             Ok(duration) => {
                 let millis = duration.as_millis();
 
@@ -467,7 +470,7 @@ impl<'js> IntoJs<'js> for SystemTime {
 
                 millis as i64
             }
-            /* before unix epoch */
+            // before unix epoch
             Err(error) => {
                 let millis = error.duration().as_millis();
 
@@ -489,7 +492,7 @@ impl<'js> IntoJs<'js> for SystemTime {
 
 #[cfg(feature = "chrono")]
 impl<'js, Tz: chrono::TimeZone> IntoJs<'js> for chrono::DateTime<Tz> {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         millis_to_date(ctx, self.timestamp_millis())
     }
 }
@@ -512,7 +515,7 @@ mod test {
 
         ctx.with(|ctx| {
             let globs = ctx.globals();
-            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
             let res: i64 = ctx.eval("ts.getTime()").unwrap();
             assert_eq!(millis, res as _);
         });
@@ -525,7 +528,7 @@ mod test {
 
         ctx.with(|ctx| {
             let globs = ctx.globals();
-            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
             let res: i64 = ctx.eval("ts.getTime()").unwrap();
             assert_eq!(-(millis as i64), res as _);
         });
@@ -545,7 +548,7 @@ mod test {
 
         ctx.with(|ctx| {
             let globs = ctx.globals();
-            globs.set("ts", ts.into_js(ctx).unwrap()).unwrap();
+            globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
             let res: i64 = ctx.eval("ts.getTime()").unwrap();
             assert_eq!(millis, res);
         });

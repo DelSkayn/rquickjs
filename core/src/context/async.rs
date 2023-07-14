@@ -81,7 +81,10 @@ unsafe impl<R> Send for WithFuture<'_, R> {}
 ///     // With the macro you can borrow the environment.
 ///     *some_var_ref += 1;
 ///
-///     let delay = Func::new("delay", Async(delay));
+///     let delay = Function::new(ctx.clone(),Async(delay))
+///         .unwrap()
+///         .with_name("print")
+///         .unwrap();
 ///
 ///     let global = ctx.globals();
 ///     global.set("print",Func::from(print)).unwrap();
@@ -277,7 +280,6 @@ impl Drop for AsyncContext {
 }
 
 // Since the reference to runtime is behind a Arc this object is send
-//
 #[cfg(feature = "parallel")]
 unsafe impl Send for AsyncContext {}
 

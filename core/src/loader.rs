@@ -49,7 +49,7 @@ pub trait Resolver {
     ///
     /// ```no_run
     /// # use rquickjs::{Ctx, Result, Error};
-    /// # fn default_resolve<'js>(_ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    /// # fn default_resolve<'js>(_ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
     /// Ok(if !name.starts_with('.') {
     ///     name.into()
     /// } else {
@@ -62,14 +62,14 @@ pub trait Resolver {
     /// })
     /// # }
     /// ```
-    fn resolve<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String>;
+    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String>;
 }
 
 /// Module loader interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Loader {
     /// Load module by name
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<ModuleData>;
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<ModuleData>;
 }
 
 /// The Raw Module loader interface.
@@ -87,12 +87,12 @@ pub unsafe trait RawLoader {
     /// # Safety
     /// Callers must ensure that the module returned by this function is not used after an module
     /// declaration or evaluation failed.
-    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>>;
+    unsafe fn raw_load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>>;
 }
 
 unsafe impl<T: Loader> RawLoader for T {
-    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
-        let res = self.load(ctx, name)?.unsafe_declare(ctx)?;
+    unsafe fn raw_load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+        let res = self.load(ctx, name)?.unsafe_declare(ctx.clone())?;
         Ok(res)
     }
 }
@@ -137,7 +137,7 @@ impl LoaderHolder {
     #[inline]
     fn normalize<'js>(
         opaque: &mut LoaderOpaque,
-        ctx: Ctx<'js>,
+        ctx: &Ctx<'js>,
         base: &CStr,
         name: &CStr,
     ) -> Result<*mut qjs::c_char> {
@@ -165,8 +165,8 @@ impl LoaderHolder {
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::normalize(loader, ctx, base, name).unwrap_or_else(|error| {
-            error.throw(ctx);
+        Self::normalize(loader, &ctx, base, name).unwrap_or_else(|error| {
+            error.throw(&ctx);
             ptr::null_mut()
         })
     }
@@ -174,7 +174,7 @@ impl LoaderHolder {
     #[inline]
     unsafe fn load<'js>(
         opaque: &mut LoaderOpaque,
-        ctx: Ctx<'js>,
+        ctx: &Ctx<'js>,
         name: &CStr,
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
@@ -191,8 +191,8 @@ impl LoaderHolder {
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::load(loader, ctx, name).unwrap_or_else(|error| {
-            error.throw(ctx);
+        Self::load(loader, &ctx, name).unwrap_or_else(|error| {
+            error.throw(&ctx);
             ptr::null_mut()
         })
     }
@@ -216,7 +216,7 @@ macro_rules! loader_impls {
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+                fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
                     let mut messages = Vec::<std::string::String>::new();
                     let ($($t,)*) = self;
                     $(
@@ -237,17 +237,17 @@ macro_rules! loader_impls {
                 }
             }
 
-            impl< $($t,)*> $crate::loader::Loader for ($($t,)*)
+            unsafe impl< $($t,)*> $crate::loader::RawLoader for ($($t,)*)
             where
-                $($t: $crate::loader::Loader,)*
+                $($t: $crate::loader::RawLoader,)*
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
+                unsafe fn raw_load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
                     let mut messages = Vec::<std::string::String>::new();
                     let ($($t,)*) = self;
                     $(
-                        match $t.load(_ctx, name) {
+                        match $t.raw_load(_ctx, name) {
                             // Still could try the next loader
                             Err($crate::Error::Loading { message, .. }) => {
                                 message.map(|message| messages.push(message));
@@ -276,7 +276,7 @@ mod test {
     struct TestResolver;
 
     impl Resolver for TestResolver {
-        fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+        fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
             if base == "loader" && name == "test" {
                 Ok(name.into())
             } else {
@@ -292,7 +292,7 @@ mod test {
     struct TestLoader;
 
     impl Loader for TestLoader {
-        fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
+        fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<ModuleData> {
             if name == "test" {
                 Ok(ModuleData::source(
                     "test",

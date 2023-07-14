@@ -1,8 +1,8 @@
 [package]
 name = "rquickjs-core"
-version = "0.3.1"
+version = "0.4.0-beta.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 readme = "README.md"
 description = "High level bindings to the QuickJS javascript engine"
@@ -31,7 +31,7 @@ version = "0.4"
 optional = true
 
 [dependencies.rquickjs-sys]
-version = "0.3.1"
+version = "0.4.0-beta.0"
 path = "../sys"
 
 [dependencies.dlopen]
@@ -85,6 +85,9 @@ array-buffer = []
 
 # Enable interop between Rust futures and JS Promises
 futures = ["async-lock"]
+
+# Allows transfering objects between different contexts of the same runtime.
+multi-ctx = []
 
 # Max number of function args
 max-args-7 = []

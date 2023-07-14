@@ -45,7 +45,7 @@ mod test {
     #[test]
     fn to_javascript() {
         test_with(|ctx| {
-            let bigint = BigInt::from_i64(ctx, i64::MAX).unwrap();
+            let bigint = BigInt::from_i64(ctx.clone(), i64::MAX).unwrap();
             let func: Function = ctx
                 .eval(format!(
                     "x => {{

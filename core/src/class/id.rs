@@ -13,6 +13,7 @@ unsafe impl Send for ClassId {}
 unsafe impl Sync for ClassId {}
 
 impl ClassId {
+    /// Create a new class id.
     pub const fn new() -> Self {
         Self {
             id: Cell::new(0),

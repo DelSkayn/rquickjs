@@ -1,8 +1,10 @@
 use crate::{
-    qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive, Result, Value,
+    atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive,
+    Result, Value,
 };
 use std::{
     convert::{TryFrom, TryInto},
+    fmt,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
@@ -10,17 +12,19 @@ use std::{
     slice,
 };
 
+use super::Constructor;
+
 /// The trait which implements types which capable to be TypedArray items
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub trait TypedArrayItem: Copy {
-    const CLASS_NAME: &'static str;
+    const CLASS_NAME: PredefinedAtom;
 }
 
 macro_rules! typedarray_items {
     ($($name:ident: $type:ty,)*) => {
         $(impl TypedArrayItem for $type {
-            const CLASS_NAME: &'static str = stringify!($name);
+            const CLASS_NAME: PredefinedAtom = PredefinedAtom::$name;
         })*
     };
 }
@@ -54,12 +58,29 @@ typedarray_items! {
 /// | `BigUint64Array`   | [`TypedArray<u64>`]   |
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
-#[derive(Debug, PartialEq, Clone)]
 #[repr(transparent)]
 pub struct TypedArray<'js, T>(pub(crate) Object<'js>, PhantomData<T>);
 
-impl<'js, 't, T> Outlive<'t> for TypedArray<'js, T> {
-    type Target = TypedArray<'t, T>;
+unsafe impl<'js, T> Outlive<'js> for TypedArray<'js, T> {
+    type Target<'to> = TypedArray<'to, T>;
+}
+
+impl<'js, T> fmt::Debug for TypedArray<'js, T> {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.debug_tuple("TypedArray").field(&self.0).finish()
+    }
+}
+
+impl<'js, T> PartialEq for TypedArray<'js, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<'js, T> Clone for TypedArray<'js, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
 }
 
 impl<'js, T> TypedArray<'js, T> {
@@ -84,10 +105,10 @@ impl<'js, T> TypedArray<'js, T> {
     /// Get the length of the typed array in elements.
     pub fn len(&self) -> usize {
         //Self::get_raw(&self.0).expect("Not a TypedArray").0
-        let ctx = self.0.ctx;
+        let ctx = &self.0.ctx;
         let value = self.0.as_js_value();
         unsafe {
-            let val = qjs::JS_GetPropertyStr(ctx.as_ptr(), value, b"length\0".as_ptr() as *const _);
+            let val = qjs::JS_GetProperty(ctx.as_ptr(), value, PredefinedAtom::Length as _);
             assert!(qjs::JS_IsInt(val));
             qjs::JS_VALUE_GET_INT(val) as _
         }
@@ -139,7 +160,7 @@ impl<'js, T> TypedArray<'js, T> {
         if object.is_instance_of(class) {
             Ok(Self(object, PhantomData))
         } else {
-            Err(Error::new_from_js("object", T::CLASS_NAME))
+            Err(Error::new_from_js("object", T::CLASS_NAME.to_str()))
         }
     }
 
@@ -153,15 +174,15 @@ impl<'js, T> TypedArray<'js, T> {
 
     /// Get underlaying ArrayBuffer
     pub fn arraybuffer(&self) -> Result<ArrayBuffer<'js>> {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx().clone();
         let val = self.0.as_js_value();
         let buf = unsafe {
             let val =
                 qjs::JS_GetTypedArrayBuffer(ctx.as_ptr(), val, null_mut(), null_mut(), null_mut());
             ctx.handle_exception(val)?;
-            Value::from_js_value(ctx, val)
+            Value::from_js_value(ctx.clone(), val)
         };
-        ArrayBuffer::from_value(buf)
+        ArrayBuffer::from_js(&ctx, buf)
     }
 
     /// Convert from an ArrayBuffer
@@ -169,13 +190,13 @@ impl<'js, T> TypedArray<'js, T> {
     where
         T: TypedArrayItem,
     {
-        let ctx = arraybuffer.0.ctx;
-        let ctor: Function = ctx.globals().get(T::CLASS_NAME)?;
-        ctor.construct((arraybuffer,))
+        let ctx = &arraybuffer.0.ctx;
+        let ctor: Constructor = dbg!(ctx.globals().get(T::CLASS_NAME)?);
+        dbg!(ctor.construct((arraybuffer,)))
     }
 
     pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {
-        let ctx = val.ctx;
+        let ctx = &val.ctx;
         let val = val.as_js_value();
         let mut off = MaybeUninit::<qjs::size_t>::uninit();
         let mut len = MaybeUninit::<qjs::size_t>::uninit();
@@ -189,7 +210,7 @@ impl<'js, T> TypedArray<'js, T> {
                 stp.as_mut_ptr(),
             );
             ctx.handle_exception(val).ok()?;
-            Value::from_js_value(ctx, val)
+            Value::from_js_value(ctx.clone(), val)
         };
         let off: usize = unsafe { off.assume_init() }
             .try_into()
@@ -221,7 +242,8 @@ impl<'js, T> TypedArray<'js, T> {
 
 impl<'js, T: TypedArrayItem> AsRef<[T]> for TypedArray<'js, T> {
     fn as_ref(&self) -> &[T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect(T::CLASS_NAME);
+        let (len, ptr) =
+            Self::get_raw(&self.0).unwrap_or_else(|| panic!("{}", T::CLASS_NAME.to_str()));
         unsafe { slice::from_raw_parts(ptr as _, len) }
     }
 }
@@ -269,13 +291,13 @@ impl<'js, T> FromJs<'js> for TypedArray<'js, T>
 where
     T: TypedArrayItem,
 {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Self::from_value(value)
     }
 }
 
 impl<'js, T> IntoJs<'js> for TypedArray<'js, T> {
-    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, _: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(self.into_value())
     }
 }
@@ -302,7 +324,7 @@ mod test {
     #[test]
     fn into_javascript_i8() {
         test_with(|ctx| {
-            let val = TypedArray::<i8>::new(ctx, [-1i8, 0, 22, 5]).unwrap();
+            let val = TypedArray::<i8>::new(ctx.clone(), [-1i8, 0, 22, 5]).unwrap();
             ctx.globals().set("v", val).unwrap();
             let res: i8 = ctx
                 .eval(
@@ -338,7 +360,7 @@ mod test {
     #[test]
     fn into_javascript_f32() {
         test_with(|ctx| {
-            let val = TypedArray::<f32>::new(ctx, [-1.5, 0.0, 2.25]).unwrap();
+            let val = TypedArray::<f32>::new(ctx.clone(), [-1.5, 0.0, 2.25]).unwrap();
             ctx.globals().set("v", val).unwrap();
             let res: i8 = ctx
                 .eval(

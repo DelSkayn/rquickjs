@@ -1,5 +1,5 @@
 pub mod array;
-mod atom;
+pub mod atom;
 mod bigint;
 pub mod convert;
 mod exception;
@@ -21,11 +21,9 @@ pub use atom::Atom;
 pub use bigint::BigInt;
 pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
 pub use exception::Exception;
-pub use function::{
-    AsArguments, AsFunction, Func, Function, Method, MutFn, OnceFn, Opt, Rest, This,
-};
+pub use function::{Constructor, Function};
 pub use module::Module;
-pub use object::{Filter, Object, ObjectDef};
+pub use object::{Filter, Object};
 pub use string::String;
 pub use symbol::Symbol;
 
@@ -33,9 +31,6 @@ pub use symbol::Symbol;
 pub use array_buffer::ArrayBuffer;
 #[cfg(feature = "array-buffer")]
 pub use typed_array::TypedArray;
-
-#[cfg(feature = "futures")]
-pub use function::Async;
 
 use std::{fmt, mem, ops::Deref, result::Result as StdResult, str};
 
@@ -47,7 +42,7 @@ pub struct Value<'js> {
 
 impl<'js> Clone for Value<'js> {
     fn clone(&self) -> Self {
-        let ctx = self.ctx;
+        let ctx = self.ctx.clone();
         let value = unsafe { qjs::JS_DupValue(self.value) };
         Self { ctx, value }
     }
@@ -82,12 +77,22 @@ impl<'js> fmt::Debug for Value<'js> {
                 unsafe { self.ref_string() }.to_string().fmt(f)?;
                 "\")".fmt(f)?;
             }
-            Symbol | Object | Array | Function => {
+            Symbol | Object | Array | Function | Constructor => {
                 '('.fmt(f)?;
                 unsafe { self.get_ptr() }.fmt(f)?;
                 ')'.fmt(f)?;
             }
-            _ => (),
+            Exception => {
+                writeln!(f, "(")?;
+                self.as_exception().unwrap().fmt(f)?;
+                writeln!(f, ")")?;
+            }
+            Null => "null".fmt(f)?,
+            Undefined => "undefined".fmt(f)?,
+            Uninitialized => "uninitialized".fmt(f)?,
+            Module => "module".fmt(f)?,
+            BigInt => "BigInt".fmt(f)?,
+            Unknown => "unknown".fmt(f)?,
         }
         Ok(())
     }
@@ -131,6 +136,7 @@ impl<'js> Value<'js> {
     #[inline]
     pub(crate) fn into_js_value(self) -> qjs::JSValue {
         let value = self.value;
+        unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) };
         mem::forget(self);
         value
     }
@@ -162,8 +168,8 @@ impl<'js> Value<'js> {
 
     /// Returns the Ctx object associated with this value.
     #[inline]
-    pub fn ctx(&self) -> Ctx<'js> {
-        self.ctx
+    pub fn ctx(&self) -> &Ctx<'js> {
+        &self.ctx
     }
 
     // unsafe because no type checking
@@ -267,12 +273,14 @@ impl<'js> Value<'js> {
         qjs::JS_VALUE_GET_PTR(self.value)
     }
 
+    /// Returns if the value is the JavaScript null value.
     #[inline]
     pub fn is_null(&self) -> bool {
         let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
         qjs::JS_TAG_NULL == tag
     }
 
+    /// Returns if the value is the JavaScript undefined value.
     #[inline]
     pub fn is_undefined(&self) -> bool {
         let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
@@ -340,6 +348,18 @@ impl<'js> Value<'js> {
         0 != unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) }
     }
 
+    /// Check if the value is a constructor function
+    #[inline]
+    pub fn is_constructor(&self) -> bool {
+        0 != unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) }
+    }
+
+    /// Check if the value is a constructor function
+    #[inline]
+    pub fn is_exception(&self) -> bool {
+        unsafe { qjs::JS_IsException(self.value) }
+    }
+
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
@@ -352,9 +372,14 @@ impl<'js> Value<'js> {
         self
     }
 
+    #[inline]
+    pub(crate) fn into_value(self) -> Self {
+        self
+    }
+
     /// Convert from value to specified type
     pub fn get<T: FromJs<'js>>(&self) -> Result<T> {
-        T::from_js(self.ctx, self.clone())
+        T::from_js(self.ctx(), self.clone())
     }
 }
 
@@ -369,7 +394,7 @@ macro_rules! type_impls {
     ($($type:ident: $name:ident => $tag:ident,)*) => {
         /// The type of Javascript value
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-        #[repr(i32)]
+        #[repr(u8)]
         pub enum Type {
             $($type,)*
             Unknown
@@ -386,13 +411,15 @@ macro_rules! type_impls {
             pub const fn interpretable_as(self, other: Self) -> bool {
                 use Type::*;
 
-                let t = self as i32;
-                let o = other as i32;
-
-                o == t ||
-                    (o == Float as i32 && t == Int as i32) ||
-                    (o == Object as i32 && (t == Array as i32 ||
-                                            t == Function as i32))
+                if (self as u8) == (other as u8){
+                    return true
+                }
+                match other{
+                    Float => matches!(self, Int),
+                    Object => matches!(self, Array | Function | Constructor | Exception),
+                    Function => matches!(self, Constructor),
+                    _ => false
+                }
             }
 
             /// Returns string representation of type
@@ -445,7 +472,9 @@ macro_rules! type_impls {
     };
 
     (@cond Array $self:expr) => { $self.is_array() };
+    (@cond Constructor $self:expr) => { $self.is_constructor() };
     (@cond Function $self:expr) => { $self.is_function() };
+    (@cond Exception $self:expr) => { $self.is_error() };
     (@cond $type:ident $self:expr) => { true };
 }
 
@@ -459,62 +488,84 @@ type_impls! {
     String: string => JS_TAG_STRING,
     Symbol: symbol => JS_TAG_SYMBOL,
     Array: array => JS_TAG_OBJECT,
+    Constructor: constructor => JS_TAG_OBJECT,
     Function: function => JS_TAG_OBJECT,
+    Exception: exception => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
     BigInt: big_int => JS_TAG_BIG_INT,
 }
 
 macro_rules! sub_types {
-    ($($type:ident $as:ident $ref:ident $into:ident $from:ident,)*) => {
+    ($( $head:ident$(->$sub_type:ident)* $as:ident $ref:ident $into:ident $try_into:ident $from:ident,)*) => {
         $(
-            impl<'js> sub_types!(@type $type) {
+            impl<'js> $head<'js> {
                 /// Reference to value
                 #[inline]
                 pub fn as_value(&self) -> &Value<'js> {
-                    &self.0
+                    &self.0.as_value()
                 }
 
                 /// Convert into value
                 #[inline]
                 pub fn into_value(self) -> Value<'js> {
+                    self.0.into_value()
+                }
+
+                /// Returns the underlying super type.
+                pub fn into_inner(self) -> sub_types!(@head_ty $($sub_type),*) {
                     self.0
+                }
+                /// Returns a reference to the underlying super type.
+                pub fn as_inner(&self) -> & sub_types!(@head_ty $($sub_type),*) {
+                    &self.0
+                }
+
+                /// Returns the [`Ctx`] object associated with this value
+                pub fn ctx(&self) -> &Ctx<'js>{
+                    self.0.ctx()
                 }
 
                 /// Convert from value
                 pub fn from_value(value: Value<'js>) -> Result<Self> {
                     let type_ = value.type_of();
-                    if type_.interpretable_as(Type::$type) {
-                        Ok(sub_types!(@wrap $type value))
+                    if type_.interpretable_as(Type::$head) {
+                        Ok(sub_types!(@wrap $head$(->$sub_type)*  value))
                     } else {
-                        Err(Error::new_from_js(type_.as_str(), Type::$type.as_str()))
+                        Err(Error::new_from_js(type_.as_str(), Type::$head.as_str()))
                     }
                 }
 
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
-                    sub_types!(@wrap $type Value::from_js_value_const(ctx, value))
+                    sub_types!(@wrap $head$(->$sub_type)* Value::from_js_value_const(ctx, value))
                 }
 
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
-                    sub_types!(@wrap $type Value::from_js_value(ctx, value))
+                    sub_types!(@wrap $head$(->$sub_type)* Value::from_js_value(ctx, value))
+                }
+
+                #[allow(unused)]
+                pub(crate) fn into_js_value(self) -> qjs::JSValue{
+                    self.0.into_js_value()
+                }
+
+                #[allow(unused)]
+                pub(crate) fn as_js_value(&self) -> qjs::JSValueConst{
+                    self.0.as_js_value()
                 }
             }
 
-            impl<'js> Deref for sub_types!(@type $type) {
-                type Target = Value<'js>;
+            impl<'js> Deref for $head<'js> {
+                type Target = sub_types!(@head_ty $($sub_type),*);
 
                 fn deref(&self) -> &Self::Target {
                     &self.0
                 }
             }
 
-            impl<'js> AsRef<Value<'js>> for sub_types!(@type $type) {
-                fn as_ref(&self) -> &Value<'js> {
-                    &self.0
-                }
-            }
+            sub_types!(@imp_as_ref $head$(,$sub_type)*);
 
             impl<'js> Value<'js> {
                 /// Interprete as
@@ -522,13 +573,13 @@ macro_rules! sub_types {
                 /// # Safety
                 /// You should be sure that the value already is of required type before to do it.
                 #[inline]
-                pub unsafe fn $ref(&self) -> &sub_types!(@type $type) {
-                    &*(self as *const _ as *const $type)
+                pub unsafe fn $ref(&self) -> &$head<'js> {
+                    &*(self as *const _ as *const $head)
                 }
 
                 /// Try reinterprete as
-                pub fn $as(&self) -> Option<&sub_types!(@type $type)> {
-                    if self.type_of().interpretable_as(Type::$type) {
+                pub fn $as(&self) -> Option<&$head<'js>> {
+                    if self.type_of().interpretable_as(Type::$head) {
                         Some(unsafe { self.$ref() })
                     } else {
                         None
@@ -536,60 +587,101 @@ macro_rules! sub_types {
                 }
 
                 /// Try convert into
-                pub fn $into(self) -> Option<sub_types!(@type $type)> {
-                    if self.type_of().interpretable_as(Type::$type) {
-                        Some(sub_types!(@wrap $type self))
+                pub fn $into(self) -> Option<$head<'js>> {
+                    if self.type_of().interpretable_as(Type::$head) {
+                        Some(sub_types!(@wrap $head$(->$sub_type)* self))
                     } else {
                         None
                     }
                 }
 
+                /// Try convert into returning self if the conversion fails
+                pub fn $try_into(self) -> std::result::Result<$head<'js>, Value<'js>> {
+                    if self.type_of().interpretable_as(Type::$head) {
+                        Ok(sub_types!(@wrap $head$(->$sub_type)* self))
+                    } else {
+                        Err(self)
+                    }
+                }
+
                 /// Convert from
-                pub fn $from(value: sub_types!(@type $type)) -> Self {
-                    value.0
+                pub fn $from(value: $head<'js>) -> Self {
+                    value.into_value()
                 }
             }
 
-            impl<'js> From<sub_types!(@type $type)> for Value<'js> {
-                fn from(value: sub_types!(@type $type)) -> Self {
-                    value.0
+            impl<'js> From<$head<'js>> for Value<'js> {
+                fn from(value: $head<'js>) -> Self {
+                    value.into_value()
                 }
             }
 
-            impl<'js> FromJs<'js> for sub_types!(@type $type) {
-                fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+            impl<'js> FromJs<'js> for $head<'js> {
+                fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     Self::from_value(value)
                 }
             }
 
-            impl<'js> IntoJs<'js> for sub_types!(@type $type) {
-                fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
-                    Ok(self.0)
+            impl<'js> IntoJs<'js> for $head<'js> {
+                fn into_js(self, _ctx: &Ctx<'js>) -> Result<Value<'js>> {
+                    Ok(self.into_value())
                 }
             }
 
-            impl<'js> IntoAtom<'js> for sub_types!(@type $type) {
-                fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>> {
-                    Atom::from_value(ctx, &self.0)
+            impl<'js> IntoAtom<'js> for $head<'js>{
+                fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>> {
+                    Atom::from_value(ctx.clone(), &self.into_value())
                 }
             }
         )*
     };
 
-    (@type Module) => { EvaluatedModule<'js> };
     (@type $type:ident) => { $type<'js> };
 
-    (@wrap Module $val:expr) => { Module($val, PhantomData) };
-    (@wrap $type:ident $val:expr) => { $type($val) };
+    (@head $head:ident $(rem:ident)*)  => { $head };
+    (@head_ty $head:ident$(,$rem:ident)*)  => { $head<'js> };
+
+    (@wrap $type:ident$(->$rem:ident)+ $val:expr) => { $type(sub_types!(@wrap $($rem)->* $val)) };
+    (@wrap Value $val:expr) => { $val };
+
+    /*
+    (@into_inner $head:ident->$inner:ident$(->$rem:ident)*) => {
+        impl<'js> $head<'js>{
+            pub fn into_inner($
+        }
+    }*/
+
+    (@imp_as_ref $type:ident,Value) => {
+        impl<'js> AsRef<Value<'js>> for $type<'js> {
+            fn as_ref(&self) -> &Value<'js> {
+                &self.0
+            }
+        }
+    };
+    (@imp_as_ref $type:ident,$inner:ident$(,$rem:ident)*) => {
+        impl<'js> AsRef<$inner<'js>> for $type<'js> {
+            fn as_ref(&self) -> &$inner<'js> {
+                &self.0
+            }
+        }
+
+        impl<'js> AsRef<Value<'js>> for $type<'js> {
+            fn as_ref(&self) -> &Value<'js> {
+                self.0.as_ref()
+            }
+        }
+    };
 }
 
 sub_types! {
-    String as_string ref_string into_string from_string,
-    Symbol as_symbol ref_symbol into_symbol from_symbol,
-    Object as_object ref_object into_object from_object,
-    Array as_array ref_array into_array from_array,
-    Function as_function ref_function into_function from_function,
-    BigInt as_big_int ref_big_int into_big_int from_big_int,
+    String->Value as_string ref_string into_string try_into_string from_string,
+    Symbol->Value as_symbol ref_symbol into_symbol try_into_symbol from_symbol,
+    Object->Value as_object ref_object into_object try_into_object from_object,
+    Function->Object->Value as_function ref_function into_function try_into_function from_function,
+    Constructor->Function->Object->Value as_constructor ref_constructor into_constructor try_into_constructor from_constructor,
+    Array->Object->Value as_array ref_array into_array try_into_array from_array,
+    Exception->Object->Value as_exception ref_exception into_exception try_into_exception from_exception,
+    BigInt->Value as_big_int ref_big_int into_big_int try_into_big_int from_big_int,
 }
 
 macro_rules! void_types {
@@ -616,14 +708,14 @@ macro_rules! void_types {
             }
 
             impl<'js> FromJs<'js> for $type {
-                fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     Self::from_value(value)
                 }
             }
 
             impl<'js> IntoJs<'js> for $type {
-                fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-                    Ok(self.into_value(ctx))
+                fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+                    Ok(self.into_value(ctx.clone()))
                 }
             }
         )*

@@ -1,9 +1,8 @@
 use rquickjs::{
-    function::Func,
     loader::{
         BuiltinLoader, BuiltinResolver, FileResolver, ModuleLoader, NativeLoader, ScriptLoader,
     },
-    Context, Runtime,
+    Context, Function, Runtime,
 };
 
 mod bundle;
@@ -36,10 +35,19 @@ fn main() {
     rt.set_loader(resolver, loader);
     ctx.with(|ctx| {
         let global = ctx.globals();
-        global.set("print", Func::new("print", print)).unwrap();
+        global
+            .set(
+                "print",
+                Function::new(ctx.clone(), print)
+                    .unwrap()
+                    .with_name("print")
+                    .unwrap(),
+            )
+            .unwrap();
 
         println!("import script module");
         let _ = ctx
+            .clone()
             .compile(
                 "test",
                 r#"
@@ -53,6 +61,7 @@ print(`f(2, 4) = ${f(2, 4)}`);
 
         println!("import native module");
         let _ = ctx
+            .clone()
             .compile(
                 "test",
                 r#"
@@ -66,6 +75,7 @@ print(`f(2, 4) = ${f(2, 4)}`);
 
         println!("import bundled script module");
         let _ = ctx
+            .clone()
             .compile(
                 "test",
                 r#"
