@@ -121,6 +121,12 @@ jobs:
             features: full-async
             optimization: false
           - task: bindings
+            os: macos-latest
+            rust: stable
+            target: aarch64-apple-darwin
+            features: full-async
+            optimization: false
+          - task: bindings
             os: windows-latest
             rust: stable
             target: i686-pc-windows-gnu
