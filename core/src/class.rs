@@ -1,3 +1,5 @@
+//! Javascript classes defined from rust.
+
 use crate::{
     function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs, Object, Outlive,
     Result, Value,
@@ -134,6 +136,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         )
     }
 
+    /// Create a constructor for the current class using its definition.
     pub fn create_constructor(ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>> {
         Self::register(ctx)?;
         C::constructor(ctx)
@@ -273,6 +276,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         object.into_class().ok()
     }
 
+    /// Turn the class into a value.
     #[inline]
     pub fn into_value(self) -> Value<'js> {
         self.0.into_value()

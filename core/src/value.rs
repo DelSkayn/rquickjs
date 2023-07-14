@@ -273,12 +273,14 @@ impl<'js> Value<'js> {
         qjs::JS_VALUE_GET_PTR(self.value)
     }
 
+    /// Returns if the value is the JavaScript null value.
     #[inline]
     pub fn is_null(&self) -> bool {
         let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
         qjs::JS_TAG_NULL == tag
     }
 
+    /// Returns if the value is the JavaScript undefined value.
     #[inline]
     pub fn is_undefined(&self) -> bool {
         let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
@@ -510,8 +512,13 @@ macro_rules! sub_types {
                     self.0.into_value()
                 }
 
+                /// Returns the underlying super type.
                 pub fn into_inner(self) -> sub_types!(@head_ty $($sub_type),*) {
                     self.0
+                }
+                /// Returns a reference to the underlying super type.
+                pub fn as_inner(&self) -> & sub_types!(@head_ty $($sub_type),*) {
+                    &self.0
                 }
 
                 /// Returns the [`Ctx`] object associated with this value

@@ -130,6 +130,8 @@ pub use rquickjs_core::*;
 pub use rquickjs_macro::{class, function, methods};
 
 pub mod class {
+    //! Javascript classes defined from rust.
+
     pub use rquickjs_core::class::*;
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
     #[cfg(feature = "macro")]

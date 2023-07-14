@@ -1,3 +1,5 @@
+//! Javascript array types.
+
 use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
@@ -16,6 +18,7 @@ use super::convert::FromIteratorJs;
 pub struct Array<'js>(pub(crate) Object<'js>);
 
 impl<'js> Array<'js> {
+    /// Create a new javascript array.
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
         Ok(Array(unsafe {
             let val = qjs::JS_NewArray(ctx.as_ptr());

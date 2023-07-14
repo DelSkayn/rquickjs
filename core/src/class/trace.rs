@@ -38,6 +38,7 @@ impl<'a, 'js> Tracer<'a, 'js> {
         }
     }
 
+    /// Mark a value as being reachable from the current traced object.
     fn mark(self, value: &Value<'js>) {
         let value = value.as_js_value();
         if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(value) } {

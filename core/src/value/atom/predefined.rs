@@ -2,7 +2,7 @@ use crate::qjs;
 
 /// A collection of atoms which are predefined in quickjs.
 ///
-/// Using these over [`Atom::from_str`] can be more performant as these don't need to be looked up
+/// Using these over [`Atom::from_str`](crate::Atom::from_str) can be more performant as these don't need to be looked up
 /// in a hashmap.
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 #[repr(u32)]

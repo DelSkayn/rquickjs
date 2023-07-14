@@ -5,6 +5,8 @@ use crate::{
 use std::slice;
 
 /// A struct which contains the values a callback is called with.
+///
+/// Arguments retrieved from the JavaScript side for calling rust functions.
 pub struct Params<'a, 'js> {
     ctx: Ctx<'js>,
     function: qjs::JSValue,
@@ -99,6 +101,7 @@ impl<'a, 'js> Params<'a, 'js> {
     }
 }
 
+/// Accessor to parameters used for retrieving arguments in order one at the time.
 pub struct ParamsAccessor<'a, 'js> {
     params: Params<'a, 'js>,
     offset: usize,

@@ -1,3 +1,5 @@
+//! Javascript function functionality
+
 use crate::{
     atom::PredefinedAtom,
     class::{Class, JsClass},
@@ -92,6 +94,7 @@ impl<'js> Function<'js> {
         Ok(())
     }
 
+    /// Defer a function call with given arguments.
     pub fn defer_arg(&self, args: Args<'js>) -> Result<()> {
         args.defer(self.clone())
     }
@@ -262,6 +265,9 @@ impl<'js> Constructor<'js> {
         Ok(Constructor(func))
     }
 
+    /// Call the constructor as a constructor.
+    ///
+    /// Equivalent to calling any constructor function with the new keyword..
     pub fn construct<A, R>(&self, args: A) -> Result<R>
     where
         A: IntoArgs<'js>,
@@ -274,6 +280,9 @@ impl<'js> Constructor<'js> {
         self.construct_args(accum_args)
     }
 
+    /// Call the constructor as a constructor with an [`Args`] object.
+    ///
+    /// Equivalent to calling any constructor function with the new keyword..
     pub fn construct_args<R>(&self, args: Args<'js>) -> Result<R>
     where
         R: FromJs<'js>,
@@ -661,28 +670,6 @@ mod test {
             assert_eq!(val, "test_str");
         });
     }
-
-    /*
-    #[test]
-    fn call_overloaded_callback() {
-        test_with(|ctx| {
-            let globals = ctx.globals();
-            globals
-                .set(
-                    "calc",
-                    Func::from((|a: f64, b: f64| (a + 1f64) * b, |a: f64| a + 1f64, || 1f64)),
-                )
-                .unwrap();
-
-            let r: f64 = ctx.eval("calc()").unwrap();
-            assert_approx_eq!(r, 1.0);
-            let r: f64 = ctx.eval("calc(2)").unwrap();
-            assert_approx_eq!(r, 3.0);
-            let r: f64 = ctx.eval("calc(2, 3)").unwrap();
-            assert_approx_eq!(r, 9.0);
-        })
-    }
-    */
 
     #[test]
     fn call_rust_fn_with_this_and_args() {

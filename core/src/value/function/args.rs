@@ -5,7 +5,7 @@ use crate::{
 
 use super::{ffi::defer_call_job, Constructor};
 
-const ARGS_ON_STACK: usize = 8;
+const ARGS_ON_STACK: usize = 4;
 
 pub enum ArgsSlice {
     Stack {
@@ -15,7 +15,9 @@ pub enum ArgsSlice {
     Heap(Vec<qjs::JSValue>),
 }
 
-/// Input for a functions
+/// Argument input for a functions
+///
+/// Arguments on the rust side for calling into the JavaScript context.
 pub struct Args<'js> {
     ctx: Ctx<'js>,
     pub(crate) this: qjs::JSValue,
