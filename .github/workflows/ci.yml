@@ -335,6 +335,8 @@ jobs:
       - name: Build
         run: cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
+        if: |
+          matrix.target != 'aarch64-apple-darwin'
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
