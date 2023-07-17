@@ -3,8 +3,6 @@ on:
   push:
     branches:
       - "*"
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
   pull_request:
 jobs:
   format:
@@ -364,25 +362,3 @@ jobs:
           title: Update bindings
           body: |
             Bindings should be updated to be consistent with latest changes
-  publish:
-    if: (github.repository == 'DelSkayn/rquickjs' || github.repository == 'katyo/rquickjs') && startsWith(github.ref, 'refs/tags/')
-    needs:
-      - format
-      - doc
-      - check
-      - test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-      - name: Publish crates
-        uses: katyo/publish-crates@v1
-        with:
-          registry-token: ${{ secrets.CRATES_TOKEN }}
-          no-verify: true
-          #dry-run: true
