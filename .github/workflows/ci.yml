@@ -4,6 +4,12 @@ on:
     branches:
       - "*"
   pull_request:
+
+# Only run on the latest ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   format:
     runs-on: ubuntu-latest
@@ -90,11 +96,32 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           args: --all --all-targets --features full-async
 
+  msrv:
+    # Check to see if rquickjs builds on minimal supported rust version.
+    runs-on: ubuntu-latest
+    # we use a matrix here just because env can't be used in job names
+    # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
+    strategy:
+      matrix:
+        msrv: [1.60.0] # 2021 edition requires 1.56
+    name: ubuntu / ${{ matrix.msrv }}
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Install ${{ matrix.msrv }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.msrv }}
+      - name: cargo +${{ matrix.msrv }} check
+        run: cargo check
+
   test:
     needs:
       - format
       - doc
       - check
+      - msrv
     strategy:
       fail-fast: ${{ startsWith(github.ref, 'refs/tags/') }}
       matrix:
