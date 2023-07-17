@@ -158,6 +158,20 @@ where
 {
     let target = env::var("TARGET").unwrap();
 
+    if !Path::new("./")
+        .join("src")
+        .join("bindings")
+        .join(format!("{}.rs", target))
+        .canonicalize()
+        .map(|x| x.exists())
+        .unwrap_or(false)
+    {
+        println!(
+            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
+            target
+        );
+    }
+
     let bindings_file = out_dir.as_ref().join("bindings.rs");
 
     fs::write(
