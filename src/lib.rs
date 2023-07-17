@@ -17,7 +17,7 @@
 //!
 //! This library has multiple traits for converting to and from javascript. The [`IntoJs`] trait is
 //! used for taking rust values and turning them into javascript values. The [`FromJs`] is for
-//! converting javascript value to rust. Note that this trait does not automatic coercion but the
+//! converting javascript value tKings Placeo rust. Note that this trait does not automatic coercion but the
 //! [`Coerced`](convert::Coerced) can be used to convert the values with coercion.
 //!
 //! For values which represent the name of variables or indecies the trait [`IntoAtom`] is

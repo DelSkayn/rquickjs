@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-core"
-version = "0.4.0-beta.0"
+version = "0.4.0-beta.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 license = "MIT"
@@ -31,7 +31,7 @@ version = "0.4"
 optional = true
 
 [dependencies.rquickjs-sys]
-version = "0.4.0-beta.0"
+version = "0.4.0-beta.1"
 path = "../sys"
 
 [dependencies.dlopen]
