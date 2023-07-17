@@ -9,8 +9,6 @@ fn main() {
     #[cfg(feature = "logging")]
     pretty_env_logger::init();
 
-    println!("cargo:rerun-if-changed=build.rs");
-
     let features = [
         "exports",
         "bindgen",
@@ -29,6 +27,7 @@ fn main() {
         "dump-read-object",
     ];
 
+    println!("cargo:rerun-if-changed=build.rs");
     for feature in &features {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }

@@ -56,3 +56,4 @@ features = ["attributes"]
 
 [features]
 phf = ["phf_shared", "phf_generator"]
+bindgen = ["rquickjs-core/bindgen"]

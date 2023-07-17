@@ -61,7 +61,7 @@ phf = ["rquickjs-core/phf", "rquickjs-macro/phf"]
 
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
-bindgen = ["rquickjs-core/bindgen"]
+bindgen = ["rquickjs-core/bindgen", "rquickjs-macro?/bindgen"]
 
 # Enable support of parallel execution
 parallel = ["rquickjs-core/parallel"]
