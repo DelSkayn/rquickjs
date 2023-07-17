@@ -94,7 +94,6 @@ impl_outlive!(
     std::backtrace::Backtrace,
     std::cell::Cell<T>,
     std::cell::RefCell<T>,
-    std::cell::OnceCell<T>,
     std::cell::UnsafeCell<T>,
     std::collections::BTreeMap<K,V>,
     std::collections::BTreeSet<K>,
