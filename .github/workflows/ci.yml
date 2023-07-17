@@ -103,7 +103,7 @@ jobs:
     # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
     strategy:
       matrix:
-        msrv: [1.60.0] # 2021 edition requires 1.56
+        msrv: [1.65.0] # 1.65.0 introduced GAT stabilization
     name: ubuntu / ${{ matrix.msrv }}
     steps:
       - uses: actions/checkout@v3
