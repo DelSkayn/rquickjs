@@ -191,8 +191,8 @@ impl<'js, T> TypedArray<'js, T> {
         T: TypedArrayItem,
     {
         let ctx = &arraybuffer.0.ctx;
-        let ctor: Constructor = dbg!(ctx.globals().get(T::CLASS_NAME)?);
-        dbg!(ctor.construct((arraybuffer,)))
+        let ctor: Constructor = ctx.globals().get(T::CLASS_NAME)?;
+        ctor.construct((arraybuffer,))
     }
 
     pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {

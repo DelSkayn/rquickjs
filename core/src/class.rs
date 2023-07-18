@@ -20,6 +20,7 @@ pub use cell::{
 };
 mod ffi;
 mod trace;
+use rquickjs_sys::JS_VALUE_GET_TAG;
 pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
@@ -161,7 +162,10 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Registers the class `C` into the runtime.
     ///
     /// It is required to call this function on every context in which the class is used before using the class.
-    /// Otherwise the class
+    /// Otherwise the class.
+    ///
+    /// It is fine to call this function multiple times, even on the same context. The class and
+    /// its prototype will only be registered once.
     pub fn register(ctx: &Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         let class_id = C::class_id().get();
@@ -185,13 +189,14 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
             }
         }
 
-        if unsafe {
-            qjs::JS_VALUE_GET_TAG(qjs::JS_GetClassProto(ctx.as_ptr(), class_id)) == qjs::JS_TAG_NULL
-        } {
+        let proto_val = unsafe { qjs::JS_GetClassProto(ctx.as_ptr(), class_id) };
+        if unsafe { JS_VALUE_GET_TAG(proto_val) == qjs::JS_TAG_NULL } {
             if let Some(proto) = C::prototype(ctx)? {
                 let val = proto.into_value().into_js_value();
                 unsafe { qjs::JS_SetClassProto(ctx.as_ptr(), class_id, val) }
             }
+        } else {
+            unsafe { qjs::JS_FreeValue(ctx.as_ptr(), proto_val) }
         }
 
         Ok(())
@@ -337,7 +342,7 @@ mod test {
     };
 
     use crate::{
-        class::{ClassId, JsClass, Trace, Tracer, Writable},
+        class::{ClassId, JsClass, Readable, Trace, Tracer, Writable},
         function::This,
         test_with,
         value::Constructor,
@@ -493,6 +498,39 @@ mod test {
             approx::assert_abs_diff_eq!(v.x, 5.0);
             approx::assert_abs_diff_eq!(v.y, 4.0);
             approx::assert_abs_diff_eq!(v.z, 11.0);
+        })
+    }
+
+    #[test]
+    fn register_twice() {
+        pub struct X;
+
+        impl<'js> Trace<'js> for X {
+            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        impl<'js> JsClass<'js> for X {
+            const NAME: &'static str = "X";
+
+            type Mutable = Readable;
+
+            fn class_id() -> &'static ClassId {
+                static ID: ClassId = ClassId::new();
+                &ID
+            }
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<Object<'js>>> {
+                Object::new(ctx.clone()).map(Some)
+            }
+
+            fn constructor(_ctx: &crate::Ctx<'js>) -> crate::Result<Option<Constructor<'js>>> {
+                Ok(None)
+            }
+        }
+
+        test_with(|ctx| {
+            Class::<X>::register(&ctx).unwrap();
+            Class::<X>::register(&ctx).unwrap();
         })
     }
 }
