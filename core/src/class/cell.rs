@@ -204,7 +204,7 @@ unsafe impl Mutability for Writable {
 ///
 /// Implements a RefCell like borrow checking.
 pub struct JsCell<'js, T: JsClass<'js>> {
-    cell: <T::Mutable as Mutability>::Cell<T>,
+    pub(crate) cell: <T::Mutable as Mutability>::Cell<T>,
 }
 
 impl<'js, T: JsClass<'js>> JsCell<'js, T> {

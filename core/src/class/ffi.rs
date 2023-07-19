@@ -2,7 +2,7 @@ use std::mem;
 
 use crate::{class::JsCell, qjs};
 
-use super::{JsClass, Tracer};
+use super::{JsClass, Mutability, Tracer};
 
 pub(crate) unsafe extern "C" fn finalizer<'js, C: JsClass<'js>>(
     _rt: *mut qjs::JSRuntime,
@@ -20,7 +20,7 @@ pub(crate) unsafe extern "C" fn trace<'js, C: JsClass<'js>>(
     mark_func: qjs::JS_MarkFunc,
 ) {
     let id = C::class_id();
-    let ptr = qjs::JS_GetOpaque(val, id.get()).cast::<C>();
+    let ptr = qjs::JS_GetOpaque(val, id.get()).cast::<JsCell<C>>();
     let tracer = Tracer::from_ffi(rt, mark_func);
-    (*ptr).trace(tracer)
+    <C::Mutable as Mutability>::deref(&(*ptr).cell).trace(tracer)
 }

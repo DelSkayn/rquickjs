@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{markers::Invariant, qjs, Value};
+use crate::{markers::Invariant, qjs, Ctx, Value};
 
 /// A trait for classes for tracing references to quickjs objects.
 ///
@@ -39,17 +39,29 @@ impl<'a, 'js> Tracer<'a, 'js> {
     }
 
     /// Mark a value as being reachable from the current traced object.
-    fn mark(self, value: &Value<'js>) {
+    pub fn mark(self, value: &Value<'js>) {
+        self.mark_ctx(value.ctx());
         let value = value.as_js_value();
         if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(value) } {
             unsafe { qjs::JS_MarkValue(self.rt, value, self.mark_func) };
         }
+    }
+
+    pub fn mark_ctx(self, ctx: &Ctx<'js>) {
+        let ptr = ctx.as_ptr();
+        unsafe { (self.mark_func.unwrap())(self.rt, ptr.cast()) }
     }
 }
 
 impl<'js> Trace<'js> for Value<'js> {
     fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
         tracer.mark(self);
+    }
+}
+
+impl<'js> Trace<'js> for Ctx<'js> {
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        tracer.mark_ctx(self);
     }
 }
 
