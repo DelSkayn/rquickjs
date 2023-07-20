@@ -116,12 +116,47 @@ jobs:
       - name: cargo +${{ matrix.msrv }} check
         run: cargo check
 
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Build cache
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install protobuf-compiler libprotobuf-dev
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run cargo test coverage
+        run: cargo llvm-cov --html --no-default-features --features full-async --workspace
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+            name: code-coverage-report
+            path: target/llvm-cov/html/
+            retention-days: 5
+
   test:
     needs:
       - format
       - doc
       - check
       - msrv
+      - coverage
     strategy:
       fail-fast: ${{ startsWith(github.ref, 'refs/tags/') }}
       matrix:
