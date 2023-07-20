@@ -381,6 +381,22 @@ impl<'js> Value<'js> {
     pub fn get<T: FromJs<'js>>(&self) -> Result<T> {
         T::from_js(self.ctx(), self.clone())
     }
+
+    /// Returns the raw C library javascript value.
+    pub fn as_raw(&self) -> qjs::JSValue {
+        self.value
+    }
+
+    /// Create a value from the C library JavaScript value.
+    ///
+    /// # Safety
+    /// the value cannot be from an unrelated runtime and the value must be owned.
+    /// Quickjs javascript values are reference counted. The drop implementation of this type
+    /// decrements the referece count so the value must have count which won't be decremented
+    /// elsewhere. Use [`qjs::JS_DupValue`] to increment the reference count of the value.
+    pub unsafe fn from_raw(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
+        Self::from_js_value(ctx, value)
+    }
 }
 
 impl<'js> AsRef<Value<'js>> for Value<'js> {

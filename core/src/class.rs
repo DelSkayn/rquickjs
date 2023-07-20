@@ -397,7 +397,7 @@ mod test {
 
         ctx.with(|ctx| {
             let cls = Class::instance(
-                ctx,
+                ctx.clone(),
                 Container {
                     inner: Vec::new(),
                     test: drop_test.clone(),
@@ -408,7 +408,20 @@ mod test {
             cls.borrow_mut().inner.push(cls_clone);
         });
         rt.run_gc();
-        assert!(drop_test.load(Ordering::SeqCst))
+        assert!(drop_test.load(Ordering::SeqCst));
+        ctx.with(|ctx| {
+            let cls = Class::instance(
+                ctx.clone(),
+                Container {
+                    inner: Vec::new(),
+                    test: drop_test.clone(),
+                },
+            )
+            .unwrap();
+            let cls_clone = cls.clone();
+            cls.borrow_mut().inner.push(cls_clone);
+            ctx.globals().set("t", cls).unwrap();
+        });
     }
 
     #[test]

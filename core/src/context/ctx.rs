@@ -82,17 +82,6 @@ impl<'js> Drop for Ctx<'js> {
 unsafe impl Send for Ctx<'_> {}
 
 impl<'js> Ctx<'js> {
-    /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
-    ///
-    /// # Safety
-    /// User must ensure that a lock was acquired over the runtime and that invariant is a unique
-    /// lifetime which can't be coerced to a lifetime outside the scope of the lock of to the
-    /// lifetime of another runtime.
-    pub unsafe fn from_ptr_invariant(ctx: NonNull<qjs::JSContext>, inv: Invariant<'js>) -> Self {
-        unsafe { qjs::JS_DupContext(ctx.as_ptr()) };
-        Ctx { ctx, _marker: inv }
-    }
-
     pub(crate) fn as_ptr(&self) -> *mut qjs::JSContext {
         self.ctx.as_ptr()
     }
@@ -387,6 +376,36 @@ impl<'js> Ctx<'js> {
         F: Future<Output = ()> + 'js,
     {
         unsafe { (*self.get_opaque()).spawner().push(future) }
+    }
+
+    /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
+    ///
+    /// # Safety
+    /// User must ensure that a lock was acquired over the runtime and that invariant is a unique
+    /// lifetime which can't be coerced to a lifetime outside the scope of the lock of to the
+    /// lifetime of another runtime.
+    pub unsafe fn from_raw_invariant(ctx: NonNull<qjs::JSContext>, inv: Invariant<'js>) -> Self {
+        unsafe { qjs::JS_DupContext(ctx.as_ptr()) };
+        Ctx { ctx, _marker: inv }
+    }
+
+    /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
+    ///
+    /// # Safety
+    /// User must ensure that a lock was acquired over the runtime and that invariant is a unique
+    /// lifetime which can't be coerced to a lifetime outside the scope of the lock of to the
+    /// lifetime of another runtime.
+    pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>) -> Self {
+        unsafe { qjs::JS_DupContext(ctx.as_ptr()) };
+        Ctx {
+            ctx,
+            _marker: Invariant::new(),
+        }
+    }
+
+    /// Returns the pointer to the C library context.
+    pub fn as_raw(&self) -> NonNull<qjs::JSContext> {
+        self.ctx
     }
 }
 
