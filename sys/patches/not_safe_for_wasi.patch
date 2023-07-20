@@ -29,3 +29,11 @@ index 48aeffc..cb6c80d 100644
  #if !defined(EMSCRIPTEN)
  /* enable stack limitation */
  #define CONFIG_STACK_CHECK
+@@ -1760,7 +1760,7 @@ static const JSMallocFunctions def_malloc_funcs = {
+     (size_t (*)(const void *))malloc_usable_size,
+ #else
+     /* change this to `NULL,` if compilation fails */
+-    malloc_usable_size,
++    NULL,
+ #endif
+ };
