@@ -91,10 +91,8 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          args: --all --all-targets --features full-async
+      - name: Cargo clippy
+        run: cargo clippy --all --all-targets --features full-async
 
   msrv:
     # Check to see if rquickjs builds on minimal supported rust version.
