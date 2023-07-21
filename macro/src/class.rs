@@ -3,7 +3,10 @@ use proc_macro2::{Ident, Literal, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{Fields, Generics, ItemStruct, Lifetime, LifetimeParam};
 
-use crate::{crate_ident, fields::Field};
+use crate::{
+    common::{crate_ident, Case},
+    fields::Field,
+};
 
 #[derive(Debug, FromMeta, Default)]
 #[darling(default)]
@@ -11,8 +14,10 @@ pub(crate) struct AttrItem {
     freeze: bool,
     #[darling(rename = "crate")]
     crate_: Option<Ident>,
+    rename_accessors: Option<Case>,
 }
 
+/// Add the 'js lifetime to a list of existing lifetimes, if it doesn't already exits.
 pub fn add_js_lifetime(generics: &Generics) -> Generics {
     let mut generics = generics.clone();
     let has_js_lifetime = generics.lifetimes().any(|lt| lt.lifetime.ident == "js");
@@ -53,7 +58,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
     let props = prop_fields
         .iter()
         .enumerate()
-        .map(|(idx, x)| x.expand_property(&lib_crate, idx));
+        .map(|(idx, x)| x.expand_property(&lib_crate, idx, attr.rename_accessors));
 
     let impl_mod = format_ident!("__impl__{}", ident);
 

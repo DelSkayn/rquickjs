@@ -4,7 +4,7 @@ use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use syn::{punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, Visibility};
 
-use crate::{crate_ident, Common};
+use crate::{common::crate_ident, Common};
 
 #[derive(Debug, FromMeta, Default)]
 #[darling(default)]

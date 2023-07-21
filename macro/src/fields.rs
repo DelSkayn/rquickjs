@@ -1,8 +1,11 @@
+use convert_case::Casing;
 use darling::FromField;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use syn::{Attribute, Fields, Ident, Type, Visibility};
+
+use crate::common::Case;
 
 #[derive(Debug, FromField)]
 #[darling(attributes(qjs))]
@@ -58,13 +61,20 @@ impl Field {
         }
     }
 
-    pub fn name(&self, which: usize) -> String {
+    pub fn name(&self, which: usize, case: Option<Case>) -> String {
         if let Some(name) = &self.rename {
             name.clone()
         } else {
             self.ident
                 .clone()
-                .map(|x| format!("{}", x))
+                .map(|x| {
+                    let name = x.to_string();
+                    if let Some(case) = case {
+                        name.to_case(case.to_convert_case())
+                    } else {
+                        name
+                    }
+                })
                 .unwrap_or_else(|| format!("{}", which))
         }
     }
@@ -94,13 +104,23 @@ impl Field {
         }
     }
 
-    pub fn expand_property(&self, lib_crate: &Ident, which: usize) -> TokenStream {
+    pub fn expand_property(
+        &self,
+        lib_crate: &Ident,
+        which: usize,
+        case: Option<Case>,
+    ) -> TokenStream {
+        if !(self.get || self.set) {
+            return TokenStream::new();
+        }
+
+        let field = self
+            .ident
+            .clone()
+            .unwrap_or_else(|| format_ident!("{}", which));
+        let ty = &self.ty;
+
         let accessor = if self.get && self.set {
-            let field = self
-                .ident
-                .clone()
-                .unwrap_or_else(|| format_ident!("{}", which));
-            let ty = &self.ty;
             quote! {
                 #lib_crate::object::Accessor::new(
                     |this: #lib_crate::function::This<#lib_crate::class::OwnedBorrow<'js, Self>>|{
@@ -112,10 +132,6 @@ impl Field {
                 )
             }
         } else if self.get {
-            let field = self
-                .ident
-                .clone()
-                .unwrap_or_else(|| format_ident!("{}", which));
             quote! {
                 #lib_crate::object::Accessor::new_get(
                     |this: #lib_crate::function::This<#lib_crate::class::OwnedBorrow<'js, Self>>|{
@@ -124,11 +140,6 @@ impl Field {
                 )
             }
         } else if self.set {
-            let field = self
-                .ident
-                .clone()
-                .unwrap_or_else(|| format_ident!("{}", which));
-            let ty = &self.ty;
             quote! {
                 #lib_crate::object::Accessor::new_set(
                     |mut this: #lib_crate::function::This<#lib_crate::class::OwnedBorrowMut<'js, Self>>, v: #ty|{
@@ -140,7 +151,7 @@ impl Field {
             return TokenStream::new();
         };
         let prop_config = self.expand_prop_config();
-        let name = self.name(which);
+        let name = self.name(which, case);
         quote! {
             proto.prop(#name, #accessor #prop_config)?;
         }

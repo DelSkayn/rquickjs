@@ -3,7 +3,7 @@ use proc_macro_error::abort;
 use quote::quote;
 use syn::{Data, DataStruct, DeriveInput};
 
-use crate::{class::add_js_lifetime, crate_ident, fields::Field};
+use crate::{class::add_js_lifetime, common::crate_ident, fields::Field};
 
 pub(crate) fn expand(input: DeriveInput) -> TokenStream {
     let DeriveInput {

@@ -1,12 +1,18 @@
 use std::collections::HashMap;
 
+use convert_case::Casing;
 use darling::{FromAttributes, FromMeta};
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_error::{abort, emit_warning};
 use quote::{format_ident, quote};
 use syn::{spanned::Spanned, Attribute, Block, ImplItemFn, ItemImpl, Signature, Type, Visibility};
 
-use crate::{class::add_js_lifetime, crate_ident, function::JsFunction, Common};
+use crate::{
+    class::add_js_lifetime,
+    common::{crate_ident, Case},
+    function::JsFunction,
+    Common,
+};
 
 #[derive(Debug, FromMeta, Default)]
 #[darling(default)]
@@ -14,6 +20,9 @@ pub(crate) struct AttrItem {
     prefix: Option<String>,
     #[darling(rename = "crate")]
     crate_: Option<Ident>,
+    rename_methods: Option<Case>,
+    rename_accessors: Option<Case>,
+    rename_constants: Option<Case>,
 }
 
 #[derive(Debug, FromAttributes, Default, Clone)]
@@ -121,11 +130,16 @@ impl JsMethod {
     }
 
     /// The name on of this method on the javascript side.
-    pub fn name(&self) -> String {
+    pub fn name(&self, case: Option<Case>) -> String {
         if let Some(x) = self.parse_attrs.rename.clone() {
             x
         } else {
-            format!("{}", self.function.name)
+            let res = self.function.name.to_string();
+            if let Some(case) = case {
+                res.to_case(case.to_convert_case())
+            } else {
+                res
+            }
         }
     }
 
@@ -179,11 +193,12 @@ impl JsMethod {
         common: &Common,
         self_ty: &Type,
         object_name: &Ident,
+        case: Option<Case>,
     ) -> TokenStream {
         if self.parse_attrs.skip {
             return TokenStream::new();
         }
-        let func_name_str = self.name();
+        let func_name_str = self.name(case);
         let js_func_name = self.function.expand_carry_type_name(common);
         quote! {
             #object_name.set(#func_name_str,<#self_ty>::#js_func_name)?;
@@ -228,7 +243,7 @@ impl Accessor {
         res
     }
 
-    fn expand_apply_to_proto(&self, lib_crate: &Ident) -> TokenStream {
+    fn expand_apply_to_proto(&self, lib_crate: &Ident, case: Option<Case>) -> TokenStream {
         let get_common = Common {
             prefix: "__impl_get_".to_string(),
             lib_crate: lib_crate.clone(),
@@ -243,7 +258,7 @@ impl Accessor {
                 let configurable = get.parse_attrs.configurable || set.parse_attrs.configurable;
                 let enumerable = get.parse_attrs.enumerable || set.parse_attrs.enumerable;
 
-                let name = get.name();
+                let name = get.name(case);
 
                 let configurable = configurable
                     .then(|| quote!(.configurable()))
@@ -264,7 +279,7 @@ impl Accessor {
                 let configurable = get.parse_attrs.configurable;
                 let enumerable = get.parse_attrs.enumerable;
 
-                let name = get.name();
+                let name = get.name(case);
 
                 let configurable = configurable
                     .then(|| quote!(.configurable()))
@@ -284,7 +299,7 @@ impl Accessor {
                 let configurable = set.parse_attrs.configurable;
                 let enumerable = set.parse_attrs.enumerable;
 
-                let name = set.name();
+                let name = set.name(case);
 
                 let configurable = configurable
                     .then(|| quote!(.configurable()))
@@ -348,27 +363,29 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
             syn::ImplItem::Fn(item) => {
                 let function = JsMethod::parse_impl_fn(item, &self_ty);
                 if function.parse_attrs.get {
-                    let access = accessors.entry(function.name()).or_insert(Accessor {
-                        get: None,
-                        set: None,
-                    });
+                    let access = accessors
+                        .entry(function.name(attr.rename_accessors))
+                        .or_insert(Accessor {
+                            get: None,
+                            set: None,
+                        });
                     if let Some(first) = access.get.take() {
                         let first_span = first.attr_span;
                         emit_warning!(
-                            function.attr_span, "Redefined a getter for `{}`.", function.name();
+                            function.attr_span, "Redefined a getter for `{}`.", function.name(attr.rename_accessors);
                             hint = first_span => "Getter first defined here."
                         );
                     }
                     access.get = Some(function);
                 } else if function.parse_attrs.set {
-                    let access = accessors.entry(function.name()).or_insert(Accessor {
+                    let access = accessors.entry(function.name(None)).or_insert(Accessor {
                         get: None,
                         set: None,
                     });
                     if let Some(first) = access.set.take() {
                         let first_span = first.attr_span;
                         emit_warning!(
-                            function.attr_span, "Redefined a setter for `{}`", function.name();
+                            function.attr_span, "Redefined a setter for `{}`", function.name(attr.rename_accessors);
                             hint = first_span => "Setter first defined here"
                         );
                     }
@@ -418,12 +435,13 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
 
     let proto_ident = format_ident!("_proto");
     let function_apply_proto = functions.iter().filter_map(|func| {
-        (!func.parse_attrs.r#static)
-            .then(|| func.expand_apply_to_object(&common, &self_ty, &proto_ident))
+        (!func.parse_attrs.r#static).then(|| {
+            func.expand_apply_to_object(&common, &self_ty, &proto_ident, attr.rename_methods)
+        })
     });
     let accessor_apply_proto = accessors
         .values()
-        .map(|access| access.expand_apply_to_proto(&common.lib_crate));
+        .map(|access| access.expand_apply_to_proto(&common.lib_crate, attr.rename_accessors));
 
     let constructor_ident = format_ident!("constr");
 
@@ -433,9 +451,14 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         let js_added_generics = add_js_lifetime(&generics);
 
         let static_function_apply = functions.iter().filter_map(|func| {
-            func.parse_attrs
-                .r#static
-                .then(|| func.expand_apply_to_object(&common, &self_ty, &constructor_ident))
+            func.parse_attrs.r#static.then(|| {
+                func.expand_apply_to_object(
+                    &common,
+                    &self_ty,
+                    &constructor_ident,
+                    attr.rename_methods,
+                )
+            })
         });
 
         quote! {
