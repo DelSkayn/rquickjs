@@ -54,7 +54,7 @@ impl<'js> Function<'js> {
 
         let cls = Class::instance(ctx, RustFunction(func))?;
         debug_assert!(cls.is_function());
-        Function(cls.into_object()).with_length(F::param_requirements().min())
+        Function(cls.into_inner()).with_length(F::param_requirements().min())
     }
 
     /// Call the function with given arguments.
@@ -216,7 +216,7 @@ impl<'js> Constructor<'js> {
                 .set_prototype(proto.as_ref())?;
             Ok(res)
         });
-        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_object())
+        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_inner())
             .with_constructor(true);
         unsafe {
             qjs::JS_SetConstructor(
@@ -257,7 +257,7 @@ impl<'js> Constructor<'js> {
                 .set_prototype(proto.as_ref())?;
             Ok(res)
         });
-        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_object())
+        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_inner())
             .with_constructor(true);
         unsafe {
             qjs::JS_SetConstructor(ctx.as_ptr(), func.as_js_value(), prototype.as_js_value())

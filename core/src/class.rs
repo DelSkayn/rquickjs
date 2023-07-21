@@ -51,6 +51,7 @@ pub trait JsClass<'js>: Trace<'js> {
 }
 
 /// A object which is instance of a rust class.
+#[repr(transparent)]
 pub struct Class<'js, C: JsClass<'js>>(pub(crate) Object<'js>, PhantomData<C>);
 
 impl<'js, C: JsClass<'js>> Clone for Class<'js, C> {
@@ -271,20 +272,39 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Turns the class back into a generic object.
     #[inline]
-    pub fn into_object(self) -> Object<'js> {
+    pub fn into_inner(self) -> Object<'js> {
         self.0
     }
 
-    /// Converts a generic object into a class if the object is of the right class.
+    /// Turns the class back into a generic object.
     #[inline]
-    pub fn from_object(object: Object<'js>) -> Option<Self> {
-        object.into_class().ok()
+    pub fn as_inner(&self) -> &Object<'js> {
+        &self.0
+    }
+
+    /// Convert from value.
+    #[inline]
+    pub fn from_value(value: Value<'js>) -> Result<Self> {
+        if let Some(cls) = value.clone().into_object().and_then(Self::from_object) {
+            return Ok(cls);
+        }
+        Err(Error::FromJs {
+            from: value.type_name(),
+            to: C::NAME,
+            message: None,
+        })
     }
 
     /// Turn the class into a value.
     #[inline]
     pub fn into_value(self) -> Value<'js> {
         self.0.into_value()
+    }
+
+    /// Converts a generic object into a class if the object is of the right class.
+    #[inline]
+    pub fn from_object(object: Object<'js>) -> Option<Self> {
+        object.into_class().ok()
     }
 }
 
@@ -311,6 +331,17 @@ impl<'js> Object<'js> {
             Ok(Class(self, PhantomData))
         } else {
             Err(self)
+        }
+    }
+
+    /// Turn the object into the class if it is an instance of that class.
+    pub fn as_class<C: JsClass<'js>>(&self) -> Option<&Class<'js, C>> {
+        if self.instance_of::<C>() {
+            // SAFETY:
+            // Safe bacause class is a transparent wrapper
+            unsafe { Some(std::mem::transmute::<&Object<'js>, &Class<'js, C>>(self)) }
+        } else {
+            None
         }
     }
 }
