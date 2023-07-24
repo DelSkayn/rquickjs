@@ -3,8 +3,18 @@ use proc_macro::TokenStream as TokenStream1;
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use syn::{parse_macro_input, DeriveInput, Item};
 
+#[cfg(test)]
+macro_rules! assert_eq_tokens {
+    ($actual:expr, $expected:expr) => {
+        let actual = $actual.to_string();
+        let expected = $expected.to_string();
+        difference::assert_diff!(&actual, &expected, " ", 0);
+    };
+}
+
 mod class;
 mod common;
+mod embed;
 mod fields;
 mod function;
 mod method;
@@ -99,4 +109,11 @@ pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 pub fn trace(stream: TokenStream1) -> TokenStream1 {
     let derive_input = parse_macro_input!(stream as DeriveInput);
     trace::expand(derive_input).into()
+}
+
+#[proc_macro_error]
+#[proc_macro]
+pub fn embed(item: TokenStream1) -> TokenStream1 {
+    let embed_modules: embed::EmbedModules = parse_macro_input!(item);
+    embed::embed(embed_modules).into()
 }

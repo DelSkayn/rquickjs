@@ -127,7 +127,7 @@ pub use rquickjs_core::*;
 
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
 #[cfg(feature = "macro")]
-pub use rquickjs_macro::{class, function, methods};
+pub use rquickjs_macro::{class, embed, function, methods};
 
 pub mod class {
     //! Javascript classes defined from rust.
