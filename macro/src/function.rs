@@ -4,7 +4,7 @@ use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use syn::{punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, Visibility};
 
-use crate::{common::crate_ident, Common};
+use crate::common::{crate_ident, BASE_PREFIX};
 
 #[derive(Debug, FromMeta, Default)]
 #[darling(default)]
@@ -21,16 +21,14 @@ pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
         ref vis, ref sig, ..
     } = item;
 
-    let common = Common {
-        prefix: attr.prefix.unwrap_or_else(|| "js_".to_string()),
-        lib_crate: attr.crate_.unwrap_or_else(crate_ident),
-    };
+    let prefix = attr.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
+    let lib_crate = attr.crate_.unwrap_or_else(crate_ident);
 
     let func = JsFunction::new(vis.clone(), sig, None);
 
-    let carry_type = func.expand_carry_type(&common);
-    let impl_ = func.expand_to_js_function_impl(&common);
-    let into_js = func.expand_into_js_impl(&common);
+    let carry_type = func.expand_carry_type(&prefix);
+    let impl_ = func.expand_to_js_function_impl(&prefix, &lib_crate);
+    let into_js = func.expand_into_js_impl(&prefix, &lib_crate);
 
     quote! {
         #item
@@ -98,13 +96,13 @@ impl JsFunction {
         }
     }
 
-    pub fn expand_carry_type_name(&self, common: &Common) -> Ident {
-        format_ident!("{}{}", common.prefix, self.name)
+    pub fn expand_carry_type_name(&self, prefix: &str) -> Ident {
+        format_ident!("{}{}", prefix, self.name)
     }
     /// Expands the type which will carry the function implementations.
-    pub fn expand_carry_type(&self, common: &Common) -> TokenStream {
+    pub fn expand_carry_type(&self, prefix: &str) -> TokenStream {
         let vis = &self.vis;
-        let name = self.expand_carry_type_name(common);
+        let name = self.expand_carry_type_name(prefix);
         quote! {
             #[allow(non_camel_case_types)]
             #vis struct #name;
@@ -112,9 +110,8 @@ impl JsFunction {
     }
 
     /// Expands the type which will carry the function implementations.
-    pub fn expand_into_js_impl(&self, common: &Common) -> TokenStream {
-        let js_name = self.expand_carry_type_name(common);
-        let lib_crate = &common.lib_crate;
+    pub fn expand_into_js_impl(&self, prefix: &str, lib_crate: &Ident) -> TokenStream {
+        let js_name = self.expand_carry_type_name(prefix);
         quote! {
             impl<'js> #lib_crate::IntoJs<'js> for #js_name{
                 fn into_js(self, ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
@@ -124,8 +121,7 @@ impl JsFunction {
         }
     }
 
-    pub fn expand_to_js_function_body(&self, common: &Common) -> TokenStream {
-        let lib_crate = &common.lib_crate;
+    pub fn expand_to_js_function_body(&self, lib_crate: &Ident) -> TokenStream {
         let arg_extract = self.params.expand_extract(lib_crate);
         let arg_apply = self.params.expand_apply();
         let rust_function = &self.rust_function;
@@ -149,9 +145,8 @@ impl JsFunction {
         }
     }
 
-    pub fn expand_to_js_function_impl(&self, common: &Common) -> TokenStream {
-        let body = self.expand_to_js_function_body(common);
-        let lib_crate = &common.lib_crate;
+    pub fn expand_to_js_function_impl(&self, prefix: &str, lib_crate: &Ident) -> TokenStream {
+        let body = self.expand_to_js_function_body(lib_crate);
         let arg_types = self.params.expand_type(lib_crate);
         let arg_type_requirements = arg_types.iter().map(|ty| {
             quote! {
@@ -159,7 +154,7 @@ impl JsFunction {
             }
         });
         let arg_type_tuple = quote!((#(#arg_types,)*));
-        let js_name = self.expand_carry_type_name(common);
+        let js_name = self.expand_carry_type_name(prefix);
 
         quote! {
             impl<'js> #lib_crate::function::IntoJsFunc<'js,#arg_type_tuple> for #js_name{

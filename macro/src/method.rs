@@ -8,10 +8,10 @@ use quote::{format_ident, quote};
 use syn::{spanned::Spanned, Attribute, Block, ImplItemFn, ItemImpl, Signature, Type, Visibility};
 
 use crate::{
-    class::add_js_lifetime,
-    common::{crate_ident, Case},
+    common::{
+        add_js_lifetime, crate_ident, Case, BASE_PREFIX, GET_PREFIX, IMPL_PREFIX, SET_PREFIX,
+    },
     function::JsFunction,
-    Common,
 };
 
 #[derive(Debug, FromMeta, Default)]
@@ -154,13 +154,13 @@ impl JsMethod {
         }
     }
 
-    pub(crate) fn expand_js_impl(&self, common: &Common) -> TokenStream {
+    pub(crate) fn expand_js_impl(&self, prefix: &str, lib_crate: &Ident) -> TokenStream {
         if self.parse_attrs.skip {
             return TokenStream::new();
         }
-        let carry_type = self.function.expand_carry_type(common);
-        let impl_ = self.function.expand_to_js_function_impl(common);
-        let into_js = self.function.expand_into_js_impl(common);
+        let carry_type = self.function.expand_carry_type(prefix);
+        let impl_ = self.function.expand_to_js_function_impl(prefix, lib_crate);
+        let into_js = self.function.expand_into_js_impl(prefix, lib_crate);
 
         quote! {
             #carry_type
@@ -173,14 +173,14 @@ impl JsMethod {
 
     pub(crate) fn expand_associated_type(
         &self,
-        associated_common: &Common,
-        common: &Common,
+        associated_prefix: &str,
+        impl_prefix: &str,
     ) -> TokenStream {
         if self.parse_attrs.skip {
             return TokenStream::new();
         }
-        let associated_name = self.function.expand_carry_type_name(associated_common);
-        let impl_name = self.function.expand_carry_type_name(common);
+        let associated_name = self.function.expand_carry_type_name(associated_prefix);
+        let impl_name = self.function.expand_carry_type_name(impl_prefix);
         let vis = &self.vis;
 
         quote! {
@@ -190,7 +190,7 @@ impl JsMethod {
 
     pub(crate) fn expand_apply_to_object(
         &self,
-        common: &Common,
+        prefix: &str,
         self_ty: &Type,
         object_name: &Ident,
         case: Option<Case>,
@@ -199,7 +199,7 @@ impl JsMethod {
             return TokenStream::new();
         }
         let func_name_str = self.name(case);
-        let js_func_name = self.function.expand_carry_type_name(common);
+        let js_func_name = self.function.expand_carry_type_name(prefix);
         quote! {
             #object_name.set(#func_name_str,<#self_ty>::#js_func_name)?;
         }
@@ -223,36 +223,18 @@ impl Accessor {
         res
     }
 
-    fn expand_js_impl(&self, common: &Common) -> TokenStream {
-        let get_common = Common {
-            prefix: "__impl_get_".to_string(),
-            lib_crate: common.lib_crate.clone(),
-        };
-        let set_common = Common {
-            prefix: "__impl_set_".to_string(),
-            lib_crate: common.lib_crate.clone(),
-        };
-
+    fn expand_js_impl(&self, lib_crate: &Ident) -> TokenStream {
         let mut res = TokenStream::new();
         if let Some(ref g) = self.get {
-            res.extend(g.expand_js_impl(&get_common));
+            res.extend(g.expand_js_impl(GET_PREFIX, lib_crate));
         }
         if let Some(ref s) = self.set {
-            res.extend(s.expand_js_impl(&set_common));
+            res.extend(s.expand_js_impl(SET_PREFIX, lib_crate));
         }
         res
     }
 
     fn expand_apply_to_proto(&self, lib_crate: &Ident, case: Option<Case>) -> TokenStream {
-        let get_common = Common {
-            prefix: "__impl_get_".to_string(),
-            lib_crate: lib_crate.clone(),
-        };
-        let set_common = Common {
-            prefix: "__impl_set_".to_string(),
-            lib_crate: lib_crate.clone(),
-        };
-
         match (self.get.as_ref(), self.set.as_ref()) {
             (Some(get), Some(set)) => {
                 let configurable = get.parse_attrs.configurable || set.parse_attrs.configurable;
@@ -267,8 +249,8 @@ impl Accessor {
                     .then(|| quote!(.enumerable()))
                     .unwrap_or_default();
 
-                let get_name = get.function.expand_carry_type_name(&get_common);
-                let set_name = set.function.expand_carry_type_name(&set_common);
+                let get_name = get.function.expand_carry_type_name(GET_PREFIX);
+                let set_name = set.function.expand_carry_type_name(SET_PREFIX);
                 quote! {_proto.prop(#name,
                         #lib_crate::object::Accessor::new(#get_name,#set_name)
                         #configurable
@@ -288,7 +270,7 @@ impl Accessor {
                     .then(|| quote!(.enumerable()))
                     .unwrap_or_default();
 
-                let get_name = get.function.expand_carry_type_name(&get_common);
+                let get_name = get.function.expand_carry_type_name(GET_PREFIX);
                 quote! {_proto.prop(#name,
                         #lib_crate::object::Accessor::new_get(#get_name)
                         #configurable
@@ -308,7 +290,7 @@ impl Accessor {
                     .then(|| quote!(.enumerable()))
                     .unwrap_or_default();
 
-                let set_name = set.function.expand_carry_type_name(&set_common);
+                let set_name = set.function.expand_carry_type_name(GET_PREFIX);
                 quote! {_proto.prop(#name,
                         #lib_crate::object::Accessor::new_set(#set_name)
                         #configurable
@@ -347,10 +329,8 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         abort!(u, "unsafe impl's are not supported.")
     }
 
-    let common = Common {
-        prefix: attr.prefix.unwrap_or_else(|| "js_".to_string()),
-        lib_crate: attr.crate_.unwrap_or_else(crate_ident),
-    };
+    let prefix = attr.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
+    let lib_crate = attr.crate_.unwrap_or_else(crate_ident);
 
     let mut accessors = HashMap::new();
     let mut functions = Vec::new();
@@ -408,52 +388,45 @@ pub(crate) fn expand(attr: AttrItem, item: ItemImpl) -> TokenStream {
         }
     }
 
-    let func_common = Common {
-        prefix: "__impl_".to_string(),
-        lib_crate: common.lib_crate.clone(),
-    };
-
     let function_impls = functions.iter().map(|func| func.expand_impl());
     let accessor_impls = accessors.values().map(|access| access.expand_impl());
     let constructor_impl = constructor.as_ref().map(|constr| constr.expand_impl());
 
     let function_js_impls = functions
         .iter()
-        .map(|func| func.expand_js_impl(&func_common));
+        .map(|func| func.expand_js_impl(IMPL_PREFIX, &lib_crate));
     let accessor_js_impls = accessors
         .values()
-        .map(|access| access.expand_js_impl(&common));
+        .map(|access| access.expand_js_impl(&lib_crate));
     let constructor_js_impl = constructor
         .as_ref()
-        .map(|constr| constr.expand_js_impl(&func_common));
-
-    let lib_crate = &common.lib_crate;
+        .map(|constr| constr.expand_js_impl(IMPL_PREFIX, &lib_crate));
 
     let associated_types = functions
         .iter()
-        .map(|func| func.expand_associated_type(&common, &func_common));
+        .map(|func| func.expand_associated_type(&prefix, IMPL_PREFIX));
 
     let proto_ident = format_ident!("_proto");
     let function_apply_proto = functions.iter().filter_map(|func| {
         (!func.parse_attrs.r#static).then(|| {
-            func.expand_apply_to_object(&common, &self_ty, &proto_ident, attr.rename_methods)
+            func.expand_apply_to_object(&prefix, &self_ty, &proto_ident, attr.rename_methods)
         })
     });
     let accessor_apply_proto = accessors
         .values()
-        .map(|access| access.expand_apply_to_proto(&common.lib_crate, attr.rename_accessors));
+        .map(|access| access.expand_apply_to_proto(&lib_crate, attr.rename_accessors));
 
     let constructor_ident = format_ident!("constr");
 
     let constructor_create = if let Some(c) = constructor.as_ref() {
-        let name = c.function.expand_carry_type_name(&func_common);
+        let name = c.function.expand_carry_type_name(IMPL_PREFIX);
 
         let js_added_generics = add_js_lifetime(&generics);
 
         let static_function_apply = functions.iter().filter_map(|func| {
             func.parse_attrs.r#static.then(|| {
                 func.expand_apply_to_object(
-                    &common,
+                    &prefix,
                     &self_ty,
                     &constructor_ident,
                     attr.rename_methods,

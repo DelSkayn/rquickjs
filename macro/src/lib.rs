@@ -1,6 +1,5 @@
 use darling::{export::NestedMeta, FromMeta};
 use proc_macro::TokenStream as TokenStream1;
-use proc_macro2::Ident;
 use proc_macro_error::{abort, abort_call_site, proc_macro_error};
 use syn::{parse_macro_input, DeriveInput, Item};
 
@@ -10,11 +9,6 @@ mod fields;
 mod function;
 mod method;
 mod trace;
-
-struct Common {
-    pub prefix: String,
-    pub lib_crate: Ident,
-}
 
 #[proc_macro_attribute]
 #[proc_macro_error]

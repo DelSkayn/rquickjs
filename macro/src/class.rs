@@ -1,10 +1,10 @@
 use darling::FromMeta;
-use proc_macro2::{Ident, Literal, Span, TokenStream};
+use proc_macro2::{Ident, Literal, TokenStream};
 use quote::{format_ident, quote};
-use syn::{Fields, Generics, ItemStruct, Lifetime, LifetimeParam};
+use syn::{Fields, ItemStruct};
 
 use crate::{
-    common::{crate_ident, Case},
+    common::{add_js_lifetime, crate_ident, Case},
     fields::Field,
 };
 
@@ -15,22 +15,6 @@ pub(crate) struct AttrItem {
     #[darling(rename = "crate")]
     crate_: Option<Ident>,
     rename_accessors: Option<Case>,
-}
-
-/// Add the 'js lifetime to a list of existing lifetimes, if it doesn't already exits.
-pub fn add_js_lifetime(generics: &Generics) -> Generics {
-    let mut generics = generics.clone();
-    let has_js_lifetime = generics.lifetimes().any(|lt| lt.lifetime.ident == "js");
-    if !has_js_lifetime {
-        generics.params.insert(
-            0,
-            syn::GenericParam::Lifetime(LifetimeParam::new(Lifetime::new(
-                "'js",
-                Span::call_site(),
-            ))),
-        );
-    }
-    generics
 }
 
 pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
