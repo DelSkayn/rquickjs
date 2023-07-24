@@ -30,7 +30,7 @@ macro_rules! cstr {
             let mut i = 0;
             while i < s.len() {
                 if s[i] == 0 {
-                    panic!("cstr string contained null character")
+                    panic!("C-str string contained null character")
                 }
                 i += 1;
             }

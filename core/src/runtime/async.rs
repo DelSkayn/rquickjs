@@ -191,7 +191,7 @@ impl AsyncRuntime {
         let job_res = lock.execute_pending_job().map_err(|e| {
             let ptr =
                 NonNull::new(e).expect("executing pending job returned a null context on error");
-            AsyncJobException(AsyncContext::from_raw(ptr, self.clone()))
+            AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
         })?;
         if job_res {
             return Ok(true);
@@ -210,7 +210,7 @@ impl AsyncRuntime {
             match lock.execute_pending_job().map_err(|e| {
                 let ptr = NonNull::new(e)
                     .expect("executing pending job returned a null context on error");
-                AsyncJobException(AsyncContext::from_raw(ptr, self.clone()))
+                AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
             }) {
                 Err(e) => {
                     // SAFETY: Runtime is already locked so creating a context is safe.

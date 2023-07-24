@@ -21,8 +21,18 @@ impl Clone for Context {
 }
 
 impl Context {
-    pub(crate) fn from_raw(ctx: NonNull<qjs::JSContext>, rt: Runtime) -> Self {
+    /// Create a unused context from a raw context pointer.
+    ///
+    /// # Safety
+    /// Pointer must point to a context from the given runtime.
+    /// The context must also have valid reference count, one which can be decremented when this
+    /// object is dropped without going negative.
+    pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: Runtime) -> Self {
         Context { ctx, rt }
+    }
+
+    pub fn as_raw(&self) -> NonNull<qjs::JSContext> {
+        self.ctx
     }
 
     /// Creates a base context with only the required functions registered.

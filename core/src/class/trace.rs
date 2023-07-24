@@ -47,6 +47,7 @@ impl<'a, 'js> Tracer<'a, 'js> {
         }
     }
 
+    /// Mark the ctx object, this function should be called on any bare ctx objects.
     pub fn mark_ctx(self, ctx: &Ctx<'js>) {
         let ptr = ctx.as_ptr();
         unsafe { (self.mark_func.unwrap())(self.rt, ptr.cast()) }

@@ -4,6 +4,7 @@ use crate::{class::JsCell, qjs};
 
 use super::{JsClass, Mutability, Tracer};
 
+/// FFI finalizer, destroying the object once it is delete by the Gc.
 pub(crate) unsafe extern "C" fn finalizer<'js, C: JsClass<'js>>(
     _rt: *mut qjs::JSRuntime,
     val: qjs::JSValue,
@@ -14,6 +15,7 @@ pub(crate) unsafe extern "C" fn finalizer<'js, C: JsClass<'js>>(
     mem::drop(inst);
 }
 
+/// FFI tracing function.
 pub(crate) unsafe extern "C" fn trace<'js, C: JsClass<'js>>(
     rt: *mut qjs::JSRuntime,
     val: qjs::JSValue,

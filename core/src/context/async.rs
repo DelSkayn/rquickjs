@@ -147,7 +147,13 @@ impl Clone for AsyncContext {
 }
 
 impl AsyncContext {
-    pub(crate) fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
+    /// Create a async context form a raw context pointer.
+    ///
+    /// # Safety
+    /// The context must be of the correct runtime.
+    /// The context must also have valid reference count, one which can be decremented when this
+    /// object is dropped without going negative.
+    pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
         AsyncContext { ctx, rt }
     }
 

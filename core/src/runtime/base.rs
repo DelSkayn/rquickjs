@@ -159,10 +159,12 @@ impl Runtime {
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
         self.inner.lock().execute_pending_job().map_err(|e| {
-            JobException(Context::from_raw(
-                NonNull::new(e).expect("quickjs returned null ptr for job error"),
-                self.clone(),
-            ))
+            JobException(unsafe {
+                Context::from_raw(
+                    NonNull::new(e).expect("quickjs returned null ptr for job error"),
+                    self.clone(),
+                )
+            })
         })
     }
 }
