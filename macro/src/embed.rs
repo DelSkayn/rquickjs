@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::common::crate_ident;
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
@@ -136,7 +137,7 @@ pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
         quote!((#key, #value))
     });
 
-    let lib_crate = super::config::lib_crate();
+    let lib_crate = crate_ident();
     let lib_crate = format_ident!("{}", lib_crate);
     quote! {
         #lib_crate::loader::bundle::Bundle(& #lib_crate::phf::Map{
@@ -149,8 +150,6 @@ pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
 
 #[cfg(not(feature = "phf"))]
 pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
-    use crate::common::crate_ident;
-
     let lib_crate = crate_ident();
     let lib_crate = format_ident!("{}", lib_crate);
     let entries = modules.iter().map(|(name, data)| {
