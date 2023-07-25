@@ -49,7 +49,7 @@ impl Default for NativeLoader {
 }
 
 impl Loader for NativeLoader {
-    fn load<'js>(&mut self, _ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
+    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
         use dlopen::raw::Library;
 
         if !check_extensions(path, &self.extensions) {

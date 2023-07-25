@@ -1,0 +1,351 @@
+use darling::FromMeta;
+use proc_macro2::{Ident, TokenStream};
+use proc_macro_error::abort;
+use quote::{format_ident, quote};
+use syn::{punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, Visibility};
+
+use crate::common::{crate_ident, BASE_PREFIX};
+
+#[derive(Debug, FromMeta, Default)]
+#[darling(default)]
+pub(crate) struct AttrItem {
+    #[darling(rename = "crate")]
+    crate_: Option<Ident>,
+    /// The ident prefix, defaults to 'js_'.
+    prefix: Option<String>,
+    rename: Option<String>,
+}
+
+pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
+    let ItemFn {
+        ref vis, ref sig, ..
+    } = item;
+
+    let prefix = attr.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
+    let lib_crate = attr.crate_.unwrap_or_else(crate_ident);
+
+    let func = JsFunction::new(vis.clone(), sig, None);
+
+    let carry_type = func.expand_carry_type(&prefix);
+    let impl_ = func.expand_to_js_function_impl(&prefix, &lib_crate);
+    let into_js = func.expand_into_js_impl(&prefix, &lib_crate);
+
+    quote! {
+        #item
+
+        #carry_type
+
+        #impl_
+
+        #into_js
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct JsFunction {
+    pub vis: Visibility,
+    pub name: Ident,
+    pub rust_function: TokenStream,
+    pub is_async: bool,
+    pub params: JsParams,
+}
+
+impl JsFunction {
+    pub fn new(vis: Visibility, sig: &Signature, self_type: Option<&Type>) -> Self {
+        let Signature {
+            ref asyncness,
+            ref unsafety,
+            ref abi,
+            ref variadic,
+            ref ident,
+            ref inputs,
+            ..
+        } = sig;
+
+        if let Some(unsafe_) = unsafety {
+            abort!(
+                unsafe_,
+                "implementing javascript callbacks for unsafe functions is not allowed."
+            )
+        }
+        if let Some(abi) = abi {
+            abort!(
+                abi,
+                "implementing javascript callbacks functions with an non rust abi is not supported."
+            )
+        }
+        if let Some(variadic) = variadic {
+            abort!(variadic,"implementing javascript callbacks for functions with variadic params is not supported.")
+        }
+        let is_async = asyncness.is_some();
+
+        let params = JsParams::from_input(inputs, self_type);
+
+        let rust_function = if let Some(self_type) = self_type {
+            quote! {  <#self_type >::#ident }
+        } else {
+            quote!( #ident )
+        };
+
+        JsFunction {
+            vis,
+            name: ident.clone(),
+            is_async,
+            rust_function,
+            params,
+        }
+    }
+
+    pub fn expand_carry_type_name(&self, prefix: &str) -> Ident {
+        format_ident!("{}{}", prefix, self.name)
+    }
+    /// Expands the type which will carry the function implementations.
+    pub fn expand_carry_type(&self, prefix: &str) -> TokenStream {
+        let vis = &self.vis;
+        let name = self.expand_carry_type_name(prefix);
+        quote! {
+            #[allow(non_camel_case_types)]
+            #vis struct #name;
+        }
+    }
+
+    /// Expands the type which will carry the function implementations.
+    pub fn expand_into_js_impl(&self, prefix: &str, lib_crate: &Ident) -> TokenStream {
+        let js_name = self.expand_carry_type_name(prefix);
+        quote! {
+            impl<'js> #lib_crate::IntoJs<'js> for #js_name{
+                fn into_js(self, ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                    #lib_crate::Function::new(ctx.clone(),#js_name)?.into_js(ctx)
+                }
+            }
+        }
+    }
+
+    pub fn expand_to_js_function_body(&self, lib_crate: &Ident) -> TokenStream {
+        let arg_extract = self.params.expand_extract(lib_crate);
+        let arg_apply = self.params.expand_apply();
+        let rust_function = &self.rust_function;
+
+        if self.is_async {
+            quote! {
+                #arg_extract
+
+                let fut = async move {
+                    #rust_function(#arg_apply).await
+                };
+
+                #lib_crate::IntoJs::into_js(#lib_crate::promise::Promised(fut), &ctx)
+            }
+        } else {
+            quote! {
+                #arg_extract
+                let res = #rust_function(#arg_apply);
+                #lib_crate::IntoJs::into_js(res,&ctx)
+            }
+        }
+    }
+
+    pub fn expand_to_js_function_impl(&self, prefix: &str, lib_crate: &Ident) -> TokenStream {
+        let body = self.expand_to_js_function_body(lib_crate);
+        let arg_types = self.params.expand_type(lib_crate);
+        let arg_type_requirements = arg_types.iter().map(|ty| {
+            quote! {
+                .combine(<#ty as #lib_crate::function::FromParam>::param_requirement())
+            }
+        });
+        let arg_type_tuple = quote!((#(#arg_types,)*));
+        let js_name = self.expand_carry_type_name(prefix);
+
+        quote! {
+            impl<'js> #lib_crate::function::IntoJsFunc<'js,#arg_type_tuple> for #js_name{
+
+                fn param_requirements() -> #lib_crate::function::ParamRequirement {
+                    #lib_crate::function::ParamRequirement::none()
+                    #(#arg_type_requirements)*
+                }
+
+                fn call<'a>(&self, params: #lib_crate::function::Params<'a,'js>) -> #lib_crate::Result<#lib_crate::Value<'js>>{
+                    let ctx = params.ctx().clone();
+                    params.check_params(Self::param_requirements())?;
+                    let mut _params = params.access();
+                    #body
+                }
+
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct JsParams {
+    pub params: Vec<JsParam>,
+}
+
+impl JsParams {
+    pub fn expand_apply(&self) -> TokenStream {
+        let iter = self.params.iter().map(|x| x.expand_apply());
+        quote! { #(#iter),* }
+    }
+
+    pub fn expand_type(&self, lib_crate: &Ident) -> Vec<TokenStream> {
+        self.params
+            .iter()
+            .map(|x| x.expand_type(lib_crate))
+            .collect()
+    }
+
+    pub fn expand_extract(&self, lib_crate: &Ident) -> TokenStream {
+        let res = self.params.iter().map(|x| x.expand_extract(lib_crate));
+        quote!(#(#res)*)
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub(crate) enum ParamKind {
+    Value,
+    Borrow,
+    BorrowMut,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct JsParam {
+    kind: ParamKind,
+    number: usize,
+    tokens: TokenStream,
+    is_this: bool,
+}
+
+impl JsParam {
+    pub fn expand_binding(&self) -> TokenStream {
+        let tmp = format_ident!("tmp_{}", self.number);
+        if let ParamKind::BorrowMut = self.kind {
+            quote! { mut #tmp }
+        } else {
+            quote! { #tmp }
+        }
+    }
+
+    pub fn expand_apply(&self) -> TokenStream {
+        let t = format_ident!("tmp_{}", self.number);
+        let apply = match self.kind {
+            ParamKind::Value => quote!(#t),
+            ParamKind::Borrow => quote!(&*#t),
+            ParamKind::BorrowMut => quote!(&mut *#t),
+        };
+        if self.is_this {
+            quote!(#apply.0)
+        } else {
+            apply
+        }
+    }
+
+    pub fn expand_type(&self, lib_crate: &Ident) -> TokenStream {
+        let t = &self.tokens;
+        let ty = match self.kind {
+            ParamKind::Value => quote!(#t),
+            ParamKind::Borrow => quote!(#lib_crate::class::OwnedBorrow<'js,#t>),
+            ParamKind::BorrowMut => quote!(#lib_crate::class::OwnedBorrowMut<'js,#t>),
+        };
+        if self.is_this {
+            quote!(
+                #lib_crate::function::This<#ty>
+            )
+        } else {
+            ty
+        }
+    }
+
+    pub fn expand_extract(&self, lib_crate: &Ident) -> TokenStream {
+        let ty = self.expand_type(lib_crate);
+        let binding = self.expand_binding();
+        quote! {
+            let #binding = <#ty as #lib_crate::function::FromParam>::from_param(&mut _params)?;
+        }
+    }
+}
+
+impl JsParams {
+    pub fn from_input(inputs: &Punctuated<FnArg, Comma>, self_type: Option<&Type>) -> Self {
+        let mut types = Vec::<JsParam>::new();
+
+        for (idx, arg) in inputs.iter().enumerate() {
+            match arg {
+                FnArg::Typed(pat) => {
+                    let (stream, kind) = match *pat.ty {
+                        Type::Reference(ref borrow) => {
+                            let ty = Self::inner_type_to_type(&borrow.elem, self_type);
+                            let stream = quote! {
+                                #ty
+                            };
+                            let kind = if borrow.mutability.is_some() {
+                                ParamKind::BorrowMut
+                            } else {
+                                ParamKind::Borrow
+                            };
+                            (stream, kind)
+                        }
+                        ref ty => {
+                            let ty = Self::inner_type_to_type(ty, self_type);
+                            (
+                                quote! {
+                                    #ty
+                                },
+                                ParamKind::Value,
+                            )
+                        }
+                    };
+
+                    types.push(JsParam {
+                        kind,
+                        tokens: stream,
+                        number: idx,
+                        is_this: false,
+                    });
+                }
+                FnArg::Receiver(recv) => {
+                    if let Some(self_type) = self_type {
+                        let stream = quote! {
+                            #self_type
+                        };
+                        let kind = if recv.reference.is_some() {
+                            if recv.mutability.is_some() {
+                                ParamKind::BorrowMut
+                            } else {
+                                ParamKind::Borrow
+                            }
+                        } else {
+                            ParamKind::Value
+                        };
+                        types.push(JsParam {
+                            kind,
+                            number: idx,
+                            tokens: stream,
+                            is_this: true,
+                        })
+                    } else {
+                        abort!(
+                            recv.self_token,
+                            "self arguments not supported in this context"
+                        );
+                    }
+                }
+            }
+        }
+        JsParams { params: types }
+    }
+
+    fn inner_type_to_type<'a>(ty: &'a Type, self_type: Option<&'a Type>) -> &'a Type {
+        if let Type::Path(ref path) = ty {
+            if let Some(first) = path.path.segments.first() {
+                if first.ident == format_ident!("Self") {
+                    if let Some(self_type) = self_type {
+                        return self_type;
+                    } else {
+                        abort!(ty, "Self not supported as a argument type in this constext")
+                    }
+                }
+            }
+        }
+        ty
+    }
+}

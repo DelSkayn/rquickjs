@@ -9,8 +9,6 @@ fn main() {
     #[cfg(feature = "logging")]
     pretty_env_logger::init();
 
-    println!("cargo:rerun-if-changed=build.rs");
-
     let features = [
         "exports",
         "bindgen",
@@ -29,6 +27,7 @@ fn main() {
         "dump-read-object",
     ];
 
+    println!("cargo:rerun-if-changed=build.rs");
     for feature in &features {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
@@ -93,6 +92,7 @@ fn main() {
     for file in source_files.iter().chain(header_files.iter()) {
         fs::copy(src_dir.join(file), out_dir.join(file)).expect("Unable to copy source");
     }
+    fs::copy("quickjs.bind.h", out_dir.join("quickjs.bind.h")).expect("Unable to copy source");
 
     // applying patches
     for file in &patch_files {
@@ -100,7 +100,7 @@ fn main() {
     }
 
     // generating bindings
-    bindgen(out_dir, out_dir.join("quickjs.h"), &defines);
+    bindgen(out_dir, out_dir.join("quickjs.bind.h"), &defines);
 
     let mut builder = cc::Build::new();
     builder
@@ -156,6 +156,20 @@ where
     V: AsRef<str> + 'a,
 {
     let target = env::var("TARGET").unwrap();
+
+    if !Path::new("./")
+        .join("src")
+        .join("bindings")
+        .join(format!("{}.rs", target))
+        .canonicalize()
+        .map(|x| x.exists())
+        .unwrap_or(false)
+    {
+        println!(
+            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
+            target
+        );
+    }
 
     let bindings_file = out_dir.as_ref().join("bindings.rs");
 

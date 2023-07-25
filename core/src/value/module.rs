@@ -54,7 +54,7 @@ pub enum ModuleDataKind {
     /// Module source text,
     Source(Vec<u8>),
     /// A function which loads a module from rust.
-    Native(for<'js> unsafe fn(ctx: Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>>),
+    Native(for<'js> unsafe fn(ctx: &Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>>),
     /// A raw loading function, used for loading from dynamic libraries.
     Raw(ModuleLoadFn),
     /// Module object bytecode.
@@ -87,7 +87,7 @@ impl ModuleDataKind {
     unsafe fn declare<'js, N: Into<Vec<u8>>>(self, ctx: Ctx<'js>, name: N) -> Result<Module<'js>> {
         match self {
             ModuleDataKind::Source(x) => Module::unsafe_declare(ctx, name, x),
-            ModuleDataKind::Native(x) => (x)(ctx, name.into()),
+            ModuleDataKind::Native(x) => (x)(&ctx, name.into()),
             ModuleDataKind::Raw(x) => {
                 let name = CString::new(name)?;
                 let ptr = (x)(ctx.as_ptr(), name.as_ptr().cast());
@@ -140,8 +140,8 @@ impl ModuleData {
         D: ModuleDef,
         N: Into<Vec<u8>>,
     {
-        unsafe fn define<'js, D: ModuleDef>(ctx: Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>> {
-            Module::unsafe_declare_def::<D, _>(ctx, name)
+        unsafe fn define<'js, D: ModuleDef>(ctx: &Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>> {
+            Module::unsafe_declare_def::<D, _>(ctx.clone(), name)
         }
 
         ModuleData {
@@ -248,12 +248,12 @@ impl ModulesBuilder {
         self
     }
 
-    pub fn eval<'js>(self, ctx: Ctx<'js>) -> Result<Vec<Module<'js>>> {
+    pub fn eval<'js>(self, ctx: &Ctx<'js>) -> Result<Vec<Module<'js>>> {
         let mut modules = Vec::with_capacity(self.modules.len());
         for m in self
             .modules
             .into_iter()
-            .map(|x| unsafe { x.unsafe_declare(ctx) })
+            .map(|x| unsafe { x.unsafe_declare(ctx.clone()) })
         {
             modules.push(m?);
         }
@@ -305,7 +305,7 @@ impl Declarations {
         Ok(self)
     }
 
-    pub(crate) unsafe fn apply(self, ctx: Ctx<'_>, module: Module) -> Result<()> {
+    pub(crate) unsafe fn apply(self, ctx: Ctx<'_>, module: &Module) -> Result<()> {
         for k in self.declarations {
             let ptr = match k {
                 Cow::Borrowed(x) => x.as_ptr(),
@@ -350,8 +350,7 @@ impl<'js> Exports<'js> {
         value: T,
     ) -> Result<&mut Self> {
         let name = CString::new(name.into())?;
-        let ctx = self.ctx;
-        let value = value.into_js(ctx)?;
+        let value = value.into_js(&self.ctx)?;
         self.export_value(name, value)
     }
 
@@ -404,7 +403,7 @@ impl<'js> Exports<'js> {
 /// declaration or evaluation. As a result while it is possible to acquire a unevaluated module, it
 /// is unsafe to hold onto such a module and any function which returns such an unevaluated modules
 /// is marked as unsafe.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 #[must_use = "if access to the module object is not required, prefer to only declare a module"]
 pub struct Module<'js> {
     ctx: Ctx<'js>,
@@ -422,7 +421,7 @@ pub trait ModuleDef {
     }
 
     /// The exports should be added here
-    fn evaluate<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
+    fn evaluate<'js>(_ctx: &Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
         let _ = exports;
         Ok(())
     }
@@ -506,7 +505,7 @@ impl<'js> Module<'js> {
     {
         let name = unsafe {
             Atom::from_atom_val(
-                self.ctx,
+                self.ctx.clone(),
                 qjs::JS_GetModuleName(self.ctx.as_ptr(), self.as_module_def().as_ptr()),
             )
         };
@@ -520,14 +519,14 @@ impl<'js> Module<'js> {
     {
         let meta = unsafe {
             Value::from_js_value(
-                self.ctx,
+                self.ctx.clone(),
                 self.ctx.handle_exception(qjs::JS_GetImportMeta(
                     self.ctx.as_ptr(),
                     self.as_module_def().as_ptr(),
                 ))?,
             )
         };
-        T::from_js(self.ctx, meta)
+        T::from_js(&self.ctx, meta)
     }
 
     /// Write object bytecode for the module in little endian format.
@@ -557,10 +556,10 @@ impl<'js> Module<'js> {
         Context::init_raw(ctx);
         let ctx = Ctx::from_ptr(ctx);
         let name = CStr::from_ptr(name).to_bytes();
-        match Self::unsafe_declare_def::<D, _>(ctx, name) {
+        match Self::unsafe_declare_def::<D, _>(ctx.clone(), name) {
             Ok(module) => module.as_module_def().as_ptr(),
             Err(error) => {
-                error.throw(ctx);
+                error.throw(&ctx);
                 ptr::null_mut()
             }
         }
@@ -572,7 +571,7 @@ impl<'js> Module<'js> {
     /// kind. Use if the bytecode is ment for a target with a different endianness than the
     /// current.
     pub fn write_object(&self, swap_endianess: bool) -> Result<Vec<u8>> {
-        let ctx = self.ctx;
+        let ctx = &self.ctx;
         let mut len = MaybeUninit::uninit();
         // TODO: Allow inclusion of other flags?
         let mut flags = qjs::JS_WRITE_OBJ_BYTECODE;
@@ -693,9 +692,9 @@ impl<'js> Module<'js> {
             unsafe { qjs::JS_NewCModule(ctx.as_ptr(), name.as_ptr(), Some(Self::eval_fn::<D>)) };
 
         let ptr = NonNull::new(ptr).ok_or(Error::Allocation)?;
-        let module = Module::from_module_def(ctx, ptr);
+        let module = Module::from_module_def(ctx.clone(), ptr);
         // Safety: Safe because this is a newly created
-        unsafe { defs.apply(ctx, module)? };
+        unsafe { defs.apply(ctx, &module)? };
         Ok(module)
     }
 
@@ -710,12 +709,12 @@ impl<'js> Module<'js> {
         // Should never be null
         debug_assert_ne!(ptr, ptr::null_mut());
         let ptr = NonNull::new_unchecked(ptr);
-        let module = Self::from_module_def(ctx, ptr);
-        let mut exports = Exports::new(ctx);
-        match D::evaluate(ctx, &mut exports).and_then(|_| exports.apply(module)) {
+        let module = Self::from_module_def(ctx.clone(), ptr);
+        let mut exports = Exports::new(ctx.clone());
+        match D::evaluate(&ctx, &mut exports).and_then(|_| exports.apply(module)) {
             Ok(_) => 0,
             Err(error) => {
-                error.throw(ctx);
+                error.throw(&ctx);
                 -1
             }
         }
@@ -734,7 +733,7 @@ impl<'js> Module<'js> {
     ///
     /// It is unsound to hold onto an unavaluated module across any call to this function which
     /// returns an error.
-    pub unsafe fn eval(self) -> Result<()> {
+    pub unsafe fn eval(&self) -> Result<()> {
         unsafe {
             let value = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.module.as_ptr().cast());
             // JS_EvalFunction `free's` the module so we should dup first
@@ -756,7 +755,7 @@ impl<'js> Module<'js> {
         let name = CString::new(name.as_ref())?;
         let value = unsafe {
             Value::from_js_value(
-                self.ctx,
+                self.ctx.clone(),
                 self.ctx.handle_exception(qjs::JS_GetModuleExport(
                     self.ctx.as_ptr(),
                     self.as_module_def().as_ptr(),
@@ -764,7 +763,7 @@ impl<'js> Module<'js> {
                 ))?,
             )
         };
-        T::from_js(self.ctx, value)
+        T::from_js(&self.ctx, value)
     }
 
     /// Returns a iterator over the exported names of the module export.
@@ -773,9 +772,10 @@ impl<'js> Module<'js> {
     where
         N: FromAtom<'js>,
     {
+        let count = unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def().as_ptr()) };
         ExportNamesIter {
             module: self,
-            count: unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def().as_ptr()) },
+            count,
             index: 0,
             marker: PhantomData,
         }
@@ -788,9 +788,10 @@ impl<'js> Module<'js> {
         N: FromAtom<'js>,
         T: FromJs<'js>,
     {
+        let count = unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def().as_ptr()) };
         ExportEntriesIter {
             module: self,
-            count: unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_module_def().as_ptr()) },
+            count,
             index: 0,
             marker: PhantomData,
         }
@@ -802,7 +803,7 @@ impl<'js> Module<'js> {
         let count = qjs::JS_GetModuleExportEntriesCount(ptr);
         for i in 0..count {
             let atom_name = Atom::from_atom_val(
-                self.ctx,
+                self.ctx.clone(),
                 qjs::JS_GetModuleExportEntryName(self.ctx.as_ptr(), ptr, i),
             );
             println!("{}", atom_name.to_string().unwrap());
@@ -831,11 +832,11 @@ where
         if self.index == self.count {
             return None;
         }
-        let ctx = self.module.ctx;
+        let ctx = &self.module.ctx;
         let ptr = self.module.as_module_def().as_ptr();
         let atom = unsafe {
             let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
-            Atom::from_atom_val(ctx, atom_val)
+            Atom::from_atom_val(ctx.clone(), atom_val)
         };
         self.index += 1;
         Some(N::from_atom(atom))
@@ -864,15 +865,15 @@ where
         if self.index == self.count {
             return None;
         }
-        let ctx = self.module.ctx;
+        let ctx = &self.module.ctx;
         let ptr = self.module.as_module_def().as_ptr();
         let name = unsafe {
             let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
-            Atom::from_atom_val(ctx, atom_val)
+            Atom::from_atom_val(ctx.clone(), atom_val)
         };
         let value = unsafe {
             let js_val = qjs::JS_GetModuleExportEntry(ctx.as_ptr(), ptr, self.index);
-            Value::from_js_value(ctx, js_val)
+            Value::from_js_value(ctx.clone(), js_val)
         };
         self.index += 1;
         Some(N::from_atom(name).and_then(|name| T::from_js(ctx, value).map(|value| (name, value))))
@@ -892,7 +893,7 @@ mod test {
             Ok(())
         }
 
-        fn evaluate<'js>(_ctx: Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
+        fn evaluate<'js>(_ctx: &Ctx<'js>, exports: &mut Exports<'js>) -> Result<()> {
             exports.export("hello", "world".to_string())?;
             Ok(())
         }
@@ -915,8 +916,9 @@ mod test {
     #[test]
     fn import_native() {
         test_with(|ctx| {
-            Module::declare_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+            Module::declare_def::<RustModule, _>(ctx.clone(), "rust_mod").unwrap();
             let _ = ctx
+                .clone()
                 .compile(
                     "test",
                     r#"
@@ -940,6 +942,7 @@ mod test {
     fn from_javascript() {
         test_with(|ctx| {
             let module: Module = ctx
+                .clone()
                 .compile(
                     "Test",
                     r#"
@@ -959,19 +962,24 @@ mod test {
 
             #[cfg(feature = "exports")]
             {
-                let names = module.names().collect::<Result<Vec<StdString>>>().unwrap();
+                let names = module
+                    .clone()
+                    .names()
+                    .collect::<Result<Vec<StdString>>>()
+                    .unwrap();
 
                 assert_eq!(names[0], "a");
                 assert_eq!(names[1], "foo");
                 assert_eq!(names[2], "Baz");
 
                 let entries = module
+                    .clone()
                     .entries()
                     .collect::<Result<Vec<(StdString, Value)>>>()
                     .unwrap();
 
                 assert_eq!(entries[0].0, "a");
-                assert_eq!(i32::from_js(ctx, entries[0].1.clone()).unwrap(), 2);
+                assert_eq!(i32::from_js(&ctx, entries[0].1.clone()).unwrap(), 2);
                 assert_eq!(entries[1].0, "foo");
                 assert_eq!(entries[2].0, "Baz");
             }

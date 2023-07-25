@@ -3,7 +3,6 @@ use std::{
     ffi::{CString, FromBytesWithNulError, NulError},
     fmt::{self, Display, Formatter, Result as FmtResult},
     io::Error as IoError,
-    ops::Range,
     panic,
     panic::UnwindSafe,
     str::{FromStr, Utf8Error},
@@ -12,13 +11,44 @@ use std::{
 
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
-use crate::{qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value};
+use crate::{
+    atom::PredefinedAtom, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
+};
 
 /// Result type used throught the library.
 pub type Result<T> = StdResult<T, Error>;
 
 /// Result type containing an the javascript exception if there was one.
 pub type CaughtResult<'js, T> = StdResult<T, CaughtError<'js>>;
+
+#[derive(Debug)]
+pub enum BorrowError {
+    /// The object was not writable
+    NotWritable,
+    /// The object was already borrowed in a way that prevents borrowing again.
+    AlreadyBorrowed,
+    /// The object could only be used once and was used already.
+    AlreadyUsed,
+}
+
+impl fmt::Display for BorrowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            BorrowError::NotWritable => write!(f, "tried to borrow a value which is not writable"),
+            BorrowError::AlreadyBorrowed => {
+                write!(f, "can't borrow a value as it is already borrowed")
+            }
+            BorrowError::AlreadyUsed => {
+                write!(
+                    f,
+                    "tried to use a value, which can only be used once, again."
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for BorrowError {}
 
 /// Error type of the library.
 #[derive(Debug)]
@@ -39,6 +69,10 @@ pub enum Error {
     Utf8(Utf8Error),
     /// An io error
     Io(IoError),
+    /// An error happened while trying to borrow a rust class object.
+    ClassBorrow(BorrowError),
+    /// An error happened while trying to borrow a rust function.
+    FunctionBorrow(BorrowError),
     /// An exception raised by quickjs itself.
     /// The actual javascript value can be retrieved by calling [`Ctx::catch`].
     ///
@@ -58,8 +92,12 @@ pub enum Error {
         message: Option<StdString>,
     },
     /// Error matching of function arguments
-    NumArgs {
-        expected: Range<usize>,
+    MissingArgs {
+        expected: usize,
+        given: usize,
+    },
+    TooManyArgs {
+        expected: usize,
         given: usize,
     },
     #[cfg(feature = "loader")]
@@ -207,14 +245,9 @@ impl Error {
         matches!(self, Self::IntoJs { .. })
     }
 
-    /// Create function args mismatch error
-    pub fn new_num_args(expected: Range<usize>, given: usize) -> Self {
-        Self::NumArgs { expected, given }
-    }
-
     /// Return whether the error is an function args mismatch error
     pub fn is_num_args(&self) -> bool {
-        matches!(self, Self::NumArgs { .. })
+        matches!(self, Self::TooManyArgs { .. } | Self::MissingArgs { .. })
     }
 
     /// Optimized conversion to CString
@@ -229,12 +262,17 @@ impl Error {
     }
 
     /// Throw an exception
-    pub(crate) fn throw(&self, ctx: Ctx) -> qjs::JSValue {
+    pub(crate) fn throw(&self, ctx: &Ctx) -> qjs::JSValue {
         use Error::*;
         match self {
             Exception => qjs::JS_EXCEPTION,
             Allocation => unsafe { qjs::JS_ThrowOutOfMemory(ctx.as_ptr()) },
-            InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } | NumArgs { .. } => {
+            InvalidString(_)
+            | Utf8(_)
+            | FromJs { .. }
+            | IntoJs { .. }
+            | TooManyArgs { .. }
+            | MissingArgs { .. } => {
                 let message = self.to_cstring();
                 unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
             }
@@ -255,18 +293,16 @@ impl Error {
                         //return
                         return value;
                     }
-                    let obj = Object::from_js_value(ctx, value);
-                    match obj.set("message", error.to_string()) {
+                    let obj = Object::from_js_value(ctx.clone(), value);
+                    match obj.set(PredefinedAtom::Message, error.to_string()) {
                         Ok(_) => {}
                         Err(Error::Exception) => return qjs::JS_EXCEPTION,
                         Err(e) => {
                             panic!("generated error while throwing error: {}", e);
                         }
                     }
-                    std::mem::drop(obj);
-                    todo!()
-                    //let js_val = (obj).into_js_value();
-                    //return qjs::JS_Throw(ctx.as_ptr(), js_val);
+                    let js_val = (obj).into_js_value();
+                    qjs::JS_Throw(ctx.as_ptr(), js_val)
                 }
             }
         }
@@ -324,16 +360,20 @@ impl Display for Error {
                     }
                 }
             }
-            NumArgs { expected, given } => {
+            MissingArgs { expected, given } => {
                 "Error calling function with ".fmt(f)?;
                 given.fmt(f)?;
                 " argument(s) while ".fmt(f)?;
-                expected.start.fmt(f)?;
-                "..".fmt(f)?;
-                if expected.end < usize::MAX {
-                    expected.end.fmt(f)?;
-                }
-                " expected".fmt(f)?;
+                expected.fmt(f)?;
+                " where expected".fmt(f)?;
+            }
+            TooManyArgs { expected, given } => {
+                "Error calling function with ".fmt(f)?;
+                given.fmt(f)?;
+                " argument(s), function is exhaustive and cannot be called with more then "
+                    .fmt(f)?;
+                expected.fmt(f)?;
+                " arguments".fmt(f)?;
             }
             #[cfg(feature = "loader")]
             Resolving {
@@ -368,6 +408,14 @@ impl Display for Error {
             Io(error) => {
                 "IO Error: ".fmt(f)?;
                 error.fmt(f)?;
+            }
+            ClassBorrow(x) => {
+                "Error borrowing class: ".fmt(f)?;
+                x.fmt(f)?;
+            }
+            FunctionBorrow(x) => {
+                "Error borrowing function: ".fmt(f)?;
+                x.fmt(f)?;
             }
             UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
@@ -428,7 +476,7 @@ impl<'js> StdError for CaughtError<'js> {}
 impl<'js> CaughtError<'js> {
     /// Create a `CaughtError` from an [`Error`], retrieving the error value from `Ctx` if there
     /// was one.
-    pub fn from_error(ctx: Ctx<'js>, error: Error) -> Self {
+    pub fn from_error(ctx: &Ctx<'js>, error: Error) -> Self {
         if let Error::Exception = error {
             let value = ctx.catch();
             if let Some(ex) = value
@@ -446,12 +494,12 @@ impl<'js> CaughtError<'js> {
 
     /// Turn a `Result` with [`Error`] into a result with [`CaughtError`] retrieving the error
     /// value from the context if there was one.
-    pub fn catch<T>(ctx: Ctx<'js>, error: Result<T>) -> CaughtResult<'js, T> {
+    pub fn catch<T>(ctx: &Ctx<'js>, error: Result<T>) -> CaughtResult<'js, T> {
         error.map_err(|error| Self::from_error(ctx, error))
     }
 
     /// Put the possible caught value back as the current error and turn the [`CaughtError`] into [`Error`]
-    pub fn throw(self, ctx: Ctx<'js>) -> Error {
+    pub fn throw(self, ctx: &Ctx<'js>) -> Error {
         match self {
             CaughtError::Error(e) => e,
             CaughtError::Exception(ex) => ctx.throw(ex.into_value()),
@@ -479,7 +527,7 @@ impl<'js> CaughtError<'js> {
 /// # ctx.with(|ctx|{
 /// use rquickjs::CatchResultExt;
 ///
-/// if let Err(CaughtError::Value(err)) = ctx.eval::<(),_>("throw 3").catch(ctx){
+/// if let Err(CaughtError::Value(err)) = ctx.eval::<(),_>("throw 3").catch(&ctx){
 ///     assert_eq!(err.as_int(),Some(3));
 /// # }else{
 /// #    panic!()
@@ -487,11 +535,11 @@ impl<'js> CaughtError<'js> {
 /// # });
 /// ```
 pub trait CatchResultExt<'js, T> {
-    fn catch(self, ctx: Ctx<'js>) -> CaughtResult<'js, T>;
+    fn catch(self, ctx: &Ctx<'js>) -> CaughtResult<'js, T>;
 }
 
 impl<'js, T> CatchResultExt<'js, T> for Result<T> {
-    fn catch(self, ctx: Ctx<'js>) -> CaughtResult<'js, T> {
+    fn catch(self, ctx: &Ctx<'js>) -> CaughtResult<'js, T> {
         CaughtError::catch(ctx, self)
     }
 }
@@ -501,11 +549,11 @@ impl<'js, T> CatchResultExt<'js, T> for Result<T> {
 /// Calling throw on a `CaughtError` will set the current error to the one contained in
 /// `CaughtError` if such a value exists and then turn `CaughtError` into `Error`.
 pub trait ThrowResultExt<'js, T> {
-    fn throw(self, ctx: Ctx<'js>) -> Result<T>;
+    fn throw(self, ctx: &Ctx<'js>) -> Result<T>;
 }
 
 impl<'js, T> ThrowResultExt<'js, T> for CaughtResult<'js, T> {
-    fn throw(self, ctx: Ctx<'js>) -> Result<T> {
+    fn throw(self, ctx: &Ctx<'js>) -> Result<T> {
         self.map_err(|e| e.throw(ctx))
     }
 }
@@ -560,7 +608,7 @@ impl Display for AsyncJobException {
 }
 
 impl<'js> Ctx<'js> {
-    pub(crate) fn handle_panic<F>(self, f: F) -> qjs::JSValue
+    pub(crate) fn handle_panic<F>(&self, f: F) -> qjs::JSValue
     where
         F: FnOnce() -> qjs::JSValue + UnwindSafe,
     {
@@ -568,7 +616,7 @@ impl<'js> Ctx<'js> {
             match panic::catch_unwind(f) {
                 Ok(x) => x,
                 Err(e) => {
-                    self.get_opaque().panic = Some(e);
+                    (*self.get_opaque()).panic = Some(e);
                     qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
                 }
             }
@@ -580,11 +628,11 @@ impl<'js> Ctx<'js> {
     ///
     /// # Safety
     /// Assumes to have ownership of the JSValue
-    pub(crate) unsafe fn handle_exception(self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
+    pub(crate) unsafe fn handle_exception(&self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
         if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
             Ok(js_val)
         } else {
-            if let Some(x) = self.get_opaque().panic.take() {
+            if let Some(x) = (*self.get_opaque()).panic.take() {
                 panic::resume_unwind(x)
             }
             Err(Error::Exception)
@@ -593,10 +641,10 @@ impl<'js> Ctx<'js> {
 
     /// Returns Error::Exception if there is no existing panic,
     /// otherwise continues panicking.
-    pub(crate) fn raise_exception(self) -> Error {
+    pub(crate) fn raise_exception(&self) -> Error {
         // Safety
         unsafe {
-            if let Some(x) = self.get_opaque().panic.take() {
+            if let Some(x) = (*self.get_opaque()).panic.take() {
                 panic::resume_unwind(x)
             }
             Error::Exception

@@ -59,6 +59,8 @@ impl AsyncRuntime {
     ///
     /// # Features
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
+    // Annoying false positive clippy lint
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Result<Self> {
         let opaque = Opaque::with_spawner();
         let rt = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
@@ -72,6 +74,8 @@ impl AsyncRuntime {
     /// Will generally only fail if not enough memory was available.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
     #[cfg(feature = "allocator")]
+    // Annoying false positive clippy lint
+    #[allow(clippy::arc_with_non_send_sync)]
     pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
@@ -187,7 +191,7 @@ impl AsyncRuntime {
         let job_res = lock.execute_pending_job().map_err(|e| {
             let ptr =
                 NonNull::new(e).expect("executing pending job returned a null context on error");
-            AsyncJobException(AsyncContext::from_raw(ptr, self.clone()))
+            AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
         })?;
         if job_res {
             return Ok(true);
@@ -206,7 +210,7 @@ impl AsyncRuntime {
             match lock.execute_pending_job().map_err(|e| {
                 let ptr = NonNull::new(e)
                     .expect("executing pending job returned a null context on error");
-                AsyncJobException(AsyncContext::from_raw(ptr, self.clone()))
+                AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
             }) {
                 Err(e) => {
                     // SAFETY: Runtime is already locked so creating a context is safe.

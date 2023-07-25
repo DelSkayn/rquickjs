@@ -1,6 +1,8 @@
 use std::path::Path;
 
+use crate::common::crate_ident;
 use proc_macro2::TokenStream;
+use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use rquickjs_core::{Context, Module, Result, Runtime};
 use syn::{
@@ -35,7 +37,7 @@ pub struct EmbedModules(pub Punctuated<EmbedModule, Token![,]>);
 
 impl Parse for EmbedModules {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let res = input.parse_terminated::<_, Token![,]>(EmbedModule::parse)?;
+        let res = input.parse_terminated(EmbedModule::parse, Token![,])?;
         Ok(EmbedModules(res))
     }
 }
@@ -59,13 +61,12 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
             {
                 Ok(x) => x,
                 Err(e) => {
-                    error!(
+                    abort!(
                         f.name,
                         "Error loading embedded js module from path `{}`: {}",
                         path.display(),
                         e
                     );
-                    continue;
                 }
             }
         } else {
@@ -75,13 +76,12 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
         let source = match std::fs::read_to_string(&path) {
             Ok(x) => x,
             Err(e) => {
-                error!(
+                abort!(
                     f.name,
                     "Error loading embedded js module from path `{}`: {}",
                     path.display(),
                     e
                 );
-                continue;
             }
         };
         files.push((f.name.value(), source));
@@ -95,8 +95,9 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
 
         ctx.with(|ctx| -> Result<()> {
             for f in files.into_iter() {
-                let bc =
-                    unsafe { Module::unsafe_declare(ctx, f.0.clone(), f.1)?.write_object(false)? };
+                let bc = unsafe {
+                    Module::unsafe_declare(ctx.clone(), f.0.clone(), f.1)?.write_object(false)?
+                };
                 modules.push((f.0, bc));
             }
             Ok(())
@@ -107,8 +108,7 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
     let res = match res {
         Ok(x) => x,
         Err(e) => {
-            error!("Error compiling embedded js module: {}", e);
-            return quote!();
+            abort!("Error compiling embedded js module: {}", e);
         }
     };
 
@@ -137,7 +137,7 @@ pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
         quote!((#key, #value))
     });
 
-    let lib_crate = super::config::lib_crate();
+    let lib_crate = crate_ident();
     let lib_crate = format_ident!("{}", lib_crate);
     quote! {
         #lib_crate::loader::bundle::Bundle(& #lib_crate::phf::Map{
@@ -150,7 +150,7 @@ pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
 
 #[cfg(not(feature = "phf"))]
 pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
-    let lib_crate = super::config::lib_crate();
+    let lib_crate = crate_ident();
     let lib_crate = format_ident!("{}", lib_crate);
     let entries = modules.iter().map(|(name, data)| {
         quote! { (#name,#data)}

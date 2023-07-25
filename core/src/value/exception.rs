@@ -1,17 +1,18 @@
-use std::{fmt, ops::Deref};
+use std::{error::Error as ErrorTrait, fmt};
 
-use crate::{convert::Coerced, qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Result, Value};
 
 /// A javascript instance of Error
 ///
 /// Will turn into a error when converted to javascript but won't autmatically be thrown.
 #[repr(transparent)]
-pub struct Exception<'js>(Object<'js>);
+pub struct Exception<'js>(pub(crate) Object<'js>);
+
+impl<'js> ErrorTrait for Exception<'js> {}
 
 impl fmt::Debug for Exception<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exception")
-            .field("object", &self.0)
             .field("message", &self.message())
             .field("file", &self.file())
             .field("line", &self.line())
@@ -31,11 +32,6 @@ impl<'js> Exception<'js> {
         &self.0
     }
 
-    /// Turns the exception into a generic javascript value.
-    pub fn into_value(self) -> Value<'js> {
-        self.0.into_value()
-    }
-
     /// Creates an exception from an object if it is an instance of error.
     pub fn from_object(obj: Object<'js>) -> Option<Self> {
         if obj.is_error() {
@@ -53,7 +49,7 @@ impl<'js> Exception<'js> {
                 .into_object()
                 .expect("`JS_NewError` did not return an object")
         };
-        obj.set("message", message)?;
+        obj.set(PredefinedAtom::Message, message)?;
         Ok(Exception(obj))
     }
 
@@ -70,9 +66,9 @@ impl<'js> Exception<'js> {
                 .into_object()
                 .expect("`JS_NewError` did not return an object")
         };
-        obj.set("message", message)?;
-        obj.set("fileName", file)?;
-        obj.set("lineNumber", line)?;
+        obj.set(PredefinedAtom::Message, message)?;
+        obj.set(PredefinedAtom::FileName, file)?;
+        obj.set(PredefinedAtom::LineNumber, line)?;
         Ok(Exception(obj))
     }
 
@@ -90,7 +86,7 @@ impl<'js> Exception<'js> {
     ///
     /// Same as retrieving `error.fileName` in javascript.
     pub fn file(&self) -> Option<String> {
-        self.get::<_, Option<Coerced<String>>>("fileName")
+        self.get::<_, Option<Coerced<String>>>(PredefinedAtom::FileName)
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
@@ -100,7 +96,7 @@ impl<'js> Exception<'js> {
     ///
     /// Same as retrieving `error.lineNumber` in javascript.
     pub fn line(&self) -> Option<i32> {
-        self.get::<_, Option<Coerced<i32>>>("lineNumber")
+        self.get::<_, Option<Coerced<i32>>>(PredefinedAtom::LineNumber)
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
@@ -110,7 +106,7 @@ impl<'js> Exception<'js> {
     ///
     /// Same as retrieving `error.stack` in javascript.
     pub fn stack(&self) -> Option<String> {
-        self.get::<_, Option<Coerced<String>>>("stack")
+        self.get::<_, Option<Coerced<String>>>(PredefinedAtom::Stack)
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
@@ -131,20 +127,22 @@ impl<'js> Exception<'js> {
     /// # };
     /// # })
     /// ```
-    pub fn throw_message(ctx: Ctx<'js>, message: &str) -> Error {
-        let (Ok(e) | Err(e)) = Self::from_message(ctx, message).map(|x| x.throw());
+    pub fn throw_message(ctx: &Ctx<'js>, message: &str) -> Error {
+        let (Ok(e) | Err(e)) = Self::from_message(ctx.clone(), message).map(|x| x.throw());
         e
     }
     /// Throws a new generic error with a file name and line number.
-    pub fn throw_message_location(ctx: Ctx<'js>, message: &str, file: &str, line: i32) -> Error {
+    pub fn throw_message_location(ctx: &Ctx<'js>, message: &str, file: &str, line: i32) -> Error {
         let (Ok(e) | Err(e)) =
-            Self::from_message_location(ctx, message, file, line).map(|x| x.throw());
+            Self::from_message_location(ctx.clone(), message, file, line).map(|x| x.throw());
         e
     }
 
     /// Throws a new syntax error.
-    pub fn throw_syntax(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_syntax(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -157,8 +155,10 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new type error.
-    pub fn throw_type(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_type(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -175,8 +175,10 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new reference error.
-    pub fn throw_reference(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_reference(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -193,8 +195,10 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new range error.
-    pub fn throw_range(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_range(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -211,8 +215,10 @@ impl<'js> Exception<'js> {
     }
 
     /// Throws a new internal error.
-    pub fn throw_internal(ctx: Ctx<'js>, message: &str) -> Error {
+    pub fn throw_internal(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
+        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
         let str_len = message.as_bytes().len().min(255);
         unsafe {
@@ -230,13 +236,14 @@ impl<'js> Exception<'js> {
 
     /// Sets the exception as the current error an returns `Error::Exception`
     pub fn throw(self) -> Error {
-        self.0.ctx.throw(self.0.into_value())
+        let ctx = self.ctx().clone();
+        ctx.throw(self.0.into_value())
     }
 }
 
 impl fmt::Display for Exception<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        "Exception generated by quickjs: ".fmt(f)?;
+        "Error:".fmt(f)?;
         if let Some(file) = self.file() {
             '['.fmt(f)?;
             file.fmt(f)?;
@@ -255,40 +262,5 @@ impl fmt::Display for Exception<'_> {
             stack.fmt(f)?;
         }
         Ok(())
-    }
-}
-
-impl<'js> Deref for Exception<'js> {
-    type Target = Object<'js>;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_object()
-    }
-}
-
-impl<'js> FromJs<'js> for Exception<'js> {
-    fn from_js(_ctx: crate::Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        if let Some(obj) = value.as_object() {
-            if obj.is_error() {
-                return Ok(Exception(obj.clone()));
-            } else {
-                return Err(Error::FromJs {
-                    from: value.type_name(),
-                    to: "Exception",
-                    message: Some("object was not an instance of error".to_string()),
-                });
-            }
-        }
-        return Err(Error::FromJs {
-            from: value.type_name(),
-            to: "Exception",
-            message: Some("value was not a type".to_string()),
-        });
-    }
-}
-
-impl<'js> IntoJs<'js> for Exception<'js> {
-    fn into_js(self, _ctx: crate::Ctx<'js>) -> Result<Value<'js>> {
-        Ok(self.0.into_value())
     }
 }

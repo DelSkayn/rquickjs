@@ -17,7 +17,7 @@
 //!
 //! This library has multiple traits for converting to and from javascript. The [`IntoJs`] trait is
 //! used for taking rust values and turning them into javascript values. The [`FromJs`] is for
-//! converting javascript value to rust. Note that this trait does not automatic coercion but the
+//! converting javascript value tKings Placeo rust. Note that this trait does not automatic coercion but the
 //! [`Coerced`](convert::Coerced) can be used to convert the values with coercion.
 //!
 //! For values which represent the name of variables or indecies the trait [`IntoAtom`] is
@@ -127,7 +127,16 @@ pub use rquickjs_core::*;
 
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
 #[cfg(feature = "macro")]
-pub use rquickjs_macro::{bind, embed, FromJs, HasRefs, IntoJs, IntoJsByRef};
+pub use rquickjs_macro::{class, embed, function, methods};
+
+pub mod class {
+    //! Javascript classes defined from rust.
+
+    pub use rquickjs_core::class::*;
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
+    #[cfg(feature = "macro")]
+    pub use rquickjs_macro::Trace;
+}
 
 // The following imports needed to linking docs
 

@@ -81,7 +81,10 @@ unsafe impl<R> Send for WithFuture<'_, R> {}
 ///     // With the macro you can borrow the environment.
 ///     *some_var_ref += 1;
 ///
-///     let delay = Func::new("delay", Async(delay));
+///     let delay = Function::new(ctx.clone(),Async(delay))
+///         .unwrap()
+///         .with_name("print")
+///         .unwrap();
 ///
 ///     let global = ctx.globals();
 ///     global.set("print",Func::from(print)).unwrap();
@@ -144,7 +147,13 @@ impl Clone for AsyncContext {
 }
 
 impl AsyncContext {
-    pub(crate) fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
+    /// Create a async context form a raw context pointer.
+    ///
+    /// # Safety
+    /// The context must be of the correct runtime.
+    /// The context must also have valid reference count, one which can be decremented when this
+    /// object is dropped without going negative.
+    pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
         AsyncContext { ctx, rt }
     }
 
@@ -277,7 +286,6 @@ impl Drop for AsyncContext {
 }
 
 // Since the reference to runtime is behind a Arc this object is send
-//
 #[cfg(feature = "parallel")]
 unsafe impl Send for AsyncContext {}
 

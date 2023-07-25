@@ -1,8 +1,9 @@
 [package]
 name = "rquickjs"
-version = "0.3.1"
+version = "0.4.0-beta.3"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
-edition = "2018"
+edition = "2021"
+rust-version = "1.65"
 license = "MIT"
 readme = "README.md"
 description = "High level bindings to the QuickJS javascript engine"
@@ -11,17 +12,17 @@ categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [dependencies.rquickjs-core]
-version = "0.3.1"
+version = "0.4.0-beta.3"
 path = "core"
 
 [dependencies.rquickjs-macro]
-version = "0.3.1"
+version = "0.4.0-beta.3"
 path = "macro"
 optional = true
 
 [dependencies.indexmap-rs]
 package = "indexmap"
-version = "1"
+version = "2"
 optional = true
 
 [dependencies.either-rs]
@@ -61,7 +62,7 @@ phf = ["rquickjs-core/phf", "rquickjs-macro/phf"]
 
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
-bindgen = ["rquickjs-core/bindgen"]
+bindgen = ["rquickjs-core/bindgen", "rquickjs-macro?/bindgen"]
 
 # Enable support of parallel execution
 parallel = ["rquickjs-core/parallel"]
@@ -93,6 +94,10 @@ array-buffer = ["rquickjs-core/array-buffer"]
 
 # Enable helper macros
 macro = ["rquickjs-macro"]
+
+# Allows transfering objects between different contexts of the same runtime.
+# Disabled for now as it can be used to create unsound code.
+# multi-ctx = ["rquickjs-core/multi-ctx"]
 
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]

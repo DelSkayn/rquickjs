@@ -51,7 +51,7 @@ mod test {
     #[test]
     fn to_javascript() {
         test_with(|ctx| {
-            let string = String::from_str(ctx, "foo").unwrap();
+            let string = String::from_str(ctx.clone(), "foo").unwrap();
             let func: Function = ctx.eval("x =>  x + 'bar'").unwrap();
             let text: StdString = (string,).apply(&func).unwrap();
             assert_eq!(text, "foobar".to_string());
