@@ -27,8 +27,8 @@ pub(crate) struct Field {
 
     /// Don't trace this field
     #[darling(default)]
-    skip_trace: bool,
-    ident: Option<Ident>,
+    pub skip_trace: bool,
+    pub ident: Option<Ident>,
     vis: Visibility,
     ty: Type,
     attrs: Vec<Attribute>,
@@ -100,7 +100,7 @@ impl Field {
             .unwrap_or_else(|| format_ident!("{}", which));
 
         quote! {
-            #lib_crate::class::Trace::<'js>::trace(&self.#field,_tracer);
+            #lib_crate::class::Trace::<'js>::trace(self.#field,_tracer);
         }
     }
 
