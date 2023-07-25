@@ -63,24 +63,24 @@ impl<'js> fmt::Debug for Value<'js> {
         use Type::*;
         match type_ {
             Bool | Int | Float => {
-                '('.fmt(f)?;
+                write!(f, "(")?;
                 match type_ {
                     Bool => unsafe { self.get_bool() }.fmt(f)?,
                     Int => unsafe { self.get_int() }.fmt(f)?,
                     Float => unsafe { self.get_float() }.fmt(f)?,
                     _ => unreachable!(),
                 }
-                ')'.fmt(f)?;
+                write!(f, ")")?;
             }
             String => {
-                "(\"".fmt(f)?;
+                write!(f, "(")?;
                 unsafe { self.ref_string() }.to_string().fmt(f)?;
-                "\")".fmt(f)?;
+                write!(f, ")")?;
             }
             Symbol | Object | Array | Function | Constructor => {
-                '('.fmt(f)?;
+                write!(f, "(")?;
                 unsafe { self.get_ptr() }.fmt(f)?;
-                ')'.fmt(f)?;
+                write!(f, ")")?;
             }
             Exception => {
                 writeln!(f, "(")?;
