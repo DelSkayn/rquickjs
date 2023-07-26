@@ -88,8 +88,8 @@ fn main() {
         if env::var("CARGO_CFG_TARGET_OS").unwrap() != "wasi" {
             panic!("can only compile to wasi");
         }
-        let wasi_sdk_path = env::var("WASI_SDK")
-            .unwrap_or_else(|_| panic!("WASI_SDK must be set to the path of your wasi-sdk"));
+        let wasi_sdk_path = env::var("WASI_SDK_PATH")
+            .unwrap_or_else(|_| panic!("WASI_SDK_PATH must be set to the path of your wasi-sdk"));
         if !Path::new(&wasi_sdk_path).exists() {
             panic!("{} does not exist", wasi_sdk_path);
         }
