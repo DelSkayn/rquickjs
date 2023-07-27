@@ -28,7 +28,7 @@ version = "0.20"
 
 [dependencies.syn]
 version = "2"
-features = ["full"]
+features = ["full","fold"]
 
 [dependencies.phf_shared]
 version = "0.10"

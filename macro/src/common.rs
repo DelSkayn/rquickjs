@@ -4,7 +4,7 @@ use proc_macro2::{Ident, Span};
 use proc_macro_crate::FoundCrate;
 use proc_macro_error::abort_call_site;
 use quote::format_ident;
-use syn::{Generics, Lifetime, LifetimeParam};
+use syn::{fold::Fold, Generics, Lifetime, LifetimeParam, Type};
 
 /// prefix for getter implementations
 pub const GET_PREFIX: &str = "__impl_get_";
@@ -75,4 +75,28 @@ pub fn add_js_lifetime(generics: &Generics) -> Generics {
         );
     }
     generics
+}
+
+pub struct SelfReplacer<'a> {
+    pub ty: &'a Type,
+}
+
+impl<'a> SelfReplacer<'a> {
+    pub fn with(ty: &'a Type) -> Self {
+        Self { ty }
+    }
+}
+
+impl<'a> Fold for SelfReplacer<'a> {
+    fn fold_type(&mut self, i: Type) -> Type {
+        let Type::Path(x) = i else { return i };
+        if x.path.segments.len() != 1 {
+            return Type::Path(self.fold_type_path(x));
+        }
+        if x.path.segments.first().unwrap().ident == "Self" {
+            self.ty.clone()
+        } else {
+            Type::Path(self.fold_type_path(x))
+        }
+    }
 }

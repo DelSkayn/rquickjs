@@ -1,6 +1,6 @@
 use darling::FromMeta;
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::{abort, abort_call_site};
+use proc_macro_error::abort_call_site;
 use syn::ItemMod;
 
 use crate::common::Case;
@@ -16,7 +16,7 @@ pub(crate) struct AttrItem {
     rename_functions: Option<Case>,
 }
 
-pub(crate) fn expand(attr: AttrItem, item: ItemMod) -> TokenStream {
+pub(crate) fn expand(_attr: AttrItem, item: ItemMod) -> TokenStream {
     let ItemMod { content, .. } = item;
 
     let Some(_content) = content else {
@@ -25,5 +25,5 @@ pub(crate) fn expand(attr: AttrItem, item: ItemMod) -> TokenStream {
         )
     };
 
-    todo!()
+    abort_call_site!("Not yet implemented")
 }

@@ -2,9 +2,11 @@ use darling::FromMeta;
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
-use syn::{punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, Visibility};
+use syn::{
+    fold::Fold, punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, Visibility,
+};
 
-use crate::common::{crate_ident, BASE_PREFIX};
+use crate::common::{crate_ident, SelfReplacer, BASE_PREFIX};
 
 #[derive(Debug, FromMeta, Default)]
 #[darling(default)]
@@ -268,12 +270,17 @@ impl JsParams {
     pub fn from_input(inputs: &Punctuated<FnArg, Comma>, self_type: Option<&Type>) -> Self {
         let mut types = Vec::<JsParam>::new();
 
+        let mut self_replacer = self_type.map(SelfReplacer::with);
+
         for (idx, arg) in inputs.iter().enumerate() {
             match arg {
                 FnArg::Typed(pat) => {
                     let (stream, kind) = match *pat.ty {
                         Type::Reference(ref borrow) => {
-                            let ty = Self::inner_type_to_type(&borrow.elem, self_type);
+                            let ty = self_replacer
+                                .as_mut()
+                                .map(|x| x.fold_type_reference(borrow.clone()))
+                                .unwrap_or_else(|| borrow.clone());
                             let stream = quote! {
                                 #ty
                             };
@@ -285,7 +292,10 @@ impl JsParams {
                             (stream, kind)
                         }
                         ref ty => {
-                            let ty = Self::inner_type_to_type(ty, self_type);
+                            let ty = self_replacer
+                                .as_mut()
+                                .map(|x| x.fold_type(ty.clone()))
+                                .unwrap_or_else(|| ty.clone());
                             (
                                 quote! {
                                     #ty
@@ -332,20 +342,5 @@ impl JsParams {
             }
         }
         JsParams { params: types }
-    }
-
-    fn inner_type_to_type<'a>(ty: &'a Type, self_type: Option<&'a Type>) -> &'a Type {
-        if let Type::Path(ref path) = ty {
-            if let Some(first) = path.path.segments.first() {
-                if first.ident == format_ident!("Self") {
-                    if let Some(self_type) = self_type {
-                        return self_type;
-                    } else {
-                        abort!(ty, "Self not supported as a argument type in this constext")
-                    }
-                }
-            }
-        }
-        ty
     }
 }
