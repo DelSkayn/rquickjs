@@ -277,10 +277,12 @@ impl JsParams {
                 FnArg::Typed(pat) => {
                     let (stream, kind) = match *pat.ty {
                         Type::Reference(ref borrow) => {
-                            let ty = self_replacer
-                                .as_mut()
-                                .map(|x| x.fold_type_reference(borrow.clone()))
-                                .unwrap_or_else(|| borrow.clone());
+                            let ty = (&*borrow.elem).clone();
+                            let ty = if let Some(repl) = self_replacer.as_mut() {
+                                repl.fold_type(ty)
+                            } else {
+                                ty
+                            };
                             let stream = quote! {
                                 #ty
                             };
