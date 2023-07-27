@@ -376,10 +376,13 @@ impl<'js> Exports<'js> {
                 )
             };
 
-            // previous checks and the fact that we also previously added the export should ensure
+            // The below is wrong, if a value is applied but not previously defined the above
+            // function can error!
+            //
+            // WRONG: previous checks and the fact that we also previously added the export should ensure
             // that the only error can be an allocation error.
             if res < 0 {
-                return Err(Error::Allocation);
+                return Err(Error::Unknown);
             }
         }
         Ok(())

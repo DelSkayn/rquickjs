@@ -635,7 +635,6 @@ impl<'js> Ctx<'js> {
             if let Some(x) = (*self.get_opaque()).panic.take() {
                 panic::resume_unwind(x)
             }
-            self.throw(dbg!(self.catch()));
             println!("{}", std::backtrace::Backtrace::force_capture());
             Err(Error::Exception)
         }
