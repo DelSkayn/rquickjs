@@ -100,7 +100,7 @@ impl Field {
             .unwrap_or_else(|| format_ident!("{}", which));
 
         quote! {
-            #lib_crate::class::Trace::<'js>::trace(self.#field,_tracer);
+            #lib_crate::class::Trace::<'js>::trace(&self.#field,_tracer);
         }
     }
 
