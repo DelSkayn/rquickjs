@@ -1,6 +1,8 @@
 use crate::{
-    qjs, value::Constructor, Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Object, Result,
-    String, Symbol, Value,
+    atom::{self, Atom},
+    qjs,
+    value::Constructor,
+    Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
 };
 use std::{
     fmt,
@@ -57,6 +59,7 @@ outlive_impls! {
     BigInt,
     Function,
     Constructor,
+    Atom
 }
 
 macro_rules! impl_outlive{
@@ -123,6 +126,7 @@ impl_outlive!(
     std::sync::Arc<T>,
     std::sync::Mutex<T>,
     std::sync::RwLock<T>,
+    atom::PredefinedAtom,
 );
 
 /// The wrapper for JS values to keep it from GC
@@ -255,9 +259,6 @@ where
         self.restore(ctx)?.into_js(ctx)
     }
 }
-
-#[cfg(feature = "parallel")]
-unsafe impl<T> Send for Persistent<T> {}
 
 #[cfg(test)]
 mod test {
