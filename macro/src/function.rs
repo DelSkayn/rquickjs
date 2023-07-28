@@ -277,7 +277,7 @@ impl JsParams {
                 FnArg::Typed(pat) => {
                     let (stream, kind) = match *pat.ty {
                         Type::Reference(ref borrow) => {
-                            let ty = (&*borrow.elem).clone();
+                            let ty = (*borrow.elem).clone();
                             let ty = if let Some(repl) = self_replacer.as_mut() {
                                 repl.fold_type(ty)
                             } else {
