@@ -17,7 +17,7 @@ mod common;
 mod embed;
 mod fields;
 mod function;
-mod method;
+mod methods;
 mod module;
 mod trace;
 
@@ -71,13 +71,13 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
         Err(e) => return e.into_compile_error().into(),
     };
 
-    let attr = method::AttrItem::from_list(&meta).unwrap_or_else(|error| {
+    let attr = methods::ImplAttr::from_list(&meta).unwrap_or_else(|error| {
         abort_call_site!("{}", error);
     });
 
     let item = parse_macro_input!(item as Item);
     match item {
-        Item::Impl(item) => method::expand(attr, item).into(),
+        Item::Impl(item) => methods::expand(attr, item).into(),
         item => {
             abort!(item, "#[methods] macro can only be used on impl blocks")
         }
