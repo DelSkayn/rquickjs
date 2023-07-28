@@ -43,7 +43,7 @@ pub unsafe extern "C" fn defer_call_job(
 
 /// A static class method for making function object like classes.
 ///
-/// You can quickly create an ClassFn from any function by using the [`class_fn`] macro.
+/// You can quickly create an `StaticJsFn` from any function by using the [`static_fn`] macro.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub struct StaticJsFn(
     pub(crate)  unsafe extern "C" fn(

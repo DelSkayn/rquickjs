@@ -227,15 +227,15 @@ pub enum PredefinedAtom {
     NewTarget = qjs::JS_ATOM_new_target as u32,
     /// "this.active_func"
     ThisActiveFunc = qjs::JS_ATOM_this_active_func as u32,
-    /// "<home_object>"
+    /// "\<home_object\>"
     HomeObject = qjs::JS_ATOM_home_object as u32,
-    /// "<computed_field>"
+    /// "\<computed_field\>"
     ComputedField = qjs::JS_ATOM_computed_field as u32,
-    /// "<static_computed_field>"
+    /// "\<static_computed_field\>"
     StaticComputedField = qjs::JS_ATOM_static_computed_field as u32, // must come after computed_fields
-    /// "<class_fields_init>"
+    /// "\<class_fields_init\>"
     ClassFieldsInit = qjs::JS_ATOM_class_fields_init as u32,
-    /// "<brand>"
+    /// "\<brand\>"
     Brand = qjs::JS_ATOM_brand as u32,
     /// "#constructor"
     HashConstructor = qjs::JS_ATOM_hash_constructor as u32,
