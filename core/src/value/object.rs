@@ -13,7 +13,7 @@ mod property;
 pub use property::{Accessor, AsProperty, Property, PropertyFlags};
 
 /// Rust representation of a javascript object.
-#[derive(Debug, PartialEq, Clone, Hash)]
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 #[repr(transparent)]
 pub struct Object<'js>(pub(crate) Value<'js>);
 
