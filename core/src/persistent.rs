@@ -153,6 +153,7 @@ impl_outlive!(
 /// NOTE: Be careful and ensure that no persistent links outlives the runtime,
 /// otherwise Runtime will abort the process when dropped.
 ///
+#[derive(Eq, PartialEq, Hash)]
 pub struct Persistent<T> {
     pub(crate) rt: *mut qjs::JSRuntime,
     pub(crate) value: T,

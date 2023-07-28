@@ -1,7 +1,7 @@
 use crate::{qjs, Atom, Ctx, Result, String, Value};
 
 /// Rust representation of a javascript symbol.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct Symbol<'js>(pub(crate) Value<'js>);
 

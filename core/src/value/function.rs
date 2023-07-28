@@ -37,7 +37,7 @@ pub trait StaticJsFunction {
 }
 
 /// A javascript function.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct Function<'js>(pub(crate) Object<'js>);
 

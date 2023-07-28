@@ -1,3 +1,6 @@
+use crate::{qjs, Ctx, Error, Result};
+use std::{fmt, hash::Hash, mem, ops::Deref, result::Result as StdResult, str};
+
 pub mod array;
 pub mod atom;
 mod bigint;
@@ -13,8 +16,6 @@ mod symbol;
 mod array_buffer;
 #[cfg(feature = "array-buffer")]
 mod typed_array;
-
-use crate::{qjs, Ctx, Error, Result};
 
 pub use array::Array;
 pub use atom::Atom;
@@ -32,12 +33,33 @@ pub use array_buffer::ArrayBuffer;
 #[cfg(feature = "array-buffer")]
 pub use typed_array::TypedArray;
 
-use std::{fmt, mem, ops::Deref, result::Result as StdResult, str};
-
 /// Any javascript value
 pub struct Value<'js> {
     pub(crate) ctx: Ctx<'js>,
     pub(crate) value: qjs::JSValue,
+}
+
+impl<'js> PartialEq for Value<'js> {
+    fn eq(&self, other: &Self) -> bool {
+        let tag = unsafe { qjs::JS_VALUE_GET_TAG(self.value) };
+        let tag_other = unsafe { qjs::JS_VALUE_GET_TAG(other.value) };
+
+        let bits = unsafe { qjs::JS_VALUE_GET_FLOAT64(self.value).to_bits() };
+        let bits_other = unsafe { qjs::JS_VALUE_GET_FLOAT64(other.value).to_bits() };
+
+        tag == tag_other && bits == bits_other
+    }
+}
+
+impl<'js> Eq for Value<'js> {}
+
+impl<'js> Hash for Value<'js> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        let tag = unsafe { qjs::JS_VALUE_GET_TAG(self.value) };
+        let bits = unsafe { qjs::JS_VALUE_GET_FLOAT64(self.value).to_bits() };
+        state.write_i32(tag);
+        state.write_u64(bits)
+    }
 }
 
 impl<'js> Clone for Value<'js> {
@@ -95,23 +117,6 @@ impl<'js> fmt::Debug for Value<'js> {
             Unknown => "unknown".fmt(f)?,
         }
         Ok(())
-    }
-}
-
-impl<'js> PartialEq for Value<'js> {
-    fn eq(&self, other: &Self) -> bool {
-        let type_ = self.type_of();
-        if type_ != other.type_of() {
-            return false;
-        }
-        use Type::*;
-        match type_ {
-            Uninitialized | Undefined | Null => true,
-            Bool => unsafe { self.get_bool() == other.get_bool() },
-            Int => unsafe { self.get_int() == other.get_int() },
-            Float => unsafe { self.get_float() == other.get_float() },
-            _ => unsafe { self.get_ptr() == other.get_ptr() },
-        }
     }
 }
 

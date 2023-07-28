@@ -13,7 +13,7 @@ use super::convert::FromIteratorJs;
 /// Javascript array's are objects and can be used as such.
 /// However arrays in quickjs are optimized when they do not have any holes.
 /// This value represents such a optimized array.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 #[repr(transparent)]
 pub struct Array<'js>(pub(crate) Object<'js>);
 

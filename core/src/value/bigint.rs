@@ -1,7 +1,7 @@
 use crate::{qjs, Ctx, Error, Result, Value};
 
 /// Rust representation of a javascript big int.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct BigInt<'js>(pub(crate) Value<'js>);
 

@@ -6,6 +6,7 @@ use crate::{
 };
 use std::{
     ffi::CString,
+    hash::Hash,
     marker::PhantomData,
     ops::Deref,
     ptr::{self, NonNull},
@@ -57,6 +58,20 @@ pub struct Class<'js, C: JsClass<'js>>(pub(crate) Object<'js>, PhantomData<C>);
 impl<'js, C: JsClass<'js>> Clone for Class<'js, C> {
     fn clone(&self) -> Self {
         Class(self.0.clone(), PhantomData)
+    }
+}
+
+impl<'js, C: JsClass<'js>> PartialEq for Class<'js, C> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<'js, C: JsClass<'js>> Eq for Class<'js, C> {}
+
+impl<'js, C: JsClass<'js>> Hash for Class<'js, C> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state)
     }
 }
 

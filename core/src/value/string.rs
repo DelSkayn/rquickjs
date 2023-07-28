@@ -2,7 +2,7 @@ use crate::{qjs, Ctx, Error, Result, StdString, Value};
 use std::{mem, slice, str};
 
 /// Rust representation of a javascript string.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct String<'js>(pub(crate) Value<'js>);
 

@@ -1,7 +1,7 @@
 //!  Quickjs atom functionality.
 
 use crate::{qjs, Ctx, Error, Result, String, Value};
-use std::{ffi::CStr, string::String as StdString};
+use std::{ffi::CStr, hash::Hash, string::String as StdString};
 
 mod predefined;
 pub use predefined::PredefinedAtom;
@@ -18,7 +18,7 @@ pub use predefined::PredefinedAtom;
 /// a normal number.
 /// However when the atom represents a string link index like `object["foo"]` or `object.foo`
 /// the atom represents a value in a hashmap.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Atom<'js> {
     pub(crate) atom: qjs::JSAtom,
     ctx: Ctx<'js>,
@@ -30,6 +30,12 @@ impl<'js> PartialEq for Atom<'js> {
     }
 }
 impl<'js> Eq for Atom<'js> {}
+
+impl<'js> Hash for Atom<'js> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        state.write_u32(self.atom)
+    }
+}
 
 impl<'js> Atom<'js> {
     /// Create an atom from a javascript value.

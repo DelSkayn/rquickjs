@@ -6,6 +6,7 @@ use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Res
 ///
 /// Will turn into a error when converted to javascript but won't autmatically be thrown.
 #[repr(transparent)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub struct Exception<'js>(pub(crate) Object<'js>);
 
 impl<'js> ErrorTrait for Exception<'js> {}

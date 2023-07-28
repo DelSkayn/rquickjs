@@ -12,7 +12,7 @@ use super::typed_array::TypedArrayItem;
 /// Rust representation of a javascript object of class ArrayBuffer.
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 #[repr(transparent)]
 pub struct ArrayBuffer<'js>(pub(crate) Object<'js>);
 
