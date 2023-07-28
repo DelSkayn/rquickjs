@@ -59,7 +59,7 @@ outlive_impls! {
     BigInt,
     Function,
     Constructor,
-    Atom
+    Atom,
 }
 
 macro_rules! impl_outlive{
