@@ -120,7 +120,7 @@ impl Future for DriveFuture {
             let mut lock = match self.state {
                 DriveFutureState::Initial => {
                     let Some(_runtime) = self.rt.try_ref() else {
-                        return Poll::Ready(())
+                        return Poll::Ready(());
                     };
 
                     // Dirty hack to get a owned lock,
