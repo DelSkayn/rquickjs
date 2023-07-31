@@ -96,18 +96,18 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn new(ctx: &'js Context) -> Self {
-        unsafe { qjs::JS_DupContext(ctx.ctx.as_ptr()) };
+        unsafe { qjs::JS_DupContext(ctx.0.ctx.as_ptr()) };
         Ctx {
-            ctx: ctx.ctx,
+            ctx: ctx.0.ctx,
             _marker: Invariant::new(),
         }
     }
 
     #[cfg(feature = "futures")]
     pub(crate) unsafe fn new_async(ctx: &'js AsyncContext) -> Self {
-        unsafe { qjs::JS_DupContext(ctx.ctx.as_ptr()) };
+        unsafe { qjs::JS_DupContext(ctx.0.ctx.as_ptr()) };
         Ctx {
-            ctx: ctx.ctx,
+            ctx: ctx.0.ctx,
             _marker: Invariant::new(),
         }
     }

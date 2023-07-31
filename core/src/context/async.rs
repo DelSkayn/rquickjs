@@ -15,7 +15,7 @@ use crate::{
     Ctx, Error, Result,
 };
 
-use super::{intrinsic, ContextBuilder, Intrinsic};
+use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
 
 struct WithFuture<'js, R> {
     future: Pin<Box<dyn Future<Output = R> + 'js + Send>>,
@@ -43,7 +43,7 @@ impl<'js, R> Future for WithFuture<'js, R> {
                 break;
             }
         }
-        self.lock = self.context.rt.inner.lock_arc();
+        self.lock = self.context.0.rt.inner.lock_arc();
         res
     }
 }
@@ -129,138 +129,20 @@ macro_rules! async_with{
     };
 }
 
-/// An asynchronous single execution context with its own global variables and stack.
-///
-/// Can share objects with other contexts of the same runtime.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-pub struct AsyncContext {
+pub(crate) struct Inner {
     pub(crate) ctx: NonNull<qjs::JSContext>,
     pub(crate) rt: AsyncRuntime,
 }
 
-impl Clone for AsyncContext {
-    fn clone(&self) -> AsyncContext {
+impl Clone for Inner {
+    fn clone(&self) -> Inner {
         let ctx = unsafe { NonNull::new_unchecked(qjs::JS_DupContext(self.ctx.as_ptr())) };
         let rt = self.rt.clone();
         Self { ctx, rt }
     }
 }
 
-impl AsyncContext {
-    /// Create a async context form a raw context pointer.
-    ///
-    /// # Safety
-    /// The context must be of the correct runtime.
-    /// The context must also have valid reference count, one which can be decremented when this
-    /// object is dropped without going negative.
-    pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
-        AsyncContext { ctx, rt }
-    }
-
-    /// Creates a base context with only the required functions registered.
-    /// If additional functions are required use [`AsyncContext::custom`],
-    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
-    pub async fn base(runtime: &AsyncRuntime) -> Result<Self> {
-        Self::custom::<intrinsic::Base>(runtime).await
-    }
-
-    /// Creates a context with only the required intrinsics registered.
-    /// If additional functions are required use [`AsyncContext::custom`],
-    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
-    pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
-        let guard = runtime.inner.lock().await;
-        let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
-        unsafe { I::add_intrinsic(ctx) };
-        let res = AsyncContext {
-            ctx,
-            rt: runtime.clone(),
-        };
-        mem::drop(guard);
-
-        Ok(res)
-    }
-
-    /// Creates a context with all standart available intrinsics registered.
-    /// If precise controll is required of which functions are available use
-    /// [`AsyncContext::custom`] or [`AsyncContext::builder`].
-    pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
-        let guard = runtime.inner.lock().await;
-        let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
-        let res = AsyncContext {
-            ctx,
-            rt: runtime.clone(),
-        };
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard);
-
-        Ok(res)
-    }
-
-    /// Create a context builder for creating a context with a specific set of intrinsics
-    pub fn builder() -> ContextBuilder<()> {
-        ContextBuilder::default()
-    }
-
-    pub async fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.rt.inner.lock().await;
-        guard.update_stack_top();
-        unsafe { qjs::JS_EnableBignumExt(self.ctx.as_ptr(), i32::from(enable)) }
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard)
-    }
-
-    /// Returns the associated runtime
-    pub fn runtime(&self) -> &AsyncRuntime {
-        &self.rt
-    }
-
-    /// A entry point for manipulating and using javascript objects and scripts.
-    ///
-    /// This function is rather limited in what environment it can capture. If you need to borrow
-    /// the environment in the closure use the [`async_with!`] macro.
-    ///
-    /// Unfortunatly it is currently impossible to have closures return a generic future which has a higher
-    /// rank trait bound lifetime. So, to allow closures to work, the closure must return a boxed
-    /// future.
-    pub async fn async_with<F, R>(&self, f: F) -> R
-    where
-        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
-            + ParallelSend,
-        R: ParallelSend,
-    {
-        let future = {
-            let guard = self.rt.inner.lock().await;
-            guard.update_stack_top();
-            let ctx = unsafe { Ctx::new_async(self) };
-            f(ctx)
-        };
-        WithFuture {
-            future,
-            context: self.clone(),
-            lock: self.rt.inner.lock_arc(),
-        }
-        .await
-    }
-
-    /// A entry point for manipulating and using javascript objects and scripts.
-    ///
-    /// This closure can't return a future, if you need to await javascript promises prefer the
-    /// [`async_with!`] macro.
-    pub async fn with<F, R>(&self, f: F) -> R
-    where
-        F: for<'js> FnOnce(Ctx<'js>) -> R + ParallelSend,
-        R: ParallelSend,
-    {
-        let guard = self.rt.inner.lock().await;
-        guard.update_stack_top();
-        let ctx = unsafe { Ctx::new_async(self) };
-        f(ctx)
-    }
-}
-
-impl Drop for AsyncContext {
+impl Drop for Inner {
     fn drop(&mut self) {
         //TODO
         let guard = match self.rt.inner.try_lock() {
@@ -282,6 +164,127 @@ impl Drop for AsyncContext {
         unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
+    }
+}
+
+/// An asynchronous single execution context with its own global variables and stack.
+///
+/// Can share objects with other contexts of the same runtime.
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+#[derive(Clone)]
+pub struct AsyncContext(pub(crate) ContextRef<Inner>);
+
+impl AsyncContext {
+    /// Create a async context form a raw context pointer.
+    ///
+    /// # Safety
+    /// The context must be of the correct runtime.
+    /// The context must also have valid reference count, one which can be decremented when this
+    /// object is dropped without going negative.
+    pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
+        AsyncContext(ContextRef::new(Inner { ctx, rt }))
+    }
+
+    /// Creates a base context with only the required functions registered.
+    /// If additional functions are required use [`AsyncContext::custom`],
+    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
+    pub async fn base(runtime: &AsyncRuntime) -> Result<Self> {
+        Self::custom::<intrinsic::Base>(runtime).await
+    }
+
+    /// Creates a context with only the required intrinsics registered.
+    /// If additional functions are required use [`AsyncContext::custom`],
+    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
+    pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
+        let guard = runtime.inner.lock().await;
+        let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
+            .ok_or_else(|| Error::Allocation)?;
+        unsafe { I::add_intrinsic(ctx) };
+        let res = Inner {
+            ctx,
+            rt: runtime.clone(),
+        };
+        mem::drop(guard);
+
+        Ok(AsyncContext(ContextRef::new(res)))
+    }
+
+    /// Creates a context with all standart available intrinsics registered.
+    /// If precise controll is required of which functions are available use
+    /// [`AsyncContext::custom`] or [`AsyncContext::builder`].
+    pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
+        let guard = runtime.inner.lock().await;
+        let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
+            .ok_or_else(|| Error::Allocation)?;
+        let res = Inner {
+            ctx,
+            rt: runtime.clone(),
+        };
+        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
+        mem::drop(guard);
+
+        Ok(AsyncContext(ContextRef::new(res)))
+    }
+
+    /// Create a context builder for creating a context with a specific set of intrinsics
+    pub fn builder() -> ContextBuilder<()> {
+        ContextBuilder::default()
+    }
+
+    pub async fn enable_big_num_ext(&self, enable: bool) {
+        let guard = self.0.rt.inner.lock().await;
+        guard.update_stack_top();
+        unsafe { qjs::JS_EnableBignumExt(self.0.ctx.as_ptr(), i32::from(enable)) }
+        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
+        mem::drop(guard)
+    }
+
+    /// Returns the associated runtime
+    pub fn runtime(&self) -> &AsyncRuntime {
+        &self.0.rt
+    }
+
+    /// A entry point for manipulating and using javascript objects and scripts.
+    ///
+    /// This function is rather limited in what environment it can capture. If you need to borrow
+    /// the environment in the closure use the [`async_with!`] macro.
+    ///
+    /// Unfortunatly it is currently impossible to have closures return a generic future which has a higher
+    /// rank trait bound lifetime. So, to allow closures to work, the closure must return a boxed
+    /// future.
+    pub async fn async_with<F, R>(&self, f: F) -> R
+    where
+        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
+            + ParallelSend,
+        R: ParallelSend,
+    {
+        let future = {
+            let guard = self.0.rt.inner.lock().await;
+            guard.update_stack_top();
+            let ctx = unsafe { Ctx::new_async(self) };
+            f(ctx)
+        };
+        WithFuture {
+            future,
+            context: self.clone(),
+            lock: self.0.rt.inner.lock_arc(),
+        }
+        .await
+    }
+
+    /// A entry point for manipulating and using javascript objects and scripts.
+    ///
+    /// This closure can't return a future, if you need to await javascript promises prefer the
+    /// [`async_with!`] macro.
+    pub async fn with<F, R>(&self, f: F) -> R
+    where
+        F: for<'js> FnOnce(Ctx<'js>) -> R + ParallelSend,
+        R: ParallelSend,
+    {
+        let guard = self.0.rt.inner.lock().await;
+        guard.update_stack_top();
+        let ctx = unsafe { Ctx::new_async(self) };
+        f(ctx)
     }
 }
 

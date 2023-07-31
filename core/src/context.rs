@@ -3,6 +3,7 @@
 mod builder;
 pub use builder::{intrinsic, ContextBuilder, Intrinsic};
 mod ctx;
+mod r#ref;
 pub use ctx::{Ctx, EvalOptions};
 #[cfg(feature = "multi-ctx")]
 mod multi_with_impl;

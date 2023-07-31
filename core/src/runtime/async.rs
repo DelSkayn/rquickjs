@@ -214,7 +214,7 @@ impl AsyncRuntime {
             }) {
                 Err(e) => {
                     // SAFETY: Runtime is already locked so creating a context is safe.
-                    let ctx = unsafe { Ctx::from_ptr(e.0.ctx.as_ptr()) };
+                    let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx.as_ptr()) };
                     let err = ctx.catch();
                     if let Some(x) = err.clone().into_object().and_then(Exception::from_object) {
                         // TODO do somthing better with errors.
