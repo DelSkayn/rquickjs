@@ -9,7 +9,7 @@ use async_lock::futures::LockArc;
 
 use crate::AsyncRuntime;
 
-use super::{raw::RawRuntime, AsyncWeakRuntime};
+use super::{AsyncWeakRuntime, InnerRuntime};
 
 /// A structure to hold futures spawned inside the runtime.
 ///
@@ -87,7 +87,7 @@ impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
 enum DriveFutureState {
     Initial,
     Lock {
-        lock_future: LockArc<RawRuntime>,
+        lock_future: LockArc<InnerRuntime>,
         // Here to ensure the lock remains valid.
         _runtime: AsyncRuntime,
     },
@@ -141,26 +141,26 @@ impl Future for DriveFuture {
                 }
             };
 
-            lock.update_stack_top();
+            lock.runtime.update_stack_top();
 
-            unsafe { lock.get_opaque_mut() }
+            unsafe { lock.runtime.get_opaque_mut() }
                 .spawner()
                 .listen(cx.waker().clone());
 
             loop {
                 // TODO: Handle error.
-                if let Ok(true) = lock.execute_pending_job() {
+                if let Ok(true) = lock.runtime.execute_pending_job() {
                     continue;
                 }
 
-                let drive = pin!(unsafe { lock.get_opaque_mut() }.spawner().drive());
+                let drive = pin!(unsafe { lock.runtime.get_opaque_mut() }.spawner().drive());
 
                 // TODO: Handle error.
                 match drive.poll(cx) {
                     Poll::Pending => {
                         // Execute pending jobs to ensure we don't dead lock when waiting on
                         // quickjs futures.
-                        while let Ok(true) = lock.execute_pending_job() {}
+                        while let Ok(true) = lock.runtime.execute_pending_job() {}
                         self.state = DriveFutureState::Initial;
                         return Poll::Pending;
                     }

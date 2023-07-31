@@ -11,7 +11,7 @@ use async_lock::futures::LockArc;
 use crate::{
     markers::ParallelSend,
     qjs,
-    runtime::{raw::RawRuntime, AsyncRuntime},
+    runtime::{AsyncRuntime, InnerRuntime},
     Ctx, Error, Result,
 };
 
@@ -20,29 +20,33 @@ use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
 struct WithFuture<'js, R> {
     future: Pin<Box<dyn Future<Output = R> + 'js + Send>>,
     context: AsyncContext,
-    lock: LockArc<RawRuntime>,
+    lock: LockArc<InnerRuntime>,
 }
 
 impl<'js, R> Future for WithFuture<'js, R> {
     type Output = R;
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut lock = ready!(pin!(&mut self.lock).poll(cx));
-        lock.update_stack_top();
-        let res = self.future.as_mut().poll(cx);
-        unsafe {
-            loop {
-                if let Ok(true) = lock.execute_pending_job() {
-                    continue;
-                }
+        let res = {
+            let mut lock = ready!(pin!(&mut self.lock).poll(cx));
+            lock.runtime.update_stack_top();
+            let res = self.future.as_mut().poll(cx);
+            unsafe {
+                loop {
+                    if let Ok(true) = lock.runtime.execute_pending_job() {
+                        continue;
+                    }
 
-                let fut = pin!(lock.get_opaque_mut().spawner().drive());
-                if let Poll::Ready(true) = fut.poll(cx) {
-                    continue;
-                }
+                    let fut = pin!(lock.runtime.get_opaque_mut().spawner().drive());
+                    if let Poll::Ready(true) = fut.poll(cx) {
+                        continue;
+                    }
 
-                break;
+                    break;
+                }
             }
-        }
+            lock.drop_pending();
+            res
+        };
         self.lock = self.context.0.rt.inner.lock_arc();
         res
     }
@@ -148,19 +152,30 @@ impl Drop for Inner {
         let guard = match self.rt.inner.try_lock() {
             Some(x) => x,
             None => {
-                let p = unsafe { &mut *(self.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
-                if p.ref_count <= 1 {
-                    // Lock was poisened, this should only happen on a panic.
-                    // We should still free the context.
-                    // TODO see if there is a way to recover from a panic which could cause the
-                    // following assertion to trigger
-                    assert!(std::thread::panicking());
+                #[cfg(not(feature = "parallel"))]
+                {
+                    let p = unsafe { &mut *(self.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
+                    if p.ref_count <= 1 {
+                        // Lock was poisened, this should only happen on a panic.
+                        // We should still free the context.
+                        // TODO see if there is a way to recover from a panic which could cause the
+                        // following assertion to trigger
+                        assert!(std::thread::panicking());
+                    }
+                    unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
+                    return;
                 }
-                unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
-                return;
+                #[cfg(feature = "parallel")]
+                {
+                    self.rt
+                        .drop_send
+                        .send(self.ctx)
+                        .expect("runtime should be alive while contexts life");
+                    return;
+                }
             }
         };
-        guard.update_stack_top();
+        guard.runtime.update_stack_top();
         unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
@@ -197,13 +212,14 @@ impl AsyncContext {
     /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
-        let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
+        let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.runtime.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
         unsafe { I::add_intrinsic(ctx) };
         let res = Inner {
             ctx,
             rt: runtime.clone(),
         };
+        guard.drop_pending();
         mem::drop(guard);
 
         Ok(AsyncContext(ContextRef::new(res)))
@@ -214,13 +230,14 @@ impl AsyncContext {
     /// [`AsyncContext::custom`] or [`AsyncContext::builder`].
     pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
-        let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
+        let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.runtime.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
         let res = Inner {
             ctx,
             rt: runtime.clone(),
         };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
+        guard.drop_pending();
         mem::drop(guard);
 
         Ok(AsyncContext(ContextRef::new(res)))
@@ -233,9 +250,10 @@ impl AsyncContext {
 
     pub async fn enable_big_num_ext(&self, enable: bool) {
         let guard = self.0.rt.inner.lock().await;
-        guard.update_stack_top();
+        guard.runtime.update_stack_top();
         unsafe { qjs::JS_EnableBignumExt(self.0.ctx.as_ptr(), i32::from(enable)) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
+        guard.drop_pending();
         mem::drop(guard)
     }
 
@@ -260,9 +278,11 @@ impl AsyncContext {
     {
         let future = {
             let guard = self.0.rt.inner.lock().await;
-            guard.update_stack_top();
+            guard.runtime.update_stack_top();
             let ctx = unsafe { Ctx::new_async(self) };
-            f(ctx)
+            let res = f(ctx);
+            guard.drop_pending();
+            res
         };
         WithFuture {
             future,
@@ -282,9 +302,11 @@ impl AsyncContext {
         R: ParallelSend,
     {
         let guard = self.0.rt.inner.lock().await;
-        guard.update_stack_top();
+        guard.runtime.update_stack_top();
         let ctx = unsafe { Ctx::new_async(self) };
-        f(ctx)
+        let res = f(ctx);
+        guard.drop_pending();
+        res
     }
 }
 
@@ -296,3 +318,47 @@ unsafe impl Send for AsyncContext {}
 // this object is sync
 #[cfg(feature = "parallel")]
 unsafe impl Sync for AsyncContext {}
+
+#[cfg(test)]
+mod test {
+    use crate::{AsyncContext, AsyncRuntime};
+
+    #[cfg(feature = "parallel")]
+    #[tokio::test]
+    async fn parallel_drop() {
+        use std::{
+            sync::{Arc, Barrier},
+            thread,
+        };
+
+        let wait_for_entry = Arc::new(Barrier::new(2));
+        let wait_for_exit = Arc::new(Barrier::new(2));
+
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx_1 = AsyncContext::full(&rt).await.unwrap();
+        let ctx_2 = AsyncContext::full(&rt).await.unwrap();
+        let wait_for_entry_c = wait_for_entry.clone();
+        let wait_for_exit_c = wait_for_exit.clone();
+        thread::spawn(move || {
+            println!("wait_for entry ctx_1");
+            wait_for_entry_c.wait();
+            println!("dropping");
+            std::mem::drop(ctx_1);
+            println!("wait_for exit ctx_1");
+            wait_for_exit_c.wait();
+        });
+
+        println!("wait_for entry ctx_2");
+        rt.run_gc().await;
+        ctx_2
+            .with(|ctx| {
+                wait_for_entry.wait();
+                println!("evaling");
+                let i: i32 = ctx.eval("2 + 8").unwrap();
+                assert_eq!(i, 10);
+                println!("wait_for exit ctx_2");
+                wait_for_exit.wait();
+            })
+            .await;
+    }
+}

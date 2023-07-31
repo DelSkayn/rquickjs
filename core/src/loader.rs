@@ -102,6 +102,7 @@ struct LoaderOpaque {
     loader: Box<dyn RawLoader>,
 }
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub(crate) struct LoaderHolder(*mut LoaderOpaque);
 

@@ -57,6 +57,7 @@ impl<'js> Opaque<'js> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct RawRuntime {
     pub(crate) rt: NonNull<qjs::JSRuntime>,
 

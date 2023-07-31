@@ -30,6 +30,7 @@ pub trait Allocator {
 
 type DynAllocator = Box<dyn Allocator>;
 
+#[derive(Debug)]
 pub(crate) struct AllocatorHolder(*mut DynAllocator);
 
 impl Drop for AllocatorHolder {

@@ -15,6 +15,8 @@ pub type InterruptHandler = Box<dyn FnMut() -> bool + Send + 'static>;
 #[cfg(feature = "futures")]
 mod r#async;
 #[cfg(feature = "futures")]
+pub(crate) use r#async::InnerRuntime;
+#[cfg(feature = "futures")]
 pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
 #[cfg(feature = "futures")]
 mod spawner;

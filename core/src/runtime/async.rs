@@ -5,12 +5,17 @@ use std::{
     sync::{Arc, Weak},
 };
 
+#[cfg(feature = "parallel")]
+use std::sync::mpsc::{self, Receiver, Sender};
+
 use async_lock::Mutex;
 
 #[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{RawLoader, Resolver};
+#[cfg(feature = "parallel")]
+use crate::qjs;
 use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Error, Exception, Result};
 
 use super::{
@@ -19,13 +24,43 @@ use super::{
     InterruptHandler, MemoryUsage,
 };
 
+#[derive(Debug)]
+pub(crate) struct InnerRuntime {
+    pub runtime: RawRuntime,
+    #[cfg(feature = "parallel")]
+    pub drop_recv: Receiver<NonNull<qjs::JSContext>>,
+}
+
+impl InnerRuntime {
+    pub fn drop_pending(&self) {
+        #[cfg(feature = "parallel")]
+        while let Ok(x) = self.drop_recv.try_recv() {
+            unsafe { qjs::JS_FreeContext(x.as_ptr()) }
+        }
+    }
+}
+
+impl Drop for InnerRuntime {
+    fn drop(&mut self) {
+        self.drop_pending();
+    }
+}
+
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
-pub struct AsyncWeakRuntime(Weak<Mutex<RawRuntime>>);
+pub struct AsyncWeakRuntime {
+    inner: Weak<Mutex<InnerRuntime>>,
+    #[cfg(feature = "parallel")]
+    drop_send: Sender<NonNull<qjs::JSContext>>,
+}
 
 impl AsyncWeakRuntime {
     pub fn try_ref(&self) -> Option<AsyncRuntime> {
-        self.0.upgrade().map(|inner| AsyncRuntime { inner })
+        self.inner.upgrade().map(|inner| AsyncRuntime {
+            inner,
+            #[cfg(feature = "parallel")]
+            drop_send: self.drop_send.clone(),
+        })
     }
 }
 
@@ -34,7 +69,9 @@ impl AsyncWeakRuntime {
 #[derive(Clone)]
 pub struct AsyncRuntime {
     // use Arc instead of Ref so we can use OwnedLock
-    pub(crate) inner: Arc<Mutex<RawRuntime>>,
+    pub(crate) inner: Arc<Mutex<InnerRuntime>>,
+    #[cfg(feature = "parallel")]
+    pub(crate) drop_send: Sender<NonNull<qjs::JSContext>>,
 }
 
 // Since all functions which use runtime are behind a mutex
@@ -63,9 +100,19 @@ impl AsyncRuntime {
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Result<Self> {
         let opaque = Opaque::with_spawner();
-        let rt = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
+        let runtime = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
+
+        #[cfg(feature = "parallel")]
+        let (drop_send, drop_recv) = mpsc::channel();
+
         Ok(Self {
-            inner: Arc::new(Mutex::new(rt)),
+            inner: Arc::new(Mutex::new(InnerRuntime {
+                runtime,
+                #[cfg(feature = "parallel")]
+                drop_recv,
+            })),
+            #[cfg(feature = "parallel")]
+            drop_send,
         })
     }
 
@@ -81,16 +128,30 @@ impl AsyncRuntime {
         A: Allocator + 'static,
     {
         let opaque = Opaque::with_spawner();
-        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
+        let runtime = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
             .ok_or(Error::Allocation)?;
+
+        #[cfg(feature = "parallel")]
+        let (drop_send, drop_recv) = mpsc::channel();
+
         Ok(Self {
-            inner: Arc::new(Mutex::new(rt)),
+            inner: Arc::new(Mutex::new(InnerRuntime {
+                runtime,
+                #[cfg(feature = "parallel")]
+                drop_recv,
+            })),
+            #[cfg(feature = "parallel")]
+            drop_send,
         })
     }
 
     /// Get weak ref to runtime
     pub fn weak(&self) -> AsyncWeakRuntime {
-        AsyncWeakRuntime(Arc::downgrade(&self.inner))
+        AsyncWeakRuntime {
+            inner: Arc::downgrade(&self.inner),
+            #[cfg(feature = "parallel")]
+            drop_send: self.drop_send.clone(),
+        }
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.
@@ -99,7 +160,11 @@ impl AsyncRuntime {
     #[inline]
     pub async fn set_interrupt_handler(&self, handler: Option<InterruptHandler>) {
         unsafe {
-            self.inner.lock().await.set_interrupt_handler(handler);
+            self.inner
+                .lock()
+                .await
+                .runtime
+                .set_interrupt_handler(handler);
         }
     }
 
@@ -112,7 +177,7 @@ impl AsyncRuntime {
         L: RawLoader + 'static,
     {
         unsafe {
-            self.inner.lock().await.set_loader(resolver, loader);
+            self.inner.lock().await.runtime.set_loader(resolver, loader);
         }
     }
 
@@ -120,7 +185,7 @@ impl AsyncRuntime {
     pub async fn set_info<S: Into<Vec<u8>>>(&self, info: S) -> Result<()> {
         let string = CString::new(info)?;
         unsafe {
-            self.inner.lock().await.set_info(string);
+            self.inner.lock().await.runtime.set_info(string);
         }
         Ok(())
     }
@@ -133,7 +198,7 @@ impl AsyncRuntime {
     /// as is the case for the "rust-alloc" or "allocator" features.
     pub async fn set_memory_limit(&self, limit: usize) {
         unsafe {
-            self.inner.lock().await.set_memory_limit(limit);
+            self.inner.lock().await.runtime.set_memory_limit(limit);
         }
     }
 
@@ -142,14 +207,14 @@ impl AsyncRuntime {
     /// The default values is 256x1024 bytes.
     pub async fn set_max_stack_size(&self, limit: usize) {
         unsafe {
-            self.inner.lock().await.set_max_stack_size(limit);
+            self.inner.lock().await.runtime.set_max_stack_size(limit);
         }
     }
 
     /// Set a memory threshold for garbage collection.
     pub async fn set_gc_threshold(&self, threshold: usize) {
         unsafe {
-            self.inner.lock().await.set_gc_threshold(threshold);
+            self.inner.lock().await.runtime.set_gc_threshold(threshold);
         }
     }
 
@@ -161,13 +226,15 @@ impl AsyncRuntime {
     /// cyclic references.
     pub async fn run_gc(&self) {
         unsafe {
-            self.inner.lock().await.run_gc();
+            let mut lock = self.inner.lock().await;
+            lock.drop_pending();
+            lock.runtime.run_gc();
         }
     }
 
     /// Get memory usage stats
     pub async fn memory_usage(&self) -> MemoryUsage {
-        unsafe { self.inner.lock().await.memory_usage() }
+        unsafe { self.inner.lock().await.runtime.memory_usage() }
     }
 
     /// Test for pending jobs
@@ -177,7 +244,8 @@ impl AsyncRuntime {
     pub async fn is_job_pending(&self) -> bool {
         let mut lock = self.inner.lock().await;
 
-        lock.is_job_pending() || !unsafe { lock.get_opaque_mut().spawner() }.is_empty()
+        lock.runtime.is_job_pending()
+            || !unsafe { lock.runtime.get_opaque_mut().spawner() }.is_empty()
     }
 
     /// Execute first pending job
@@ -186,9 +254,10 @@ impl AsyncRuntime {
     #[inline]
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.inner.lock().await;
-        lock.update_stack_top();
+        lock.runtime.update_stack_top();
+        lock.drop_pending();
 
-        let job_res = lock.execute_pending_job().map_err(|e| {
+        let job_res = lock.runtime.execute_pending_job().map_err(|e| {
             let ptr =
                 NonNull::new(e).expect("executing pending job returned a null context on error");
             AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
@@ -197,17 +266,21 @@ impl AsyncRuntime {
             return Ok(true);
         }
 
-        Ok(unsafe { lock.get_opaque_mut() }.spawner().drive().await)
+        Ok(unsafe { lock.runtime.get_opaque_mut() }
+            .spawner()
+            .drive()
+            .await)
     }
 
     /// Run all futures and jobs in the runtime until all are finished.
     #[inline]
     pub async fn idle(&self) {
         let mut lock = self.inner.lock().await;
-        lock.update_stack_top();
+        lock.runtime.update_stack_top();
+        lock.drop_pending();
 
         loop {
-            match lock.execute_pending_job().map_err(|e| {
+            match lock.runtime.execute_pending_job().map_err(|e| {
                 let ptr = NonNull::new(e)
                     .expect("executing pending job returned a null context on error");
                 AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
@@ -227,7 +300,11 @@ impl AsyncRuntime {
                 Ok(false) => {}
             }
 
-            if unsafe { lock.get_opaque_mut() }.spawner().drive().await {
+            if unsafe { lock.runtime.get_opaque_mut() }
+                .spawner()
+                .drive()
+                .await
+            {
                 continue;
             }
 

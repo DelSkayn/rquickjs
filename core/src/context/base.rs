@@ -231,6 +231,34 @@ mod test {
     }
 
     #[test]
+    #[cfg(feature = "parallel")]
+    fn parallel_drop() {
+        use std::{
+            sync::{Arc, Barrier},
+            thread,
+        };
+
+        let wait_for_entry = Arc::new(Barrier::new(2));
+
+        let rt = Runtime::new().unwrap();
+        let ctx_1 = Context::full(&rt).unwrap();
+        let ctx_2 = Context::full(&rt).unwrap();
+        let wait_for_entry_c = wait_for_entry.clone();
+        thread::spawn(move || {
+            wait_for_entry_c.wait();
+            std::mem::drop(ctx_1);
+            println!("done");
+        });
+
+        ctx_2.with(|ctx| {
+            wait_for_entry.wait();
+            let i: i32 = ctx.eval("2 + 8").unwrap();
+            assert_eq!(i, 10);
+        });
+        println!("done");
+    }
+
+    #[test]
     #[should_panic(
         expected = "Error:[eval_script]:1 invalid first character of private name\n    at eval_script:1\n"
     )]
