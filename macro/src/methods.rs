@@ -4,7 +4,7 @@ use darling::{FromAttributes, FromMeta};
 use proc_macro2::{Ident, Span, TokenStream};
 use proc_macro_error::{abort, emit_warning};
 use quote::{format_ident, quote};
-use syn::ItemImpl;
+use syn::{ItemImpl, Type};
 
 use crate::common::{add_js_lifetime, crate_ident, Case, BASE_PREFIX, IMPL_PREFIX};
 
@@ -77,6 +77,25 @@ impl ImplFnAttr {
         if self.enumerable && !(self.get || self.set) {
             abort!(span, "enumerable can only be set for getters and setters.")
         }
+    }
+}
+
+pub fn get_class_name(ty: &Type) -> String {
+    match ty {
+        Type::Array(_) => todo!(),
+        Type::Paren(x) => get_class_name(&x.elem),
+        Type::Path(x) => x.path.segments.first().unwrap().ident.to_string(),
+        Type::Tuple(x) => {
+            let name = x
+                .elems
+                .iter()
+                .map(get_class_name)
+                .collect::<Vec<_>>()
+                .join("_");
+
+            format!("tuple_{name}")
+        }
+        _ => todo!(),
     }
 }
 
@@ -221,6 +240,9 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
         TokenStream::new()
     };
 
+    let class_name = get_class_name(&self_ty);
+    let impl_mod_name = format_ident!("__impl_methods_{class_name}__");
+
     quote! {
         #(#attrs)*
         #impl_token #generics #self_ty {
@@ -229,23 +251,27 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
             #constructor_impl
         }
 
-        #(#function_js_impls)*
-        #(#accessor_js_impls)*
-        #constructor_js_impl
 
-        #[allow(non_upper_case_globals)]
-        impl #generics #self_ty{
-            #(#associated_types)*
-        }
+        mod #impl_mod_name{
+            pub use super::*;
+            #(#function_js_impls)*
+            #(#accessor_js_impls)*
+            #constructor_js_impl
 
-        impl #generics #lib_crate::class::impl_::MethodImplementor<#self_ty> for #lib_crate::class::impl_::MethodImpl<#self_ty> {
-            fn implement(&self, _proto: &#lib_crate::Object<'_>) -> #lib_crate::Result<()>{
-                #(#function_apply_proto)*
-                #(#accessor_apply_proto)*
-                Ok(())
+            #[allow(non_upper_case_globals)]
+            impl #generics #self_ty{
+                #(#associated_types)*
             }
-        }
 
-        #constructor_create
+            impl #generics #lib_crate::class::impl_::MethodImplementor<#self_ty> for #lib_crate::class::impl_::MethodImpl<#self_ty> {
+                fn implement(&self, _proto: &#lib_crate::Object<'_>) -> #lib_crate::Result<()>{
+                    #(#function_apply_proto)*
+                    #(#accessor_apply_proto)*
+                    Ok(())
+                }
+            }
+
+            #constructor_create
+        }
     }
 }

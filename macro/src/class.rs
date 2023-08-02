@@ -44,7 +44,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemStruct) -> TokenStream {
         .enumerate()
         .map(|(idx, x)| x.expand_property(&lib_crate, idx, attr.rename_accessors));
 
-    let impl_mod = format_ident!("__impl__{}", ident);
+    let impl_mod = format_ident!("__impl_class_{}__", ident);
 
     let fields = match fields {
         Fields::Named(_) => {

@@ -1,6 +1,6 @@
 use darling::FromMeta;
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::abort_call_site;
+use proc_macro_error::{abort, abort_call_site};
 use syn::ItemMod;
 
 use crate::common::Case;
@@ -12,14 +12,43 @@ pub(crate) struct AttrItem {
     #[darling(rename = "crate")]
     crate_: Option<Ident>,
     rename: Option<String>,
-    rename_constants: Option<Case>,
-    rename_functions: Option<Case>,
+    rename_all: Option<Case>,
 }
 
-pub(crate) fn expand(_attr: AttrItem, item: ItemMod) -> TokenStream {
-    let ItemMod { content, .. } = item;
+pub struct JsModule {
+    name: Ident,
+}
 
-    let Some(_content) = content else {
+// - exports
+//
+// static / const: Variable
+// fn: Function / Calculated variable,
+// struct / enum: Class,
+// type: Class
+//
+// impl: class body,
+//
+// -  missing
+//
+// - unused
+//
+// use: Rexport?
+//
+// - not allowed
+//
+// union,extern
+//
+//
+pub(crate) fn expand(_attr: AttrItem, item: ItemMod) -> TokenStream {
+    let ItemMod {
+        content, unsafety, ..
+    } = item;
+
+    if let Some(unsafe_) = unsafety {
+        abort!(unsafe_, "unsafe modules are not supported");
+    }
+
+    let Some(content_) = content else {
         abort_call_site!(
             "The `module` macro can only be applied to modules with a definition in the same file."
         )
