@@ -1,7 +1,7 @@
-use rquickjs::{class::Trace, Class, Context, Object, Runtime};
+use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime};
 
 #[derive(Trace)]
-#[rquickjs::class(rename_accessors = "camelCase")]
+#[rquickjs::class(rename_all = "camelCase")]
 pub struct TestClass<'js> {
     #[qjs(get, set)]
     inner_object: Object<'js>,
@@ -54,6 +54,7 @@ pub fn main() {
             t.innerObject.test = 42;
         "#,
         )
+        .catch(&ctx)
         .unwrap();
 
         let b = cls.borrow();

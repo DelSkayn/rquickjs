@@ -1,36 +1,94 @@
-use darling::FromMeta;
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use syn::{
-    fold::Fold, punctuated::Punctuated, token::Comma, FnArg, ItemFn, Signature, Type, Visibility,
+    fold::Fold,
+    parse::{Parse, ParseStream},
+    punctuated::Punctuated,
+    token::Comma,
+    FnArg, LitStr, Signature, Token, Type, Visibility,
 };
 
-use crate::common::{crate_ident, SelfReplacer, BASE_PREFIX};
+use crate::{
+    attrs::{take_attributes, OptionList, ValueOption},
+    common::{crate_ident, kw, AbortResultExt, SelfReplacer, BASE_PREFIX},
+};
 
-#[derive(Debug, FromMeta, Default)]
-#[darling(default)]
-pub(crate) struct AttrItem {
-    #[darling(rename = "crate")]
-    crate_: Option<Ident>,
-    /// The ident prefix, defaults to 'js_'.
-    prefix: Option<String>,
-    rename: Option<String>,
+#[derive(Debug, Default)]
+pub(crate) struct FunctionConfig {
+    pub crate_: Option<String>,
+    pub prefix: Option<String>,
+    pub rename: Option<String>,
 }
 
-pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
-    let ItemFn {
-        ref vis, ref sig, ..
-    } = item;
+pub(crate) enum FunctionOption {
+    Prefix(ValueOption<kw::prefix, LitStr>),
+    Crate(ValueOption<Token![crate], LitStr>),
+    Rename(ValueOption<kw::rename, LitStr>),
+}
 
-    let prefix = attr.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
-    let lib_crate = attr.crate_.unwrap_or_else(crate_ident);
+impl Parse for FunctionOption {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![crate]) {
+            input.parse().map(Self::Crate)
+        } else if input.peek(kw::prefix) {
+            input.parse().map(Self::Prefix)
+        } else if input.peek(kw::rename) {
+            input.parse().map(Self::Rename)
+        } else {
+            Err(syn::Error::new(input.span(), "invalid class attribute"))
+        }
+    }
+}
 
-    let func = JsFunction::new(vis.clone(), sig, None);
+impl FunctionConfig {
+    pub fn apply(&mut self, option: &FunctionOption) {
+        match option {
+            FunctionOption::Crate(ref x) => {
+                self.crate_ = Some(x.value.value());
+            }
+            FunctionOption::Rename(ref x) => {
+                self.rename = Some(x.value.value());
+            }
+            FunctionOption::Prefix(ref x) => {
+                self.rename = Some(x.value.value());
+            }
+        }
+    }
+
+    pub fn crate_name(&self) -> String {
+        self.crate_.clone().unwrap_or_else(crate_ident)
+    }
+}
+
+pub(crate) fn expand(options: OptionList<FunctionOption>, mut item: syn::ItemFn) -> TokenStream {
+    let mut config = FunctionConfig::default();
+    for option in options.0.iter() {
+        config.apply(option)
+    }
+
+    take_attributes(&mut item.attrs, |attr| {
+        if !attr.path().is_ident("qjs") {
+            return Ok(false);
+        }
+
+        let options: OptionList<FunctionOption> = attr.parse_args()?;
+        for option in options.0.iter() {
+            config.apply(option)
+        }
+
+        Ok(true)
+    })
+    .unwrap_or_abort();
+
+    let crate_name = format_ident!("{}", config.crate_name());
+    let prefix = config.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
+
+    let func = JsFunction::new(item.vis.clone(), &item.sig, None);
 
     let carry_type = func.expand_carry_type(&prefix);
-    let impl_ = func.expand_to_js_function_impl(&prefix, &lib_crate);
-    let into_js = func.expand_into_js_impl(&prefix, &lib_crate);
+    let impl_ = func.expand_to_js_function_impl(&prefix, &crate_name);
+    let into_js = func.expand_into_js_impl(&prefix, &crate_name);
 
     quote! {
         #item
@@ -43,7 +101,7 @@ pub(crate) fn expand(attr: AttrItem, item: ItemFn) -> TokenStream {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub(crate) struct JsFunction {
     pub vis: Visibility,
     pub name: Ident,

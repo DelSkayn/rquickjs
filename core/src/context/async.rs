@@ -321,8 +321,8 @@ unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]
 mod test {
+    #[cfg(feature = "parallel")]
     use crate::{AsyncContext, AsyncRuntime};
-
     #[cfg(feature = "parallel")]
     #[tokio::test]
     async fn parallel_drop() {

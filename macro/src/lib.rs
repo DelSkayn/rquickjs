@@ -1,6 +1,9 @@
-use darling::{export::NestedMeta, FromMeta};
+use attrs::OptionList;
+use class::ClassOption;
+use function::FunctionOption;
+use methods::ImplOption;
 use proc_macro::TokenStream as TokenStream1;
-use proc_macro_error::{abort, abort_call_site, proc_macro_error};
+use proc_macro_error::{abort, proc_macro_error};
 use syn::{parse_macro_input, DeriveInput, Item};
 
 #[cfg(test)]
@@ -12,51 +15,31 @@ macro_rules! assert_eq_tokens {
     };
 }
 
+mod attrs;
 mod class;
 mod common;
 mod embed;
 mod fields;
 mod function;
 mod methods;
-mod module;
+//mod module;
 mod trace;
 
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
-    let meta = match NestedMeta::parse_meta_list(attr.into()) {
-        Ok(x) => x,
-        Err(e) => return e.into_compile_error().into(),
-    };
-
-    let attr = class::AttrItem::from_list(&meta).unwrap_or_else(|error| {
-        abort_call_site!("{}", error);
-    });
-
+    let options = parse_macro_input!(attr as OptionList<ClassOption>);
     let item = parse_macro_input!(item as Item);
-    match item {
-        Item::Struct(item) => TokenStream1::from(class::expand(attr, item)),
-        item => {
-            abort!(item, "#[class] macro can only be used on structs")
-        }
-    }
+    TokenStream1::from(class::expand(options, item))
 }
 
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
-    let meta = match NestedMeta::parse_meta_list(attr.into()) {
-        Ok(x) => x,
-        Err(e) => return e.into_compile_error().into(),
-    };
-
-    let attr = function::AttrItem::from_list(&meta).unwrap_or_else(|error| {
-        abort_call_site!("{}", error);
-    });
-
+    let options = parse_macro_input!(attr as OptionList<FunctionOption>);
     let item = parse_macro_input!(item as Item);
     match item {
-        Item::Fn(func) => function::expand(attr, func).into(),
+        Item::Fn(func) => function::expand(options, func).into(),
         item => {
             abort!(item, "#[function] macro can only be used on functions")
         }
@@ -66,18 +49,10 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
-    let meta = match NestedMeta::parse_meta_list(attr.into()) {
-        Ok(x) => x,
-        Err(e) => return e.into_compile_error().into(),
-    };
-
-    let attr = methods::ImplAttr::from_list(&meta).unwrap_or_else(|error| {
-        abort_call_site!("{}", error);
-    });
-
+    let options = parse_macro_input!(attr as OptionList<ImplOption>);
     let item = parse_macro_input!(item as Item);
     match item {
-        Item::Impl(item) => methods::expand(attr, item).into(),
+        Item::Impl(item) => methods::expand(options, item).into(),
         item => {
             abort!(item, "#[methods] macro can only be used on impl blocks")
         }
@@ -86,23 +61,8 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
-    let meta = match NestedMeta::parse_meta_list(attr.into()) {
-        Ok(x) => x,
-        Err(e) => return e.into_compile_error().into(),
-    };
-
-    let attr = module::AttrItem::from_list(&meta).unwrap_or_else(|error| {
-        abort_call_site!("{}", error);
-    });
-
-    let item = parse_macro_input!(item as Item);
-    match item {
-        Item::Mod(item) => module::expand(attr, item).into(),
-        item => {
-            abort!(item, "#[module] macro can only be used on a module")
-        }
-    }
+pub fn module(_attr: TokenStream1, _item: TokenStream1) -> TokenStream1 {
+    todo!()
 }
 
 #[proc_macro_derive(Trace, attributes(qjs))]

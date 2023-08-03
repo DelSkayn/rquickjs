@@ -1,10 +1,12 @@
 use convert_case::Case as ConvertCase;
-use darling::FromMeta;
-use proc_macro2::{Ident, Span};
+use proc_macro2::Span;
 use proc_macro_crate::FoundCrate;
-use proc_macro_error::abort_call_site;
-use quote::format_ident;
-use syn::{fold::Fold, Generics, Lifetime, LifetimeParam, Type};
+use proc_macro_error::{abort, abort_call_site};
+use syn::{
+    fold::Fold,
+    parse::{Parse, ParseStream},
+    Generics, Lifetime, LifetimeParam, LitStr, Type,
+};
 
 /// prefix for getter implementations
 pub const GET_PREFIX: &str = "__impl_get_";
@@ -18,20 +20,48 @@ pub const IMPL_PREFIX: &str = "__impl_";
 /// Casing for mass case convert.
 ///
 /// Only allowing casings which are valid js identifiers.
-#[derive(FromMeta, Clone, Copy, Eq, PartialEq, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
 pub enum Case {
-    #[darling(rename = "lowercase")]
     Lower,
-    #[darling(rename = "UPPERCASE")]
     Upper,
-    #[darling(rename = "camelCase")]
     Camel,
-    #[darling(rename = "PascalCase")]
     Pascal,
-    #[darling(rename = "snake_case")]
     Snake,
-    #[darling(rename = "SCREAMING_SNAKE_CASE")]
     ScreamingSnake,
+}
+
+impl Parse for Case {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let str_lit: LitStr = input.parse()?;
+        let value = str_lit.value();
+        match value.as_str() {
+            "lowercase" => Ok(Case::Lower),
+            "UPPERCASE" => Ok(Case::Upper),
+            "camelCase" => Ok(Case::Camel),
+            "PascalCase" => Ok(Case::Pascal),
+            "snake_case" => Ok(Case::Snake),
+            "SCREAMING_SNAKE" => Ok(Case::ScreamingSnake),
+            _ => Err(syn::Error::new(str_lit.span(), "Invalid casing, expected one of 'lowercase', 'UPPERCASE', 'camelCase','PascalCase','snake_case','SCREAMING_SNAKE'"))
+        }
+    }
+}
+
+pub(crate) trait AbortResultExt {
+    type Ouput;
+    fn unwrap_or_abort(self) -> Self::Ouput;
+}
+
+impl<T> AbortResultExt for syn::Result<T> {
+    type Ouput = T;
+
+    fn unwrap_or_abort(self) -> Self::Ouput {
+        match self {
+            Ok(x) => x,
+            Err(e) => {
+                abort!(e.span(), "{e}")
+            }
+        }
+    }
 }
 
 impl Case {
@@ -47,17 +77,13 @@ impl Case {
     }
 }
 
-pub(crate) fn crate_ident() -> Ident {
+pub(crate) fn crate_ident() -> String {
     match proc_macro_crate::crate_name("rquickjs") {
         Err(e) => {
             abort_call_site!("could not find rquickjs package"; note = e);
         }
-        Ok(FoundCrate::Itself) => {
-            format_ident!("rquickjs")
-        }
-        Ok(FoundCrate::Name(x)) => {
-            format_ident!("{}", x)
-        }
+        Ok(FoundCrate::Itself) => "rquickjs".to_owned(),
+        Ok(FoundCrate::Name(x)) => x.to_string(),
     }
 }
 
@@ -99,4 +125,18 @@ impl<'a> Fold for SelfReplacer<'a> {
             Type::Path(self.fold_type_path(x))
         }
     }
+}
+
+pub(crate) mod kw {
+    syn::custom_keyword!(frozen);
+    syn::custom_keyword!(skip_trace);
+    syn::custom_keyword!(rename);
+    syn::custom_keyword!(rename_all);
+    syn::custom_keyword!(get);
+    syn::custom_keyword!(set);
+    syn::custom_keyword!(constructor);
+    syn::custom_keyword!(skip);
+    syn::custom_keyword!(configurable);
+    syn::custom_keyword!(enumerable);
+    syn::custom_keyword!(prefix);
 }

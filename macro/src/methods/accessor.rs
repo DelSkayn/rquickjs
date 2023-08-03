@@ -4,11 +4,11 @@ use quote::quote;
 
 use crate::common::{Case, GET_PREFIX, SET_PREFIX};
 
-use super::method::JsMethod;
+use super::method::Method;
 
 pub struct JsAccessor {
-    get: Option<JsMethod>,
-    set: Option<JsMethod>,
+    get: Option<Method>,
+    set: Option<Method>,
 }
 
 impl JsAccessor {
@@ -19,7 +19,7 @@ impl JsAccessor {
         }
     }
 
-    pub(crate) fn define_get(&mut self, method: JsMethod, rename: Option<Case>) {
+    pub(crate) fn define_get(&mut self, method: Method, rename: Option<Case>) {
         if let Some(first_getter) = self.get.as_ref() {
             let first_span = first_getter.attr_span;
             emit_warning!(
@@ -30,7 +30,7 @@ impl JsAccessor {
         self.get = Some(method);
     }
 
-    pub(crate) fn define_set(&mut self, method: JsMethod, rename: Option<Case>) {
+    pub(crate) fn define_set(&mut self, method: Method, rename: Option<Case>) {
         if let Some(first_setter) = self.set.as_ref() {
             let first_span = first_setter.attr_span;
             emit_warning!(
@@ -66,8 +66,8 @@ impl JsAccessor {
     pub fn expand_apply_to_proto(&self, lib_crate: &Ident, case: Option<Case>) -> TokenStream {
         match (self.get.as_ref(), self.set.as_ref()) {
             (Some(get), Some(set)) => {
-                let configurable = get.parse_attrs.configurable || set.parse_attrs.configurable;
-                let enumerable = get.parse_attrs.enumerable || set.parse_attrs.enumerable;
+                let configurable = get.config.configurable || set.config.configurable;
+                let enumerable = get.config.enumerable || set.config.enumerable;
 
                 let name = get.name(case);
 
@@ -87,8 +87,8 @@ impl JsAccessor {
                 )?;}
             }
             (Some(get), None) => {
-                let configurable = get.parse_attrs.configurable;
-                let enumerable = get.parse_attrs.enumerable;
+                let configurable = get.config.configurable;
+                let enumerable = get.config.enumerable;
 
                 let name = get.name(case);
 
@@ -107,8 +107,8 @@ impl JsAccessor {
                 )?;}
             }
             (None, Some(set)) => {
-                let configurable = set.parse_attrs.configurable;
-                let enumerable = set.parse_attrs.enumerable;
+                let configurable = set.config.configurable;
+                let enumerable = set.config.enumerable;
 
                 let name = set.name(case);
 

@@ -37,7 +37,7 @@ impl TestClass {
         self.another_value = v
     }
 
-    #[qjs(r#static)]
+    #[qjs(static)]
     pub fn compare(a: &Self, b: &Self) -> bool {
         a.value == b.value && a.another_value == b.another_value
     }

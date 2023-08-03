@@ -1,81 +1,62 @@
 use std::collections::HashMap;
 
-use darling::{FromAttributes, FromMeta};
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::{Span, TokenStream};
 use proc_macro_error::{abort, emit_warning};
 use quote::{format_ident, quote};
-use syn::{ItemImpl, Type};
+use syn::{
+    parse::{Parse, ParseStream},
+    ItemImpl, LitStr, Token, Type,
+};
 
-use crate::common::{add_js_lifetime, crate_ident, Case, BASE_PREFIX, IMPL_PREFIX};
+use crate::{
+    attrs::{take_attributes, OptionList, ValueOption},
+    common::{add_js_lifetime, crate_ident, kw, AbortResultExt, Case, BASE_PREFIX, IMPL_PREFIX},
+};
 
 mod accessor;
 use accessor::JsAccessor;
 mod method;
-use method::JsMethod;
+use method::Method;
 
-#[derive(Debug, FromMeta, Default)]
-#[darling(default)]
-pub(crate) struct ImplAttr {
+#[derive(Default)]
+pub(crate) struct ImplConfig {
     prefix: Option<String>,
-    #[darling(rename = "crate")]
-    crate_: Option<Ident>,
-    rename_methods: Option<Case>,
-    rename_accessors: Option<Case>,
-    rename_constants: Option<Case>,
+    crate_: Option<String>,
+    rename_all: Option<Case>,
 }
 
-#[derive(Debug, FromAttributes, Default, Clone)]
-#[darling(default)]
-#[darling(attributes(qjs))]
-pub(crate) struct ImplFnAttr {
-    constructor: bool,
-    skip: bool,
-    r#static: bool,
-    configurable: bool,
-    enumerable: bool,
-    get: bool,
-    set: bool,
-    rename: Option<String>,
+impl ImplConfig {
+    pub fn apply(&mut self, option: &ImplOption) {
+        match option {
+            ImplOption::Prefix(x) => {
+                self.prefix = Some(x.value.value());
+            }
+            ImplOption::Crate(x) => {
+                self.prefix = Some(x.value.value());
+            }
+            ImplOption::RenameAll(x) => {
+                self.rename_all = Some(x.value);
+            }
+        }
+    }
 }
 
-impl ImplFnAttr {
-    /// Make sure attrs aren't applied in ways they shouldn't be.
-    /// Span: The span the error should be attached to.
-    pub fn validate(&self, span: Span) {
-        if self.get && self.set {
-            abort!(
-                span,
-                "a function can't both be a setter and a getter at the same time."
-            )
-        }
+pub(crate) enum ImplOption {
+    Prefix(ValueOption<kw::prefix, LitStr>),
+    Crate(ValueOption<Token![crate], LitStr>),
+    RenameAll(ValueOption<kw::rename_all, Case>),
+}
 
-        if self.constructor && self.rename.is_some() {
-            emit_warning!(span, "renaming a constructor has no effect")
-        }
-
-        if self.constructor && self.get {
-            abort!(
-                span,
-                "a function can't both be a getter and a constructor at the same time."
-            )
-        }
-
-        if self.constructor && self.set {
-            abort!(
-                span,
-                "a function can't both be a setter and a constructor at the same time."
-            )
-        }
-
-        if self.configurable && !(self.get || self.set) {
-            abort!(
-                span,
-                "configurable can only be set for getters and setters."
-            )
-        }
-
-        if self.enumerable && !(self.get || self.set) {
-            abort!(span, "enumerable can only be set for getters and setters.")
+impl Parse for ImplOption {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(kw::prefix) {
+            input.parse().map(Self::Prefix)
+        } else if input.peek(Token![crate]) {
+            input.parse().map(Self::Crate)
+        } else if input.peek(kw::rename_all) {
+            input.parse().map(Self::RenameAll)
+        } else {
+            Err(syn::Error::new(input.span(), "invalid impl attribute"))
         }
     }
 }
@@ -99,9 +80,14 @@ pub fn get_class_name(ty: &Type) -> String {
     }
 }
 
-pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
+pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenStream {
+    let mut config = ImplConfig::default();
+    for option in options.0.iter() {
+        config.apply(option)
+    }
+
     let ItemImpl {
-        attrs,
+        mut attrs,
         defaultness,
         unsafety,
         impl_token,
@@ -111,6 +97,20 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
         items,
         ..
     } = item;
+
+    take_attributes(&mut attrs, |attr| {
+        if !attr.path().is_ident("qjs") {
+            return Ok(false);
+        }
+
+        let options: OptionList<ImplOption> = attr.parse_args()?;
+        for option in options.0.iter() {
+            config.apply(option)
+        }
+
+        Ok(true)
+    })
+    .unwrap_or_abort();
 
     if let Some(trait_) = trait_.as_ref() {
         abort!(
@@ -126,12 +126,12 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
         abort!(u, "unsafe impl's are not supported.")
     }
 
-    let prefix = attr.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
-    let lib_crate = attr.crate_.unwrap_or_else(crate_ident);
+    let prefix = config.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
+    let crate_name = format_ident!("{}", config.crate_.unwrap_or_else(crate_ident));
 
     let mut accessors = HashMap::new();
     let mut functions = Vec::new();
-    let mut constructor: Option<JsMethod> = None;
+    let mut constructor: Option<Method> = None;
     let mut static_span: Option<Span> = None;
     //let mut consts = Vec::new();
 
@@ -139,18 +139,18 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
         match item {
             syn::ImplItem::Const(_item) => {}
             syn::ImplItem::Fn(item) => {
-                let function = JsMethod::parse_impl_fn(item, &self_ty);
+                let function = Method::parse_impl_fn(item, &self_ty);
                 let span = function.attr_span;
-                if function.parse_attrs.get || function.parse_attrs.set {
+                if function.config.get || function.config.set {
                     let access = accessors
-                        .entry(function.name(attr.rename_accessors))
+                        .entry(function.name(config.rename_all))
                         .or_insert_with(JsAccessor::new);
-                    if function.parse_attrs.get {
-                        access.define_get(function, attr.rename_accessors);
+                    if function.config.get {
+                        access.define_get(function, config.rename_all);
                     } else {
-                        access.define_set(function, attr.rename_accessors);
+                        access.define_set(function, config.rename_all);
                     }
-                } else if function.parse_attrs.constructor {
+                } else if function.config.constructor {
                     if let Some(first) = constructor.replace(function) {
                         let first_span = first.attr_span;
                         abort!(
@@ -160,7 +160,7 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
                         );
                     }
                 } else {
-                    if static_span.is_none() && function.parse_attrs.r#static {
+                    if static_span.is_none() && function.config.r#static {
                         static_span = Some(function.attr_span);
                     }
                     functions.push(function)
@@ -187,13 +187,13 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
 
     let function_js_impls = functions
         .iter()
-        .map(|func| func.expand_js_impl(IMPL_PREFIX, &lib_crate));
+        .map(|func| func.expand_js_impl(IMPL_PREFIX, &crate_name));
     let accessor_js_impls = accessors
         .values()
-        .map(|access| access.expand_js_impl(&lib_crate));
+        .map(|access| access.expand_js_impl(&crate_name));
     let constructor_js_impl = constructor
         .as_ref()
-        .map(|constr| constr.expand_js_impl(IMPL_PREFIX, &lib_crate));
+        .map(|constr| constr.expand_js_impl(IMPL_PREFIX, &crate_name));
 
     let associated_types = functions
         .iter()
@@ -201,13 +201,13 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
 
     let proto_ident = format_ident!("_proto");
     let function_apply_proto = functions.iter().filter_map(|func| {
-        (!func.parse_attrs.r#static).then(|| {
-            func.expand_apply_to_object(&prefix, &self_ty, &proto_ident, attr.rename_methods)
+        (!func.config.r#static).then(|| {
+            func.expand_apply_to_object(&prefix, &self_ty, &proto_ident, config.rename_all)
         })
     });
     let accessor_apply_proto = accessors
         .values()
-        .map(|access| access.expand_apply_to_proto(&lib_crate, attr.rename_accessors));
+        .map(|access| access.expand_apply_to_proto(&crate_name, config.rename_all));
 
     let constructor_ident = format_ident!("constr");
 
@@ -217,20 +217,20 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
         let js_added_generics = add_js_lifetime(&generics);
 
         let static_function_apply = functions.iter().filter_map(|func| {
-            func.parse_attrs.r#static.then(|| {
+            func.config.r#static.then(|| {
                 func.expand_apply_to_object(
                     &prefix,
                     &self_ty,
                     &constructor_ident,
-                    attr.rename_methods,
+                    config.rename_all,
                 )
             })
         });
 
         quote! {
-            impl #js_added_generics #lib_crate::class::impl_::ConstructorCreator<'js,#self_ty> for #lib_crate::class::impl_::ConstructorCreate<#self_ty> {
-                fn create_constructor(&self, ctx: &#lib_crate::Ctx<'js>) -> #lib_crate::Result<Option<#lib_crate::function::Constructor<'js>>>{
-                    let constr = #lib_crate::function::Constructor::new_class::<#self_ty,_,_>(ctx.clone(),#name)?;
+            impl #js_added_generics #crate_name::class::impl_::ConstructorCreator<'js,#self_ty> for #crate_name::class::impl_::ConstructorCreate<#self_ty> {
+                fn create_constructor(&self, ctx: &#crate_name::Ctx<'js>) -> #crate_name::Result<Option<#crate_name::function::Constructor<'js>>>{
+                    let constr = #crate_name::function::Constructor::new_class::<#self_ty,_,_>(ctx.clone(),#name)?;
                     #(#static_function_apply)*
                     Ok(Some(constr))
                 }
@@ -263,8 +263,8 @@ pub(crate) fn expand(attr: ImplAttr, item: ItemImpl) -> TokenStream {
                 #(#associated_types)*
             }
 
-            impl #generics #lib_crate::class::impl_::MethodImplementor<#self_ty> for #lib_crate::class::impl_::MethodImpl<#self_ty> {
-                fn implement(&self, _proto: &#lib_crate::Object<'_>) -> #lib_crate::Result<()>{
+            impl #generics #crate_name::class::impl_::MethodImplementor<#self_ty> for #crate_name::class::impl_::MethodImpl<#self_ty> {
+                fn implement(&self, _proto: &#crate_name::Object<'_>) -> #crate_name::Result<()>{
                     #(#function_apply_proto)*
                     #(#accessor_apply_proto)*
                     Ok(())

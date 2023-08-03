@@ -61,3 +61,16 @@ impl<T> ConstructorCreate<T> {
 impl<T> MethodImplementor<T> for &MethodImpl<T> {}
 
 impl<'js, T> ConstructorCreator<'js, T> for &ConstructorCreate<T> {}
+
+/// A helper struct to implement FromJs for types which implement clone.
+pub struct CloneWrapper<'a, T>(pub &'a T);
+/// A helper trait to implement FromJs for types which implement clone.
+pub trait CloneTrait<T> {
+    fn wrap_clone(&self) -> T;
+}
+
+impl<'a, T: Clone> CloneTrait<T> for CloneWrapper<'a, T> {
+    fn wrap_clone(&self) -> T {
+        self.0.clone()
+    }
+}

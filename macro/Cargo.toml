@@ -23,12 +23,9 @@ fnv = "1"
 indexmap = "2"
 convert_case = "0.6.0"
 
-[dependencies.darling]
-version = "0.20"
-
 [dependencies.syn]
 version = "2"
-features = ["full","fold"]
+features = ["full","fold","extra-traits"]
 
 [dependencies.phf_shared]
 version = "0.10"
