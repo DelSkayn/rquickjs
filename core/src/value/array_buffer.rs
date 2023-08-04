@@ -200,6 +200,23 @@ impl<'js> IntoJs<'js> for ArrayBuffer<'js> {
     }
 }
 
+impl Object<'js> {
+    /// Returns wether the object is an instance of ArrayBuffer.
+    pub fn is_array_buffer(&self) -> bool {
+        ArrayBuffer::get_raw(&object.0).is_some()
+    }
+
+    pub unsafe fn ref_array_buffer(&self) -> &ArrayBuffer {
+        mem::transmute(self)
+    }
+
+    /// Turn the object into an array buffer if the object is an instance of ArrayBUuffer
+    pub fn as_array_buffer(&self) -> Option<&ArrayBuffer> {
+        self.is_array_buffer()
+            .then_some(unsafe { self.ref_array_buffer() })
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::*;

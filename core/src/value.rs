@@ -589,7 +589,7 @@ macro_rules! sub_types {
             sub_types!(@imp_as_ref $head$(,$sub_type)*);
 
             impl<'js> Value<'js> {
-                /// Interprete as
+                #[doc = concat!("Interprete as [`",stringify!($head),"`]")]
                 ///
                 /// # Safety
                 /// You should be sure that the value already is of required type before to do it.
@@ -598,7 +598,7 @@ macro_rules! sub_types {
                     &*(self as *const _ as *const $head)
                 }
 
-                /// Try reinterprete as
+                #[doc = concat!("Try reinterprete as [`",stringify!($head),"`]")]
                 pub fn $as(&self) -> Option<&$head<'js>> {
                     if self.type_of().interpretable_as(Type::$head) {
                         Some(unsafe { self.$ref() })
@@ -607,7 +607,7 @@ macro_rules! sub_types {
                     }
                 }
 
-                /// Try convert into
+                #[doc = concat!("Try convert into [`",stringify!($head),"`]")]
                 pub fn $into(self) -> Option<$head<'js>> {
                     if self.type_of().interpretable_as(Type::$head) {
                         Some(sub_types!(@wrap $head$(->$sub_type)* self))
@@ -616,7 +616,7 @@ macro_rules! sub_types {
                     }
                 }
 
-                /// Try convert into returning self if the conversion fails
+                #[doc = concat!("Try convert into [`",stringify!($head),"`] returning self if the conversion fails.")]
                 pub fn $try_into(self) -> std::result::Result<$head<'js>, Value<'js>> {
                     if self.type_of().interpretable_as(Type::$head) {
                         Ok(sub_types!(@wrap $head$(->$sub_type)* self))
@@ -625,7 +625,7 @@ macro_rules! sub_types {
                     }
                 }
 
-                /// Convert from
+                #[doc = concat!("Convert from [`",stringify!($head),"`]")]
                 pub fn $from(value: $head<'js>) -> Self {
                     value.into_value()
                 }
