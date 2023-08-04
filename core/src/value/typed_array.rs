@@ -304,11 +304,19 @@ impl<'js, T> IntoJs<'js> for TypedArray<'js, T> {
 
 impl<'js> Object<'js> {
     fn is_typed_array<T: TypedArrayItem>(&self) -> bool {
-        let class: Function = self.ctx.globals().get(T::CLASS_NAME)?;
-        object.is_instance_of(class)
+        // This should not error unless the global ArrayBuffer object suddenly isn't a Function
+        // anymore.
+        let Ok(class) = self.ctx.globals().get::<_, Function>(T::CLASS_NAME) else {
+            return false;
+        };
+        self.is_instance_of(class)
     }
 
-    unsafe fn ref_typed_array<T: TypedArrayItem>(&self) -> &TypedArray<T> {
+    /// Interprete as [`TypedArray`]
+    ///
+    /// # Safety
+    /// Yous should be sure that the object actually is the required type.
+    pub unsafe fn ref_typed_array<T: TypedArrayItem>(&self) -> &TypedArray<T> {
         mem::transmute(self)
     }
 

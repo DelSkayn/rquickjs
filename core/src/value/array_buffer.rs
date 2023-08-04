@@ -200,12 +200,16 @@ impl<'js> IntoJs<'js> for ArrayBuffer<'js> {
     }
 }
 
-impl Object<'js> {
+impl<'js> Object<'js> {
     /// Returns wether the object is an instance of ArrayBuffer.
     pub fn is_array_buffer(&self) -> bool {
-        ArrayBuffer::get_raw(&object.0).is_some()
+        ArrayBuffer::get_raw(&self.0).is_some()
     }
 
+    /// Interprete as [`ArrayBuffer`]
+    ///
+    /// # Safety
+    /// Yous should be sure that the object actually is the required type.
     pub unsafe fn ref_array_buffer(&self) -> &ArrayBuffer {
         mem::transmute(self)
     }

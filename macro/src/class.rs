@@ -269,7 +269,7 @@ impl Class {
                 ..
             } => {
                 quote! {
-                    #([#attrs])*
+                    #(#attrs)*
                     #vis #enum_token #ident #generics { #variants }
                 }
             }
@@ -301,7 +301,7 @@ impl Class {
                 };
 
                 quote! {
-                    #([#attrs])*
+                    #(#attrs)*
                     #vis #struct_token #ident #generics #fields
                 }
             }
