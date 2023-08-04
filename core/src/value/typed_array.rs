@@ -303,7 +303,7 @@ impl<'js, T> IntoJs<'js> for TypedArray<'js, T> {
 }
 
 impl<'js> Object<'js> {
-    fn is_typed_array<T: TypedArrayItem>(&self) -> bool {
+    pub fn is_typed_array<T: TypedArrayItem>(&self) -> bool {
         // This should not error unless the global ArrayBuffer object suddenly isn't a Function
         // anymore.
         let Ok(class) = self.ctx.globals().get::<_, Function>(T::CLASS_NAME) else {
@@ -316,11 +316,11 @@ impl<'js> Object<'js> {
     ///
     /// # Safety
     /// Yous should be sure that the object actually is the required type.
-    pub unsafe fn ref_typed_array<T: TypedArrayItem>(&self) -> &TypedArray<T> {
+    pub unsafe fn ref_typed_array<'a, T: TypedArrayItem>(&'a self) -> &'a TypedArray<T> {
         mem::transmute(self)
     }
 
-    fn as_typed_array<T: TypedArrayItem>(&self) -> Option<&TypedArray<T>> {
+    pub fn as_typed_array<T: TypedArrayItem>(&self) -> Option<&TypedArray<T>> {
         self.is_typed_array::<T>()
             .then_some(unsafe { self.ref_typed_array() })
     }

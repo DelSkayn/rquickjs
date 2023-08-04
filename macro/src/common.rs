@@ -58,7 +58,7 @@ impl<T> AbortResultExt for syn::Result<T> {
         match self {
             Ok(x) => x,
             Err(e) => {
-                abort!(e.span(), "{e}")
+                abort!(e.span(), "{}", e)
             }
         }
     }
