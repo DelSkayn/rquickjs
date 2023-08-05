@@ -1,7 +1,7 @@
 use std::{
     future::Future,
     mem::{self, ManuallyDrop},
-    pin::Pin,
+    pin::{pin, Pin},
     task::{ready, Context, Poll},
 };
 
@@ -62,7 +62,7 @@ where
         // Implementaiton ensures we don't break pin guarentees.
         let this = unsafe { self.get_unchecked_mut() };
 
-        let lock = loop {
+        let mut lock = loop {
             // We don't move the lock_state as long as it is pending
             if let LockState::Pending(ref mut fut) = &mut this.lock_state {
                 // SAFETY: Sound as we don't move future while it is pending.
@@ -83,6 +83,8 @@ where
             }
         };
 
+        lock.runtime.update_stack_top();
+
         // At this point we have locked the runtime so we start running the actual future
         let res = loop {
             // we can move this memory since the future is boxed and thus movable.
@@ -94,7 +96,9 @@ where
                     this.state = WithFutureState::FutureCreated { future };
                 }
                 WithFutureState::FutureCreated { mut future } => match future.as_mut().poll(cx) {
-                    Poll::Ready(x) => break Poll::Ready(x),
+                    Poll::Ready(x) => {
+                        break Poll::Ready(x);
+                    }
                     Poll::Pending => {
                         // put the future back
                         this.state = WithFutureState::FutureCreated { future };
@@ -106,6 +110,30 @@ where
                 WithFutureState::Done => panic!("With future called after it returnend"),
             }
         };
+
+        // the future was pending so it is possibly waiting on some javascript job, so drive the
+        // javascript runtime for as long as possible.
+        if res.is_pending() {
+            loop {
+                // drive the futures stored in the runtime.
+                let future = unsafe { lock.runtime.get_opaque_mut() }.spawner().drive();
+                let future = pin!(future);
+                match future.poll(cx) {
+                    // A future completed, try again in case any other future can complete.
+                    Poll::Ready(true) => continue,
+                    Poll::Ready(false) | Poll::Pending => {}
+                }
+
+                lock.runtime.is_job_pending();
+                match lock.runtime.execute_pending_job() {
+                    Ok(false) => break,
+                    Ok(true) => {}
+                    Err(_ctx) => {
+                        //TODO figure out what to do with job errors.
+                    }
+                }
+            }
+        }
 
         // Manually drop the lock so it isn't accidentially moved into somewhere.
         mem::drop(lock);

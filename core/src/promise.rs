@@ -250,6 +250,7 @@ mod test {
                 .catch(&ctx)
                 .unwrap();
 
+
             function.call::<_,Promise<()>>((promised,)).unwrap().await.unwrap()
         })
         .await

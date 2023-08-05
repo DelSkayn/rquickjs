@@ -39,6 +39,7 @@ impl<'js> Spawner<'js> {
         self.wakeup.push(wake);
     }
 
+    // Drives the runtime futures forward, returns false if their where no futures
     pub fn drive<'a>(&'a mut self) -> SpawnFuture<'a, 'js> {
         SpawnFuture(self)
     }
