@@ -1,4 +1,7 @@
-use rquickjs::{class::Trace, CatchResultExt, Class, Context, Runtime};
+use rquickjs::{
+    atom::PredefinedAtom, class::Trace, prelude::Func, CatchResultExt, Class, Context, Ctx, Object,
+    Result, Runtime,
+};
 
 #[derive(Trace)]
 #[rquickjs::class]
@@ -44,6 +47,21 @@ impl TestClass {
 
     #[qjs(skip)]
     pub fn inner_function(&self) {}
+
+    #[qjs(rename = PredefinedAtom::SymbolIterator)]
+    pub fn iterate<'js>(&self, ctx: Ctx<'js>) -> Result<Object<'js>> {
+        let res = Object::new(ctx)?;
+
+        res.set(
+            PredefinedAtom::Next,
+            Func::from(|ctx: Ctx<'js>| -> Result<Object<'js>> {
+                let res = Object::new(ctx)?;
+                res.set(PredefinedAtom::Done, true)?;
+                Ok(res)
+            }),
+        )?;
+        Ok(res)
+    }
 }
 
 pub fn main() {
@@ -91,6 +109,9 @@ pub fn main() {
             }
             if(Object.keys(proto).includes("value")){
                 throw new Error(8)
+            }
+            for(const v of t){
+                throw new Error("iterator should be done immediately")
             }
         "#,
         )

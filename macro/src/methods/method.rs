@@ -5,7 +5,7 @@ use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Attribute, Block, ImplItemFn, LitStr, Signature, Token, Type, Visibility,
+    Attribute, Block, Expr, ImplItemFn, LitStr, Signature, Token, Type, Visibility,
 };
 
 use crate::{
@@ -23,7 +23,7 @@ pub(crate) struct MethodConfig {
     pub enumerable: bool,
     pub get: bool,
     pub set: bool,
-    pub rename: Option<String>,
+    pub rename: Option<Expr>,
 }
 
 impl MethodConfig {
@@ -51,7 +51,7 @@ impl MethodConfig {
                 self.set = x.is_true();
             }
             MethodOption::Rename(x) => {
-                self.rename = Some(x.value.value());
+                self.rename = Some(x.value.clone());
             }
         }
     }
@@ -65,7 +65,7 @@ pub(crate) enum MethodOption {
     Enumerable(FlagOption<kw::enumerable>),
     Get(FlagOption<kw::get>),
     Set(FlagOption<kw::set>),
-    Rename(ValueOption<kw::rename, LitStr>),
+    Rename(ValueOption<kw::rename, Expr>),
 }
 
 impl Parse for MethodOption {
@@ -200,16 +200,20 @@ impl Method {
     }
 
     /// The name on of this method on the javascript side.
-    pub fn name(&self, case: Option<Case>) -> String {
+    pub fn name(&self, case: Option<Case>) -> Expr {
         if let Some(x) = self.config.rename.clone() {
             x
         } else {
             let res = self.function.name.to_string();
-            if let Some(case) = case {
+            let name = if let Some(case) = case {
                 res.to_case(case.to_convert_case())
             } else {
                 res
-            }
+            };
+            syn::Expr::Lit(syn::ExprLit {
+                attrs: Vec::new(),
+                lit: syn::Lit::Str(LitStr::new(&name, Span::call_site())),
+            })
         }
     }
 

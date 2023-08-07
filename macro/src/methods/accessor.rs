@@ -23,7 +23,7 @@ impl JsAccessor {
         if let Some(first_getter) = self.get.as_ref() {
             let first_span = first_getter.attr_span;
             emit_warning!(
-                method.attr_span, "Redefined a getter for `{}`.", method.name(rename);
+                method.attr_span, "Redefined a getter for `{:?}`.", method.name(rename);
                 hint = first_span => "Getter first defined here."
             );
         }
@@ -34,7 +34,7 @@ impl JsAccessor {
         if let Some(first_setter) = self.set.as_ref() {
             let first_span = first_setter.attr_span;
             emit_warning!(
-                method.attr_span, "Redefined a setter for `{}`.", method.name(rename);
+                method.attr_span, "Redefined a setter for `{:?}`.", method.name(rename);
                 hint = first_span => "Setter first defined here."
             );
         }
