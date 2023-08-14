@@ -46,6 +46,9 @@ impl Drop for InnerRuntime {
     }
 }
 
+#[cfg(feature = "parallel")]
+unsafe impl Send for InnerRuntime {}
+
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncWeakRuntime {
