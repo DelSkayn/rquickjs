@@ -745,6 +745,18 @@ impl<'js> Module<'js> {
         }
         Ok(())
     }
+
+    /// Import and evaluate a module
+    ///
+    /// This will work similar to an `await import(specifier)` statement in JavaScript but will return the import and not a promise
+    pub fn import<V: FromJs<'js>, S: Into<Vec<u8>>>(ctx: &Ctx<'js>, specifier: S) -> Result<V> {
+        let specifier = CString::new(specifier.into())?;
+        V::from_js(&ctx, unsafe {
+            let val = qjs::JS_DynamicImportSync(ctx.as_ptr(), specifier.as_ptr());
+            let val = ctx.handle_exception(val)?;
+            Value::from_js_value(ctx.clone(), val)
+        })
+    }
 }
 
 #[cfg(feature = "exports")]
@@ -902,6 +914,19 @@ mod test {
         }
     }
 
+    pub struct CrashingRustModule;
+
+    impl ModuleDef for CrashingRustModule {
+        fn declare(_: &mut Declarations) -> Result<()> {
+            Ok(())
+        }
+
+        fn evaluate<'js>(ctx: &Ctx<'js>, _exports: &mut Exports<'js>) -> Result<()> {
+            let _ = ctx.eval(r#"throw new Error("kaboom")"#)?;
+            Ok(())
+        }
+    }
+
     #[test]
     fn from_rust_def() {
         test_with(|ctx| {
@@ -939,6 +964,30 @@ mod test {
                 .unwrap();
             assert_eq!(text.as_str(), "world");
         })
+    }
+
+    #[test]
+    fn import() {
+        test_with(|ctx| {
+            Module::declare_def::<RustModule, _>(ctx.clone(), "rust_mod").unwrap();
+            let val: Object = Module::import(&ctx, "rust_mod").unwrap();
+            let hello: StdString = val.get("hello").unwrap();
+
+            assert_eq!(&hello, "world");
+        })
+    }
+
+    #[test]
+    #[should_panic(expected = "kaboom")]
+    fn import_crashing() {
+        use crate::{CatchResultExt, Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            Module::declare_def::<CrashingRustModule, _>(ctx.clone(), "bad_rust_mod").unwrap();
+            let _: Value = Module::import(&ctx, "bad_rust_mod").catch(&ctx).unwrap();
+        });
     }
 
     #[test]
