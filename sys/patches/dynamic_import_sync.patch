@@ -69,7 +69,7 @@ index 48aeffc..9e8c97f 100644
 +    if (basename_atom == JS_ATOM_NULL)
 +    {
 +        JS_FreeAtom(ctx, basename_atom);
-+        basename_val = js_new_string8(ctx, "", 0); //module name can't be accessed if we are running (eval)
++        basename_val = js_new_string8(ctx, NULL, 0); //module name can't be accessed if we are running (eval)
 +    }
 +    else
 +    {
