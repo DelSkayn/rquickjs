@@ -749,10 +749,19 @@ impl<'js> Module<'js> {
     /// Import and evaluate a module
     ///
     /// This will work similar to an `await import(specifier)` statement in JavaScript but will return the import and not a promise
-    pub fn import<V: FromJs<'js>, S: Into<Vec<u8>>>(ctx: &Ctx<'js>, specifier: S) -> Result<V> {
-        let specifier = CString::new(specifier.into())?;
-        V::from_js(&ctx, unsafe {
-            let val = qjs::JS_DynamicImportSync(ctx.as_ptr(), specifier.as_ptr());
+    pub fn import<V: FromJs<'js>, S: AsRef<[u8]>>(ctx: &Ctx<'js>, specifier: S) -> Result<V> {
+        let specifier = specifier.as_ref();
+        let js_string = unsafe {
+            qjs::JS_NewStringLen(
+                ctx.as_ptr(),
+                specifier.as_ptr() as *mut _,
+                specifier.len() as qjs::size_t,
+            )
+        };
+        let js_string = unsafe { qjs::JS_ToCString(ctx.as_ptr(), js_string) };
+
+        V::from_js(ctx, unsafe {
+            let val = qjs::JS_DynamicImportSync(ctx.as_ptr(), js_string);
             let val = ctx.handle_exception(val)?;
             Value::from_js_value(ctx.clone(), val)
         })
