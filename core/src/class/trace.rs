@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
-use crate::{markers::Invariant, qjs, Ctx, Value};
+use crate::{markers::Invariant, qjs, Class, Ctx, Value};
+
+use super::JsClass;
 
 /// A trait for classes for tracing references to quickjs objects.
 ///
@@ -63,6 +65,15 @@ impl<'js> Trace<'js> for Value<'js> {
 impl<'js> Trace<'js> for Ctx<'js> {
     fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
         tracer.mark_ctx(self);
+    }
+}
+
+impl<'js, T> Trace<'js> for Class<'js, T>
+where
+    T: JsClass<'js>,
+{
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        self.0.trace(tracer)
     }
 }
 
