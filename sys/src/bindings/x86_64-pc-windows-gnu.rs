@@ -2618,6 +2618,12 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn JS_DynamicImportSync(
+        ctx: *mut JSContext,
+        specifier: *const ::std::os::raw::c_char,
+    ) -> JSValue;
+}
+extern "C" {
     pub fn JS_GetModuleExport(
         ctx: *mut JSContext,
         m: *mut JSModuleDef,

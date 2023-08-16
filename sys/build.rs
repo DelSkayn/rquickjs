@@ -64,6 +64,7 @@ fn main() {
         "check_stack_overflow.patch",
         "infinity_handling.patch",
         "atomic_new_class_id.patch",
+        "dynamic_import_sync.patch",
     ];
 
     let mut defines = vec![
