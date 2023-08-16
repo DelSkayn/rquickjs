@@ -65,22 +65,24 @@ impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
             return Poll::Ready(false);
         }
 
-        let item =
-            self.0
-                .futures
-                .iter_mut()
-                .enumerate()
-                .find_map(|(i, f)| match f.as_mut().poll(cx) {
-                    Poll::Ready(_) => Some(i),
-                    Poll::Pending => None,
-                });
+        let mut completed_indices = Vec::new();
 
-        match item {
-            Some(idx) => {
-                self.0.futures.swap_remove(idx);
-                Poll::Ready(true)
+        // Iterate over the futures and check their completion status.
+        for (i, f) in self.0.futures.iter_mut().enumerate() {
+            if let Poll::Ready(_) = f.as_mut().poll(cx) {
+                completed_indices.push(i);
             }
-            None => Poll::Pending,
+        }
+
+        // Remove the completed futures in reverse order to avoid index shifting.
+        for &idx in completed_indices.iter().rev() {
+            self.0.futures.remove(idx);
+        }
+
+        if !completed_indices.is_empty() {
+            Poll::Ready(true)
+        } else {
+            Poll::Pending
         }
     }
 }
