@@ -1789,6 +1789,9 @@ extern "C" {
 extern "C" {
     pub fn JS_GetModuleName(ctx: *mut JSContext, m: *mut JSModuleDef) -> JSAtom;
 }
+extern "C" {
+    pub fn JS_FreeUnevaluatedModules(ctx: *mut JSContext);
+}
 pub type JSJobFunc = ::std::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,

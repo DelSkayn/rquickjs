@@ -906,6 +906,7 @@ where
 
 #[cfg(test)]
 mod test {
+
     use super::*;
     use crate::*;
 
@@ -996,6 +997,42 @@ mod test {
         ctx.with(|ctx| {
             Module::declare_def::<CrashingRustModule, _>(ctx.clone(), "bad_rust_mod").unwrap();
             let _: Value = Module::import(&ctx, "bad_rust_mod").catch(&ctx).unwrap();
+        });
+    }
+
+    #[test]
+    fn holding_onto_unevaluated() {
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let module = unsafe {
+                Module::unsafe_declare(
+                    ctx.clone(),
+                    "test",
+                    "export function add(a,b){ return a + b }",
+                )
+                .unwrap()
+            };
+            // Error
+            ctx.compile("test2", "throw new Error(1)").ok();
+
+            unsafe { module.eval().unwrap() }
+        });
+    }
+
+    #[test]
+    fn eval_crashing_module_inside_module() {
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        ctx.with(|ctx| {
+            let globals = ctx.globals();
+            let eval_crashing = |ctx: Ctx| ctx.compile("test2", "throw new Error(1)").map(|_| ());
+            let function = Function::new(ctx.clone(), eval_crashing).unwrap();
+            globals.set("eval_crashing", function).unwrap();
+
+            let res = ctx.compile("test", " eval_crashing(); ");
+            assert!(res.is_err())
         });
     }
 
