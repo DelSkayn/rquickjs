@@ -1,5 +1,5 @@
 diff --git a/quickjs.c b/quickjs.c
-index 48aeffc..9e8c97f 100644
+index 48aeffc..6862b8c 100644
 --- a/quickjs.c
 +++ b/quickjs.c
 @@ -1192,6 +1192,8 @@ static void js_free_module_def(JSContext *ctx, JSModuleDef *m);
@@ -136,11 +136,41 @@ index 48aeffc..9e8c97f 100644
  static __exception JSAtom js_parse_from_clause(JSParseState *s)
  {
      JSAtom module_name;
+@@ -33532,7 +33584,7 @@ static JSValue JS_EvalFunctionInternal(JSContext *ctx, JSValue fun_obj,
+         ret_val = js_evaluate_module(ctx, m);
+         if (JS_IsException(ret_val)) {
+         fail:
+-            js_free_modules(ctx, JS_FREE_MODULE_NOT_EVALUATED);
++            js_free_modules(ctx, JS_FREE_MODULE_NOT_RESOLVED);
+             return JS_EXCEPTION;
+         }
+     } else {
+@@ -33542,6 +33594,10 @@ static JSValue JS_EvalFunctionInternal(JSContext *ctx, JSValue fun_obj,
+     return ret_val;
+ }
+ 
++void JS_FreeUnevaluatedModules(JSContext *ctx){
++    js_free_modules(ctx, JS_FREE_MODULE_NOT_EVALUATED);
++}
++
+ JSValue JS_EvalFunction(JSContext *ctx, JSValue fun_obj)
+ {
+     return JS_EvalFunctionInternal(ctx, fun_obj, ctx->global_obj, NULL, NULL);
 diff --git a/quickjs.h b/quickjs.h
-index d4a5cd3..991a663 100644
+index d4a5cd3..0ad5b30 100644
 --- a/quickjs.h
 +++ b/quickjs.h
-@@ -1039,6 +1039,8 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
+@@ -866,6 +866,9 @@ void JS_SetModuleLoaderFunc(JSRuntime *rt,
+ JSValue JS_GetImportMeta(JSContext *ctx, JSModuleDef *m);
+ JSAtom JS_GetModuleName(JSContext *ctx, JSModuleDef *m);
+ 
++void JS_FreeUnevaluatedModules(JSContext *ctx);
++
++
+ /* JS Job support */
+ 
+ typedef JSValue JSJobFunc(JSContext *ctx, int argc, JSValueConst *argv);
+@@ -1039,6 +1042,8 @@ int JS_SetModuleExport(JSContext *ctx, JSModuleDef *m, const char *export_name,
  int JS_SetModuleExportList(JSContext *ctx, JSModuleDef *m,
                             const JSCFunctionListEntry *tab, int len);
  
