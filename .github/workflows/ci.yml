@@ -348,7 +348,7 @@ jobs:
           echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
           echo 'rustflags = ["-C", "link-self-contained=yes","-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
           echo "[target.aarch64-unknown-linux-gnu]" >> ~/.cargo/config.toml
-          echo 'rustflags = ["-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "linker=aarch64-linux-gnu-gcc"]' >> ~/.cargo/config.toml
 
           echo "/musl/bin" >> $GITHUB_PATH
       - name: Setup msys2 toolchains
