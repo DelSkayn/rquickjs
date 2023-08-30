@@ -344,7 +344,7 @@ jobs:
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64" >> $GITHUB_ENV
 
-          echo "LD_LIBRARY_PATH=/usr/aarch64-linux-gnu" >> $GITHUB_ENV
+          ln -s /usr/aarch64-linux-gnu/ld-linux-aarch64.so /lib/ld-linux-aarch64.so.1
 
           mkdir -p ~/.cargo/
           echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
