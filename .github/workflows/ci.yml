@@ -320,7 +320,6 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             curl \
-            libc6-arm64 \
             libc6-arm64-cross \
             libc6-dev-arm64-cross \
             crossbuild-essential-arm64 \
