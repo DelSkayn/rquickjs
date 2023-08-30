@@ -320,6 +320,7 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y \
             curl \
+            libc6-arm64 \
             libc6-arm64-cross \
             libc6-dev-arm64-cross \
             crossbuild-essential-arm64 \
@@ -343,6 +344,8 @@ jobs:
           echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64" >> $GITHUB_ENV
+
+          echo "LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/aarch64-linux-gnu/" >> $GITHUB_ENV
 
           mkdir -p ~/.cargo/
           echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
