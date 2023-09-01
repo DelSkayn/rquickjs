@@ -200,11 +200,12 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
         .map(|func| func.expand_associated_type(&prefix, IMPL_PREFIX));
 
     let proto_ident = format_ident!("_proto");
-    let function_apply_proto = functions.iter().filter_map(|func| {
-        (!func.config.r#static).then(|| {
+    let function_apply_proto = functions
+        .iter()
+        .filter(|&func| (!func.config.r#static))
+        .map(|func| {
             func.expand_apply_to_object(&prefix, &self_ty, &proto_ident, config.rename_all)
-        })
-    });
+        });
     let accessor_apply_proto = accessors
         .values()
         .map(|access| access.expand_apply_to_proto(&crate_name, config.rename_all));
@@ -216,16 +217,18 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
 
         let js_added_generics = add_js_lifetime(&generics);
 
-        let static_function_apply = functions.iter().filter_map(|func| {
-            func.config.r#static.then(|| {
-                func.expand_apply_to_object(
-                    &prefix,
-                    &self_ty,
-                    &constructor_ident,
-                    config.rename_all,
-                )
-            })
-        });
+        let static_function_apply =
+            functions
+                .iter()
+                .filter(|&func| func.config.r#static)
+                .map(|func| {
+                    func.expand_apply_to_object(
+                        &prefix,
+                        &self_ty,
+                        &constructor_ident,
+                        config.rename_all,
+                    )
+                });
 
         quote! {
             impl #js_added_generics #crate_name::class::impl_::ConstructorCreator<'js,#self_ty> for #crate_name::class::impl_::ConstructorCreate<#self_ty> {
