@@ -88,12 +88,14 @@ pub(crate) fn expand(input: DeriveInput) -> TokenStream {
                         });
                         let pattern = quote!(Self::#ident(#(#patterns),*));
 
-                        let names = f.iter().enumerate().filter_map(|(idx, f)| {
-                            (!f.config.skip_trace).then(|| {
+                        let names = f
+                            .iter()
+                            .enumerate()
+                            .filter(|&(_idx, f)| (!f.config.skip_trace))
+                            .map(|(idx, _f)| {
                                 let ident = format_ident!("tmp_{idx}");
                                 Some(ident)
-                            })
-                        });
+                            });
                         let body = quote! {
                             {
                                 #(#crate_name::class::Trace::trace(#names,_tracer);)*
