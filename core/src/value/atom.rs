@@ -1,4 +1,4 @@
-//!  Quickjs atom functionality.
+//!  QuickJS atom functionality.
 
 use crate::{qjs, Ctx, Error, Result, String, Value};
 use std::{ffi::CStr, hash::Hash, string::String as StdString};
@@ -6,14 +6,14 @@ use std::{ffi::CStr, hash::Hash, string::String as StdString};
 mod predefined;
 pub use predefined::PredefinedAtom;
 
-/// A quickjs Atom.
+/// A QuickJS Atom.
 ///
-/// In quickjs atoms are similar to interned string but with additional uses.
+/// In QuickJS atoms are similar to interned string but with additional uses.
 /// A symbol for instance is just an atom.
 ///
 /// # Representation
 ///
-/// Atoms in quickjs are handled differently depending on what type of index the represent.
+/// Atoms in QuickJS are handled differently depending on what type of index the represent.
 /// When the atom represents a number like index, like `object[1]` the atom is just
 /// a normal number.
 /// However when the atom represents a string link index like `object["foo"]` or `object.foo`
@@ -38,7 +38,7 @@ impl<'js> Hash for Atom<'js> {
 }
 
 impl<'js> Atom<'js> {
-    /// Create an atom from a javascript value.
+    /// Create an atom from a JavaScript value.
     pub fn from_value(ctx: Ctx<'js>, val: &Value<'js>) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val.as_js_value()) };
         if atom == qjs::JS_ATOM_NULL {
@@ -49,7 +49,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create an atom from a u32
+    /// Create an atom from a `u32`
     pub fn from_u32(ctx: Ctx<'js>, val: u32) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_NewAtomUInt32(ctx.as_ptr(), val) };
         if atom == qjs::JS_ATOM_NULL {
@@ -59,7 +59,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create an atom from an i32 via value
+    /// Create an atom from an `i32` via value
     pub fn from_i32(ctx: Ctx<'js>, val: i32) -> Result<Atom<'js>> {
         let atom =
             unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_INT, val)) };
@@ -70,7 +70,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create an atom from a bool via value
+    /// Create an atom from a `bool` via value
     pub fn from_bool(ctx: Ctx<'js>, val: bool) -> Result<Atom<'js>> {
         let val = if val { qjs::JS_TRUE } else { qjs::JS_FALSE };
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val) };
@@ -81,7 +81,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create an atom from a f64 via value
+    /// Create an atom from a `f64` via value
     pub fn from_f64(ctx: Ctx<'js>, val: f64) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_NewFloat64(val)) };
         if atom == qjs::JS_ATOM_NULL {
@@ -91,7 +91,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create an atom from a rust string
+    /// Create an atom from a Rust string
     pub fn from_str(ctx: Ctx<'js>, name: &str) -> Result<Atom<'js>> {
         unsafe {
             let ptr = name.as_ptr() as *const std::os::raw::c_char;
@@ -109,7 +109,7 @@ impl<'js> Atom<'js> {
         unsafe { Atom::from_atom_val(ctx, predefined as qjs::JSAtom) }
     }
 
-    /// Convert the atom to a javascript string.
+    /// Convert the atom to a JavaScript string.
     pub fn to_string(&self) -> Result<StdString> {
         unsafe {
             let c_str = qjs::JS_AtomToCString(self.ctx.as_ptr(), self.atom);
@@ -120,14 +120,14 @@ impl<'js> Atom<'js> {
                 return Err(Error::Unknown);
             }
             let bytes = CStr::from_ptr(c_str).to_bytes();
-            // Safety: quickjs should return valid utf8 so this should be safe.
+            // Safety: QuickJS should return valid utf8 so this should be safe.
             let res = std::str::from_utf8_unchecked(bytes).to_string();
             qjs::JS_FreeCString(self.ctx.as_ptr(), c_str);
             Ok(res)
         }
     }
 
-    /// Convert the atom to a javascript string .
+    /// Convert the atom to a JavaScript string.
     pub fn to_js_string(&self) -> Result<String<'js>> {
         unsafe {
             let val = qjs::JS_AtomToString(self.ctx.as_ptr(), self.atom);
@@ -136,7 +136,7 @@ impl<'js> Atom<'js> {
         }
     }
 
-    /// Convert the atom to a javascript value.
+    /// Convert the atom to a JavaScript value.
     pub fn to_value(&self) -> Result<Value<'js>> {
         self.to_js_string().map(|String(value)| value)
     }

@@ -1,4 +1,4 @@
-//! Quickjs runtime related types.
+//! QuickJS runtime related types.
 
 pub(crate) mod raw;
 

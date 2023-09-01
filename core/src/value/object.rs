@@ -12,13 +12,13 @@ use std::{
 mod property;
 pub use property::{Accessor, AsProperty, Property, PropertyFlags};
 
-/// Rust representation of a javascript object.
+/// Rust representation of a JavaScript object.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 #[repr(transparent)]
 pub struct Object<'js>(pub(crate) Value<'js>);
 
 impl<'js> Object<'js> {
-    /// Create a new javascript object
+    /// Create a new JavaScript object
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
         Ok(unsafe {
             let val = qjs::JS_NewObject(ctx.as_ptr());
@@ -37,7 +37,7 @@ impl<'js> Object<'js> {
         })
     }
 
-    /// check wether the object contains a certain key.
+    /// check whether the object contains a certain key.
     pub fn contains_key<K>(&self, k: K) -> Result<bool>
     where
         K: IntoAtom<'js>,

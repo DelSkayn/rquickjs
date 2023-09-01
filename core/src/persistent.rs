@@ -193,7 +193,7 @@ impl<T> Persistent<T> {
     where
         U: Outlive<'from>,
     {
-        // extreemly unsafe code which should be safe if outlive is implemented correctly.
+        // extremely unsafe code which should be safe if outlive is implemented correctly.
 
         // assertion to check if T and T::Target are the same size, they should be.
         // should compile away if they are the same size.

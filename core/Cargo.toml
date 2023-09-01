@@ -5,7 +5,7 @@ authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 license = "MIT"
 readme = "README.md"
-description = "High level bindings to the QuickJS javascript engine"
+description = "High level bindings to the QuickJS JavaScript engine"
 keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
 categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
@@ -86,7 +86,7 @@ array-buffer = []
 # Enable interop between Rust futures and JS Promises
 futures = ["async-lock"]
 
-# Allows transfering objects between different contexts of the same runtime.
+# Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
 
 # Max number of function args

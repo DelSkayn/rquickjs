@@ -1,4 +1,4 @@
-//! Utilites for embedding JS modules.
+//! Utilities for embedding JS modules.
 
 use super::{util::resolve_simple, Loader, Resolver};
 use crate::{module::ModuleData, Ctx, Error, Result};

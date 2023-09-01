@@ -1,37 +1,39 @@
-//! # High-level bindings to quickjs
+//! # High-level bindings to QuickJS
 //!
 //! The `rquickjs` crate provides safe high-level bindings to the
-//! [quickjs](https://bellard.org/quickjs/) javascript engine. This crate is heavily inspired by
+//! [QuickJS](https://bellard.org/quickjs/) JavaScript engine. This crate is heavily inspired by
 //! the [rlua](https://crates.io/crates/rlua) crate.
 //!
 //! # The `Runtime` and `Context` objects
 //!
-//! The main entry point of this library is the [`Runtime`] struct. It represents the interperter
-//! state and is used to create [`Context`] objects. As the quickjs library does not support
-//! threading the runtime is locked behind a mutex. Multiple threads cannot run as script or create
+//! The main entry point of this library is the [`Runtime`] struct. It represents the interpreter
+//! state and is used to create [`Context`] objects. As the QuickJS library does not support
+//! threading the runtime is locked behind a mutex. Multiple threads cannot run a script or create
 //! objects from the same runtime at the same time. The [`Context`] object represents a global
-//! environment. Contexts of the same runtime can share javascript objects like in browser between
+//! environment. Contexts of the same runtime can share JavaScript objects like in the browser between
 //! frames of the same origin.
 //!
 //! # Converting Values
 //!
-//! This library has multiple traits for converting to and from javascript. The [`IntoJs`] trait is
-//! used for taking rust values and turning them into javascript values. The [`FromJs`] is for
-//! converting javascript value tKings Placeo rust. Note that this trait does not automatic coercion but the
-//! [`Coerced`](convert::Coerced) can be used to convert the values with coercion.
+//! This library has multiple traits for converting to and from JavaScript. The [`IntoJs`] trait is
+//! used for taking Rust values and turning them into JavaScript values. The [`FromJs`] is for
+//! converting JavaScript values to Rust. Note that this trait does not perform automatic
+//! coercion but [`Coerced`](convert::Coerced) can be used to convert the values with coercion.
 //!
-//! For values which represent the name of variables or indecies the trait [`IntoAtom`] is
-//! available to convert values to the represention quickjs requires.
+//! For values which represent the name of variables or indices, the trait [`IntoAtom`] is
+//! available to convert values to the representation QuickJS requires.
 //!
 //! # Optional features
 //!
 //! ## Default
 //!
-//! This crate can be customized via features. The following features is enabled by default but can
-//! be disabled when not needed: - `classes` enables support for ES6 classes. Any user-defined Rust
-//! type can be exported to JS as an ES6 class which can be derived and extended by JS. -
-//! `properties` enables support for object properties (`Object.defineProperty`). - `exports` adds
-//! an ability to read the module exports.
+//! This crate can be customized via features. The following features are enabled by default but can
+//! be disabled when not needed:
+//!
+//! - `classes` enables support for ES6 classes. Any user-defined Rust
+//! type can be exported to JS as an ES6 class which can be derived and extended by JS.
+//! - `properties` enables support for object properties (`Object.defineProperty`).
+//! - `exports` adds an ability to read the module exports.
 //!
 //! ## Advanced
 //!
@@ -87,16 +89,23 @@
 //!
 //! ## Bindings
 //!
-//! The bindings is pre-built for the following platforms:
+//! The bindings are pre-generated for the following platforms:
 //!
-//! - `i686-unknown-linux-gnu`, `x86_64-unknown-linux-gnu`
+//! - Linux:
+//!   - `aarch64-unknown-linux-musl`
+//!   - `i686-unknown-linux-gnu`
+//!   - `x86_64-unknown-linux-gnu`
+//!   - `x86_64-unknown-linux-musl`
+//! - macOS:
+//!   - `aarch64-apple-darwin`
+//!   - `x86_64-apple-darwin`
+//! - Windows:
+//!   - `i686-pc-windows-gnu`
+//!   - `x86_64-pc-windows-gnu`
+//!   - `i686-pc-windows-msvc`
+//!   - `x86_64-pc-windows-msvc`
 //!
-//! - `x86_64-apple-darwin`
-//!
-//! - `i686-pc-windows-gnu`, `x86_64-pc-windows-gnu`, `i686-pc-windows-msvc`,
-//! `x86_64-pc-windows-msvc`
-//!
-//! To build the crate for unsupported target you must enable `bindgen` feature.
+//! To build the crate for any other target you must enable the `bindgen` feature.
 //!
 //! ## Experimental
 //!
@@ -107,7 +116,8 @@
 //! ## Debugging
 //!
 //! QuickJS can be configured to output some info which can help debug. The following features
-//! enables that:
+//! enable that:
+//!
 //! - `dump-bytecode`
 //! - `dump-gc`
 //! - `dump-gc-free`
@@ -130,7 +140,7 @@ pub use rquickjs_core::*;
 pub use rquickjs_macro::{class, embed, function, methods, module};
 
 pub mod class {
-    //! Javascript classes defined from rust.
+    //! JavaScript classes defined from Rust.
 
     pub use rquickjs_core::class::*;
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]

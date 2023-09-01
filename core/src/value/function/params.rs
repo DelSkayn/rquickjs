@@ -6,7 +6,7 @@ use std::slice;
 
 /// A struct which contains the values a callback is called with.
 ///
-/// Arguments retrieved from the JavaScript side for calling rust functions.
+/// Arguments retrieved from the JavaScript side for calling Rust functions.
 pub struct Params<'a, 'js> {
     ctx: Ctx<'js>,
     function: qjs::JSValue,
@@ -53,7 +53,7 @@ impl<'a, 'js> Params<'a, 'js> {
         Ok(())
     }
 
-    /// Returns the context assiociated with call.
+    /// Returns the context associated with call.
     pub fn ctx(&self) -> &Ctx<'js> {
         &self.ctx
     }

@@ -1,13 +1,13 @@
 use crate::{qjs, Ctx, Error, Result, StdString, Value};
 use std::{mem, slice, str};
 
-/// Rust representation of a javascript string.
+/// Rust representation of a JavaScript string.
 #[derive(Debug, Clone, PartialEq, Hash)]
 #[repr(transparent)]
 pub struct String<'js>(pub(crate) Value<'js>);
 
 impl<'js> String<'js> {
-    /// Convert the javascript string to a rust string.
+    /// Convert the JavaScript string to a Rust string.
     pub fn to_string(&self) -> Result<StdString> {
         let mut len = mem::MaybeUninit::uninit();
         let ptr = unsafe {
@@ -25,7 +25,7 @@ impl<'js> String<'js> {
         Ok(result?)
     }
 
-    /// Create a new js string from an rust string.
+    /// Create a new JavaScript string from an Rust string.
     pub fn from_str(ctx: Ctx<'js>, s: &str) -> Result<Self> {
         let len = s.as_bytes().len();
         let ptr = s.as_ptr();

@@ -12,10 +12,10 @@ use super::{Class, JsClass};
 /// A trait to allow classes to choose there borrowing implementation.
 ///
 /// # Safety
-/// This trait is not meant to be implementeded outside the rquickjs library.
+/// This trait is not meant to be implemented outside the rquickjs library.
 pub unsafe trait Mutability {
     #[doc(hidden)]
-    /// The interal type of cell used for this mutability.
+    /// The internal type of cell used for this mutability.
     type Cell<T>;
 
     #[doc(hidden)]
@@ -34,7 +34,7 @@ pub unsafe trait Mutability {
     /// Will be called after the reference returned by deref is no longer in use.
     ///
     /// # Safety
-    /// Caller must ansure that the reference returned by deref no longer exists.
+    /// Caller must ensure that the reference returned by deref no longer exists.
     unsafe fn unborrow<'a, T>(cell: &'a Self::Cell<T>);
 
     #[doc(hidden)]
@@ -49,7 +49,7 @@ pub unsafe trait Mutability {
     /// Will be called after the reference returned by deref_mut is no longer reachable.
     ///
     /// # Safety
-    /// Caller must ansure that the reference returned by deref_mut no longer exists.
+    /// Caller must ensure that the reference returned by deref_mut no longer exists.
     unsafe fn unborrow_mut<'a, T>(cell: &'a Self::Cell<T>);
 
     #[doc(hidden)]
@@ -200,9 +200,9 @@ unsafe impl Mutability for Writable {
     }
 }
 
-/// A cell type for rust classes passed to javascript.
+/// A cell type for Rust classes passed to JavaScript.
 ///
-/// Implements a RefCell like borrow checking.
+/// Implements [`RefCell`](std::cell::RefCell)-like borrow checking.
 pub struct JsCell<'js, T: JsClass<'js>> {
     pub(crate) cell: <T::Mutable as Mutability>::Cell<T>,
 }

@@ -192,7 +192,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Returns the last raised javascript exception, if there is no exception the javascript value `null` is returned.
+    /// Returns the last raised JavaScript exception, if there is no exception the JavaScript value `null` is returned.
     ///
     /// # Usage
     /// ```
@@ -214,7 +214,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Throws a javascript value as a new exception.
+    /// Throws a JavaScript value as a new exception.
     /// Always returns `Error::Exception`;
     pub fn throw(&self, value: Value<'js>) -> Error {
         unsafe {
@@ -224,7 +224,7 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
-    /// Parse json into a javascript value.
+    /// Parse json into a JavaScript value.
     pub fn json_parse<S>(&self, json: S) -> Result<Value<'js>>
     where
         S: Into<Vec<u8>>,
@@ -232,9 +232,9 @@ impl<'js> Ctx<'js> {
         self.json_parse_ext(json, false)
     }
 
-    /// Parse json into a javascript value, possibly allowing extended syntax support.
+    /// Parse json into a JavaScript value, possibly allowing extended syntax support.
     ///
-    /// If allow_extensions is true, this function will allow extended json syntex.
+    /// If allow_extensions is true, this function will allow extended json syntax.
     /// Extended syntax allows comments, single quoted strings, non string property names, trailing
     /// comma's and hex, oct and binary numbers.
     pub fn json_parse_ext<S>(&self, json: S, allow_extensions: bool) -> Result<Value<'js>>
@@ -263,7 +263,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Stringify a javascript value into its JSON representation
+    /// Stringify a JavaScript value into its JSON representation
     pub fn json_stringify<V>(&self, value: V) -> Result<Option<String<'js>>>
     where
         V: IntoJs<'js>,
@@ -271,7 +271,7 @@ impl<'js> Ctx<'js> {
         self.json_stringify_inner(&value.into_js(self)?, qjs::JS_UNDEFINED, qjs::JS_UNDEFINED)
     }
 
-    /// Stringify a javascript value into its JSON representation with a possible replacer.
+    /// Stringify a JavaScript value into its JSON representation with a possible replacer.
     ///
     /// The replacer is the same as the replacer argument for `JSON.stringify`.
     /// It is is a function that alters the behavior of the stringification process.
@@ -293,7 +293,7 @@ impl<'js> Ctx<'js> {
         )
     }
 
-    /// Stringify a javascript value into its JSON representation with a possible replacer and
+    /// Stringify a JavaScript value into its JSON representation with a possible replacer and
     /// spaces
     ///
     /// The replacer is the same as the replacer argument for `JSON.stringify`.
@@ -408,11 +408,11 @@ impl<'js> Ctx<'js> {
         self.ctx
     }
 
-    /// Frees modules which aren't eveluated.
+    /// Frees modules which aren't evaluated.
     ///
     /// When a module is compiled and the compilation results in an error the module can already
-    /// have resolved several modules. Originally quickjs freed all these module when compiling
-    /// (but not when a it was dynamically imported), this library patched that behaviour out
+    /// have resolved several modules. Originally QuickJS freed all these module when compiling
+    /// (but not when a it was dynamically imported), this library patched that behavior out
     /// because it proved to be hard to make safe. This function will free those modules.
     ///
     /// # Safety

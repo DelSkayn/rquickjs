@@ -6,8 +6,8 @@ use std::{
 
 use super::{Allocator, RawMemPtr};
 
-/// The largest value quickjs will allocate is a u64;
-/// So all allocated memory must have the same aligment is this largest size.
+/// The largest value QuickJS will allocate is a u64;
+/// So all allocated memory must have the same alignment is this largest size.
 const ALLOC_ALIGN: usize = std::mem::align_of::<u64>();
 
 #[derive(Copy, Clone)]
@@ -24,7 +24,7 @@ const fn max(a: usize, b: usize) -> usize {
     }
 }
 
-/// Head needs to be atleast alloc alligned so all that values after the header are aligned.
+/// Head needs to be at least alloc aligned so all that values after the header are aligned.
 const HEADER_SIZE: usize = max(size_of::<Header>(), ALLOC_ALIGN);
 
 #[inline]

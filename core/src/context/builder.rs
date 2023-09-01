@@ -4,7 +4,7 @@ use std::{marker::PhantomData, ptr::NonNull};
 use crate::{context::AsyncContext, runtime::AsyncRuntime};
 use crate::{qjs, Context, Result, Runtime};
 
-/// The internal trait to add JS builting
+/// The internal trait to add JS builtins
 pub trait Intrinsic {
     /// # Safety
     /// Do not need implement it yourself instead you may use predefined intrinsics from [`intrinsic`] module.

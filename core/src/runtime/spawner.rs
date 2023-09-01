@@ -155,7 +155,7 @@ impl Future for DriveFuture {
                 match drive.poll(cx) {
                     Poll::Pending => {
                         // Execute pending jobs to ensure we don't dead lock when waiting on
-                        // quickjs futures.
+                        // QuickJS futures.
                         while let Ok(true) = lock.runtime.execute_pending_job() {}
                         self.state = DriveFutureState::Initial;
                         return Poll::Pending;

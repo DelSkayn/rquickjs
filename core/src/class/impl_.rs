@@ -38,7 +38,7 @@ impl<T> ConstructorCreate<T> {
     }
 }
 
-/// Specialization isn't stablized yet so in the macro we can't normally have a default
+/// Specialization isn't stabilized yet so in the macro we can't normally have a default
 /// implementation for class prototypes if it doesn't have an associated impl item.
 ///
 /// We would need this default implementation because it is not possible to know in class macro if
@@ -51,7 +51,7 @@ impl<T> ConstructorCreate<T> {
 /// implemented for all &MethodImpl<T>.
 ///
 /// However it the trait is also implemented for MethodImpl<Foo> for some specific class Foo the
-/// compiler will automaticall deref the first reference and call the method for the type
+/// compiler will automatically deref the first reference and call the method for the type
 /// MethodImpl<Foo> instead of the general on.
 ///
 /// This allows us to provide a default implementation if no implementation of MethodImplementor is

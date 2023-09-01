@@ -82,7 +82,7 @@ pub trait Loader {
 /// this function.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub unsafe trait RawLoader {
-    /// Load module by name, should return an unevaluted module.
+    /// Load module by name, should return an unevaluated module.
     ///
     /// # Safety
     /// Callers must ensure that the module returned by this function is not used after an module

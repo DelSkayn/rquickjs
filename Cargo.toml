@@ -6,7 +6,7 @@ edition = "2021"
 rust-version = "1.65"
 license = "MIT"
 readme = "README.md"
-description = "High level bindings to the QuickJS javascript engine"
+description = "High level bindings to the QuickJS JavaScript engine"
 keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
 categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
@@ -95,7 +95,7 @@ array-buffer = ["rquickjs-core/array-buffer"]
 # Enable helper macros
 macro = ["rquickjs-macro"]
 
-# Allows transfering objects between different contexts of the same runtime.
+# Allows transferring objects between different contexts of the same runtime.
 # Disabled for now as it can be used to create unsound code.
 # multi-ctx = ["rquickjs-core/multi-ctx"]
 
