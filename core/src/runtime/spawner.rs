@@ -65,22 +65,17 @@ impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
             return Poll::Ready(false);
         }
 
-        let item =
-            self.0
-                .futures
-                .iter_mut()
-                .enumerate()
-                .find_map(|(i, f)| match f.as_mut().poll(cx) {
-                    Poll::Ready(_) => Some(i),
-                    Poll::Pending => None,
-                });
+        let mut did_complete = false;
+        self.0.futures.retain_mut(|f| {
+            let ready = f.as_mut().poll(cx).is_ready();
+            did_complete = did_complete || ready;
+            !ready
+        });
 
-        match item {
-            Some(idx) => {
-                self.0.futures.swap_remove(idx);
-                Poll::Ready(true)
-            }
-            None => Poll::Pending,
+        if did_complete {
+            Poll::Ready(true)
+        } else {
+            Poll::Pending
         }
     }
 }
