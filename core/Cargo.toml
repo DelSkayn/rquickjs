@@ -11,7 +11,7 @@ categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [dependencies.phf]
-version = "0.10"
+version = "0.11"
 optional = true
 
 [dependencies.indexmap]
