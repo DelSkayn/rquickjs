@@ -82,7 +82,7 @@ where
 /// this class.
 pub struct RustFunction<'js>(pub Box<dyn RustFunc<'js> + 'js>);
 
-/// The static function which is called when javascripts calls an instance of RustFunction
+/// The static function which is called when JavaScript calls an instance of [`RustFunction`].
 fn call_rust_func_class<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>> {
     let this = Class::<RustFunction>::from_js(params.ctx(), params.function())?;
     // RustFunction isn't readable this always succeeds.

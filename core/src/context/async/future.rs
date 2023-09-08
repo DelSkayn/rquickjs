@@ -59,7 +59,7 @@ where
 {
     type Output = R;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        // Implementaiton ensures we don't break pin guarentees.
+        // Implementation ensures we don't break pin guarantees.
         let this = unsafe { self.get_unchecked_mut() };
 
         let mut lock = loop {
@@ -68,7 +68,7 @@ where
                 // SAFETY: Sound as we don't move future while it is pending.
                 let pin = unsafe { Pin::new_unchecked(&mut **fut) };
                 let lock = ready!(pin.poll(cx));
-                // at this point we have aquired a lock, so we will now drop the future allowing
+                // at this point we have acquired a lock, so we will now drop the future allowing
                 // us to reused the memory space.
                 unsafe { ManuallyDrop::drop(fut) };
                 // The pinned memory is dropped so now we can freely move into it.
@@ -77,7 +77,7 @@ where
             } else {
                 // we assign a state with manually drop so we can drop the value when we need to
                 // replace it.
-                // Assigni
+                // Assign
                 this.lock_state =
                     LockState::Pending(ManuallyDrop::new(this.context.0.rt.inner.lock()));
             }
@@ -107,12 +107,12 @@ where
                 },
                 // The future was called an additional time,
                 // We don't have anything valid to do here so just panic.
-                WithFutureState::Done => panic!("With future called after it returnend"),
+                WithFutureState::Done => panic!("With future called after it returned"),
             }
         };
 
-        // the future was pending so it is possibly waiting on some javascript job, so drive the
-        // javascript runtime for as long as possible.
+        // the future was pending so it is possibly waiting on some JavaScript job, so drive the
+        // JavaScript runtime for as long as possible.
         if res.is_pending() {
             loop {
                 // drive the futures stored in the runtime.
@@ -135,7 +135,7 @@ where
             }
         }
 
-        // Manually drop the lock so it isn't accidentially moved into somewhere.
+        // Manually drop the lock so it isn't accidentally moved into somewhere.
         mem::drop(lock);
 
         res

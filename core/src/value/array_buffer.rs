@@ -9,7 +9,7 @@ use std::{
 
 use super::typed_array::TypedArrayItem;
 
-/// Rust representation of a javascript object of class ArrayBuffer.
+/// Rust representation of a JavaScript object of class ArrayBuffer.
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
@@ -72,14 +72,14 @@ impl<'js> ArrayBuffer<'js> {
         Self::get_raw(&self.0).expect("Not an ArrayBuffer").0
     }
 
-    /// Returns wether an array buffer is empty.
+    /// Returns whether an array buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
     /// Returns the underlying bytes of the buffer,
     ///
-    /// Returns None if the array is detached.
+    /// Returns `None` if the array is detached.
     pub fn as_bytes(&self) -> Option<&[u8]> {
         let (len, ptr) = Self::get_raw(self.as_value())?;
         Some(unsafe { slice::from_raw_parts_mut(ptr, len) })
@@ -159,7 +159,7 @@ impl<'js> ArrayBuffer<'js> {
 
 impl<'js, T: TypedArrayItem> AsRef<[T]> for ArrayBuffer<'js> {
     fn as_ref(&self) -> &[T] {
-        self.as_slice().expect("Arraybuffer was detached")
+        self.as_slice().expect("ArrayBuffer was detached")
     }
 }
 
@@ -201,20 +201,20 @@ impl<'js> IntoJs<'js> for ArrayBuffer<'js> {
 }
 
 impl<'js> Object<'js> {
-    /// Returns wether the object is an instance of ArrayBuffer.
+    /// Returns whether the object is an instance of [`ArrayBuffer`].
     pub fn is_array_buffer(&self) -> bool {
         ArrayBuffer::get_raw(&self.0).is_some()
     }
 
-    /// Interprete as [`ArrayBuffer`]
+    /// Interpret as [`ArrayBuffer`]
     ///
     /// # Safety
-    /// Yous should be sure that the object actually is the required type.
+    /// You should be sure that the object actually is the required type.
     pub unsafe fn ref_array_buffer(&self) -> &ArrayBuffer {
         mem::transmute(self)
     }
 
-    /// Turn the object into an array buffer if the object is an instance of ArrayBUuffer
+    /// Turn the object into an array buffer if the object is an instance of [`ArrayBuffer`].
     pub fn as_array_buffer(&self) -> Option<&ArrayBuffer> {
         self.is_array_buffer()
             .then_some(unsafe { self.ref_array_buffer() })

@@ -63,8 +63,8 @@ impl FieldConfig {
                 return Ok(false);
             }
 
-            let seperated_options: OptionList<FieldOption> = attr.parse_args()?;
-            seperated_options.0.iter().for_each(|x| config.apply(x));
+            let separated_options: OptionList<FieldOption> = attr.parse_args()?;
+            separated_options.0.iter().for_each(|x| config.apply(x));
             Ok(true)
         })
         .unwrap_or_abort();

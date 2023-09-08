@@ -16,7 +16,7 @@ pub trait MultiWith<'js> {
     /// Use multiple contexts together.
     ///
     /// # Panic
-    /// This function will panic if any of the contexts are of seperate runtimes.
+    /// This function will panic if any of the contexts are of separate runtimes.
     fn with<R, F: FnOnce(Self::Arg) -> R>(self, f: F) -> R;
 }
 

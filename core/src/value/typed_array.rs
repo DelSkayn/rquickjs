@@ -42,7 +42,7 @@ typedarray_items! {
     BigUint64Array: u64,
 }
 
-/// Rust representation of a javascript objects of TypedArray classes.
+/// Rust representation of a JavaScript objects of TypedArray classes.
 ///
 /// | ES Type            | Rust Type             |
 /// | ------------------ | --------------------- |
@@ -114,7 +114,7 @@ impl<'js, T> TypedArray<'js, T> {
         }
     }
 
-    /// Returns wether a typed array is empty.
+    /// Returns whether a typed array is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -166,13 +166,13 @@ impl<'js, T> TypedArray<'js, T> {
 
     /// Returns the underlying bytes of the buffer,
     ///
-    /// Returns None if the array is detached.
+    /// Returns `None` if the array is detached.
     pub fn as_bytes(&self) -> Option<&[u8]> {
         let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
         Some(unsafe { slice::from_raw_parts(ptr, len) })
     }
 
-    /// Get underlaying ArrayBuffer
+    /// Get underlying ArrayBuffer
     pub fn arraybuffer(&self) -> Result<ArrayBuffer<'js>> {
         let ctx = self.ctx().clone();
         let val = self.0.as_js_value();
@@ -312,7 +312,7 @@ impl<'js> Object<'js> {
         self.is_instance_of(class)
     }
 
-    /// Interprete as [`TypedArray`]
+    /// Interpret as [`TypedArray`]
     ///
     /// # Safety
     /// Yous should be sure that the object actually is the required type.

@@ -125,17 +125,17 @@ impl JsFunction {
         if let Some(unsafe_) = unsafety {
             abort!(
                 unsafe_,
-                "implementing javascript callbacks for unsafe functions is not allowed."
+                "implementing JavaScript callbacks for unsafe functions is not allowed."
             )
         }
         if let Some(abi) = abi {
             abort!(
                 abi,
-                "implementing javascript callbacks functions with an non rust abi is not supported."
+                "implementing JavaScript callbacks functions with an non Rust abi is not supported."
             )
         }
         if let Some(variadic) = variadic {
-            abort!(variadic,"implementing javascript callbacks for functions with variadic params is not supported.")
+            abort!(variadic,"implementing JavaScript callbacks for functions with variadic params is not supported.")
         }
         let is_async = asyncness.is_some();
 

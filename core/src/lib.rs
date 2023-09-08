@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-//! # High-level bindings to quickjs
+//! # High-level bindings to QuickJS
 //!
-//! The `rquickjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
+//! The `rquickjs` crate provides safe high-level bindings to the [QuickJS](https://bellard.org/quickjs/) JavaScript engine.
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
 
 #![allow(clippy::needless_lifetimes)]
@@ -22,7 +22,7 @@ pub mod phf {
 
 /// Short macro to define a cstring literal.
 ///
-/// Make sure the string does not contain any internal null characters or it panic.
+/// Make sure the string does not contain any internal null characters or it will panic.
 #[macro_export]
 macro_rules! cstr {
     ($str:tt) => {{

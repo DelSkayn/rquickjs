@@ -1,4 +1,4 @@
-//! Tools for using different allocators with quickjs.
+//! Tools for using different allocators with QuickJS.
 
 use crate::qjs;
 use std::{convert::TryInto, ptr::null_mut};
@@ -118,7 +118,7 @@ impl AllocatorHolder {
     where
         A: Allocator,
     {
-        // simulate the default bahavior of libc::malloc_usable_size
+        // simulate the default behavior of libc::malloc_usable_size
         if ptr.is_null() {
             return 0;
         }

@@ -63,8 +63,8 @@ impl Context {
         Ok(Context(ContextRef::new(res)))
     }
 
-    /// Creates a context with all standart available intrinsics registered.
-    /// If precise controll is required of which functions are available use
+    /// Creates a context with all standard available intrinsics registered.
+    /// If precise control is required of which functions are available use
     /// [`Context::custom`] or [`Context::builder`].
     pub fn full(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
@@ -103,11 +103,11 @@ impl Context {
         unsafe { qjs::JS_GetRuntime(self.0.ctx.as_ptr()) }
     }
 
-    /// A entry point for manipulating and using javascript objects and scripts.
+    /// A entry point for manipulating and using JavaScript objects and scripts.
     /// The api is structured this way to avoid repeated locking the runtime when ever
     /// any function is called. This way the runtime is locked once before executing the callback.
     /// Furthermore, this way it is impossible to use values from different runtimes in this
-    /// context which would otherwise be undefined behaviour.
+    /// context which would otherwise be undefined behavior.
     ///
     ///
     /// This is the only way to get a [`Ctx`] object.
@@ -135,7 +135,7 @@ impl Drop for Context {
             None => {
                 let p = unsafe { &mut *(self.0.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
                 if p.ref_count <= 1 {
-                    // Lock was poisened, this should only happen on a panic.
+                    // Lock was poisoned, this should only happen on a panic.
                     // We should still free the context.
                     // TODO see if there is a way to recover from a panic which could cause the
                     // following assertion to trigger

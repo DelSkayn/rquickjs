@@ -67,7 +67,7 @@ impl AsyncWeakRuntime {
     }
 }
 
-/// Asynchronous Quickjs runtime, entry point of the library.
+/// Asynchronous QuickJS runtime, entry point of the library.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncRuntime {
@@ -86,7 +86,7 @@ unsafe impl Send for AsyncWeakRuntime {}
 
 // Since a global lock needs to be locked for safe use
 // using runtime in a sync way should be safe as
-// simultanious accesses is syncronized behind a lock.
+// simultaneous accesses is synchronized behind a lock.
 #[cfg(feature = "parallel")]
 unsafe impl Sync for AsyncRuntime {}
 #[cfg(feature = "parallel")]
@@ -223,8 +223,8 @@ impl AsyncRuntime {
 
     /// Manually run the garbage collection.
     ///
-    /// Most of quickjs values are reference counted and
-    /// will automaticly free themselfs when they have no more
+    /// Most QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub async fn run_gc(&self) {
@@ -293,7 +293,7 @@ impl AsyncRuntime {
                     let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx.as_ptr()) };
                     let err = ctx.catch();
                     if let Some(x) = err.clone().into_object().and_then(Exception::from_object) {
-                        // TODO do somthing better with errors.
+                        // TODO do something better with errors.
                         println!("error executing job: {}", x);
                     } else {
                         println!("error executing job: {:?}", err);

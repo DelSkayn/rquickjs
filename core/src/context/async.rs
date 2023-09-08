@@ -18,7 +18,7 @@ mod future;
 /// let rt = AsyncRuntime::new().unwrap();
 /// let ctx = AsyncContext::full(&rt).await.unwrap();
 ///
-/// // In order for futures to conver to javascript promises they need to return `Result`.
+/// // In order for futures to convert to JavaScript promises they need to return `Result`.
 /// async fn delay<'js>(amount: f64, cb: Function<'js>) -> Result<()> {
 ///     tokio::time::sleep(Duration::from_secs_f64(amount)).await;
 ///     cb.call::<(), ()>(());
@@ -73,10 +73,10 @@ macro_rules! async_with{
             /// By requiring that everything is moved into the closure outside
             /// environments still can't life shorter than the closure.
             /// This allows use to recast the future to a higher lifetime without problems.
-            /// Second, the future will always aquire a lock before running. The closure
+            /// Second, the future will always acquire a lock before running. The closure
             /// enforces that everything moved into the future is send, but non of the
             /// rquickjs objects are send so the future will never be send.
-            /// Since we aquire a lock before running the future and nothing can escape the closure
+            /// Since we acquire a lock before running the future and nothing can escape the closure
             /// and future it is safe to recast the future as send.
             unsafe fn uplift<'a,'b,R>(f: std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'a>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'b + Send>>{
                 std::mem::transmute(f)
@@ -112,7 +112,7 @@ impl Drop for Inner {
                 {
                     let p = unsafe { &mut *(self.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
                     if p.ref_count <= 1 {
-                        // Lock was poisened, this should only happen on a panic.
+                        // Lock was poisoned, this should only happen on a panic.
                         // We should still free the context.
                         // TODO see if there is a way to recover from a panic which could cause the
                         // following assertion to trigger
@@ -181,8 +181,8 @@ impl AsyncContext {
         Ok(AsyncContext(ContextRef::new(res)))
     }
 
-    /// Creates a context with all standart available intrinsics registered.
-    /// If precise controll is required of which functions are available use
+    /// Creates a context with all standard available intrinsics registered.
+    /// If precise control is required of which functions are available use
     /// [`AsyncContext::custom`] or [`AsyncContext::builder`].
     pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
@@ -218,12 +218,12 @@ impl AsyncContext {
         &self.0.rt
     }
 
-    /// A entry point for manipulating and using javascript objects and scripts.
+    /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
     /// This function is rather limited in what environment it can capture. If you need to borrow
     /// the environment in the closure use the [`async_with!`] macro.
     ///
-    /// Unfortunatly it is currently impossible to have closures return a generic future which has a higher
+    /// Unfortunately it is currently impossible to have closures return a generic future which has a higher
     /// rank trait bound lifetime. So, to allow closures to work, the closure must return a boxed
     /// future.
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
@@ -235,9 +235,9 @@ impl AsyncContext {
         WithFuture::new(self, f)
     }
 
-    /// A entry point for manipulating and using javascript objects and scripts.
+    /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
-    /// This closure can't return a future, if you need to await javascript promises prefer the
+    /// This closure can't return a future, if you need to await JavaScript promises prefer the
     /// [`async_with!`] macro.
     pub async fn with<F, R>(&self, f: F) -> R
     where
