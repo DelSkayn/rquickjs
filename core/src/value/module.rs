@@ -320,6 +320,11 @@ impl Declarations {
         }
         Ok(())
     }
+
+    /// Returns an iterator over existing declarations.
+    pub fn iter(&self) -> impl Iterator<Item = &Cow<'static, CStr>> {
+        self.declarations.iter()
+    }
 }
 
 struct Export<'js> {
@@ -386,6 +391,11 @@ impl<'js> Exports<'js> {
             }
         }
         Ok(())
+    }
+
+    /// Returns an iterator over existing imports.
+    pub fn iter(&self) -> impl Iterator<Item = (&CStr, &Value<'js>)> {
+        self.exports.iter().map(|x| (x.name.as_c_str(), &x.value))
     }
 }
 
@@ -932,7 +942,7 @@ mod test {
         }
 
         fn evaluate<'js>(ctx: &Ctx<'js>, _exports: &mut Exports<'js>) -> Result<()> {
-            let _ = ctx.eval(r#"throw new Error("kaboom")"#)?;
+            ctx.eval::<(), _>(r#"throw new Error("kaboom")"#)?;
             Ok(())
         }
     }

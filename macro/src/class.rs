@@ -14,7 +14,7 @@ use crate::{
     fields::Fields,
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub(crate) struct ClassConfig {
     pub frozen: bool,
     pub crate_: Option<String>,
