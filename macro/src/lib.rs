@@ -2,6 +2,7 @@ use attrs::OptionList;
 use class::ClassOption;
 use function::FunctionOption;
 use methods::ImplOption;
+use module::ModuleOption;
 use proc_macro::TokenStream as TokenStream1;
 use proc_macro_error::{abort, proc_macro_error};
 use syn::{parse_macro_input, DeriveInput, Item};
@@ -22,7 +23,7 @@ mod embed;
 mod fields;
 mod function;
 mod methods;
-//mod module;
+mod module;
 mod trace;
 
 #[proc_macro_attribute]
@@ -61,8 +62,15 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 
 #[proc_macro_attribute]
 #[proc_macro_error]
-pub fn module(_attr: TokenStream1, _item: TokenStream1) -> TokenStream1 {
-    todo!()
+pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let options = parse_macro_input!(attr as OptionList<ModuleOption>);
+    let item = parse_macro_input!(item as Item);
+    match item {
+        Item::Mod(item) => module::expand(options, item).into(),
+        item => {
+            abort!(item, "#[module] macro can only be used on modules")
+        }
+    }
 }
 
 #[proc_macro_derive(Trace, attributes(qjs))]
