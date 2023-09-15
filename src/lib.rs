@@ -13,6 +13,10 @@
 //! environment. Contexts of the same runtime can share JavaScript objects like in the browser between
 //! frames of the same origin.
 //!
+//! As both [`Runtime`] and [`Context`] use a lock it is discourged to use them in a async
+//! environment. Instead, when the `futures` feature is enabled this library also exposes
+//! [`AsyncRuntime`] and [`AsyncContext`] which use a future aware lock.
+//!
 //! # Converting Values
 //!
 //! This library has multiple traits for converting to and from JavaScript. The [`IntoJs`] trait is

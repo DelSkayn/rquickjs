@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{env, path::Path};
 
 use crate::common::crate_ident;
 use proc_macro2::TokenStream;
@@ -55,16 +55,17 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
         let path = Path::new(&path);
 
         let path = if path.is_relative() {
-            match Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join(path)
-                .canonicalize()
-            {
+            let full_path = Path::new(
+                &env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set"),
+            )
+            .join(path);
+            match full_path.canonicalize() {
                 Ok(x) => x,
                 Err(e) => {
                     abort!(
                         f.name,
                         "Error loading embedded js module from path `{}`: {}",
-                        path.display(),
+                        full_path.display(),
                         e
                     );
                 }

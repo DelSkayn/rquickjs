@@ -14,6 +14,8 @@ use super::{
 };
 
 /// A weak handle to the runtime.
+///
+/// Holding onto this struct does not prevent the runtime from being dropped.
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct WeakRuntime(Weak<Mut<RawRuntime>>);

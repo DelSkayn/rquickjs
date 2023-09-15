@@ -183,6 +183,9 @@ impl<'js> Function<'js> {
     }
 }
 
+/// A function which can be used as a constructor.
+///
+/// Is a subtype of function.
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct Constructor<'js>(pub(crate) Function<'js>);
