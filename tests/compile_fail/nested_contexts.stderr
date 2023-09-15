@@ -1,0 +1,28 @@
+error[E0521]: borrowed data escapes outside of closure
+ --> tests/compile_fail/nested_contexts.rs:9:38
+  |
+7 |     ctx_1.with(|ctx_1| {
+  |                 ----- `ctx_1` declared here, outside of the closure body
+8 |         ctx_2.with(|ctx_2| {
+  |                     ----- `ctx_2` is a reference that is only valid in the closure body
+9 |             ctx_1.globals().set("t", ctx_2.globals());
+  |                                      ^^^^^^^^^^^^^^^ `ctx_2` escapes the closure body here
+  |
+  = note: requirement occurs because of the type `Ctx<'_>`, which makes the generic argument `'_` invariant
+  = note: the struct `Ctx<'js>` is invariant over the parameter `'js`
+  = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
+
+error[E0521]: borrowed data escapes outside of closure
+ --> tests/compile_fail/nested_contexts.rs:9:13
+  |
+7 |     ctx_1.with(|ctx_1| {
+  |                 -----
+  |                 |
+  |                 `ctx_1` is a reference that is only valid in the closure body
+  |                 has type `Ctx<'1>`
+8 |         ctx_2.with(|ctx_2| {
+9 |             ctx_1.globals().set("t", ctx_2.globals());
+  |             ^^^^^^^^^^^^^^^
+  |             |
+  |             `ctx_1` escapes the closure body here
+  |             argument requires that `'1` must outlive `'static`

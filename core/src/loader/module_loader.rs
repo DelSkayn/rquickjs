@@ -1,36 +1,26 @@
-use crate::{Ctx, Error, Loaded, Loader, Module, ModuleDef, Native, Result};
-use std::{
-    collections::HashMap,
-    fmt::{Debug, Formatter, Result as FmtResult},
+use crate::{
+    module::{ModuleData, ModuleDef},
+    Ctx, Error, Result,
 };
+use std::{collections::HashMap, fmt::Debug};
 
-type ModuleInitFn = dyn for<'js> FnOnce(Ctx<'js>, &str) -> Result<Module<'js, Loaded<Native>>>;
-
-struct ModuleInit(Box<ModuleInitFn>);
-
-impl Debug for ModuleInit {
-    fn fmt(&self, f: &mut Formatter) -> FmtResult {
-        "<native>".fmt(f)
-    }
-}
+use super::Loader;
 
 /// The builtin native module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug, Default)]
 pub struct ModuleLoader {
-    modules: HashMap<String, ModuleInit>,
+    modules: HashMap<String, ModuleData>,
 }
 
 impl ModuleLoader {
     /// Add module
     pub fn add_module<N: Into<String>, M: ModuleDef>(&mut self, name: N, _module: M) -> &mut Self {
-        self.modules.insert(
-            name.into(),
-            #[allow(clippy::redundant_closure)]
-            ModuleInit(Box::new(|ctx, name| Module::new_def::<M, _>(ctx, name))),
-        );
+        let name = name.into();
+        let data = ModuleData::native::<M, _>(name.clone());
+
+        self.modules.insert(name, data);
         self
     }
 
@@ -42,11 +32,10 @@ impl ModuleLoader {
     }
 }
 
-impl Loader<Native> for ModuleLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Native>>> {
-        match self.modules.remove(path) {
-            Some(module_init) => module_init.0(ctx, path),
-            _ => Err(Error::new_loading(path)),
-        }
+impl Loader for ModuleLoader {
+    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
+        self.modules
+            .remove(path)
+            .ok_or_else(|| Error::new_loading(path))
     }
 }

@@ -1,5 +1,8 @@
-use super::resolve_simple;
-use crate::{Ctx, Loaded, Loader, Lock, Module, Mut, Ref, Resolver, Result, Script};
+use crate::{
+    loader::{util::resolve_simple, Loader, RawLoader, Resolver},
+    module::ModuleDataKind,
+    Ctx, Lock, Module, Mut, Ref, Result,
+};
 use std::{
     collections::{hash_map::Iter as HashMapIter, HashMap},
     iter::{ExactSizeIterator, FusedIterator},
@@ -7,7 +10,6 @@ use std::{
 };
 
 /// Modules compiling data
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Default, Clone)]
 pub struct Compile<T = ()> {
     data: Ref<Mut<CompileData>>,
@@ -43,7 +45,7 @@ impl Compile {
     }
 
     /// Create compiling loader by wrapping other script loader
-    pub fn loader<L: Loader<Script>>(&self, loader: L) -> Compile<L> {
+    pub fn loader<L: Loader>(&self, loader: L) -> Compile<L> {
         Compile {
             data: self.data.clone(),
             inner: loader,
@@ -171,7 +173,7 @@ impl<R> Resolver for Compile<R>
 where
     R: Resolver,
 {
-    fn resolve<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
         self.inner.resolve(ctx, base, name).map(|path| {
             let name = resolve_simple(base, name);
             self.data.lock().modules.insert(path.clone(), name);
@@ -180,17 +182,20 @@ where
     }
 }
 
-impl<L> Loader<Script> for Compile<L>
+unsafe impl<L> RawLoader for Compile<L>
 where
-    L: Loader<Script>,
+    L: Loader,
 {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Script>>> {
-        self.inner.load(ctx, path).and_then(|module| {
-            self.data
-                .lock()
-                .bytecodes
-                .push((path.into(), module.write_object(false)?));
-            Ok(module)
-        })
+    unsafe fn raw_load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
+        let data = self.inner.load(ctx, path)?;
+        assert!(
+            matches!(data.kind(), ModuleDataKind::Source(_) | ModuleDataKind::ByteCode(_)) ,
+            "can't compile native modules, loader `{}` returned a native module, but `Compile` can only handle modules loaded from source or bytecode",
+            std::any::type_name::<L>()
+        );
+        let module = data.unsafe_declare(ctx.clone())?;
+        let data = module.write_object(false)?;
+        self.data.lock().bytecodes.push((path.into(), data));
+        Ok(module)
     }
 }

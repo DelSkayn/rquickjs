@@ -1,17 +1,24 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value};
 use std::{
-    mem::{size_of, ManuallyDrop, MaybeUninit},
+    convert::TryInto,
+    mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
     os::raw::c_void,
     slice,
 };
 
-/// Rust representation of a javascript object of class ArrayBuffer.
+use super::typed_array::TypedArrayItem;
+
+/// Rust representation of a JavaScript object of class ArrayBuffer.
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 #[repr(transparent)]
 pub struct ArrayBuffer<'js>(pub(crate) Object<'js>);
+
+unsafe impl<'js> Outlive<'js> for ArrayBuffer<'js> {
+    type Target<'to> = ArrayBuffer<'to>;
+}
 
 impl<'js> ArrayBuffer<'js> {
     /// Create array buffer from vector data
@@ -51,12 +58,12 @@ impl<'js> ArrayBuffer<'js> {
     pub fn new_copy<T: Copy>(ctx: Ctx<'js>, src: impl AsRef<[T]>) -> Result<Self> {
         let src = src.as_ref();
         let ptr = src.as_ptr();
-        let size = src.len() * size_of::<T>();
+        let size = std::mem::size_of_val(src);
 
         Ok(Self(Object(unsafe {
             let val = qjs::JS_NewArrayBufferCopy(ctx.as_ptr(), ptr as _, size as _);
             ctx.handle_exception(val)?;
-            Value::from_js_value(ctx, val)
+            Value::from_js_value(ctx.clone(), val)
         })))
     }
 
@@ -65,9 +72,29 @@ impl<'js> ArrayBuffer<'js> {
         Self::get_raw(&self.0).expect("Not an ArrayBuffer").0
     }
 
-    /// Returns wether an array buffer is empty.
+    /// Returns whether an array buffer is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// Returns the underlying bytes of the buffer,
+    ///
+    /// Returns `None` if the array is detached.
+    pub fn as_bytes(&self) -> Option<&[u8]> {
+        let (len, ptr) = Self::get_raw(self.as_value())?;
+        Some(unsafe { slice::from_raw_parts_mut(ptr, len) })
+    }
+
+    /// Returns a slice if the buffer underlying buffer is properly aligned for the type and the
+    /// buffer is not detached.
+    pub fn as_slice<T: TypedArrayItem>(&self) -> Option<&[T]> {
+        let (len, ptr) = Self::get_raw(&self.0)?;
+        if ptr.align_offset(mem::align_of::<T>()) != 0 {
+            return None;
+        }
+        //assert!(len % size_of::<T>() == 0);
+        let len = len / size_of::<T>();
+        Some(unsafe { slice::from_raw_parts(ptr as _, len) })
     }
 
     /// Detach array buffer
@@ -88,8 +115,8 @@ impl<'js> ArrayBuffer<'js> {
     }
 
     /// Convert from value
-    pub fn from_value(value: Value<'js>) -> Result<Self> {
-        Self::from_object(Object::from_value(value)?)
+    pub fn from_value(value: Value<'js>) -> Option<Self> {
+        Self::from_object(Object::from_value(value).ok()?)
     }
 
     /// Reference as an object
@@ -105,16 +132,16 @@ impl<'js> ArrayBuffer<'js> {
     }
 
     /// Convert from an object
-    pub fn from_object(object: Object<'js>) -> Result<Self> {
+    pub fn from_object(object: Object<'js>) -> Option<Self> {
         if Self::get_raw(&object.0).is_some() {
-            Ok(Self(object))
+            Some(Self(object))
         } else {
-            Err(Error::new_from_js("object", "ArrayBuffer"))
+            None
         }
     }
 
     pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut u8)> {
-        let ctx = val.ctx;
+        let ctx = val.ctx();
         let val = val.as_js_value();
         let mut size = MaybeUninit::<qjs::size_t>::uninit();
         let ptr = unsafe { qjs::JS_GetArrayBuffer(ctx.as_ptr(), size.as_mut_ptr(), val) };
@@ -122,27 +149,17 @@ impl<'js> ArrayBuffer<'js> {
         if ptr.is_null() {
             None
         } else {
-            let len = unsafe { size.assume_init() } as _;
+            let len = unsafe { size.assume_init() }
+                .try_into()
+                .expect(qjs::SIZE_T_ERROR);
             Some((len, ptr))
         }
     }
 }
 
-impl<'js, T> AsRef<[T]> for ArrayBuffer<'js> {
+impl<'js, T: TypedArrayItem> AsRef<[T]> for ArrayBuffer<'js> {
     fn as_ref(&self) -> &[T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect("Not an ArrayBuffer");
-        //assert!(len % size_of::<T>() == 0);
-        let len = len / size_of::<T>();
-        unsafe { slice::from_raw_parts(ptr as _, len) }
-    }
-}
-
-impl<'js, T> AsMut<[T]> for ArrayBuffer<'js> {
-    fn as_mut(&mut self) -> &mut [T] {
-        let (len, ptr) = Self::get_raw(&self.0).expect("Not an ArrayBuffer");
-        //assert!(len % size_of::<T>() == 0);
-        let len = len / size_of::<T>();
-        unsafe { slice::from_raw_parts_mut(ptr as _, len) }
+        self.as_slice().expect("ArrayBuffer was detached")
     }
 }
 
@@ -167,14 +184,40 @@ impl<'js> AsRef<Value<'js>> for ArrayBuffer<'js> {
 }
 
 impl<'js> FromJs<'js> for ArrayBuffer<'js> {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        Self::from_value(value)
+    fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let ty_name = value.type_name();
+        if let Some(v) = Self::from_value(value) {
+            Ok(v)
+        } else {
+            Err(Error::new_from_js(ty_name, "ArrayBuffer"))
+        }
     }
 }
 
 impl<'js> IntoJs<'js> for ArrayBuffer<'js> {
-    fn into_js(self, _: Ctx<'js>) -> Result<Value<'js>> {
+    fn into_js(self, _: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(self.into_value())
+    }
+}
+
+impl<'js> Object<'js> {
+    /// Returns whether the object is an instance of [`ArrayBuffer`].
+    pub fn is_array_buffer(&self) -> bool {
+        ArrayBuffer::get_raw(&self.0).is_some()
+    }
+
+    /// Interpret as [`ArrayBuffer`]
+    ///
+    /// # Safety
+    /// You should be sure that the object actually is the required type.
+    pub unsafe fn ref_array_buffer(&self) -> &ArrayBuffer {
+        mem::transmute(self)
+    }
+
+    /// Turn the object into an array buffer if the object is an instance of [`ArrayBuffer`].
+    pub fn as_array_buffer(&self) -> Option<&ArrayBuffer> {
+        self.is_array_buffer()
+            .then_some(unsafe { self.ref_array_buffer() })
     }
 }
 
@@ -200,7 +243,7 @@ mod test {
     #[test]
     fn into_javascript_i8() {
         test_with(|ctx| {
-            let val = ArrayBuffer::new(ctx, [-1i8, 0, 22, 5]).unwrap();
+            let val = ArrayBuffer::new(ctx.clone(), [-1i8, 0, 22, 5]).unwrap();
             ctx.globals().set("a", val).unwrap();
             let res: i8 = ctx
                 .eval(
@@ -237,7 +280,7 @@ mod test {
     #[test]
     fn into_javascript_f32() {
         test_with(|ctx| {
-            let val = ArrayBuffer::new(ctx, [-1.5f32, 0.0, 2.25]).unwrap();
+            let val = ArrayBuffer::new(ctx.clone(), [-1.5f32, 0.0, 2.25]).unwrap();
             ctx.globals().set("a", val).unwrap();
             let res: i8 = ctx
                 .eval(
@@ -254,5 +297,25 @@ mod test {
                 .unwrap();
             assert_eq!(res, 0);
         })
+    }
+
+    #[test]
+    fn as_bytes() {
+        test_with(|ctx| {
+            let val: ArrayBuffer = ctx
+                .eval(
+                    r#"
+                        new Uint32Array([0xCAFEDEAD,0xFEEDBEAD]).buffer
+                    "#,
+                )
+                .unwrap();
+            let mut res = [0; 8];
+            let bytes_0 = 0xCAFEDEADu32.to_ne_bytes();
+            res[..4].copy_from_slice(&bytes_0);
+            let bytes_1 = 0xFEEDBEADu32.to_ne_bytes();
+            res[4..].copy_from_slice(&bytes_1);
+
+            assert_eq!(val.as_bytes().unwrap(), &res)
+        });
     }
 }

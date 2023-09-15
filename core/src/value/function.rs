@@ -1,273 +1,299 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoAtom, IntoJs, Object, ParallelSend, Result, Value};
+//! JavaScript function functionality
+
+use crate::{
+    atom::PredefinedAtom,
+    class::{Class, JsClass},
+    function::ffi::RustFunc,
+    qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value,
+};
 
 mod args;
-mod as_args;
-mod as_func;
 mod ffi;
+mod into_func;
+mod params;
 mod types;
 
-use args::{FromInput, Input};
-pub use as_args::{AsArguments, CallInput, IntoInput};
-pub use as_func::AsFunction;
-use ffi::JsFunction;
-pub use types::{Func, Method, MutFn, OnceFn, Opt, Rest, This};
-
+pub use args::{Args, IntoArg, IntoArgs};
+pub use ffi::{RustFunction, StaticJsFn};
+pub use params::{FromParam, FromParams, ParamRequirement, Params, ParamsAccessor};
 #[cfg(feature = "futures")]
 pub use types::Async;
+pub use types::{Exhaustive, Flat, Func, FuncArg, MutFn, Null, OnceFn, Opt, Rest, This};
 
-/// Rust representation of a javascript function.
-#[derive(Debug, Clone, PartialEq)]
-pub struct Function<'js>(pub(crate) Value<'js>);
+/// A trait for converting a Rust function to a JavaScript function.
+pub trait IntoJsFunc<'js, P> {
+    /// Returns the requirements this function has for the set of arguments used to call this
+    /// function.
+    fn param_requirements() -> ParamRequirement;
+
+    /// Call the function with the given parameters.
+    fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
+}
+
+/// A trait for functions callable from JavaScript but static,
+/// Used for implementing callable objects.
+pub trait StaticJsFunction {
+    fn call<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>>;
+}
+
+/// A JavaScript function.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[repr(transparent)]
+pub struct Function<'js>(pub(crate) Object<'js>);
 
 impl<'js> Function<'js> {
-    pub fn new<F, A, R>(ctx: Ctx<'js>, func: F) -> Result<Self>
+    /// Create a new function from a Rust function which implements [`IntoJsFunc`].
+    pub fn new<P, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
-        F: AsFunction<'js, A, R> + ParallelSend + 'static,
+        F: IntoJsFunc<'js, P> + 'js,
     {
-        let func = JsFunction::new(move |input: &Input<'js>| func.call(input));
-        let func = unsafe {
-            let func = func.into_js_value(ctx);
-            Self::from_js_value(ctx, func)
-        };
-        F::post(ctx, &func)?;
-        func.set_length(F::num_args().start)?;
-        Ok(func)
+        let func = Box::new(move |params: Params<'_, 'js>| {
+            params.check_params(F::param_requirements())?;
+            f.call(params)
+        }) as Box<dyn RustFunc<'js> + 'js>;
+
+        let cls = Class::instance(ctx, RustFunction(func))?;
+        debug_assert!(cls.is_function());
+        Function(cls.into_inner()).with_length(F::param_requirements().min())
     }
 
-    /// Set the `length` property
-    pub fn set_length(&self, len: usize) -> Result<()> {
-        let ctx = self.0.ctx;
-        let func = self.0.as_js_value();
-        let len = len.into_js(ctx)?;
-
-        unsafe {
-            let res = qjs::JS_DefinePropertyValue(
-                ctx.as_ptr(),
-                func,
-                "length".into_atom(ctx).atom,
-                len.into_js_value(),
-                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
-            );
-            if res < 0 {
-                return Err(ctx.get_exception());
-            }
-        };
-
-        Ok(())
-    }
-
-    /// Set the `name` property
-    pub fn set_name<S: AsRef<str>>(&self, name: S) -> Result<()> {
-        let ctx = self.0.ctx;
-        let func = self.0.as_js_value();
-        let name = name.as_ref().into_js(ctx)?;
-
-        unsafe {
-            let res = qjs::JS_DefinePropertyValue(
-                ctx.as_ptr(),
-                func,
-                "name".into_atom(ctx).atom,
-                name.into_js_value(),
-                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
-            );
-            if res < 0 {
-                return Err(ctx.get_exception());
-            }
-        };
-
-        Ok(())
-    }
-
-    /// Call a function with given arguments
-    ///
-    /// You can use tuples to pass arguments. The `()` treated as no arguments, the `(arg,)` as a single argument and so on.
-    ///
-    /// To call function on a given `this` you can pass `This(this)` as a first argument.
-    /// By default an `undefined` will be passed as `this`.
+    /// Call the function with given arguments.
     pub fn call<A, R>(&self, args: A) -> Result<R>
     where
-        A: AsArguments<'js>,
+        A: IntoArgs<'js>,
+        R: FromJs<'js>,
+    {
+        let ctx = self.ctx();
+        let num = args.num_args();
+        let mut accum_args = Args::new(ctx.clone(), num);
+        args.into_args(&mut accum_args)?;
+        self.call_arg(accum_args)
+    }
+
+    /// Call the function with given arguments in the form of an [`Args`] object.
+    pub fn call_arg<R>(&self, args: Args<'js>) -> Result<R>
+    where
         R: FromJs<'js>,
     {
         args.apply(self)
     }
 
-    /// Immadiate call of function
-    pub(crate) fn call_raw(&self, input: &CallInput) -> Result<Value<'js>> {
-        let ctx = self.0.ctx;
-        Ok(unsafe {
-            let val = qjs::JS_Call(
-                ctx.as_ptr(),
-                self.0.as_js_value(),
-                input.this,
-                input.args.len() as _,
-                input.args.as_ptr() as _,
-            );
-            let val = ctx.handle_exception(val)?;
-            Value::from_js_value(ctx, val)
-        })
-    }
-
-    /// Call a constructor with given arguments
+    /// Defer call the function with given arguments.
     ///
-    /// You can use tuples to pass arguments. The `()` treated as no arguments, the `(arg,)` as a single argument and so on.
-    ///
-    /// To call constructor on a given `this` you can pass `This(this)` as a first argument.
-    pub fn construct<A, R>(&self, args: A) -> Result<R>
+    /// Calling a function with defer is equivalent to calling a JavaScript function with
+    /// `setTimeout(func,0)`.
+    pub fn defer<A>(&self, args: A) -> Result<()>
     where
-        A: AsArguments<'js>,
-        R: FromJs<'js>,
+        A: IntoArgs<'js>,
     {
-        args.construct(self)
-    }
-
-    /// Immadiate call of function as a constructor
-    pub(crate) fn construct_raw(&self, input: &CallInput) -> Result<Value<'js>> {
-        let ctx = self.0.ctx;
-        Ok(unsafe {
-            let val = if input.has_this() {
-                qjs::JS_CallConstructor2(
-                    ctx.as_ptr(),
-                    self.0.as_js_value(),
-                    input.this,
-                    input.args.len() as _,
-                    input.args.as_ptr() as _,
-                )
-            } else {
-                qjs::JS_CallConstructor(
-                    ctx.as_ptr(),
-                    self.0.as_js_value(),
-                    input.args.len() as _,
-                    input.args.as_ptr() as _,
-                )
-            };
-            let val = ctx.handle_exception(val)?;
-            Value::from_js_value(ctx, val)
-        })
-    }
-
-    /// Deferred call a function with given arguments
-    ///
-    /// You can use tuples to pass arguments. The `()` treated as no arguments, the `(arg,)` as a single argument and so on.
-    ///
-    /// To call function on a given `this` you can pass `This(this)` as a first argument.
-    /// By default an `undefined` will be passed as `this`.
-    pub fn defer_call<A>(&self, args: A) -> Result<()>
-    where
-        A: AsArguments<'js>,
-    {
-        args.defer_apply(self)
-    }
-
-    /// Deferred call of function
-    pub(crate) fn defer_call_raw(&self, input: &mut CallInput<'js>) -> Result<()> {
-        let ctx = self.0.ctx;
-        input.this_arg();
-        input.arg(self.clone())?;
-        unsafe {
-            if qjs::JS_EnqueueJob(
-                ctx.as_ptr(),
-                Some(Self::defer_call_job),
-                input.args.len() as _,
-                input.args.as_ptr() as _,
-            ) < 0
-            {
-                return Err(ctx.get_exception());
-            }
-        }
+        let ctx = self.ctx();
+        let num = args.num_args();
+        let mut accum_args = Args::new(ctx.clone(), num);
+        args.into_args(&mut accum_args)?;
+        self.defer_arg(accum_args)?;
         Ok(())
     }
 
-    unsafe extern "C" fn defer_call_job(
-        ctx: *mut qjs::JSContext,
-        argc: qjs::c_int,
-        argv: *mut qjs::JSValue,
-    ) -> qjs::JSValue {
-        let func = *argv.offset((argc - 1) as _);
-        let this = *argv.offset((argc - 2) as _);
-        let argc = argc - 2;
-        qjs::JS_Call(ctx, func, this, argc, argv)
+    /// Defer a function call with given arguments.
+    pub fn defer_arg(&self, args: Args<'js>) -> Result<()> {
+        args.defer(self.clone())
     }
 
-    /// Check that function is a constructor
-    pub fn is_constructor(&self) -> bool {
-        0 != unsafe { qjs::JS_IsConstructor(self.0.ctx.as_ptr(), self.0.as_js_value()) }
-    }
-
-    /// Mark the function as a constructor
-    pub fn set_constructor(&self, flag: bool) {
+    /// Set the `name` property of this function
+    pub fn set_name<S: AsRef<str>>(&self, name: S) -> Result<()> {
+        let name = name.as_ref().into_js(self.ctx())?;
         unsafe {
-            qjs::JS_SetConstructorBit(self.0.ctx.as_ptr(), self.0.as_js_value(), i32::from(flag))
-        };
-    }
-
-    /// Set a function prototype
-    ///
-    /// Actually this method does the following:
-    /// ```js
-    /// func.prototype = proto;
-    /// proto.constructor = func;
-    /// ```
-    pub fn set_prototype(&self, proto: &Object<'js>) {
-        unsafe {
-            qjs::JS_SetConstructor(
+            let res = qjs::JS_DefinePropertyValue(
                 self.0.ctx.as_ptr(),
                 self.0.as_js_value(),
-                proto.0.as_js_value(),
+                PredefinedAtom::Name as qjs::JSAtom,
+                name.into_js_value(),
+                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
+            );
+            if res < 0 {
+                return Err(self.0.ctx.raise_exception());
+            }
+        };
+        Ok(())
+    }
+
+    /// Set the `name` property of this function and then return self.
+    pub fn with_name<S: AsRef<str>>(self, name: S) -> Result<Self> {
+        self.set_name(name)?;
+        Ok(self)
+    }
+
+    /// Sets the `length` property of the function.
+    pub fn set_length(&self, len: usize) -> Result<()> {
+        let len = len.into_js(self.ctx())?;
+        unsafe {
+            let res = qjs::JS_DefinePropertyValue(
+                self.0.ctx.as_ptr(),
+                self.0.as_js_value(),
+                PredefinedAtom::Length as qjs::JSAtom,
+                len.into_js_value(),
+                (qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_THROW) as _,
+            );
+            if res < 0 {
+                return Err(self.0.ctx.raise_exception());
+            }
+        };
+        Ok(())
+    }
+
+    /// Sets the `length` property of the function and return self.
+    pub fn with_length(self, len: usize) -> Result<Self> {
+        self.set_length(len)?;
+        Ok(self)
+    }
+
+    /// Returns the prototype which all JavaScript function by default have as its prototype, i.e.
+    /// `Function.prototype`.
+    pub fn prototype(ctx: Ctx<'js>) -> Object<'js> {
+        let res = unsafe {
+            let v = qjs::JS_DupValue(qjs::JS_GetFunctionProto(ctx.as_ptr()));
+            Value::from_js_value(ctx, v)
+        };
+        // as far is I know this should always be an object.
+        res.into_object()
+            .expect("`Function.prototype` wasn't an object")
+    }
+
+    /// Returns whether this function is an constructor.
+    pub fn is_constructor(&self) -> bool {
+        let res = unsafe { qjs::JS_IsConstructor(self.ctx().as_ptr(), self.0.as_js_value()) };
+        res != 0
+    }
+
+    /// Set whether this function is a constructor or not.
+    pub fn set_constructor(&self, is_constructor: bool) {
+        unsafe {
+            qjs::JS_SetConstructorBit(
+                self.ctx().as_ptr(),
+                self.0.as_js_value(),
+                is_constructor as i32,
             )
         };
     }
 
-    /// Get a function prototype
+    /// Set whether this function is a constructor or not then return self.
+    pub fn with_constructor(self, is_constructor: bool) -> Self {
+        self.set_constructor(is_constructor);
+        self
+    }
+}
+
+#[derive(Debug, Clone)]
+#[repr(transparent)]
+pub struct Constructor<'js>(pub(crate) Function<'js>);
+
+impl<'js> Constructor<'js> {
+    /// Creates a Rust constructor function for a Rust class.
     ///
-    /// Actually this method returns the `func.prototype`.
-    pub fn get_prototype(&self) -> Result<Object<'js>> {
-        let ctx = self.0.ctx;
-        let value = self.0.as_js_value();
-        Ok(unsafe {
-            //TODO: can a function not have a prototype?.
-            let proto = ctx.handle_exception(qjs::JS_GetPropertyStr(
+    /// Note that this function creates a constructor from a given function, the returned constructor
+    /// is thus not the same as the one returned from [`JsClass::constructor`].
+    pub fn new_class<C, F, P>(ctx: Ctx<'js>, f: F) -> Result<Self>
+    where
+        F: IntoJsFunc<'js, P> + 'js,
+        C: JsClass<'js>,
+    {
+        let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
+            params.check_params(F::param_requirements())?;
+            let this = params.this();
+            let ctx = params.ctx().clone();
+            let proto = this
+                .into_function()
+                .map(|func| func.get(PredefinedAtom::Prototype))
+                .unwrap_or_else(|| Ok(Class::<C>::prototype(ctx.clone())))?;
+
+            let res = f.call(params)?;
+            res.as_object()
+                .ok_or_else(|| Error::IntoJs {
+                    from: res.type_of().as_str(),
+                    to: "object",
+                    message: Some("rust constructor function did not return a object".to_owned()),
+                })?
+                .set_prototype(proto.as_ref())?;
+            Ok(res)
+        });
+        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_inner())
+            .with_constructor(true);
+        unsafe {
+            qjs::JS_SetConstructor(
                 ctx.as_ptr(),
-                value,
-                "prototype\0".as_ptr() as _,
-            ))?;
-            if qjs::JS_IsObject(proto) {
-                Object::from_js_value(ctx, proto)
-            } else {
-                return Err(Error::Unknown);
-            }
-        })
+                func.as_js_value(),
+                Class::<C>::prototype(ctx)
+                    .as_ref()
+                    .map(|x| x.as_js_value())
+                    .unwrap_or(qjs::JS_NULL),
+            )
+        };
+        Ok(Constructor(func))
     }
 
-    /// Reference as an object
-    #[inline]
-    pub fn as_object(&self) -> &Object<'js> {
-        unsafe { &*(self as *const _ as *const Object) }
+    /// Create a new Rust constructor function with a given prototype.
+    ///
+    /// Useful if the function does not return a Rust class.
+    pub fn new_prototype<F, P>(ctx: &Ctx<'js>, prototype: Object<'js>, f: F) -> Result<Self>
+    where
+        F: IntoJsFunc<'js, P> + 'js,
+    {
+        let proto_clone = prototype.clone();
+        let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
+            params.check_params(F::param_requirements())?;
+            let this = params.this();
+            let proto = this
+                .as_function()
+                .map(|func| func.get(PredefinedAtom::Prototype))
+                .unwrap_or_else(|| Ok(Some(proto_clone.clone())))?;
+
+            let res = f.call(params)?;
+            res.as_object()
+                .ok_or_else(|| Error::IntoJs {
+                    from: res.type_of().as_str(),
+                    to: "object",
+                    message: Some("rust constructor function did not return a object".to_owned()),
+                })?
+                .set_prototype(proto.as_ref())?;
+            Ok(res)
+        });
+        let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_inner())
+            .with_constructor(true);
+        unsafe {
+            qjs::JS_SetConstructor(ctx.as_ptr(), func.as_js_value(), prototype.as_js_value())
+        };
+        Ok(Constructor(func))
     }
 
-    /// Convert into an object
-    #[inline]
-    pub fn into_object(self) -> Object<'js> {
-        Object(self.0)
+    /// Call the constructor as a constructor.
+    ///
+    /// Equivalent to calling any constructor function with the new keyword.
+    pub fn construct<A, R>(&self, args: A) -> Result<R>
+    where
+        A: IntoArgs<'js>,
+        R: FromJs<'js>,
+    {
+        let ctx = self.ctx();
+        let num = args.num_args();
+        let mut accum_args = Args::new(ctx.clone(), num);
+        args.into_args(&mut accum_args)?;
+        self.construct_args(accum_args)
     }
 
-    /// Convert from an object
-    pub fn from_object(object: Object<'js>) -> Result<Self> {
-        if object.is_function() {
-            Ok(Self(object.0))
-        } else {
-            Err(Error::new_from_js("object", "function"))
-        }
-    }
-
-    pub(crate) unsafe fn init_raw(rt: *mut qjs::JSRuntime) {
-        JsFunction::register(rt);
+    /// Call the constructor as a constructor with an [`Args`] object.
+    ///
+    /// Equivalent to calling any constructor function with the new keyword.
+    pub fn construct_args<R>(&self, args: Args<'js>) -> Result<R>
+    where
+        R: FromJs<'js>,
+    {
+        args.construct(self)
     }
 }
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{prelude::*, *};
     use approx::assert_abs_diff_eq as assert_approx_eq;
 
     #[test]
@@ -365,8 +391,9 @@ mod test {
                 .eval("() => { throw new Error('unimplemented'); }")
                 .unwrap();
 
-            if let Err(Error::Exception { message, .. }) = f.call::<_, ()>(()) {
-                assert_eq!(message, "unimplemented");
+            if let Err(Error::Exception) = f.call::<_, ()>(()) {
+                let exception = Exception::from_js(&ctx, ctx.catch()).unwrap();
+                assert_eq!(exception.message().as_deref(), Some("unimplemented"));
             } else {
                 panic!("Should throws");
             }
@@ -411,7 +438,7 @@ mod test {
         ctx.with(|ctx| {
             let g = ctx.globals();
             let f: Function = ctx.eval("(obj) => { obj.called = true; }").unwrap();
-            f.defer_call((g.clone(),)).unwrap();
+            f.defer((g.clone(),)).unwrap();
             let c: Value = g.get("called").unwrap();
             assert_eq!(c.type_of(), Type::Undefined);
         });
@@ -431,13 +458,13 @@ mod test {
     #[test]
     fn static_callback() {
         test_with(|ctx| {
-            let f = Function::new(ctx, test).unwrap();
+            let f = Function::new(ctx.clone(), test).unwrap();
             f.set_name("test").unwrap();
             let eval: Function = ctx.eval("a => { a() }").unwrap();
             (f.clone(),).apply::<()>(&eval).unwrap();
             f.call::<_, ()>(()).unwrap();
 
-            let name: StdString = f.clone().into_object().get("name").unwrap();
+            let name: StdString = f.clone().into_inner().get("name").unwrap();
             assert_eq!(name, "test");
 
             let get_name: Function = ctx.eval("a => a.name").unwrap();
@@ -453,7 +480,7 @@ mod test {
             #[allow(clippy::mutex_atomic)]
             let called = Arc::new(Mutex::new(false));
             let called_clone = called.clone();
-            let f = Function::new(ctx, move || {
+            let f = Function::new(ctx.clone(), move || {
                 (*called_clone.lock().unwrap()) = true;
             })
             .unwrap();
@@ -464,7 +491,7 @@ mod test {
             f.call::<_, ()>(()).unwrap();
             assert!(*called.lock().unwrap());
 
-            let name: StdString = f.clone().into_object().get("name").unwrap();
+            let name: StdString = f.clone().into_inner().get("name").unwrap();
             assert_eq!(name, "test");
 
             let get_name: Function = ctx.eval("a => a.name").unwrap();
@@ -478,8 +505,8 @@ mod test {
         test_with(|ctx| {
             let mut v = 0;
             let f = Function::new(
-                ctx,
-                MutFn::from(move || {
+                ctx.clone(),
+                MutFn::new(move || {
                     v += 1;
                     v
                 }),
@@ -492,7 +519,7 @@ mod test {
             assert_eq!(eval.call::<_, i32>((f.clone(),)).unwrap(), 2);
             assert_eq!(eval.call::<_, i32>((f.clone(),)).unwrap(), 3);
 
-            let name: StdString = f.clone().into_object().get("name").unwrap();
+            let name: StdString = f.clone().into_inner().get("name").unwrap();
             assert_eq!(name, "test");
 
             let get_name: Function = ctx.eval("a => a.name").unwrap();
@@ -503,19 +530,20 @@ mod test {
 
     #[test]
     #[should_panic(
-        expected = "Mutable function callback is already in use! Could it have been called recursively?"
+        expected = "Error borrowing function: can't borrow a value as it is already borrowed"
     )]
     fn recursively_called_mutable_callback() {
         test_with(|ctx| {
             let mut v = 0;
             let f = Function::new(
-                ctx,
-                MutFn::from(move |ctx: Ctx| {
+                ctx.clone(),
+                MutFn::new(move |ctx: Ctx| {
                     v += 1;
                     ctx.globals()
                         .get::<_, Function>("foo")
                         .unwrap()
                         .call::<_, ()>(())
+                        .catch(&ctx)
                         .unwrap();
                     v
                 }),
@@ -528,13 +556,13 @@ mod test {
 
     #[test]
     #[should_panic(
-        expected = "Once function callback is already was used! Could it have been called twice?"
+        expected = "Error borrowing function: tried to use a value, which can only be used once, again."
     )]
     fn repeatedly_called_once_callback() {
         test_with(|ctx| {
             let mut v = 0;
             let f = Function::new(
-                ctx,
+                ctx.clone(),
                 OnceFn::from(move || {
                     v += 1;
                     v
@@ -542,8 +570,8 @@ mod test {
             )
             .unwrap();
             ctx.globals().set("foo", f.clone()).unwrap();
-            f.call::<_, ()>(()).unwrap();
-            f.call::<_, ()>(()).unwrap();
+            f.call::<_, ()>(()).catch(&ctx).unwrap();
+            f.call::<_, ()>(()).catch(&ctx).unwrap();
         })
     }
 
@@ -551,10 +579,10 @@ mod test {
     fn multiple_const_callbacks() {
         test_with(|ctx| {
             let globals = ctx.globals();
-            globals.set("one", Func::new("one", || 1f64)).unwrap();
-            globals.set("neg", Func::new("neg", |a: f64| -a)).unwrap();
+            globals.set("one", Func::new(|| 1f64)).unwrap();
+            globals.set("neg", Func::new(|a: f64| -a)).unwrap();
             globals
-                .set("add", Func::new("add", |a: f64, b: f64| a + b))
+                .set("add", Func::new(|a: f64, b: f64| a + b))
                 .unwrap();
 
             let r: f64 = ctx.eval("neg(add(one(), 2))").unwrap();
@@ -644,29 +672,9 @@ mod test {
     }
 
     #[test]
-    fn call_overloaded_callback() {
-        test_with(|ctx| {
-            let globals = ctx.globals();
-            globals
-                .set(
-                    "calc",
-                    Func::from((|a: f64, b: f64| (a + 1f64) * b, |a: f64| a + 1f64, || 1f64)),
-                )
-                .unwrap();
-
-            let r: f64 = ctx.eval("calc()").unwrap();
-            assert_approx_eq!(r, 1.0);
-            let r: f64 = ctx.eval("calc(2)").unwrap();
-            assert_approx_eq!(r, 3.0);
-            let r: f64 = ctx.eval("calc(2, 3)").unwrap();
-            assert_approx_eq!(r, 9.0);
-        })
-    }
-
-    #[test]
     fn call_rust_fn_with_this_and_args() {
         let res: f64 = test_with(|ctx| {
-            let func = Function::new(ctx, |this: This<Object>, a: f64, b: f64| {
+            let func = Function::new(ctx.clone(), |this: This<Object>, a: f64, b: f64| {
                 let x: f64 = this.get("x").unwrap();
                 let y: f64 = this.get("y").unwrap();
                 this.set("r", a * x + b * y).unwrap();
@@ -688,7 +696,7 @@ mod test {
     #[test]
     fn apply_rust_fn_with_this_and_args() {
         let res: f32 = test_with(|ctx| {
-            let func = Function::new(ctx, |this: This<Object>, x: f32, y: f32| {
+            let func = Function::new(ctx.clone(), |this: This<Object>, x: f32, y: f32| {
                 let a: f32 = this.get("a").unwrap();
                 let b: f32 = this.get("b").unwrap();
                 a * x + b * y
@@ -709,7 +717,7 @@ mod test {
     #[test]
     fn bind_rust_fn_with_this_and_call_with_args() {
         let res: f32 = test_with(|ctx| {
-            let func = Function::new(ctx, |this: This<Object>, x: f32, y: f32| {
+            let func = Function::new(ctx.clone(), |this: This<Object>, x: f32, y: f32| {
                 let a: f32 = this.get("a").unwrap();
                 let b: f32 = this.get("b").unwrap();
                 a * x + b * y
@@ -730,7 +738,7 @@ mod test {
     #[test]
     fn call_rust_fn_with_var_args() {
         let res: Vec<i8> = test_with(|ctx| {
-            let func = Function::new(ctx, |args: Rest<i8>| {
+            let func = Function::new(ctx.clone(), |args: Rest<i8>| {
                 use std::iter::once;
                 once(args.len() as i8)
                     .chain(args.iter().cloned())
@@ -755,7 +763,7 @@ mod test {
     #[test]
     fn call_rust_fn_with_rest_args() {
         let res: Vec<i8> = test_with(|ctx| {
-            let func = Function::new(ctx, |arg1: i8, arg2: i8, args: Rest<i8>| {
+            let func = Function::new(ctx.clone(), |arg1: i8, arg2: i8, args: Rest<i8>| {
                 use std::iter::once;
                 once(arg1)
                     .chain(once(arg2))

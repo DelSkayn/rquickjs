@@ -1,7 +1,10 @@
-use crate::{qjs, Context, Result, Runtime};
 use std::{marker::PhantomData, ptr::NonNull};
 
-/// The internal trait to add JS builting
+#[cfg(feature = "futures")]
+use crate::{context::AsyncContext, runtime::AsyncRuntime};
+use crate::{qjs, Context, Result, Runtime};
+
+/// The internal trait to add JS builtins
 pub trait Intrinsic {
     /// # Safety
     /// Do not need implement it yourself instead you may use predefined intrinsics from [`intrinsic`] module.
@@ -143,5 +146,10 @@ impl<I: Intrinsic> ContextBuilder<I> {
 
     pub fn build(self, runtime: &Runtime) -> Result<Context> {
         Context::custom::<I>(runtime)
+    }
+
+    #[cfg(feature = "futures")]
+    pub async fn build_async(self, runtime: &AsyncRuntime) -> Result<AsyncContext> {
+        AsyncContext::custom::<I>(runtime).await
     }
 }

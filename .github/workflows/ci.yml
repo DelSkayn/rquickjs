@@ -3,9 +3,13 @@ on:
   push:
     branches:
       - "*"
-    tags:
-      - "[0-9]+.[0-9]+.[0-9]+"
   pull_request:
+
+# Only run on the latest ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   format:
     runs-on: ubuntu-latest
@@ -66,7 +70,7 @@ jobs:
   check:
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
+      checks: write
     steps:
       - uses: actions/checkout@v3
         with:
@@ -87,18 +91,70 @@ jobs:
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
-      - uses: sksat/action-clippy@main
+      - name: Cargo clippy
+        run: cargo clippy --all --all-targets --features full-async
+
+  msrv:
+    # Check to see if rquickjs builds on minimal supported Rust version.
+    runs-on: ubuntu-latest
+    # we use a matrix here just because env can't be used in job names
+    # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
+    strategy:
+      matrix:
+        msrv: [1.65.0] # 1.65.0 introduced GAT stabilization
+    name: ubuntu / ${{ matrix.msrv }}
+    steps:
+      - uses: actions/checkout@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          reporter: github-check
-          fail_on_error: true
-          clippy_flags: --all --all-targets --features full-async
+          submodules: true
+      - name: Install ${{ matrix.msrv }}
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.msrv }}
+      - name: cargo +${{ matrix.msrv }} check
+        run: cargo check
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dtolnay/rust-toolchain@v1
+        with:
+          toolchain: nightly
+          components: clippy
+      - uses: actions/checkout@v3
+        with:
+          submodules: true
+      - name: Build cache
+        uses: actions/cache@v3
+        with:
+          path: target
+          key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get -y update
+          sudo apt-get -y install protobuf-compiler libprotobuf-dev
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
+      - name: Run cargo test coverage
+        run: cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v3
+        with:
+            name: code-coverage-report
+            path: target/llvm-cov/html/
+            retention-days: 5
 
   test:
     needs:
       - format
       - doc
       - check
+      - msrv
+      - coverage
     strategy:
       fail-fast: ${{ startsWith(github.ref, 'refs/tags/') }}
       matrix:
@@ -120,6 +176,12 @@ jobs:
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
+            features: full-async
+            optimization: false
+          - task: bindings
+            os: macos-latest
+            rust: stable
+            target: aarch64-apple-darwin
             features: full-async
             optimization: false
           - task: bindings
@@ -205,18 +267,6 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: async-std
-            optimization: false
-          - task: features
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: tokio
-            optimization: false
-          - task: features
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
             features: parallel
             optimization: false
           # Test channels
@@ -253,7 +303,7 @@ jobs:
           ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
           sudo dpkg --add-architecture ${SYSTEM_ARCH}
           sudo apt-get update -y
-          sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET}
+          sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET} libgcc-s1:${SYSTEM_ARCH}
           echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
       - name: Setup musl-tools
         if: startsWith(matrix.target, 'x86_64-') && endsWith(matrix.target, '-musl')
@@ -331,7 +381,9 @@ jobs:
       - name: Build sys
         env:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
-        run: cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
+        run: |
+          cargo clean
+          cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
         uses: actions/upload-artifact@v3
@@ -341,6 +393,8 @@ jobs:
       - name: Build
         run: cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
+        if: |
+          matrix.target != 'aarch64-apple-darwin'
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
@@ -368,25 +422,3 @@ jobs:
           title: Update bindings
           body: |
             Bindings should be updated to be consistent with latest changes
-  publish:
-    if: (github.repository == 'DelSkayn/rquickjs' || github.repository == 'katyo/rquickjs') && startsWith(github.ref, 'refs/tags/')
-    needs:
-      - format
-      - doc
-      - check
-      - test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          submodules: true
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: stable
-      - name: Publish crates
-        uses: katyo/publish-crates@v1
-        with:
-          registry-token: ${{ secrets.CRATES_TOKEN }}
-          no-verify: true
-          #dry-run: true

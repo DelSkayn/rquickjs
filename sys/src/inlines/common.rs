@@ -153,10 +153,10 @@ pub unsafe fn JS_ToCString(ctx: *mut JSContext, val: JSValue) -> *const c_char {
 #[inline]
 pub unsafe fn JS_ToCStringLen(
     ctx: *mut JSContext,
-    plen: *mut size_t,
+    plen: *mut usize,
     val: JSValue,
 ) -> *const c_char {
-    JS_ToCStringLen2(ctx, plen, val, 0)
+    JS_ToCStringLen2(ctx, plen as _, val, 0)
 }
 
 #[inline]

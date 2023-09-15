@@ -1,10 +1,9 @@
-use crate::{Ctx, Error, Loaded, Loader, Module, Result, Script};
+use crate::{loader::Loader, module::ModuleData, Ctx, Error, Result};
 use std::collections::HashMap;
 
 /// The builtin script module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug, Default)]
 pub struct BuiltinLoader {
     modules: HashMap<String, Vec<u8>>,
@@ -29,10 +28,10 @@ impl BuiltinLoader {
     }
 }
 
-impl Loader<Script> for BuiltinLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Script>>> {
+impl Loader for BuiltinLoader {
+    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
         match self.modules.remove(path) {
-            Some(source) => Module::new(ctx, path, source),
+            Some(source) => Ok(ModuleData::source(path, source)),
             _ => Err(Error::new_loading(path)),
         }
     }

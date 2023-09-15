@@ -1,10 +1,12 @@
-use super::check_extensions;
-use crate::{Ctx, Error, Loaded, Loader, Module, Result, Script};
+use crate::{
+    loader::{util::check_extensions, Loader},
+    module::ModuleData,
+    Ctx, Error, Result,
+};
 
 /// The script module loader
 ///
 /// This loader can be used as the nested backing loader in user-defined loaders.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 #[derive(Debug)]
 pub struct ScriptLoader {
     extensions: Vec<String>,
@@ -33,13 +35,13 @@ impl Default for ScriptLoader {
     }
 }
 
-impl Loader<Script> for ScriptLoader {
-    fn load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js, Loaded<Script>>> {
+impl Loader for ScriptLoader {
+    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
         if !check_extensions(path, &self.extensions) {
             return Err(Error::new_loading(path));
         }
 
         let source: Vec<_> = std::fs::read(path)?;
-        Module::new(ctx, path, source)
+        Ok(ModuleData::source(path, source))
     }
 }

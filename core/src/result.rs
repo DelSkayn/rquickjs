@@ -1,19 +1,54 @@
-use crate::{qjs, Ctx, FromJs, IntoJs, Object, StdResult, StdString, Type, Value};
-
 use std::{
     error::Error as StdError,
-    ffi::{CString, NulError},
-    fmt::{Display, Formatter, Result as FmtResult},
+    ffi::{CString, FromBytesWithNulError, NulError},
+    fmt::{self, Display, Formatter, Result as FmtResult},
     io::Error as IoError,
-    ops::Range,
     panic,
     panic::UnwindSafe,
     str::{FromStr, Utf8Error},
     string::FromUtf8Error,
 };
 
-/// Result type used throught the library.
+#[cfg(feature = "futures")]
+use crate::context::AsyncContext;
+use crate::{
+    atom::PredefinedAtom, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
+};
+
+/// Result type used throughout the library.
 pub type Result<T> = StdResult<T, Error>;
+
+/// Result type containing an the JavaScript exception if there was one.
+pub type CaughtResult<'js, T> = StdResult<T, CaughtError<'js>>;
+
+#[derive(Debug)]
+pub enum BorrowError {
+    /// The object was not writable
+    NotWritable,
+    /// The object was already borrowed in a way that prevents borrowing again.
+    AlreadyBorrowed,
+    /// The object could only be used once and was used already.
+    AlreadyUsed,
+}
+
+impl fmt::Display for BorrowError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            BorrowError::NotWritable => write!(f, "tried to borrow a value which is not writable"),
+            BorrowError::AlreadyBorrowed => {
+                write!(f, "can't borrow a value as it is already borrowed")
+            }
+            BorrowError::AlreadyUsed => {
+                write!(
+                    f,
+                    "tried to use a value, which can only be used once, again."
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for BorrowError {}
 
 /// Error type of the library.
 #[derive(Debug)]
@@ -22,35 +57,47 @@ pub enum Error {
     /// Could not allocate memory
     /// This is generally only triggered when out of memory.
     Allocation,
+    /// A module defined two exported values with the same name.
+    DuplicateExports,
     /// Found a string with a internal null byte while converting
     /// to C string.
     InvalidString(NulError),
+    /// Found a string with a internal null byte while converting
+    /// to C string.
+    InvalidCStr(FromBytesWithNulError),
     /// String from rquickjs was not UTF-8
     Utf8(Utf8Error),
     /// An io error
     Io(IoError),
-    /// An exception raised by quickjs itself.
-    Exception {
-        message: StdString,
-        file: StdString,
-        line: i32,
-        stack: StdString,
-    },
-    /// Error converting from javascript to a rust type.
+    /// An error happened while trying to borrow a Rust class object.
+    ClassBorrow(BorrowError),
+    /// An error happened while trying to borrow a Rust function.
+    FunctionBorrow(BorrowError),
+    /// An exception raised by QuickJS itself.
+    /// The actual JavaScript value can be retrieved by calling [`Ctx::catch`].
+    ///
+    /// When returned from a callback the JavaScript will continue to unwind with the current
+    /// error.
+    Exception,
+    /// Error converting from JavaScript to a Rust type.
     FromJs {
         from: &'static str,
         to: &'static str,
         message: Option<StdString>,
     },
-    /// Error converting to javascript from a rust type.
+    /// Error converting to JavaScript from a Rust type.
     IntoJs {
         from: &'static str,
         to: &'static str,
         message: Option<StdString>,
     },
     /// Error matching of function arguments
-    NumArgs {
-        expected: Range<usize>,
+    MissingArgs {
+        expected: usize,
+        given: usize,
+    },
+    TooManyArgs {
+        expected: usize,
         given: usize,
     },
     #[cfg(feature = "loader")]
@@ -68,7 +115,7 @@ pub enum Error {
     },
     /// Error when restoring a Persistent in a runtime other than the original runtime.
     UnrelatedRuntime,
-    /// An error from quickjs from which the specifics are unknown.
+    /// An error from QuickJS from which the specifics are unknown.
     /// Should eventually be removed as development progresses.
     Unknown,
 }
@@ -136,9 +183,9 @@ impl Error {
         matches!(self, Error::Loading { .. })
     }
 
-    /// Returns whether the error is a quickjs generated exception.
+    /// Returns whether the error is a QuickJS generated exception.
     pub fn is_exception(&self) -> bool {
-        matches!(self, Error::Exception { .. })
+        matches!(self, Error::Exception)
     }
 
     /// Create from JS conversion error
@@ -198,14 +245,9 @@ impl Error {
         matches!(self, Self::IntoJs { .. })
     }
 
-    /// Create function args mismatch error
-    pub fn new_num_args(expected: Range<usize>, given: usize) -> Self {
-        Self::NumArgs { expected, given }
-    }
-
     /// Return whether the error is an function args mismatch error
     pub fn is_num_args(&self) -> bool {
-        matches!(self, Self::NumArgs { .. })
+        matches!(self, Self::TooManyArgs { .. } | Self::MissingArgs { .. })
     }
 
     /// Optimized conversion to CString
@@ -220,11 +262,17 @@ impl Error {
     }
 
     /// Throw an exception
-    pub(crate) fn throw(&self, ctx: Ctx) -> qjs::JSValue {
+    pub(crate) fn throw(&self, ctx: &Ctx) -> qjs::JSValue {
         use Error::*;
         match self {
+            Exception => qjs::JS_EXCEPTION,
             Allocation => unsafe { qjs::JS_ThrowOutOfMemory(ctx.as_ptr()) },
-            InvalidString(_) | Utf8(_) | FromJs { .. } | IntoJs { .. } | NumArgs { .. } => {
+            InvalidString(_)
+            | Utf8(_)
+            | FromJs { .. }
+            | IntoJs { .. }
+            | TooManyArgs { .. }
+            | MissingArgs { .. } => {
                 let message = self.to_cstring();
                 unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
             }
@@ -237,9 +285,25 @@ impl Error {
                 let message = self.to_cstring();
                 unsafe { qjs::JS_ThrowInternalError(ctx.as_ptr(), message.as_ptr()) }
             }
-            _ => {
-                let value = self.into_js(ctx).unwrap();
-                unsafe { qjs::JS_Throw(ctx.as_ptr(), value.into_js_value()) }
+            error => {
+                unsafe {
+                    let value = qjs::JS_NewError(ctx.as_ptr());
+                    if qjs::JS_VALUE_GET_NORM_TAG(value) == qjs::JS_TAG_EXCEPTION {
+                        //allocation error happened, can't raise error properly. just immediately
+                        //return
+                        return value;
+                    }
+                    let obj = Object::from_js_value(ctx.clone(), value);
+                    match obj.set(PredefinedAtom::Message, error.to_string()) {
+                        Ok(_) => {}
+                        Err(Error::Exception) => return qjs::JS_EXCEPTION,
+                        Err(e) => {
+                            panic!("generated error while throwing error: {}", e);
+                        }
+                    }
+                    let js_val = (obj).into_js_value();
+                    qjs::JS_Throw(ctx.as_ptr(), js_val)
+                }
             }
         }
     }
@@ -253,40 +317,23 @@ impl Display for Error {
 
         match self {
             Allocation => "Allocation failed while creating object".fmt(f)?,
+            DuplicateExports => {
+                "Tried to export two values with the same name from one module".fmt(f)?
+            }
             InvalidString(error) => {
                 "String contained internal null bytes: ".fmt(f)?;
+                error.fmt(f)?;
+            }
+            InvalidCStr(error) => {
+                "CStr didn't end in a null byte: ".fmt(f)?;
                 error.fmt(f)?;
             }
             Utf8(error) => {
                 "Conversion from string failed: ".fmt(f)?;
                 error.fmt(f)?;
             }
-            Unknown => "quickjs library created a unknown error".fmt(f)?,
-            Exception {
-                file,
-                line,
-                message,
-                stack,
-            } => {
-                "Exception generated by quickjs: ".fmt(f)?;
-                if !file.is_empty() {
-                    '['.fmt(f)?;
-                    file.fmt(f)?;
-                    ']'.fmt(f)?;
-                }
-                if *line >= 0 {
-                    ':'.fmt(f)?;
-                    line.fmt(f)?;
-                }
-                if !message.is_empty() {
-                    ' '.fmt(f)?;
-                    message.fmt(f)?;
-                }
-                if !stack.is_empty() {
-                    '\n'.fmt(f)?;
-                    stack.fmt(f)?;
-                }
-            }
+            Unknown => "QuickJS library created a unknown error".fmt(f)?,
+            Exception => "Exception generated by QuickJS".fmt(f)?,
             FromJs { from, to, message } => {
                 "Error converting from js '".fmt(f)?;
                 from.fmt(f)?;
@@ -313,16 +360,20 @@ impl Display for Error {
                     }
                 }
             }
-            NumArgs { expected, given } => {
+            MissingArgs { expected, given } => {
                 "Error calling function with ".fmt(f)?;
                 given.fmt(f)?;
                 " argument(s) while ".fmt(f)?;
-                expected.start.fmt(f)?;
-                "..".fmt(f)?;
-                if expected.end < usize::MAX {
-                    expected.end.fmt(f)?;
-                }
-                " expected".fmt(f)?;
+                expected.fmt(f)?;
+                " where expected".fmt(f)?;
+            }
+            TooManyArgs { expected, given } => {
+                "Error calling function with ".fmt(f)?;
+                given.fmt(f)?;
+                " argument(s), function is exhaustive and cannot be called with more then "
+                    .fmt(f)?;
+                expected.fmt(f)?;
+                " arguments".fmt(f)?;
             }
             #[cfg(feature = "loader")]
             Resolving {
@@ -358,6 +409,14 @@ impl Display for Error {
                 "IO Error: ".fmt(f)?;
                 error.fmt(f)?;
             }
+            ClassBorrow(x) => {
+                "Error borrowing class: ".fmt(f)?;
+                x.fmt(f)?;
+            }
+            FunctionBorrow(x) => {
+                "Error borrowing function: ".fmt(f)?;
+                x.fmt(f)?;
+            }
             UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
         Ok(())
@@ -378,6 +437,7 @@ macro_rules! from_impls {
 
 from_impls! {
     NulError => InvalidString,
+    FromBytesWithNulError => InvalidCStr,
     Utf8Error => Utf8,
     IoError => Io,
 }
@@ -388,58 +448,167 @@ impl From<FromUtf8Error> for Error {
     }
 }
 
-impl<'js> FromJs<'js> for Error {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        let obj = Object::from_js(ctx, value)?;
-        if obj.is_error() {
-            Ok(Error::Exception {
-                message: obj.get("message").unwrap_or_else(|_| "".into()),
-                file: obj.get("fileName").unwrap_or_else(|_| "".into()),
-                line: obj.get("lineNumber").unwrap_or(-1),
-                stack: obj.get("stack").unwrap_or_else(|_| "".into()),
-            })
-        } else {
-            Err(Error::new_from_js("object", "error"))
+/// An error type containing possible thrown exception values.
+#[derive(Debug)]
+pub enum CaughtError<'js> {
+    /// Error wasn't an exception
+    Error(Error),
+    /// Error was an exception and an instance of Error
+    Exception(Exception<'js>),
+    /// Error was an exception but not an instance of Error.
+    Value(Value<'js>),
+}
+
+impl<'js> Display for CaughtError<'js> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match *self {
+            CaughtError::Error(ref e) => e.fmt(f),
+            CaughtError::Exception(ref e) => e.fmt(f),
+            CaughtError::Value(ref e) => {
+                writeln!(f, "Exception generated by quickjs: {e:?}")
+            }
         }
     }
 }
 
-impl<'js> IntoJs<'js> for &Error {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        use Error::*;
-        let value = unsafe {
-            Object::from_js_value(ctx, ctx.handle_exception(qjs::JS_NewError(ctx.as_ptr()))?)
-        };
-        match self {
-            Exception {
-                message,
-                file,
-                line,
-                stack,
-            } => {
-                if !message.is_empty() {
-                    value.set("message", message)?;
-                }
-                if !file.is_empty() {
-                    value.set("fileName", file)?;
-                }
-                if *line >= 0 {
-                    value.set("lineNumber", *line)?;
-                }
-                if !stack.is_empty() {
-                    value.set("stack", stack)?;
-                }
+impl<'js> StdError for CaughtError<'js> {}
+
+impl<'js> CaughtError<'js> {
+    /// Create a `CaughtError` from an [`Error`], retrieving the error value from `Ctx` if there
+    /// was one.
+    pub fn from_error(ctx: &Ctx<'js>, error: Error) -> Self {
+        if let Error::Exception = error {
+            let value = ctx.catch();
+            if let Some(ex) = value
+                .as_object()
+                .and_then(|x| Exception::from_object(x.clone()))
+            {
+                CaughtError::Exception(ex)
+            } else {
+                CaughtError::Value(value)
             }
-            error => {
-                value.set("message", error.to_string())?;
-            }
+        } else {
+            CaughtError::Error(error)
         }
-        Ok(value.0)
+    }
+
+    /// Turn a `Result` with [`Error`] into a result with [`CaughtError`] retrieving the error
+    /// value from the context if there was one.
+    pub fn catch<T>(ctx: &Ctx<'js>, error: Result<T>) -> CaughtResult<'js, T> {
+        error.map_err(|error| Self::from_error(ctx, error))
+    }
+
+    /// Put the possible caught value back as the current error and turn the [`CaughtError`] into [`Error`]
+    pub fn throw(self, ctx: &Ctx<'js>) -> Error {
+        match self {
+            CaughtError::Error(e) => e,
+            CaughtError::Exception(ex) => ctx.throw(ex.into_value()),
+            CaughtError::Value(ex) => ctx.throw(ex),
+        }
+    }
+
+    /// Returns whether self is of variant `CaughtError::Exception`.
+    pub fn is_exception(&self) -> bool {
+        matches!(self, CaughtError::Exception(_))
+    }
+
+    /// Returns whether self is of variant `CaughtError::Exception` or `CaughtError::Value`.
+    pub fn is_js_error(&self) -> bool {
+        matches!(self, CaughtError::Exception(_) | CaughtError::Value(_))
+    }
+}
+
+/// Extension trait to easily turn results with [`Error`] into results with [`CaughtError`]
+/// # Usage
+/// ```
+/// # use rquickjs::{Error, Context, Runtime, CaughtError};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx|{
+/// use rquickjs::CatchResultExt;
+///
+/// if let Err(CaughtError::Value(err)) = ctx.eval::<(),_>("throw 3").catch(&ctx){
+///     assert_eq!(err.as_int(),Some(3));
+/// # }else{
+/// #    panic!()
+/// }
+/// # });
+/// ```
+pub trait CatchResultExt<'js, T> {
+    fn catch(self, ctx: &Ctx<'js>) -> CaughtResult<'js, T>;
+}
+
+impl<'js, T> CatchResultExt<'js, T> for Result<T> {
+    fn catch(self, ctx: &Ctx<'js>) -> CaughtResult<'js, T> {
+        CaughtError::catch(ctx, self)
+    }
+}
+
+/// Extension trait to easily turn results with [`CaughtError`] into results with [`Error`]
+///
+/// Calling throw on a `CaughtError` will set the current error to the one contained in
+/// `CaughtError` if such a value exists and then turn `CaughtError` into `Error`.
+pub trait ThrowResultExt<'js, T> {
+    fn throw(self, ctx: &Ctx<'js>) -> Result<T>;
+}
+
+impl<'js, T> ThrowResultExt<'js, T> for CaughtResult<'js, T> {
+    fn throw(self, ctx: &Ctx<'js>) -> Result<T> {
+        self.map_err(|e| e.throw(ctx))
+    }
+}
+
+/// A error raised from running a pending job
+/// Contains the context from which the error was raised.
+///
+/// Use `Ctx::catch` to retrieve the error.
+#[derive(Clone)]
+pub struct JobException(pub Context);
+
+impl fmt::Debug for JobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_tuple("JobException")
+            .field(&"TODO: Context")
+            .finish()
+    }
+}
+
+impl Display for JobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "Job raised an exception")?;
+        // TODO print the error?
+        Ok(())
+    }
+}
+
+/// A error raised from running a pending job
+/// Contains the context from which the error was raised.
+///
+/// Use `Ctx::catch` to retrieve the error.
+#[cfg(feature = "futures")]
+#[derive(Clone)]
+pub struct AsyncJobException(pub AsyncContext);
+
+#[cfg(feature = "futures")]
+impl fmt::Debug for AsyncJobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        f.debug_tuple("AsyncJobException")
+            .field(&"TODO: Context")
+            .finish()
+    }
+}
+
+#[cfg(feature = "futures")]
+impl Display for AsyncJobException {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "Async job raised an exception")?;
+        // TODO print the error?
+        Ok(())
     }
 }
 
 impl<'js> Ctx<'js> {
-    pub(crate) fn handle_panic<F>(self, f: F) -> qjs::JSValue
+    pub(crate) fn handle_panic<F>(&self, f: F) -> qjs::JSValue
     where
         F: FnOnce() -> qjs::JSValue + UnwindSafe,
     {
@@ -447,7 +616,7 @@ impl<'js> Ctx<'js> {
             match panic::catch_unwind(f) {
                 Ok(x) => x,
                 Err(e) => {
-                    self.get_opaque().panic = Some(e);
+                    (*self.get_opaque()).panic = Some(e);
                     qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
                 }
             }
@@ -459,22 +628,26 @@ impl<'js> Ctx<'js> {
     ///
     /// # Safety
     /// Assumes to have ownership of the JSValue
-    pub(crate) unsafe fn handle_exception(self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
+    pub(crate) unsafe fn handle_exception(&self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
         if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
             Ok(js_val)
         } else {
-            Err(self.get_exception())
+            if let Some(x) = (*self.get_opaque()).panic.take() {
+                panic::resume_unwind(x)
+            }
+            Err(Error::Exception)
         }
     }
 
-    pub(crate) unsafe fn get_exception(self) -> Error {
-        let exception_val = qjs::JS_GetException(self.as_ptr());
-
-        if let Some(x) = self.get_opaque().panic.take() {
-            panic::resume_unwind(x);
+    /// Returns Error::Exception if there is no existing panic,
+    /// otherwise continues panicking.
+    pub(crate) fn raise_exception(&self) -> Error {
+        // Safety
+        unsafe {
+            if let Some(x) = (*self.get_opaque()).panic.take() {
+                panic::resume_unwind(x)
+            }
+            Error::Exception
         }
-
-        let exception = Value::from_js_value(self, exception_val);
-        Error::from_js(self, exception).unwrap()
     }
 }

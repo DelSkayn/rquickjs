@@ -7,6 +7,7 @@ PATCHES += get_function_proto
 PATCHES += check_stack_overflow
 PATCHES += infinity_handling
 PATCHES += atomic_new_class_id
+PATCHES += dynamic_import_sync
 endif
 
 ifneq ($(filter msvc all,$(patch)),)

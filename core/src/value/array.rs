@@ -1,69 +1,76 @@
-use crate::{qjs, Ctx, Error, FromIteratorJs, FromJs, IntoJs, Object, Result, Value};
+//! JavaScript array types.
+
+use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
 };
 
-/// Rust representation of a javascript object optimized as an array.
+use super::convert::FromIteratorJs;
+
+/// Rust representation of a JavaScript object optimized as an array.
 ///
-/// Javascript array's are objects and can be used as such.
-/// However arrays in quickjs are optimized when they do not have any holes.
-/// This value represents such a optimized array.
-#[derive(Debug, PartialEq, Clone)]
+/// JavaScript array's are objects and can be used as such.
+/// However arrays in QuickJS are optimized when they do not have any holes.
+/// This value represents such an optimized array.
+#[derive(Debug, PartialEq, Clone, Eq, Hash)]
 #[repr(transparent)]
-pub struct Array<'js>(pub(crate) Value<'js>);
+pub struct Array<'js>(pub(crate) Object<'js>);
 
 impl<'js> Array<'js> {
+    /// Create a new JavaScript array.
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
         Ok(Array(unsafe {
             let val = qjs::JS_NewArray(ctx.as_ptr());
             ctx.handle_exception(val)?;
             Value::from_js_value(ctx, val)
+                .into_object()
+                .expect("arrays should always be objects")
         }))
     }
 
-    /// Get the lenght of the javascript array.
+    /// Get the length of the JavaScript array.
     pub fn len(&self) -> usize {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let value = self.0.as_js_value();
         unsafe {
-            let val = qjs::JS_GetPropertyStr(ctx.as_ptr(), value, b"length\0".as_ptr() as *const _);
+            let val = qjs::JS_GetProperty(ctx.as_ptr(), value, PredefinedAtom::Length as _);
             assert!(qjs::JS_IsInt(val));
             qjs::JS_VALUE_GET_INT(val) as _
         }
     }
 
-    /// Returns wether a javascript array is empty.
+    /// Returns whether a JavaScript array is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Get the value at an index in the javascript array.
+    /// Get the value at an index in the JavaScript array.
     pub fn get<V: FromJs<'js>>(&self, idx: usize) -> Result<V> {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let obj = self.0.as_js_value();
         let val = unsafe {
             let val = qjs::JS_GetPropertyUint32(ctx.as_ptr(), obj, idx as _);
             let val = ctx.handle_exception(val)?;
-            Value::from_js_value(ctx, val)
+            Value::from_js_value(ctx.clone(), val)
         };
         V::from_js(ctx, val)
     }
 
-    /// Set the value at an index in the javascript array.
+    /// Set the value at an index in the JavaScript array.
     pub fn set<V: IntoJs<'js>>(&self, idx: usize, val: V) -> Result<()> {
-        let ctx = self.0.ctx;
+        let ctx = self.ctx();
         let obj = self.0.as_js_value();
         let val = val.into_js(ctx)?.into_js_value();
         unsafe {
             if 0 > qjs::JS_SetPropertyUint32(ctx.as_ptr(), obj, idx as _, val) {
-                return Err(ctx.get_exception());
+                return Err(ctx.raise_exception());
             }
         }
         Ok(())
     }
 
-    /// Get iterator over elments of an array
+    /// Get an iterator over elements of an array
     pub fn iter<T: FromJs<'js>>(&self) -> ArrayIter<'js, T> {
         let count = self.len() as _;
         ArrayIter {
@@ -74,25 +81,12 @@ impl<'js> Array<'js> {
         }
     }
 
-    /// Reference as an object
-    #[inline]
-    pub fn as_object(&self) -> &Object<'js> {
-        unsafe { &*(self as *const _ as *const Object) }
-    }
-
-    /// Convert into an object
-    #[inline]
     pub fn into_object(self) -> Object<'js> {
-        Object(self.0)
+        self.0
     }
 
-    /// Convert from an object
-    pub fn from_object(object: Object<'js>) -> Result<Self> {
-        if object.is_array() {
-            Ok(Self(object.0))
-        } else {
-            Err(Error::new_from_js("object", "array"))
-        }
+    pub fn as_object(&self) -> &Object<'js> {
+        &self.0
     }
 }
 
@@ -173,11 +167,11 @@ where
 {
     type Item = Value<'js>;
 
-    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    fn from_iter_js<T>(ctx: &Ctx<'js>, iter: T) -> Result<Self>
     where
         T: IntoIterator<Item = A>,
     {
-        let array = Array::new(ctx)?;
+        let array = Array::new(ctx.clone())?;
         for (idx, item) in iter.into_iter().enumerate() {
             let item = item.into_js(ctx)?;
             array.set(idx as _, item)?;
@@ -188,6 +182,8 @@ where
 
 #[cfg(test)]
 mod test {
+    use convert::IteratorJs;
+
     use crate::*;
     #[test]
     fn from_javascript() {
@@ -237,9 +233,9 @@ mod test {
                 .unwrap();
             let elems: Vec<_> = val.into_iter().collect::<Result<_>>().unwrap();
             assert_eq!(elems.len(), 3);
-            assert_eq!(i8::from_js(ctx, elems[0].clone()).unwrap(), 1);
-            assert_eq!(StdString::from_js(ctx, elems[1].clone()).unwrap(), "abcd");
-            assert!(bool::from_js(ctx, elems[2].clone()).unwrap());
+            assert_eq!(i8::from_js(&ctx, elems[0].clone()).unwrap(), 1);
+            assert_eq!(StdString::from_js(&ctx, elems[1].clone()).unwrap(), "abcd");
+            assert!(bool::from_js(&ctx, elems[2].clone()).unwrap());
         })
     }
 
@@ -268,12 +264,12 @@ mod test {
             let array = [1i32, 2, 3]
                 .iter()
                 .cloned()
-                .collect_js::<Array>(ctx)
+                .collect_js::<Array>(&ctx)
                 .unwrap();
             assert_eq!(array.len(), 3);
-            assert_eq!(i32::from_js(ctx, array.get(0).unwrap()).unwrap(), 1);
-            assert_eq!(i32::from_js(ctx, array.get(1).unwrap()).unwrap(), 2);
-            assert_eq!(i32::from_js(ctx, array.get(2).unwrap()).unwrap(), 3);
+            assert_eq!(i32::from_js(&ctx, array.get(0).unwrap()).unwrap(), 1);
+            assert_eq!(i32::from_js(&ctx, array.get(1).unwrap()).unwrap(), 2);
+            assert_eq!(i32::from_js(&ctx, array.get(2).unwrap()).unwrap(), 3);
         })
     }
 }

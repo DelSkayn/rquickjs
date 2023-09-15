@@ -1,88 +1,141 @@
-use super::Input;
-use crate::{qjs, ClassId, Ctx, Result, Value};
-use std::{ops::Deref, panic::AssertUnwindSafe, ptr};
+use std::panic::AssertUnwindSafe;
 
-static FUNC_CLASS_ID: ClassId = ClassId::new();
+use crate::{
+    class::{Class, ClassId, JsClass, Readable, Trace, Tracer},
+    qjs,
+    value::function::{Params, StaticJsFunction},
+    Ctx, FromJs, Function, Object, Outlive, Result, Value,
+};
+pub use mac::static_fn;
 
-type BoxedFunc<'js> = Box<dyn Fn(&Input<'js>) -> Result<Value<'js>>>;
+use super::Constructor;
 
-#[repr(transparent)]
-pub struct JsFunction<'js>(BoxedFunc<'js>);
+///. The C side callback
+pub unsafe extern "C" fn js_callback_class<F: StaticJsFunction>(
+    ctx: *mut qjs::JSContext,
+    function: qjs::JSValue,
+    this: qjs::JSValue,
+    argc: qjs::c_int,
+    argv: *mut qjs::JSValue,
+    _flags: qjs::c_int,
+) -> qjs::JSValue {
+    let args = Params::from_ffi_class(ctx, function, this, argc, argv, _flags);
+    let ctx = args.ctx().clone();
 
-impl<'js> Deref for JsFunction<'js> {
-    type Target = BoxedFunc<'js>;
+    ctx.handle_panic(AssertUnwindSafe(|| {
+        let value = F::call(args)
+            .map(Value::into_js_value)
+            .unwrap_or_else(|error| error.throw(&ctx));
+        value
+    }))
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+pub unsafe extern "C" fn defer_call_job(
+    ctx: *mut qjs::JSContext,
+    argc: qjs::c_int,
+    argv: *mut qjs::JSValue,
+) -> qjs::JSValue {
+    let func = *argv.offset((argc - 1) as _);
+    let this = *argv.offset((argc - 2) as _);
+    let argc = argc - 2;
+    qjs::JS_Call(ctx, func, this, argc, argv)
+}
+
+/// A static class method for making function object like classes.
+///
+/// You can quickly create an `StaticJsFn` from any function by using the [`static_fn`] macro.
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub struct StaticJsFn(
+    pub(crate)  unsafe extern "C" fn(
+        *mut qjs::JSContext,
+        qjs::JSValue,
+        qjs::JSValue,
+        qjs::c_int,
+        *mut qjs::JSValue,
+        qjs::c_int,
+    ) -> qjs::JSValue,
+);
+
+impl StaticJsFn {
+    /// Create a new class fn object from a type implementing the [`StaticJsFunction`] trait.
+    pub fn new<F: StaticJsFunction>() -> Self {
+        Self(js_callback_class::<F>)
     }
 }
 
-impl<'js> JsFunction<'js> {
-    pub fn new<F>(func: F) -> Self
-    where
-        F: Fn(&Input<'js>) -> Result<Value<'js>> + 'static,
-    {
-        Self(Box::new(func))
+/// A trait for dynamic callbacks to rust.
+pub trait RustFunc<'js> {
+    /// Call the actual function with a given set of parameters and return a function.
+    fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
+}
+
+impl<'js, F> RustFunc<'js> for F
+where
+    for<'a> F: Fn(Params<'a, 'js>) -> Result<Value<'js>>,
+{
+    fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>> {
+        (self)(params)
+    }
+}
+
+/// The class used for wrapping closures, rquickjs implements callbacks by creating an instances of
+/// this class.
+pub struct RustFunction<'js>(pub Box<dyn RustFunc<'js> + 'js>);
+
+/// The static function which is called when JavaScript calls an instance of [`RustFunction`].
+fn call_rust_func_class<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>> {
+    let this = Class::<RustFunction>::from_js(params.ctx(), params.function())?;
+    // RustFunction isn't readable this always succeeds.
+    let borrow = this.borrow();
+    (*borrow).0.call(params)
+}
+
+unsafe impl<'js> Outlive<'js> for RustFunction<'js> {
+    type Target<'to> = RustFunction<'to>;
+}
+
+impl<'js> Trace<'js> for RustFunction<'js> {
+    fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+}
+
+impl<'js> JsClass<'js> for RustFunction<'js> {
+    const NAME: &'static str = "RustFunction";
+
+    type Mutable = Readable;
+
+    fn class_id() -> &'static crate::class::ClassId {
+        static ID: ClassId = ClassId::new();
+        &ID
     }
 
-    pub fn class_id() -> qjs::JSClassID {
-        FUNC_CLASS_ID.get() as _
+    fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
+        Ok(Some(Function::prototype(ctx.clone())))
     }
 
-    pub unsafe fn into_js_value(self, ctx: Ctx<'_>) -> qjs::JSValue {
-        let proto = qjs::JS_GetFunctionProto(ctx.as_ptr());
-        let obj = qjs::JS_NewObjectProtoClass(ctx.as_ptr(), proto, Self::class_id() as _);
-        qjs::JS_SetOpaque(obj, Box::into_raw(Box::new(self)) as _);
-        obj
+    fn constructor(_ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>> {
+        Ok(None)
     }
 
-    unsafe fn _call(
-        &self,
-        ctx: *mut qjs::JSContext,
-        this: qjs::JSValue,
-        argc: qjs::c_int,
-        argv: *mut qjs::JSValue,
-    ) -> Result<qjs::JSValue> {
-        let input = Input::new_raw(ctx, this, argc, argv);
-
-        let res = self.0(&input)?;
-
-        Ok(res.into_js_value())
+    fn function() -> Option<StaticJsFn> {
+        Some(static_fn!(call_rust_func_class))
     }
+}
 
-    pub unsafe fn register(rt: *mut qjs::JSRuntime) {
-        let class_id = Self::class_id();
-        if 0 == qjs::JS_IsRegisteredClass(rt, class_id) {
-            let class_def = qjs::JSClassDef {
-                class_name: b"RustFunction\0".as_ptr() as *const _,
-                finalizer: Some(Self::finalizer),
-                gc_mark: None,
-                call: Some(Self::call),
-                exotic: ptr::null_mut(),
-            };
-            assert!(qjs::JS_NewClass(rt, class_id, &class_def) == 0);
-        }
+mod mac {
+    /// A macro for implementing StaticJsFunction for generic functions.
+    #[macro_export]
+    macro_rules! static_fn {
+        ($f:ident) => {{
+            pub struct CarryFunction;
+            impl $crate::function::StaticJsFunction for CarryFunction {
+                fn call<'a, 'js>(
+                    params: $crate::function::Params<'a, 'js>,
+                ) -> $crate::Result<$crate::Value<'js>> {
+                    $f(params)
+                }
+            }
+            StaticJsFn::new::<CarryFunction>()
+        }};
     }
-
-    unsafe extern "C" fn call(
-        ctx: *mut qjs::JSContext,
-        func: qjs::JSValue,
-        this: qjs::JSValue,
-        argc: qjs::c_int,
-        argv: *mut qjs::JSValue,
-        _flags: qjs::c_int,
-    ) -> qjs::JSValue {
-        let ctx = Ctx::from_ptr(ctx);
-        let opaque = &*(qjs::JS_GetOpaque2(ctx.as_ptr(), func, Self::class_id()) as *mut Self);
-
-        ctx.handle_panic(AssertUnwindSafe(|| {
-            opaque
-                ._call(ctx.as_ptr(), this, argc, argv)
-                .unwrap_or_else(|error| error.throw(ctx))
-        }))
-    }
-
-    unsafe extern "C" fn finalizer(_rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
-        let _opaque = Box::from_raw(qjs::JS_GetOpaque(val, Self::class_id()) as *mut Self);
-    }
+    pub use static_fn;
 }

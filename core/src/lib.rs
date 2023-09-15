@@ -1,19 +1,12 @@
-//! # High-level bindings to quickjs
+#![allow(dead_code)]
+
+//! # High-level bindings to QuickJS
 //!
-//! The `rquickjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
+//! The `rquickjs` crate provides safe high-level bindings to the [QuickJS](https://bellard.org/quickjs/) JavaScript engine.
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
 
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
-
-#[cfg(feature = "async-std")]
-extern crate async_std_rs as async_std;
-
-#[cfg(feature = "tokio")]
-extern crate tokio_rs as tokio;
-
-#[cfg(feature = "smol")]
-extern crate smol_rs as smol;
 
 //#[doc(hidden)]
 pub mod qjs {
@@ -27,70 +20,91 @@ pub mod phf {
     pub use phf::*;
 }
 
-mod markers;
-pub use markers::ParallelSend;
+/// Short macro to define a cstring literal.
+///
+/// Make sure the string does not contain any internal null characters or it will panic.
+#[macro_export]
+macro_rules! cstr {
+    ($str:tt) => {{
+        const fn no_null(s: &[u8]) {
+            let mut i = 0;
+            while i < s.len() {
+                if s[i] == 0 {
+                    panic!("C-str string contained null character")
+                }
+                i += 1;
+            }
+        }
+        no_null($str.as_bytes());
+        unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(concat!($str, "\0").as_bytes()) }
+    }};
+}
+
+pub mod markers;
 mod result;
-pub use result::{Error, Result};
+pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 mod safe_ref;
 pub(crate) use safe_ref::*;
-mod runtime;
-#[cfg(feature = "async-std")]
-pub use runtime::AsyncStd;
-#[cfg(all(feature = "smol", feature = "parallel"))]
-pub use runtime::Smol;
-#[cfg(feature = "tokio")]
-pub use runtime::Tokio;
+pub mod runtime;
 #[cfg(feature = "futures")]
-pub use runtime::{Executor, ExecutorSpawner, Idle};
-pub use runtime::{MemoryUsage, Runtime};
-mod context;
-pub use context::{intrinsic, Context, ContextBuilder, Ctx, EvalOptions, Intrinsic, MultiWith};
-mod value;
-pub use value::*;
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+pub use runtime::AsyncRuntime;
+pub use runtime::Runtime;
+pub mod context;
+#[cfg(feature = "futures")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+pub use context::AsyncContext;
+#[cfg(feature = "multi-ctx")]
+pub use context::MultiWith;
+pub use context::{Context, Ctx};
 mod persistent;
+mod value;
 pub use persistent::{Outlive, Persistent};
+pub use value::{
+    array, atom, convert, function, module, object, Array, Atom, BigInt, Exception, FromAtom,
+    FromJs, Function, IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined,
+    Value,
+};
 
-mod class_id;
-#[cfg(not(feature = "classes"))]
-pub(crate) use class_id::ClassId;
-#[cfg(feature = "classes")]
-pub use class_id::ClassId;
+pub mod class;
+pub use class::Class;
 
-#[cfg(feature = "classes")]
-mod class;
-#[cfg(feature = "classes")]
-pub use class::{Class, ClassDef, Constructor, HasRefs, RefsMarker, WithProto};
-
-#[cfg(feature = "properties")]
-mod property;
-#[cfg(feature = "properties")]
-pub use property::{Accessor, AsProperty, Property};
+#[cfg(feature = "array-buffer")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
+pub use value::{ArrayBuffer, TypedArray};
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
 #[cfg(feature = "futures")]
-mod promise;
-
-#[cfg(feature = "futures")]
-pub use promise::{Promise, Promised};
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+pub mod promise;
 
 #[cfg(feature = "allocator")]
-mod allocator;
-
-#[cfg(feature = "allocator")]
-pub use allocator::{Allocator, RawMemPtr, RustAllocator};
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
+pub mod allocator;
 
 #[cfg(feature = "loader")]
-mod loader;
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
+pub mod loader;
 
-#[cfg(feature = "loader")]
-pub use loader::{
-    BuiltinLoader, BuiltinResolver, Bundle, Compile, FileResolver, HasByteCode, Loader,
-    ModuleLoader, Resolver, ScriptLoader,
-};
-
-#[cfg(feature = "dyn-load")]
-pub use loader::NativeLoader;
+pub mod prelude {
+    //! A group of often used types.
+    #[cfg(feature = "multi-ctx")]
+    pub use crate::context::MultiWith;
+    pub use crate::{
+        convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs, List},
+        function::{
+            Exhaustive, Flat, Func, FuncArg, IntoArg, IntoArgs, MutFn, OnceFn, Opt, Rest, This,
+        },
+        result::{CatchResultExt, ThrowResultExt},
+    };
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub use crate::{
+        function::Async,
+        promise::{Promise, Promised},
+    };
+}
 
 #[cfg(test)]
 pub(crate) fn test_with<F, R>(func: F) -> R
