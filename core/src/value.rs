@@ -12,11 +12,6 @@ pub mod object;
 mod string;
 mod symbol;
 
-#[cfg(feature = "array-buffer")]
-mod array_buffer;
-#[cfg(feature = "array-buffer")]
-mod typed_array;
-
 pub use array::Array;
 pub use atom::Atom;
 pub use bigint::BigInt;
@@ -27,6 +22,11 @@ pub use module::Module;
 pub use object::{Filter, Object};
 pub use string::String;
 pub use symbol::Symbol;
+
+#[cfg(feature = "array-buffer")]
+pub mod array_buffer;
+#[cfg(feature = "array-buffer")]
+pub mod typed_array;
 
 #[cfg(feature = "array-buffer")]
 pub use array_buffer::ArrayBuffer;

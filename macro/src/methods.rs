@@ -136,7 +136,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
     //let mut consts = Vec::new();
 
     for item in items {
-        match item {
+        match dbg!(item) {
             syn::ImplItem::Const(_item) => {}
             syn::ImplItem::Fn(item) => {
                 let function = Method::parse_impl_fn(item, &self_ty);

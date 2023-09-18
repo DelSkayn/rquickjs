@@ -15,6 +15,9 @@ use crate::{
     atom::PredefinedAtom, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
 };
 
+#[cfg(feature = "array-buffer")]
+use crate::value::array_buffer::AsSliceError;
+
 /// Result type used throughout the library.
 pub type Result<T> = StdResult<T, Error>;
 
@@ -113,6 +116,9 @@ pub enum Error {
         name: StdString,
         message: Option<StdString>,
     },
+
+    #[cfg(feature = "array-buffer")]
+    AsSlice(AsSliceError),
     /// Error when restoring a Persistent in a runtime other than the original runtime.
     UnrelatedRuntime,
     /// An error from QuickJS from which the specifics are unknown.
@@ -276,6 +282,11 @@ impl Error {
                 let message = self.to_cstring();
                 unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
             }
+            #[cfg(feature = "array-buffer")]
+            AsSlice(_) => {
+                let message = self.to_cstring();
+                unsafe { qjs::JS_ThrowReferenceError(ctx.as_ptr(), message.as_ptr()) }
+            }
             #[cfg(feature = "loader")]
             Resolving { .. } | Loading { .. } => {
                 let message = self.to_cstring();
@@ -417,6 +428,11 @@ impl Display for Error {
                 "Error borrowing function: ".fmt(f)?;
                 x.fmt(f)?;
             }
+            #[cfg(feature = "array-buffer")]
+            AsSlice(x) => {
+                "Could not convert array buffer to slice: ".fmt(f)?;
+                x.fmt(f)?;
+            }
             UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
         Ok(())
@@ -445,6 +461,13 @@ from_impls! {
 impl From<FromUtf8Error> for Error {
     fn from(error: FromUtf8Error) -> Self {
         Error::Utf8(error.utf8_error())
+    }
+}
+
+#[cfg(feature = "array-buffer")]
+impl From<AsSliceError> for Error {
+    fn from(value: AsSliceError) -> Self {
+        Error::AsSlice(value)
     }
 }
 
