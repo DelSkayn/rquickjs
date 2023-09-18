@@ -341,7 +341,6 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///         .unwrap();
 ///     })
 /// }
-///
 /// ```
 #[proc_macro_attribute]
 #[proc_macro_error]
@@ -402,11 +401,7 @@ pub fn trace(stream: TokenStream1) -> TokenStream1 {
 ///             .unwrap();
 ///     })
 /// }
-///
 /// ```
-///
-///
-///
 #[proc_macro_error]
 #[proc_macro]
 pub fn embed(item: TokenStream1) -> TokenStream1 {
