@@ -26,11 +26,14 @@ pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
 
+/// The trait which allows rust types to be used from javascript.
 pub trait JsClass<'js>: Trace<'js> {
     /// The name the constructor has in JavaScript
     const NAME: &'static str;
 
     /// Can the type be mutated while a JavaScript value.
+    ///
+    /// This should either be [`Readable`] or [`Writable`].
     type Mutable: Mutability;
 
     /// A unique id for the class.
@@ -112,7 +115,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         ))
     }
 
-    /// Create a class from a Rust object with a given prototype
+    /// Create a class from a Rust object with a given prototype.
     pub fn instance_proto(value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
         if !Self::is_registered(proto.ctx()) {
             Self::register(proto.ctx())?;

@@ -58,7 +58,7 @@ jobs:
       - name: Documentation
         env:
           DOCS_RS: 1
-        run: cargo doc --features full-async,parallel,doc-cfg
+        run: cargo doc --no-deps --features full-async,parallel,doc-cfg
       - name: Upload docs
         uses: actions/upload-artifact@v3
         with:

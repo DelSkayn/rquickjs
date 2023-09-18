@@ -46,7 +46,7 @@ version = "2"
 [dev-dependencies.rquickjs]
 path = ".."
 version = "0.4.0-beta.4"
-features = ["macro", "classes", "properties", "futures"]
+features = ["macro", "classes", "properties", "futures","phf"]
 
 [dev-dependencies.async-std]
 version = "1"
