@@ -51,9 +51,6 @@ mod trace;
 ///     /// Make a field enumerable.
 ///     #[qjs(get, set, enumerable)]
 ///     another_value: u32,
-///     /// Make a field configurable.
-///     #[qjs(get, set, configurable)]
-///     another_configurable_field: u32,
 /// }
 ///
 /// pub fn main() {
@@ -68,7 +65,6 @@ mod trace;
 ///                 inner_object: Object::new(ctx.clone()).unwrap(),
 ///                 some_value: 1,
 ///                 another_value: 2,
-///                 another_configurable_field: 3,
 ///             },
 ///         )
 ///         .unwrap();
@@ -80,7 +76,7 @@ mod trace;
 ///             if(t.someValue !== 1){
 ///                 throw new Error(1)
 ///             }"#
-///         )
+///         ).unwrap();
 ///     })
 /// }
 /// ```
@@ -208,10 +204,9 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///             if(nv.value !== 5){
 ///                 throw new Error('invalid value')
 ///             }
-///             "
 ///         "#,
-///         )
-///     })
+///         ).catch(&ctx).unwrap();
+///     });
 /// }
 /// ```
 #[proc_macro_attribute]
