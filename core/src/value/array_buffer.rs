@@ -1,13 +1,38 @@
 use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value};
+use core::fmt;
 use std::{
     convert::TryInto,
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
     os::raw::c_void,
+    ptr::NonNull,
+    result::Result as StdResult,
     slice,
 };
 
 use super::typed_array::TypedArrayItem;
+
+pub struct RawArrayBuffer {
+    pub len: usize,
+    pub ptr: NonNull<u8>,
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum AsSliceError {
+    BufferUsed,
+    InvalidAlignment,
+}
+
+impl fmt::Display for AsSliceError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AsSliceError::BufferUsed => write!(f, "Buffer was already used"),
+            AsSliceError::InvalidAlignment => {
+                write!(f, "Buffer had a different alignment than was requested")
+            }
+        }
+    }
+}
 
 /// Rust representation of a JavaScript object of class ArrayBuffer.
 ///
@@ -69,7 +94,7 @@ impl<'js> ArrayBuffer<'js> {
 
     /// Get the length of the array buffer in bytes.
     pub fn len(&self) -> usize {
-        Self::get_raw(&self.0).expect("Not an ArrayBuffer").0
+        Self::get_raw(&self.0).expect("Not an ArrayBuffer").len
     }
 
     /// Returns whether an array buffer is empty.
@@ -81,20 +106,19 @@ impl<'js> ArrayBuffer<'js> {
     ///
     /// Returns `None` if the array is detached.
     pub fn as_bytes(&self) -> Option<&[u8]> {
-        let (len, ptr) = Self::get_raw(self.as_value())?;
-        Some(unsafe { slice::from_raw_parts_mut(ptr, len) })
+        let raw = Self::get_raw(self.as_value())?;
+        Some(unsafe { slice::from_raw_parts_mut(raw.ptr.as_ptr(), raw.len) })
     }
 
     /// Returns a slice if the buffer underlying buffer is properly aligned for the type and the
     /// buffer is not detached.
-    pub fn as_slice<T: TypedArrayItem>(&self) -> Option<&[T]> {
-        let (len, ptr) = Self::get_raw(&self.0)?;
-        if ptr.align_offset(mem::align_of::<T>()) != 0 {
-            return None;
+    pub fn as_slice<T: TypedArrayItem>(&self) -> StdResult<&[T], AsSliceError> {
+        let raw = Self::get_raw(&self.0).ok_or(AsSliceError::BufferUsed)?;
+        if raw.ptr.as_ptr().align_offset(mem::align_of::<T>()) != 0 {
+            return Err(AsSliceError::InvalidAlignment);
         }
-        //assert!(len % size_of::<T>() == 0);
-        let len = len / size_of::<T>();
-        Some(unsafe { slice::from_raw_parts(ptr as _, len) })
+        let len = raw.len / size_of::<T>();
+        Ok(unsafe { slice::from_raw_parts(raw.ptr.as_ptr().cast(), len) })
     }
 
     /// Detach array buffer
@@ -140,19 +164,26 @@ impl<'js> ArrayBuffer<'js> {
         }
     }
 
-    pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut u8)> {
+    /// Returns a structure with data about the raw buffer which this object contains.
+    ///
+    /// Returns None if the buffer was already used.
+    pub fn as_raw(&self) -> Option<RawArrayBuffer> {
+        Self::get_raw(self.as_value())
+    }
+
+    pub(crate) fn get_raw(val: &Value<'js>) -> Option<RawArrayBuffer> {
         let ctx = val.ctx();
         let val = val.as_js_value();
         let mut size = MaybeUninit::<qjs::size_t>::uninit();
         let ptr = unsafe { qjs::JS_GetArrayBuffer(ctx.as_ptr(), size.as_mut_ptr(), val) };
 
-        if ptr.is_null() {
-            None
-        } else {
+        if let Some(ptr) = NonNull::new(ptr) {
             let len = unsafe { size.assume_init() }
                 .try_into()
                 .expect(qjs::SIZE_T_ERROR);
-            Some((len, ptr))
+            Some(RawArrayBuffer { len, ptr })
+        } else {
+            None
         }
     }
 }
