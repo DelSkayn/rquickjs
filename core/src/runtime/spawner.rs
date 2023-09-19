@@ -119,9 +119,6 @@ impl Future for DriveFuture {
                         return Poll::Ready(());
                     };
 
-                    // Dirty hack to get a owned lock,
-                    // We know the lock will remain alive and won't be moved since it is inside a
-                    // arc like structure and we keep it alive in the lock.
                     let lock_future = _runtime.inner.lock_arc();
                     self.state = DriveFutureState::Lock {
                         lock_future,

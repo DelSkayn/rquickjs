@@ -26,7 +26,7 @@ pub(crate) enum FieldOption {
     Get(FlagOption<kw::get>),
     Set(FlagOption<kw::set>),
     Enumerable(FlagOption<kw::enumerable>),
-    Configurable(FlagOption<kw::enumerable>),
+    Configurable(FlagOption<kw::configurable>),
     SkipTrace(FlagOption<kw::skip_trace>),
     Rename(ValueOption<kw::rename, LitStr>),
 }

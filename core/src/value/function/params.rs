@@ -85,9 +85,9 @@ impl<'a, 'js> Params<'a, 'js> {
         self.args.is_empty()
     }
 
-    /// returns if the function is called as a constructor.
+    /// Returns if the function is called as a constructor.
     ///
-    /// If it is the value return by [`this`] is actually the `new.target` value.
+    /// If it is the value return by `this` is actually the `new.target` value.
     pub fn is_constructor(&self) -> bool {
         self.is_constructor
     }

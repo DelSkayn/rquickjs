@@ -69,7 +69,7 @@ pub struct Async<T>(pub T);
 
 /// Helper type for creating a function from a closure which implements FnMut
 ///
-/// When called through [`CellFn`] will try to borrow the internal [`RefCell`], if this is not
+/// When called will try to borrow the internal [`RefCell`], if this is not
 /// possible it will return an error.
 pub struct MutFn<T>(pub RefCell<T>);
 
@@ -87,7 +87,7 @@ impl<T> From<T> for MutFn<T> {
 
 /// Helper type for creating a function from a closure which implements FnMut
 ///
-/// When called through [`CellFn`] will take the internal value leaving it empty. If the internal
+/// When called, will take the internal value leaving it empty. If the internal
 /// value was already empty it will return a error.
 pub struct OnceFn<T>(pub Cell<Option<T>>);
 
