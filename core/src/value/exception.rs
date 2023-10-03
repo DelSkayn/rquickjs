@@ -17,6 +17,7 @@ impl fmt::Debug for Exception<'_> {
             .field("message", &self.message())
             .field("file", &self.file())
             .field("line", &self.line())
+            .field("column", &self.column())
             .field("stack", &self.stack())
             .finish()
     }
@@ -98,6 +99,16 @@ impl<'js> Exception<'js> {
     /// Same as retrieving `error.lineNumber` in JavaScript.
     pub fn line(&self) -> Option<i32> {
         self.get::<_, Option<Coerced<i32>>>(PredefinedAtom::LineNumber)
+            .ok()
+            .and_then(|x| x)
+            .map(|x| x.0)
+    }
+
+    /// Returns the file line from with the error originated..
+    ///
+    /// Same as retrieving `error.lineNumber` in JavaScript.
+    pub fn column(&self) -> Option<i32> {
+        self.get::<_, Option<Coerced<i32>>>(PredefinedAtom::ColumnNumber)
             .ok()
             .and_then(|x| x)
             .map(|x| x.0)
@@ -253,6 +264,10 @@ impl fmt::Display for Exception<'_> {
         if let Some(line) = self.line() {
             ':'.fmt(f)?;
             line.fmt(f)?;
+        }
+        if let Some(column) = self.column() {
+            ':'.fmt(f)?;
+            column.fmt(f)?;
         }
         if let Some(message) = self.message() {
             ' '.fmt(f)?;
