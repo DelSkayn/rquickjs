@@ -125,13 +125,6 @@ pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// then when you use closures or the functions for which the proper traits are already
 /// implemented..
 ///
-/// # Example
-///
-/// ```
-/// TODO
-///
-///
-/// ```
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
