@@ -256,18 +256,26 @@ impl<'js> Exception<'js> {
 impl fmt::Display for Exception<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         "Error:".fmt(f)?;
+        let mut has_file = false;
         if let Some(file) = self.file() {
             '['.fmt(f)?;
             file.fmt(f)?;
             ']'.fmt(f)?;
+            has_file = true;
         }
         if let Some(line) = self.line() {
-            ':'.fmt(f)?;
-            line.fmt(f)?;
+            if line > -1 {
+                if has_file {
+                    ':'.fmt(f)?;
+                }
+                line.fmt(f)?;
+            }
         }
         if let Some(column) = self.column() {
-            ':'.fmt(f)?;
-            column.fmt(f)?;
+            if column > -1 {
+                ':'.fmt(f)?;
+                column.fmt(f)?;
+            }
         }
         if let Some(message) = self.message() {
             ' '.fmt(f)?;
