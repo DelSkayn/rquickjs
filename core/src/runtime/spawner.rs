@@ -65,14 +65,21 @@ impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
             return Poll::Ready(false);
         }
 
-        let mut did_complete = false;
-        self.0.futures.retain_mut(|f| {
-            let ready = f.as_mut().poll(cx).is_ready();
-            did_complete = did_complete || ready;
-            !ready
-        });
+        let mut completed_indices = Vec::new();
 
-        if did_complete {
+        // Iterate over the futures and check their completion status.
+        for (i, f) in self.0.futures.iter_mut().enumerate() {
+            if let Poll::Ready(_) = f.as_mut().poll(cx) {
+                completed_indices.push(i);
+            }
+        }
+
+        // Remove the completed futures in reverse order to avoid index shifting.
+        for &idx in completed_indices.iter().rev() {
+            self.0.futures.remove(idx);
+        }
+
+        if !completed_indices.is_empty() {
             Poll::Ready(true)
         } else {
             Poll::Pending
