@@ -3,6 +3,7 @@ patch = all #hotfix msvc exports
 $(info patch = $(patch))
 
 ifneq ($(filter hotfix all,$(patch)),)
+PATCHES += error_column_number
 PATCHES += get_function_proto
 PATCHES += check_stack_overflow
 PATCHES += infinity_handling

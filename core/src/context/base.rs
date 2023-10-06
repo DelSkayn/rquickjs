@@ -260,7 +260,7 @@ mod test {
 
     #[test]
     #[should_panic(
-        expected = "Error:[eval_script]:1 invalid first character of private name\n    at eval_script:1\n"
+        expected = "Error:[eval_script]:1:4 invalid first character of private name\n    at eval_script:1:4\n"
     )]
     fn exception() {
         test_with(|ctx| {
