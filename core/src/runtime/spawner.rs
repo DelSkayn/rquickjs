@@ -1,6 +1,8 @@
 use std::{
+    cell::RefCell,
     future::Future,
     pin::{pin, Pin},
+    sync::atomic::AtomicPtr,
     task::ready,
     task::{Poll, Waker},
 };
@@ -15,14 +17,16 @@ use super::{AsyncWeakRuntime, InnerRuntime};
 ///
 /// TODO: change future lookup in poll from O(n) to O(1).
 pub struct Spawner<'js> {
-    futures: Vec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
+    futures: RefCell<Vec<Option<Pin<Box<dyn Future<Output = ()> + 'js>>>>>,
+    parent: Option<Waker>,
     wakeup: Vec<Waker>,
 }
 
 impl<'js> Spawner<'js> {
     pub fn new() -> Self {
         Spawner {
-            futures: Vec::new(),
+            futures: RefCell::new(Vec::new()),
+            parent: None,
             wakeup: Vec::new(),
         }
     }
@@ -32,7 +36,7 @@ impl<'js> Spawner<'js> {
         F: Future<Output = ()> + 'js,
     {
         self.wakeup.drain(..).for_each(Waker::wake);
-        self.futures.push(Box::pin(f))
+        self.futures.borrow_mut().push(Some(Box::pin(f)))
     }
 
     pub fn listen(&mut self, wake: Waker) {
@@ -40,12 +44,12 @@ impl<'js> Spawner<'js> {
     }
 
     // Drives the runtime futures forward, returns false if their where no futures
-    pub fn drive<'a>(&'a mut self) -> SpawnFuture<'a, 'js> {
+    pub fn drive<'a>(&'a self) -> SpawnFuture<'a, 'js> {
         SpawnFuture(self)
     }
 
     pub fn is_empty(&mut self) -> bool {
-        self.futures.is_empty()
+        self.futures.borrow().is_empty()
     }
 }
 
@@ -55,22 +59,30 @@ impl Drop for Spawner<'_> {
     }
 }
 
-pub struct SpawnFuture<'a, 'js>(&'a mut Spawner<'js>);
+pub struct SpawnFuture<'a, 'js>(&'a Spawner<'js>);
 
 impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
     type Output = bool;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        if self.0.futures.is_empty() {
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        if self.0.futures.borrow().is_empty() {
             return Poll::Ready(false);
         }
 
+        let mut i = 0;
         let mut did_complete = false;
-        self.0.futures.retain_mut(|f| {
-            let ready = f.as_mut().poll(cx).is_ready();
-            did_complete = did_complete || ready;
-            !ready
-        });
+        while i < self.0.futures.borrow().len() {
+            let mut borrow = self.0.futures.borrow_mut()[i].take().unwrap();
+            if borrow.as_mut().poll(cx).is_pending() {
+                // put back.
+                self.0.futures.borrow_mut()[i] = Some(borrow);
+            } else {
+                did_complete = true;
+            }
+            i += 1;
+        }
+
+        self.0.futures.borrow_mut().retain_mut(|f| f.is_some());
 
         if did_complete {
             Poll::Ready(true)
