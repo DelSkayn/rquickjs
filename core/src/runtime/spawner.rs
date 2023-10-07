@@ -2,7 +2,6 @@ use std::{
     cell::RefCell,
     future::Future,
     pin::{pin, Pin},
-    sync::atomic::AtomicPtr,
     task::ready,
     task::{Poll, Waker},
 };
@@ -13,11 +12,13 @@ use crate::AsyncRuntime;
 
 use super::{AsyncWeakRuntime, InnerRuntime};
 
+type FuturesVec<T> = RefCell<Vec<Option<T>>>;
+
 /// A structure to hold futures spawned inside the runtime.
 ///
 /// TODO: change future lookup in poll from O(n) to O(1).
 pub struct Spawner<'js> {
-    futures: RefCell<Vec<Option<Pin<Box<dyn Future<Output = ()> + 'js>>>>>,
+    futures: FuturesVec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
     parent: Option<Waker>,
     wakeup: Vec<Waker>,
 }

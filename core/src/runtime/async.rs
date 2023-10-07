@@ -453,4 +453,34 @@ mod test {
         assert_eq!(number.load(Ordering::SeqCst),1);
 
     });
+
+    async_test_case!(recursive_spawn => (rt,ctx){
+        use tokio::sync::oneshot;
+
+        async_with!(&ctx => |ctx|{
+            let ctx_clone = ctx.clone();
+            let (tx,rx) = oneshot::channel::<()>();
+            let (tx2,rx2) = oneshot::channel::<()>();
+            ctx.spawn(async move {
+                tokio::task::yield_now().await;
+
+                let ctx = ctx_clone.clone();
+
+                ctx_clone.spawn(async move {
+                    tokio::task::yield_now().await;
+                    ctx.spawn(async move {
+                        tokio::task::yield_now().await;
+                        tx2.send(()).unwrap();
+                        tokio::task::yield_now().await;
+                    });
+                    tokio::task::yield_now().await;
+                    tx.send(()).unwrap();
+                });
+
+            });
+            tokio::time::timeout(Duration::from_millis(500), rx).await.unwrap().unwrap();
+            tokio::time::timeout(Duration::from_millis(500), rx2).await.unwrap().unwrap();
+        }).await;
+
+    });
 }
