@@ -19,7 +19,6 @@ type FuturesVec<T> = RefCell<Vec<Option<T>>>;
 /// TODO: change future lookup in poll from O(n) to O(1).
 pub struct Spawner<'js> {
     futures: FuturesVec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
-    parent: Option<Waker>,
     wakeup: Vec<Waker>,
 }
 
@@ -27,7 +26,6 @@ impl<'js> Spawner<'js> {
     pub fn new() -> Self {
         Spawner {
             futures: RefCell::new(Vec::new()),
-            parent: None,
             wakeup: Vec::new(),
         }
     }

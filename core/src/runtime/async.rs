@@ -477,6 +477,12 @@ mod test {
                     tx.send(()).unwrap();
                 });
 
+                // Add a bunch of futures just to make sure possible segfaults are more likely to
+                // happen
+                for _ in 0..32{
+                    ctx_clone.spawn(async move {})
+                }
+
             });
             tokio::time::timeout(Duration::from_millis(500), rx).await.unwrap().unwrap();
             tokio::time::timeout(Duration::from_millis(500), rx2).await.unwrap().unwrap();
