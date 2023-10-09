@@ -359,7 +359,7 @@ impl<'js> Value<'js> {
         0 != unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) }
     }
 
-    /// Check if the value is a constructor function
+    /// Check if the value is an exception
     #[inline]
     pub fn is_exception(&self) -> bool {
         unsafe { qjs::JS_IsException(self.value) }
