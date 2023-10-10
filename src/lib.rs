@@ -74,12 +74,6 @@
 //!
 //! - `phf` enables using Perfect Hash Function for builtin modules lookup
 //!
-//! ## Custom
-//!
-//! To gets build faster the numbers of arguments which can be passed to and given by the functions
-//! is limited to 6. If you need more arguments you can enabled feature `max-args-N` where N is
-//! number from 7 to 16.
-//!
 //! ## Extra types
 //!
 //! This crate has support for conversion of many Rust types like [`Option`],
