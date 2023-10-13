@@ -129,7 +129,7 @@ version = "0.3"
 [dev-dependencies.tokio]
 version = "1.0"
 default-features = false
-features = ["rt", "rt-multi-thread", "time", "macros"]
+features = ["rt", "rt-multi-thread", "time", "macros", "sync"]
 
 [dev-dependencies.rquickjs]
 path = ".."
