@@ -13,7 +13,7 @@
 //! environment. Contexts of the same runtime can share JavaScript objects like in the browser between
 //! frames of the same origin.
 //!
-//! As both [`Runtime`] and [`Context`] use a lock it is discourged to use them in a async
+//! As both [`Runtime`] and [`Context`] use a lock it is discouraged to use them in a async
 //! environment. Instead, when the `futures` feature is enabled this library also exposes
 //! [`AsyncRuntime`] and [`AsyncContext`] which use a future aware lock.
 //!
@@ -62,7 +62,7 @@
 //! - `futures` adds support for async Rust. When enabled the library exports [`AsyncRuntime`] and
 //! [`AsyncContext`]. These are the asynchronous variants of the normal runtime and context. In
 //! order to ensure that QuickJS is used properly the runtime is placed behind a lock. For the
-//! normal runtime this is a normal mutex. You should avoid blocking threads in asynchronous rust
+//! normal runtime this is a normal mutex. You should avoid blocking threads in asynchronous Rust
 //! so the async runtime uses a future aware mutex. In the async runtime Rust futures can be passed
 //! to JS as [ES6
 //! Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)

@@ -29,8 +29,8 @@ impl<'a, 'js> Tracer<'a, 'js> {
     /// Create a tracer from the c implementation.
     ///
     /// # Safety
-    /// Caller must ensure that the trace doesn't outlive the lifetime of the mark_func and rt
-    /// pointer
+    /// Caller must ensure that the trace doesn't outlive the lifetime of the `mark_func` and
+    /// `rt` pointer
     pub unsafe fn from_ffi(rt: *mut qjs::JSRuntime, mark_func: qjs::JS_MarkFunc) -> Self {
         Self {
             rt,

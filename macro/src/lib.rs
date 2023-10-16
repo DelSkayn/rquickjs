@@ -26,7 +26,7 @@ mod methods;
 mod module;
 mod trace;
 
-/// An attribute for implementing [`JsClass`](rquickjs_core::class::JsClass`) for a rust type.
+/// An attribute for implementing [`JsClass`](rquickjs_core::class::JsClass`) for a Rust type.
 ///
 /// # Attribute options
 ///
@@ -63,15 +63,15 @@ mod trace;
 /// use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime};
 ///
 /// /// Implement JsClass for TestClass.
-/// /// This allows passing any instance of TestClass straight to javascript.
+/// /// This allows passing any instance of TestClass straight to JavaScript.
 /// /// It is command to also add #[derive(Trace)] as all types which implement JsClass need to
 /// /// also implement trace.
 /// #[derive(Trace)]
 /// #[rquickjs::class(rename_all = "camelCase")]
 /// pub struct TestClass<'js> {
-///     /// These attribute make the accessible from javascript with getters and setters.
+///     /// These attribute make the accessible from JavaScript with getters and setters.
 ///     /// As we used `rename_all = "camelCase"` in the attribute it will be called `innerObject`
-///     /// on the javascript side.
+///     /// on the JavaScript side.
 ///     #[qjs(get, set)]
 ///     inner_object: Object<'js>,
 ///
@@ -98,7 +98,7 @@ mod trace;
 ///             },
 ///         )
 ///         .unwrap();
-///         /// Pass it to javascript
+///         /// Pass it to JavaScript
 ///         ctx.globals().set("t", cls.clone()).unwrap();
 ///         ctx.eval::<(), _>(
 ///             r#"
@@ -144,7 +144,7 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// [`macro@class`] attribute to derive [`JsClass`](rquickjs_core::class::JsClass).
 ///
 /// # Limitations
-/// Due to limitations in the rust type system this attribute can be used on only one impl block
+/// Due to limitations in the Rust type system this attribute can be used on only one impl block
 /// per type.
 ///
 /// # Attribute options
@@ -243,7 +243,7 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     #[qjs(skip)]
 ///     pub fn inner_function(&self) {}
 ///
-///     /// Functions can also be renamed to specific symbols. This allows you to make an rust type
+///     /// Functions can also be renamed to specific symbols. This allows you to make an Rust type
 ///     /// act like an iteratable value for example.
 ///     #[qjs(rename = PredefinedAtom::SymbolIterator)]
 ///     pub fn iterate<'js>(&self, ctx: Ctx<'js>) -> Result<Object<'js>> {
@@ -292,7 +292,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     }
 }
 
-/// An attribute which generates code for exporting a module to rust.
+/// An attribute which generates code for exporting a module to Rust.
 ///
 /// Any supported item inside the module which is marked as `pub` will be exported as a JavaScript value.
 /// Different items result in different JavaScript values.
@@ -320,7 +320,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// | `rename`       | String    | Changes the name of the implemented module on the JavaScript side.                                                                                                                     |
 /// | `rename_vars`  | Casing    | Alters the name of all items exported as JavaScript values by changing the case.  Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
 /// | `rename_types` | Casing    | Alters the name of all items exported as JavaScript classes by changing the case. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
-/// | `prefix`       | String    | The module will be implemented for a new type with roughly the same name as the rust module with a prefix added. This changes the prefix which will be added. Defaults to `js_`        |
+/// | `prefix`       | String    | The module will be implemented for a new type with roughly the same name as the Rust module with a prefix added. This changes the prefix which will be added. Defaults to `js_`        |
 ///
 /// # Item options
 ///
@@ -426,7 +426,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///         1 + 1
 ///     }
 ///
-///     /// You can make items public but not export them to javascript by adding the skip attribute.
+///     /// You can make items public but not export them to JavaScript by adding the skip attribute.
 ///     #[qjs(skip)]
 ///     pub fn ignore_function() -> u32 {
 ///         2 + 2
@@ -480,9 +480,9 @@ pub fn trace(stream: TokenStream1) -> TokenStream1 {
     trace::expand(derive_input).into()
 }
 
-/// A macro for embedding javascript code into a binary.
+/// A macro for embedding JavaScript code into a binary.
 ///
-/// Compiles a javascript module to bytecode and then compiles the resulting bytecode into the
+/// Compiles a JavaScript module to bytecode and then compiles the resulting bytecode into the
 /// binary. Each file loaded is turned into its own module. The macro takes a list of paths to
 /// files to be compiled into a module with an option name. Module paths are relative to the crate
 /// manifest file.

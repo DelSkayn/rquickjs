@@ -13,7 +13,7 @@ use crate::qjs;
 use super::spawner::Spawner;
 use super::InterruptHandler;
 
-/// Opaque book keeping data for rust.
+/// Opaque book keeping data for Rust.
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,

@@ -8,7 +8,7 @@ use crate::{Ctx, Function, IntoJs, Result, Value};
 
 use super::IntoJsFunc;
 
-/// Helper type to implement ToJsFunction for closure by constraining arguments.
+/// Helper type to implement [`IntoJsFunc`] for closure by constraining arguments.
 pub struct Func<T, P>(T, PhantomData<P>);
 
 impl<'js, T, P> Func<T, P>
@@ -45,7 +45,7 @@ pub struct This<T>(pub T);
 /// helper type for retrieving function object on which a function is called..
 pub struct FuncArg<T>(pub T);
 
-/// Helper type for optional paramaters.
+/// Helper type for optional parameters.
 pub struct Opt<T>(pub Option<T>);
 
 /// Helper type for rest and spread arguments.
@@ -57,8 +57,8 @@ pub struct Null<T>(pub Option<T>);
 /// A type to flatten tuples into another tuple.
 ///
 /// ToArgs is only implemented for tuples with a length of up to 8.
-/// If you need more arguments you can use this type to extend arguments with upto 8 additional
-/// arguments recursivily.
+/// If you need more arguments you can use this type to extend arguments with up to 8 additional
+/// arguments recursively.
 pub struct Flat<T>(pub T);
 
 /// Helper type for making an parameter set exhaustive.
@@ -67,7 +67,7 @@ pub struct Exhaustive;
 /// Helper type for creating a function from a closure which returns a future.
 pub struct Async<T>(pub T);
 
-/// Helper type for creating a function from a closure which implements FnMut
+/// Helper type for creating a function from a closure which implements [`FnMut`]
 ///
 /// When called will try to borrow the internal [`RefCell`], if this is not
 /// possible it will return an error.
@@ -85,7 +85,7 @@ impl<T> From<T> for MutFn<T> {
     }
 }
 
-/// Helper type for creating a function from a closure which implements FnMut
+/// Helper type for creating a function from a closure which implements [`FnMut`]
 ///
 /// When called, will take the internal value leaving it empty. If the internal
 /// value was already empty it will return a error.

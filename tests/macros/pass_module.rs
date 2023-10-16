@@ -80,7 +80,7 @@ mod test_mod {
         1 + 1
     }
 
-    /// You can make items public but not export them to javascript by adding the skip attribute.
+    /// You can make items public but not export them to JavaScript by adding the skip attribute.
     #[qjs(skip)]
     pub fn ignore_function() -> u32 {
         2 + 2

@@ -158,7 +158,7 @@ fn export_use(use_: &UseTree, module: &mut JsModule, config: &ModuleItemConfig) 
         }
         UseTree::Glob(x) => {
             emit_warning!(
-                x.star_token,"Using a glob export does not export the items to javascript";
+                x.star_token,"Using a glob export does not export the items to JavaScript";
                 note = "Please specify each item to be exported individially."
             )
         }
