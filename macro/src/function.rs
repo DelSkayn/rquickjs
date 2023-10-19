@@ -70,7 +70,7 @@ impl FunctionConfig {
         )
     }
 
-    /// The name for the javascript side
+    /// The name for the JavaScript side
     pub fn js_name(&self, rust_name: &Ident, case: Option<Case>) -> String {
         if let Some(x) = self.rename.as_ref() {
             return x.clone();

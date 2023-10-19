@@ -256,7 +256,7 @@ impl Error {
         matches!(self, Self::TooManyArgs { .. } | Self::MissingArgs { .. })
     }
 
-    /// Optimized conversion to CString
+    /// Optimized conversion to [`CString`]
     pub(crate) fn to_cstring(&self) -> CString {
         // stringify error with NUL at end
         let mut message = format!("{self}\0").into_bytes();
@@ -646,11 +646,11 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Handle possible exceptions in JSValue's and turn them into errors
-    /// Will return the JSValue if it is not an exception
+    /// Handle possible exceptions in [`JSValue`]'s and turn them into errors
+    /// Will return the [`JSValue`] if it is not an exception
     ///
     /// # Safety
-    /// Assumes to have ownership of the JSValue
+    /// Assumes to have ownership of the [`JSValue`]
     pub(crate) unsafe fn handle_exception(&self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
         if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
             Ok(js_val)
@@ -662,7 +662,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Returns Error::Exception if there is no existing panic,
+    /// Returns [`Error::Exception`] if there is no existing panic,
     /// otherwise continues panicking.
     pub(crate) fn raise_exception(&self) -> Error {
         // Safety

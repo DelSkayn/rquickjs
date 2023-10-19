@@ -26,7 +26,7 @@ pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
 
-/// The trait which allows rust types to be used from javascript.
+/// The trait which allows Rust types to be used from JavaScript.
 pub trait JsClass<'js>: Trace<'js> {
     /// The name the constructor has in JavaScript
     const NAME: &'static str;

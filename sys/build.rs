@@ -137,7 +137,7 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
         .current_dir(out_dir)
         .spawn()
         .expect("Unable to execute patch, you may need to install it: {}");
-    println!("Appliyng patch {}", patch.as_ref().display());
+    println!("Applying patch {}", patch.as_ref().display());
     {
         let patch = fs::read(patch).expect("Unable to read patch");
 

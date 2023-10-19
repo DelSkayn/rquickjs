@@ -208,7 +208,7 @@ pub struct JsCell<'js, T: JsClass<'js>> {
 }
 
 impl<'js, T: JsClass<'js>> JsCell<'js, T> {
-    /// Create a new JsCell
+    /// Create a new `JsCell`
     pub fn new(t: T) -> Self {
         JsCell {
             cell: <T::Mutable as Mutability>::new_cell(t),
