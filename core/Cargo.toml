@@ -89,18 +89,6 @@ futures = ["async-lock"]
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
 
-# Max number of function args
-max-args-7 = []
-max-args-8 = ["max-args-7"]
-max-args-9 = ["max-args-8"]
-max-args-10 = ["max-args-9"]
-max-args-11 = ["max-args-10"]
-max-args-12 = ["max-args-11"]
-max-args-13 = ["max-args-12"]
-max-args-14 = ["max-args-13"]
-max-args-15 = ["max-args-14"]
-max-args-16 = ["max-args-15"]
-
 # Enable QuickJS dumps for debug
 dump-bytecode = ["rquickjs-sys/dump-bytecode"]
 dump-gc = ["rquickjs-sys/dump-gc"]

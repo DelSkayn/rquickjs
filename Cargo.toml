@@ -102,18 +102,6 @@ macro = ["rquickjs-macro"]
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]
 
-# Max number of function args
-max-args-7 = ["rquickjs-core/max-args-7"]
-max-args-8 = ["rquickjs-core/max-args-7"]
-max-args-9 = ["rquickjs-core/max-args-8"]
-max-args-10 = ["rquickjs-core/max-args-9"]
-max-args-11 = ["rquickjs-core/max-args-10"]
-max-args-12 = ["rquickjs-core/max-args-11"]
-max-args-13 = ["rquickjs-core/max-args-12"]
-max-args-14 = ["rquickjs-core/max-args-13"]
-max-args-15 = ["rquickjs-core/max-args-14"]
-max-args-16 = ["rquickjs-core/max-args-15"]
-
 # Enable QuickJS dumps for debug
 dump-bytecode = ["rquickjs-core/dump-bytecode"]
 dump-gc = ["rquickjs-core/dump-gc"]
