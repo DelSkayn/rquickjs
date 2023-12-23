@@ -2,6 +2,7 @@ use std::{env, fs, path::Path};
 
 use diffy::{apply, Patch};
 use newline_converter::dos2unix;
+use path_absolutize::Absolutize;
 
 fn main() {
     #[cfg(feature = "logging")]
@@ -174,8 +175,8 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
                 .or(patch.modified())
                 .expect("Cannot find modified file name");
 
-            let original_path = out_dir.join(original);
-            let modified_path = out_dir.join(modified);
+            let original_path = out_dir.join(original).absolutize().unwrap().to_path_buf();
+            let modified_path = out_dir.join(modified).absolutize().unwrap().to_path_buf();
 
             let original = if !original_path.exists() && !modified_path.exists() {
                 String::new()
