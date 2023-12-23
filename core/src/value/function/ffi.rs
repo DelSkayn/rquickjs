@@ -63,7 +63,7 @@ impl StaticJsFn {
     }
 }
 
-/// A trait for dynamic callbacks to rust.
+/// A trait for dynamic callbacks to Rust.
 pub trait RustFunc<'js> {
     /// Call the actual function with a given set of parameters and return a function.
     fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
@@ -122,7 +122,7 @@ impl<'js> JsClass<'js> for RustFunction<'js> {
 }
 
 mod mac {
-    /// A macro for implementing StaticJsFunction for generic functions.
+    /// A macro for implementing [`StaticJsFunction`](crate::function::StaticJsFunction) for generic functions.
     #[macro_export]
     macro_rules! static_fn {
         ($f:ident) => {{

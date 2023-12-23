@@ -58,6 +58,7 @@ fn main() {
     ];
 
     let mut patch_files = vec![
+        "error_column_number.patch",
         "get_function_proto.patch",
         "check_stack_overflow.patch",
         "infinity_handling.patch",

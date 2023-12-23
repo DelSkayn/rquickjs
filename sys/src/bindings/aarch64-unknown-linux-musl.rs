@@ -603,6 +603,8 @@ pub struct JSMemoryUsage {
     pub js_func_code_size: i64,
     pub js_func_pc2line_count: i64,
     pub js_func_pc2line_size: i64,
+    pub js_func_pc2column_count: i64,
+    pub js_func_pc2column_size: i64,
     pub c_func_count: i64,
     pub array_count: i64,
     pub fast_array_count: i64,
@@ -616,7 +618,7 @@ fn bindgen_test_layout_JSMemoryUsage() {
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::std::mem::size_of::<JSMemoryUsage>(),
-        208usize,
+        224usize,
         concat!("Size of: ", stringify!(JSMemoryUsage))
     );
     assert_eq!(
@@ -825,8 +827,28 @@ fn bindgen_test_layout_JSMemoryUsage() {
         )
     );
     assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).c_func_count) as usize - ptr as usize },
+        unsafe { ::std::ptr::addr_of!((*ptr).js_func_pc2column_count) as usize - ptr as usize },
         160usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSMemoryUsage),
+            "::",
+            stringify!(js_func_pc2column_count)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).js_func_pc2column_size) as usize - ptr as usize },
+        168usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(JSMemoryUsage),
+            "::",
+            stringify!(js_func_pc2column_size)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).c_func_count) as usize - ptr as usize },
+        176usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMemoryUsage),
@@ -836,7 +858,7 @@ fn bindgen_test_layout_JSMemoryUsage() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).array_count) as usize - ptr as usize },
-        168usize,
+        184usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMemoryUsage),
@@ -846,7 +868,7 @@ fn bindgen_test_layout_JSMemoryUsage() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).fast_array_count) as usize - ptr as usize },
-        176usize,
+        192usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMemoryUsage),
@@ -856,7 +878,7 @@ fn bindgen_test_layout_JSMemoryUsage() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).fast_array_elements) as usize - ptr as usize },
-        184usize,
+        200usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMemoryUsage),
@@ -866,7 +888,7 @@ fn bindgen_test_layout_JSMemoryUsage() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).binary_object_count) as usize - ptr as usize },
-        192usize,
+        208usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMemoryUsage),
@@ -876,7 +898,7 @@ fn bindgen_test_layout_JSMemoryUsage() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).binary_object_size) as usize - ptr as usize },
-        200usize,
+        216usize,
         concat!(
             "Offset of field: ",
             stringify!(JSMemoryUsage),
@@ -2701,179 +2723,180 @@ pub const JS_ATOM_empty_string: _bindgen_ty_2 = 47;
 pub const JS_ATOM_length: _bindgen_ty_2 = 48;
 pub const JS_ATOM_fileName: _bindgen_ty_2 = 49;
 pub const JS_ATOM_lineNumber: _bindgen_ty_2 = 50;
-pub const JS_ATOM_message: _bindgen_ty_2 = 51;
-pub const JS_ATOM_errors: _bindgen_ty_2 = 52;
-pub const JS_ATOM_stack: _bindgen_ty_2 = 53;
-pub const JS_ATOM_name: _bindgen_ty_2 = 54;
-pub const JS_ATOM_toString: _bindgen_ty_2 = 55;
-pub const JS_ATOM_toLocaleString: _bindgen_ty_2 = 56;
-pub const JS_ATOM_valueOf: _bindgen_ty_2 = 57;
-pub const JS_ATOM_eval: _bindgen_ty_2 = 58;
-pub const JS_ATOM_prototype: _bindgen_ty_2 = 59;
-pub const JS_ATOM_constructor: _bindgen_ty_2 = 60;
-pub const JS_ATOM_configurable: _bindgen_ty_2 = 61;
-pub const JS_ATOM_writable: _bindgen_ty_2 = 62;
-pub const JS_ATOM_enumerable: _bindgen_ty_2 = 63;
-pub const JS_ATOM_value: _bindgen_ty_2 = 64;
-pub const JS_ATOM_get: _bindgen_ty_2 = 65;
-pub const JS_ATOM_set: _bindgen_ty_2 = 66;
-pub const JS_ATOM_of: _bindgen_ty_2 = 67;
-pub const JS_ATOM___proto__: _bindgen_ty_2 = 68;
-pub const JS_ATOM_undefined: _bindgen_ty_2 = 69;
-pub const JS_ATOM_number: _bindgen_ty_2 = 70;
-pub const JS_ATOM_boolean: _bindgen_ty_2 = 71;
-pub const JS_ATOM_string: _bindgen_ty_2 = 72;
-pub const JS_ATOM_object: _bindgen_ty_2 = 73;
-pub const JS_ATOM_symbol: _bindgen_ty_2 = 74;
-pub const JS_ATOM_integer: _bindgen_ty_2 = 75;
-pub const JS_ATOM_unknown: _bindgen_ty_2 = 76;
-pub const JS_ATOM_arguments: _bindgen_ty_2 = 77;
-pub const JS_ATOM_callee: _bindgen_ty_2 = 78;
-pub const JS_ATOM_caller: _bindgen_ty_2 = 79;
-pub const JS_ATOM__eval_: _bindgen_ty_2 = 80;
-pub const JS_ATOM__ret_: _bindgen_ty_2 = 81;
-pub const JS_ATOM__var_: _bindgen_ty_2 = 82;
-pub const JS_ATOM__arg_var_: _bindgen_ty_2 = 83;
-pub const JS_ATOM__with_: _bindgen_ty_2 = 84;
-pub const JS_ATOM_lastIndex: _bindgen_ty_2 = 85;
-pub const JS_ATOM_target: _bindgen_ty_2 = 86;
-pub const JS_ATOM_index: _bindgen_ty_2 = 87;
-pub const JS_ATOM_input: _bindgen_ty_2 = 88;
-pub const JS_ATOM_defineProperties: _bindgen_ty_2 = 89;
-pub const JS_ATOM_apply: _bindgen_ty_2 = 90;
-pub const JS_ATOM_join: _bindgen_ty_2 = 91;
-pub const JS_ATOM_concat: _bindgen_ty_2 = 92;
-pub const JS_ATOM_split: _bindgen_ty_2 = 93;
-pub const JS_ATOM_construct: _bindgen_ty_2 = 94;
-pub const JS_ATOM_getPrototypeOf: _bindgen_ty_2 = 95;
-pub const JS_ATOM_setPrototypeOf: _bindgen_ty_2 = 96;
-pub const JS_ATOM_isExtensible: _bindgen_ty_2 = 97;
-pub const JS_ATOM_preventExtensions: _bindgen_ty_2 = 98;
-pub const JS_ATOM_has: _bindgen_ty_2 = 99;
-pub const JS_ATOM_deleteProperty: _bindgen_ty_2 = 100;
-pub const JS_ATOM_defineProperty: _bindgen_ty_2 = 101;
-pub const JS_ATOM_getOwnPropertyDescriptor: _bindgen_ty_2 = 102;
-pub const JS_ATOM_ownKeys: _bindgen_ty_2 = 103;
-pub const JS_ATOM_add: _bindgen_ty_2 = 104;
-pub const JS_ATOM_done: _bindgen_ty_2 = 105;
-pub const JS_ATOM_next: _bindgen_ty_2 = 106;
-pub const JS_ATOM_values: _bindgen_ty_2 = 107;
-pub const JS_ATOM_source: _bindgen_ty_2 = 108;
-pub const JS_ATOM_flags: _bindgen_ty_2 = 109;
-pub const JS_ATOM_global: _bindgen_ty_2 = 110;
-pub const JS_ATOM_unicode: _bindgen_ty_2 = 111;
-pub const JS_ATOM_raw: _bindgen_ty_2 = 112;
-pub const JS_ATOM_new_target: _bindgen_ty_2 = 113;
-pub const JS_ATOM_this_active_func: _bindgen_ty_2 = 114;
-pub const JS_ATOM_home_object: _bindgen_ty_2 = 115;
-pub const JS_ATOM_computed_field: _bindgen_ty_2 = 116;
-pub const JS_ATOM_static_computed_field: _bindgen_ty_2 = 117;
-pub const JS_ATOM_class_fields_init: _bindgen_ty_2 = 118;
-pub const JS_ATOM_brand: _bindgen_ty_2 = 119;
-pub const JS_ATOM_hash_constructor: _bindgen_ty_2 = 120;
-pub const JS_ATOM_as: _bindgen_ty_2 = 121;
-pub const JS_ATOM_from: _bindgen_ty_2 = 122;
-pub const JS_ATOM_meta: _bindgen_ty_2 = 123;
-pub const JS_ATOM__default_: _bindgen_ty_2 = 124;
-pub const JS_ATOM__star_: _bindgen_ty_2 = 125;
-pub const JS_ATOM_Module: _bindgen_ty_2 = 126;
-pub const JS_ATOM_then: _bindgen_ty_2 = 127;
-pub const JS_ATOM_resolve: _bindgen_ty_2 = 128;
-pub const JS_ATOM_reject: _bindgen_ty_2 = 129;
-pub const JS_ATOM_promise: _bindgen_ty_2 = 130;
-pub const JS_ATOM_proxy: _bindgen_ty_2 = 131;
-pub const JS_ATOM_revoke: _bindgen_ty_2 = 132;
-pub const JS_ATOM_async: _bindgen_ty_2 = 133;
-pub const JS_ATOM_exec: _bindgen_ty_2 = 134;
-pub const JS_ATOM_groups: _bindgen_ty_2 = 135;
-pub const JS_ATOM_status: _bindgen_ty_2 = 136;
-pub const JS_ATOM_reason: _bindgen_ty_2 = 137;
-pub const JS_ATOM_globalThis: _bindgen_ty_2 = 138;
-pub const JS_ATOM_bigint: _bindgen_ty_2 = 139;
-pub const JS_ATOM_bigfloat: _bindgen_ty_2 = 140;
-pub const JS_ATOM_bigdecimal: _bindgen_ty_2 = 141;
-pub const JS_ATOM_roundingMode: _bindgen_ty_2 = 142;
-pub const JS_ATOM_maximumSignificantDigits: _bindgen_ty_2 = 143;
-pub const JS_ATOM_maximumFractionDigits: _bindgen_ty_2 = 144;
-pub const JS_ATOM_not_equal: _bindgen_ty_2 = 145;
-pub const JS_ATOM_timed_out: _bindgen_ty_2 = 146;
-pub const JS_ATOM_ok: _bindgen_ty_2 = 147;
-pub const JS_ATOM_toJSON: _bindgen_ty_2 = 148;
-pub const JS_ATOM_Object: _bindgen_ty_2 = 149;
-pub const JS_ATOM_Array: _bindgen_ty_2 = 150;
-pub const JS_ATOM_Error: _bindgen_ty_2 = 151;
-pub const JS_ATOM_Number: _bindgen_ty_2 = 152;
-pub const JS_ATOM_String: _bindgen_ty_2 = 153;
-pub const JS_ATOM_Boolean: _bindgen_ty_2 = 154;
-pub const JS_ATOM_Symbol: _bindgen_ty_2 = 155;
-pub const JS_ATOM_Arguments: _bindgen_ty_2 = 156;
-pub const JS_ATOM_Math: _bindgen_ty_2 = 157;
-pub const JS_ATOM_JSON: _bindgen_ty_2 = 158;
-pub const JS_ATOM_Date: _bindgen_ty_2 = 159;
-pub const JS_ATOM_Function: _bindgen_ty_2 = 160;
-pub const JS_ATOM_GeneratorFunction: _bindgen_ty_2 = 161;
-pub const JS_ATOM_ForInIterator: _bindgen_ty_2 = 162;
-pub const JS_ATOM_RegExp: _bindgen_ty_2 = 163;
-pub const JS_ATOM_ArrayBuffer: _bindgen_ty_2 = 164;
-pub const JS_ATOM_SharedArrayBuffer: _bindgen_ty_2 = 165;
-pub const JS_ATOM_Uint8ClampedArray: _bindgen_ty_2 = 166;
-pub const JS_ATOM_Int8Array: _bindgen_ty_2 = 167;
-pub const JS_ATOM_Uint8Array: _bindgen_ty_2 = 168;
-pub const JS_ATOM_Int16Array: _bindgen_ty_2 = 169;
-pub const JS_ATOM_Uint16Array: _bindgen_ty_2 = 170;
-pub const JS_ATOM_Int32Array: _bindgen_ty_2 = 171;
-pub const JS_ATOM_Uint32Array: _bindgen_ty_2 = 172;
-pub const JS_ATOM_BigInt64Array: _bindgen_ty_2 = 173;
-pub const JS_ATOM_BigUint64Array: _bindgen_ty_2 = 174;
-pub const JS_ATOM_Float32Array: _bindgen_ty_2 = 175;
-pub const JS_ATOM_Float64Array: _bindgen_ty_2 = 176;
-pub const JS_ATOM_DataView: _bindgen_ty_2 = 177;
-pub const JS_ATOM_BigInt: _bindgen_ty_2 = 178;
-pub const JS_ATOM_BigFloat: _bindgen_ty_2 = 179;
-pub const JS_ATOM_BigFloatEnv: _bindgen_ty_2 = 180;
-pub const JS_ATOM_BigDecimal: _bindgen_ty_2 = 181;
-pub const JS_ATOM_OperatorSet: _bindgen_ty_2 = 182;
-pub const JS_ATOM_Operators: _bindgen_ty_2 = 183;
-pub const JS_ATOM_Map: _bindgen_ty_2 = 184;
-pub const JS_ATOM_Set: _bindgen_ty_2 = 185;
-pub const JS_ATOM_WeakMap: _bindgen_ty_2 = 186;
-pub const JS_ATOM_WeakSet: _bindgen_ty_2 = 187;
-pub const JS_ATOM_Map_Iterator: _bindgen_ty_2 = 188;
-pub const JS_ATOM_Set_Iterator: _bindgen_ty_2 = 189;
-pub const JS_ATOM_Array_Iterator: _bindgen_ty_2 = 190;
-pub const JS_ATOM_String_Iterator: _bindgen_ty_2 = 191;
-pub const JS_ATOM_RegExp_String_Iterator: _bindgen_ty_2 = 192;
-pub const JS_ATOM_Generator: _bindgen_ty_2 = 193;
-pub const JS_ATOM_Proxy: _bindgen_ty_2 = 194;
-pub const JS_ATOM_Promise: _bindgen_ty_2 = 195;
-pub const JS_ATOM_PromiseResolveFunction: _bindgen_ty_2 = 196;
-pub const JS_ATOM_PromiseRejectFunction: _bindgen_ty_2 = 197;
-pub const JS_ATOM_AsyncFunction: _bindgen_ty_2 = 198;
-pub const JS_ATOM_AsyncFunctionResolve: _bindgen_ty_2 = 199;
-pub const JS_ATOM_AsyncFunctionReject: _bindgen_ty_2 = 200;
-pub const JS_ATOM_AsyncGeneratorFunction: _bindgen_ty_2 = 201;
-pub const JS_ATOM_AsyncGenerator: _bindgen_ty_2 = 202;
-pub const JS_ATOM_EvalError: _bindgen_ty_2 = 203;
-pub const JS_ATOM_RangeError: _bindgen_ty_2 = 204;
-pub const JS_ATOM_ReferenceError: _bindgen_ty_2 = 205;
-pub const JS_ATOM_SyntaxError: _bindgen_ty_2 = 206;
-pub const JS_ATOM_TypeError: _bindgen_ty_2 = 207;
-pub const JS_ATOM_URIError: _bindgen_ty_2 = 208;
-pub const JS_ATOM_InternalError: _bindgen_ty_2 = 209;
-pub const JS_ATOM_Private_brand: _bindgen_ty_2 = 210;
-pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_2 = 211;
-pub const JS_ATOM_Symbol_iterator: _bindgen_ty_2 = 212;
-pub const JS_ATOM_Symbol_match: _bindgen_ty_2 = 213;
-pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_2 = 214;
-pub const JS_ATOM_Symbol_replace: _bindgen_ty_2 = 215;
-pub const JS_ATOM_Symbol_search: _bindgen_ty_2 = 216;
-pub const JS_ATOM_Symbol_split: _bindgen_ty_2 = 217;
-pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_2 = 218;
-pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_2 = 219;
-pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_2 = 220;
-pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 221;
-pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 222;
-pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 223;
-pub const JS_ATOM_Symbol_operatorSet: _bindgen_ty_2 = 224;
-pub const JS_ATOM_END: _bindgen_ty_2 = 225;
+pub const JS_ATOM_columnNumber: _bindgen_ty_2 = 51;
+pub const JS_ATOM_message: _bindgen_ty_2 = 52;
+pub const JS_ATOM_errors: _bindgen_ty_2 = 53;
+pub const JS_ATOM_stack: _bindgen_ty_2 = 54;
+pub const JS_ATOM_name: _bindgen_ty_2 = 55;
+pub const JS_ATOM_toString: _bindgen_ty_2 = 56;
+pub const JS_ATOM_toLocaleString: _bindgen_ty_2 = 57;
+pub const JS_ATOM_valueOf: _bindgen_ty_2 = 58;
+pub const JS_ATOM_eval: _bindgen_ty_2 = 59;
+pub const JS_ATOM_prototype: _bindgen_ty_2 = 60;
+pub const JS_ATOM_constructor: _bindgen_ty_2 = 61;
+pub const JS_ATOM_configurable: _bindgen_ty_2 = 62;
+pub const JS_ATOM_writable: _bindgen_ty_2 = 63;
+pub const JS_ATOM_enumerable: _bindgen_ty_2 = 64;
+pub const JS_ATOM_value: _bindgen_ty_2 = 65;
+pub const JS_ATOM_get: _bindgen_ty_2 = 66;
+pub const JS_ATOM_set: _bindgen_ty_2 = 67;
+pub const JS_ATOM_of: _bindgen_ty_2 = 68;
+pub const JS_ATOM___proto__: _bindgen_ty_2 = 69;
+pub const JS_ATOM_undefined: _bindgen_ty_2 = 70;
+pub const JS_ATOM_number: _bindgen_ty_2 = 71;
+pub const JS_ATOM_boolean: _bindgen_ty_2 = 72;
+pub const JS_ATOM_string: _bindgen_ty_2 = 73;
+pub const JS_ATOM_object: _bindgen_ty_2 = 74;
+pub const JS_ATOM_symbol: _bindgen_ty_2 = 75;
+pub const JS_ATOM_integer: _bindgen_ty_2 = 76;
+pub const JS_ATOM_unknown: _bindgen_ty_2 = 77;
+pub const JS_ATOM_arguments: _bindgen_ty_2 = 78;
+pub const JS_ATOM_callee: _bindgen_ty_2 = 79;
+pub const JS_ATOM_caller: _bindgen_ty_2 = 80;
+pub const JS_ATOM__eval_: _bindgen_ty_2 = 81;
+pub const JS_ATOM__ret_: _bindgen_ty_2 = 82;
+pub const JS_ATOM__var_: _bindgen_ty_2 = 83;
+pub const JS_ATOM__arg_var_: _bindgen_ty_2 = 84;
+pub const JS_ATOM__with_: _bindgen_ty_2 = 85;
+pub const JS_ATOM_lastIndex: _bindgen_ty_2 = 86;
+pub const JS_ATOM_target: _bindgen_ty_2 = 87;
+pub const JS_ATOM_index: _bindgen_ty_2 = 88;
+pub const JS_ATOM_input: _bindgen_ty_2 = 89;
+pub const JS_ATOM_defineProperties: _bindgen_ty_2 = 90;
+pub const JS_ATOM_apply: _bindgen_ty_2 = 91;
+pub const JS_ATOM_join: _bindgen_ty_2 = 92;
+pub const JS_ATOM_concat: _bindgen_ty_2 = 93;
+pub const JS_ATOM_split: _bindgen_ty_2 = 94;
+pub const JS_ATOM_construct: _bindgen_ty_2 = 95;
+pub const JS_ATOM_getPrototypeOf: _bindgen_ty_2 = 96;
+pub const JS_ATOM_setPrototypeOf: _bindgen_ty_2 = 97;
+pub const JS_ATOM_isExtensible: _bindgen_ty_2 = 98;
+pub const JS_ATOM_preventExtensions: _bindgen_ty_2 = 99;
+pub const JS_ATOM_has: _bindgen_ty_2 = 100;
+pub const JS_ATOM_deleteProperty: _bindgen_ty_2 = 101;
+pub const JS_ATOM_defineProperty: _bindgen_ty_2 = 102;
+pub const JS_ATOM_getOwnPropertyDescriptor: _bindgen_ty_2 = 103;
+pub const JS_ATOM_ownKeys: _bindgen_ty_2 = 104;
+pub const JS_ATOM_add: _bindgen_ty_2 = 105;
+pub const JS_ATOM_done: _bindgen_ty_2 = 106;
+pub const JS_ATOM_next: _bindgen_ty_2 = 107;
+pub const JS_ATOM_values: _bindgen_ty_2 = 108;
+pub const JS_ATOM_source: _bindgen_ty_2 = 109;
+pub const JS_ATOM_flags: _bindgen_ty_2 = 110;
+pub const JS_ATOM_global: _bindgen_ty_2 = 111;
+pub const JS_ATOM_unicode: _bindgen_ty_2 = 112;
+pub const JS_ATOM_raw: _bindgen_ty_2 = 113;
+pub const JS_ATOM_new_target: _bindgen_ty_2 = 114;
+pub const JS_ATOM_this_active_func: _bindgen_ty_2 = 115;
+pub const JS_ATOM_home_object: _bindgen_ty_2 = 116;
+pub const JS_ATOM_computed_field: _bindgen_ty_2 = 117;
+pub const JS_ATOM_static_computed_field: _bindgen_ty_2 = 118;
+pub const JS_ATOM_class_fields_init: _bindgen_ty_2 = 119;
+pub const JS_ATOM_brand: _bindgen_ty_2 = 120;
+pub const JS_ATOM_hash_constructor: _bindgen_ty_2 = 121;
+pub const JS_ATOM_as: _bindgen_ty_2 = 122;
+pub const JS_ATOM_from: _bindgen_ty_2 = 123;
+pub const JS_ATOM_meta: _bindgen_ty_2 = 124;
+pub const JS_ATOM__default_: _bindgen_ty_2 = 125;
+pub const JS_ATOM__star_: _bindgen_ty_2 = 126;
+pub const JS_ATOM_Module: _bindgen_ty_2 = 127;
+pub const JS_ATOM_then: _bindgen_ty_2 = 128;
+pub const JS_ATOM_resolve: _bindgen_ty_2 = 129;
+pub const JS_ATOM_reject: _bindgen_ty_2 = 130;
+pub const JS_ATOM_promise: _bindgen_ty_2 = 131;
+pub const JS_ATOM_proxy: _bindgen_ty_2 = 132;
+pub const JS_ATOM_revoke: _bindgen_ty_2 = 133;
+pub const JS_ATOM_async: _bindgen_ty_2 = 134;
+pub const JS_ATOM_exec: _bindgen_ty_2 = 135;
+pub const JS_ATOM_groups: _bindgen_ty_2 = 136;
+pub const JS_ATOM_status: _bindgen_ty_2 = 137;
+pub const JS_ATOM_reason: _bindgen_ty_2 = 138;
+pub const JS_ATOM_globalThis: _bindgen_ty_2 = 139;
+pub const JS_ATOM_bigint: _bindgen_ty_2 = 140;
+pub const JS_ATOM_bigfloat: _bindgen_ty_2 = 141;
+pub const JS_ATOM_bigdecimal: _bindgen_ty_2 = 142;
+pub const JS_ATOM_roundingMode: _bindgen_ty_2 = 143;
+pub const JS_ATOM_maximumSignificantDigits: _bindgen_ty_2 = 144;
+pub const JS_ATOM_maximumFractionDigits: _bindgen_ty_2 = 145;
+pub const JS_ATOM_not_equal: _bindgen_ty_2 = 146;
+pub const JS_ATOM_timed_out: _bindgen_ty_2 = 147;
+pub const JS_ATOM_ok: _bindgen_ty_2 = 148;
+pub const JS_ATOM_toJSON: _bindgen_ty_2 = 149;
+pub const JS_ATOM_Object: _bindgen_ty_2 = 150;
+pub const JS_ATOM_Array: _bindgen_ty_2 = 151;
+pub const JS_ATOM_Error: _bindgen_ty_2 = 152;
+pub const JS_ATOM_Number: _bindgen_ty_2 = 153;
+pub const JS_ATOM_String: _bindgen_ty_2 = 154;
+pub const JS_ATOM_Boolean: _bindgen_ty_2 = 155;
+pub const JS_ATOM_Symbol: _bindgen_ty_2 = 156;
+pub const JS_ATOM_Arguments: _bindgen_ty_2 = 157;
+pub const JS_ATOM_Math: _bindgen_ty_2 = 158;
+pub const JS_ATOM_JSON: _bindgen_ty_2 = 159;
+pub const JS_ATOM_Date: _bindgen_ty_2 = 160;
+pub const JS_ATOM_Function: _bindgen_ty_2 = 161;
+pub const JS_ATOM_GeneratorFunction: _bindgen_ty_2 = 162;
+pub const JS_ATOM_ForInIterator: _bindgen_ty_2 = 163;
+pub const JS_ATOM_RegExp: _bindgen_ty_2 = 164;
+pub const JS_ATOM_ArrayBuffer: _bindgen_ty_2 = 165;
+pub const JS_ATOM_SharedArrayBuffer: _bindgen_ty_2 = 166;
+pub const JS_ATOM_Uint8ClampedArray: _bindgen_ty_2 = 167;
+pub const JS_ATOM_Int8Array: _bindgen_ty_2 = 168;
+pub const JS_ATOM_Uint8Array: _bindgen_ty_2 = 169;
+pub const JS_ATOM_Int16Array: _bindgen_ty_2 = 170;
+pub const JS_ATOM_Uint16Array: _bindgen_ty_2 = 171;
+pub const JS_ATOM_Int32Array: _bindgen_ty_2 = 172;
+pub const JS_ATOM_Uint32Array: _bindgen_ty_2 = 173;
+pub const JS_ATOM_BigInt64Array: _bindgen_ty_2 = 174;
+pub const JS_ATOM_BigUint64Array: _bindgen_ty_2 = 175;
+pub const JS_ATOM_Float32Array: _bindgen_ty_2 = 176;
+pub const JS_ATOM_Float64Array: _bindgen_ty_2 = 177;
+pub const JS_ATOM_DataView: _bindgen_ty_2 = 178;
+pub const JS_ATOM_BigInt: _bindgen_ty_2 = 179;
+pub const JS_ATOM_BigFloat: _bindgen_ty_2 = 180;
+pub const JS_ATOM_BigFloatEnv: _bindgen_ty_2 = 181;
+pub const JS_ATOM_BigDecimal: _bindgen_ty_2 = 182;
+pub const JS_ATOM_OperatorSet: _bindgen_ty_2 = 183;
+pub const JS_ATOM_Operators: _bindgen_ty_2 = 184;
+pub const JS_ATOM_Map: _bindgen_ty_2 = 185;
+pub const JS_ATOM_Set: _bindgen_ty_2 = 186;
+pub const JS_ATOM_WeakMap: _bindgen_ty_2 = 187;
+pub const JS_ATOM_WeakSet: _bindgen_ty_2 = 188;
+pub const JS_ATOM_Map_Iterator: _bindgen_ty_2 = 189;
+pub const JS_ATOM_Set_Iterator: _bindgen_ty_2 = 190;
+pub const JS_ATOM_Array_Iterator: _bindgen_ty_2 = 191;
+pub const JS_ATOM_String_Iterator: _bindgen_ty_2 = 192;
+pub const JS_ATOM_RegExp_String_Iterator: _bindgen_ty_2 = 193;
+pub const JS_ATOM_Generator: _bindgen_ty_2 = 194;
+pub const JS_ATOM_Proxy: _bindgen_ty_2 = 195;
+pub const JS_ATOM_Promise: _bindgen_ty_2 = 196;
+pub const JS_ATOM_PromiseResolveFunction: _bindgen_ty_2 = 197;
+pub const JS_ATOM_PromiseRejectFunction: _bindgen_ty_2 = 198;
+pub const JS_ATOM_AsyncFunction: _bindgen_ty_2 = 199;
+pub const JS_ATOM_AsyncFunctionResolve: _bindgen_ty_2 = 200;
+pub const JS_ATOM_AsyncFunctionReject: _bindgen_ty_2 = 201;
+pub const JS_ATOM_AsyncGeneratorFunction: _bindgen_ty_2 = 202;
+pub const JS_ATOM_AsyncGenerator: _bindgen_ty_2 = 203;
+pub const JS_ATOM_EvalError: _bindgen_ty_2 = 204;
+pub const JS_ATOM_RangeError: _bindgen_ty_2 = 205;
+pub const JS_ATOM_ReferenceError: _bindgen_ty_2 = 206;
+pub const JS_ATOM_SyntaxError: _bindgen_ty_2 = 207;
+pub const JS_ATOM_TypeError: _bindgen_ty_2 = 208;
+pub const JS_ATOM_URIError: _bindgen_ty_2 = 209;
+pub const JS_ATOM_InternalError: _bindgen_ty_2 = 210;
+pub const JS_ATOM_Private_brand: _bindgen_ty_2 = 211;
+pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_2 = 212;
+pub const JS_ATOM_Symbol_iterator: _bindgen_ty_2 = 213;
+pub const JS_ATOM_Symbol_match: _bindgen_ty_2 = 214;
+pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_2 = 215;
+pub const JS_ATOM_Symbol_replace: _bindgen_ty_2 = 216;
+pub const JS_ATOM_Symbol_search: _bindgen_ty_2 = 217;
+pub const JS_ATOM_Symbol_split: _bindgen_ty_2 = 218;
+pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_2 = 219;
+pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_2 = 220;
+pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_2 = 221;
+pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 222;
+pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 223;
+pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 224;
+pub const JS_ATOM_Symbol_operatorSet: _bindgen_ty_2 = 225;
+pub const JS_ATOM_END: _bindgen_ty_2 = 226;
 pub type _bindgen_ty_2 = ::std::os::raw::c_uint;

@@ -26,22 +26,52 @@ mod methods;
 mod module;
 mod trace;
 
-/// An attribute for implementing JsClass for a rust type.
+/// An attribute for implementing [`JsClass`](rquickjs_core::class::JsClass`) for a Rust type.
+///
+/// # Attribute options
+///
+/// The attribute has a number of options for configuring the generated trait implementation. These
+/// attributes can be passed to the `class` attribute as an argument: `#[class(rename =
+/// "AnotherName")]` or with a separate `qjs` attribute on the struct item: `#[qjs(rename =
+/// "AnotherName")]`. A option which is a Flag can be set just by adding the attribute:
+/// `#[qjs(flag)]` or by setting it to specific boolean value: `#[qjs(flag = true)]`.
+///
+/// | **Option**   | **Value** | **Description**                                                                                                                                                                         |
+/// |--------------|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `crate`      | String    | Changes the name from which the attribute tries to use rquickjs types. Use when the name behind which the rquickjs crate is declared is not properly resolved by the macro.             |
+/// | `rename`     | String    | Changes the name of the implemented class on the JavaScript side.                                                                                                                       |
+/// | `rename_all` | Casing    | Converts the case of all the fields of this struct which have implement accessors. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+/// | `frozen`     | Flag      | Changes the class implementation to only allow borrowing immutably.  Trying to borrow mutably will result in an error.                                                                  |
+///
+/// # Field options
+///
+/// The fields of a struct (doesn't work on enums) can also tagged with an attribute to, for
+/// example make the fields accessible from JavaScript. These attributes are all in the form of
+/// `#[qjs(option = value)]`.
+///
+/// | **Option**     | **Value** | **Description**                                                                         |
+/// |----------------|-----------|-----------------------------------------------------------------------------------------|
+/// | `get`          | Flag      | Creates a getter for this field, allowing read access to the field from JavaScript.     |
+/// | `set`          | Flag      | Creates a setter for this field, allowing write access to the field from JavaSccript.   |
+/// | `enumerable`   | Flag      | Makes the field, if it has a getter or setter, enumerable in JavaScript.                |
+/// | `configurable` | Flag      | Makes the field, if it has a getter or setter, configurable in JavaScript.              |
+/// | `rename`       | String    | Changes the name of the field getter and/or setter to the specified name in JavaScript. |
+///
 ///
 /// # Example
 /// ```
 /// use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime};
 ///
 /// /// Implement JsClass for TestClass.
-/// /// This allows passing any instance of TestClass straight to javascript.
+/// /// This allows passing any instance of TestClass straight to JavaScript.
 /// /// It is command to also add #[derive(Trace)] as all types which implement JsClass need to
 /// /// also implement trace.
 /// #[derive(Trace)]
 /// #[rquickjs::class(rename_all = "camelCase")]
 /// pub struct TestClass<'js> {
-///     /// These attribute make the accessible from javascript with getters and setters.
+///     /// These attribute make the accessible from JavaScript with getters and setters.
 ///     /// As we used `rename_all = "camelCase"` in the attribute it will be called `innerObject`
-///     /// on the javascript side.
+///     /// on the JavaScript side.
 ///     #[qjs(get, set)]
 ///     inner_object: Object<'js>,
 ///
@@ -68,7 +98,7 @@ mod trace;
 ///             },
 ///         )
 ///         .unwrap();
-///         /// Pass it to javascript
+///         /// Pass it to JavaScript
 ///         ctx.globals().set("t", cls.clone()).unwrap();
 ///         ctx.eval::<(), _>(
 ///             r#"
@@ -91,8 +121,10 @@ pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 
 /// A attribute for implementing `IntoJsFunc` for a certain function.
 ///
-/// Using this attribute allows a wider range of functions to be used as callbacks from javascript
-/// then when you use closures or straight functions.
+/// Using this attribute allows a wider range of functions to be used as callbacks from JavaScript
+/// then when you use closures or the functions for which the proper traits are already
+/// implemented..
+///
 #[proc_macro_attribute]
 #[proc_macro_error]
 pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
@@ -106,13 +138,51 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     }
 }
 
-/// A macro for implementing methods for a class.
+/// A attribute for implementing methods for a class.
+///
+/// This attribute can be added to a impl block which implements methods for a type which uses the
+/// [`macro@class`] attribute to derive [`JsClass`](rquickjs_core::class::JsClass).
+///
+/// # Limitations
+/// Due to limitations in the Rust type system this attribute can be used on only one impl block
+/// per type.
+///
+/// # Attribute options
+///
+/// The attribute has a number of options for configuring the generated trait implementation. These
+/// attributes can be passed to the `methods` attribute as an argument: `#[methods(rename =
+/// "AnotherName")]` or with a separate `qjs` attribute on the impl item: `#[qjs(rename =
+/// "AnotherName")]`. A option which is a Flag can be set just by adding the attribute:
+/// `#[qjs(flag)]` or by setting it to specific boolean value: `#[qjs(flag = true)]`.
+///
+/// | **Option**   | **Value** | **Description**                                                                                                                                                                         |
+/// |--------------|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `crate`      | String    | Changes the name from which the attribute tries to use rquickjs types. Use when the name behind which the rquickjs crate is declared is not properly resolved by the macro.             |
+/// | `rename`     | String    | Changes the name of the implemented class on the JavaScript side.                                                                                                                       |
+/// | `rename_all` | Casing    | Converts the case of all the fields of this struct which have implement accessors. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+///
+///
+/// # Item options
+///
+/// Each item of the impl block can also tagged with an attribute to change the resulting derived method definition.
+/// These attributes are all in the form of `#[qjs(option = value)]`.
+///
+/// | **Option**     | **Value**                                                         | **Description**                                                                                 |
+/// |----------------|-------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+/// | `get`          | Flag                                                              | Makes this method a getter for a field of the same name.                                        |
+/// | `set`          | Flag                                                              | Makes this method a setter for a field of the same name.                                        |
+/// | `enumerable`   | Flag                                                              | Makes the method, if it is a getter or setter, enumerable in JavaScript.                        |
+/// | `configurable` | Flag                                                              | Makes the method, if it is a getter or setter, configurable in JavaScript.                      |
+/// | `rename`       | String or [`PredefinedAtom`](rquickjs_core::atom::PredefinedAtom) | Changes the name of the field getter and/or setter to the specified name in JavaScript.         |
+/// | `static`       | Flag                                                              | Makes the method a static method i.e. defined on the type constructor instead of the prototype. |
+/// | `constructor`  | Flag                                                              | Marks this method a the constructor for this type.                                              |
+/// | `skip`         | Flag                                                              | Skips defining this method on the JavaScript class.                                             |
 ///
 /// # Example
 /// ```
 /// use rquickjs::{
-///     atom::PredefinedAtom, class::Trace, prelude::Func, CatchResultExt, Class, Context, Ctx, Object,
-///     Result, Runtime,
+///     atom::PredefinedAtom, class::Trace, prelude::Func, CatchResultExt, Class, Context, Ctx,
+///     Object, Result, Runtime,
 /// };
 ///
 /// #[derive(Trace)]
@@ -125,7 +195,7 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// #[rquickjs::methods]
 /// impl TestClass {
 ///     /// Marks a method as a constructor.
-///     /// This method will be used when
+///     /// This method will be used when a new TestClass object is created from JavaScript.
 ///     #[qjs(constructor)]
 ///     pub fn new(value: u32) -> Self {
 ///         TestClass {
@@ -173,7 +243,7 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     #[qjs(skip)]
 ///     pub fn inner_function(&self) {}
 ///
-///     /// Functions can also be renamed to specific symbols. This allows you to make an rust type
+///     /// Functions can also be renamed to specific symbols. This allows you to make an Rust type
 ///     /// act like an iteratable value for example.
 ///     #[qjs(rename = PredefinedAtom::SymbolIterator)]
 ///     pub fn iterate<'js>(&self, ctx: Ctx<'js>) -> Result<Object<'js>> {
@@ -222,7 +292,51 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     }
 }
 
-/// An attribute which generates code for exporting a module to rust.
+/// An attribute which generates code for exporting a module to Rust.
+///
+/// Any supported item inside the module which is marked as `pub` will be exported as a JavaScript value.
+/// Different items result in different JavaScript values.
+/// The supported items are:
+///
+/// - `struct` and `enum` items. These will be exported as JavaScript
+/// classes with their constructor exported as a function from the module.
+/// - `fn` items, these will be exported as JavaScript functions.
+/// - `use` items, the types which are reexported with `pub` will be handled just like `struct` and
+/// `enum` items defined inside the module. The name of the class can be adjusted by renaming the
+/// reexport with `as`.
+/// - `const` and `static` items, these items will be exported as values with the same name.
+///
+/// # Attribute options
+///
+/// The attribute has a number of options for configuring the generated trait implementation. These
+/// attributes can be passed to the `module` attribute as an argument: `#[module(rename =
+/// "AnotherName")]` or with a separate `qjs` attribute on the impl item: `#[qjs(rename =
+/// "AnotherName")]`. A option which is a Flag can be set just by adding the attribute:
+/// `#[qjs(flag)]` or by setting it to specific boolean value: `#[qjs(flag = true)]`.
+///
+/// | **Option**     | **Value** | **Description**                                                                                                                                                                        |
+/// |----------------|-----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `crate`        | String    | Changes the name from which the attribute tries to use rquickjs types. Use when the name behind which the rquickjs crate is declared is not properly resolved by the macro.            |
+/// | `rename`       | String    | Changes the name of the implemented module on the JavaScript side.                                                                                                                     |
+/// | `rename_vars`  | Casing    | Alters the name of all items exported as JavaScript values by changing the case.  Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+/// | `rename_types` | Casing    | Alters the name of all items exported as JavaScript classes by changing the case. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+/// | `prefix`       | String    | The module will be implemented for a new type with roughly the same name as the Rust module with a prefix added. This changes the prefix which will be added. Defaults to `js_`        |
+///
+/// # Item options
+///
+/// The attribute also has a number of options for changing the resulting generated module
+/// implementation for specific items.
+/// These attributes are all in the form of `#[qjs(option = value)]`.
+///
+/// | **Option** | **Value** | **Item Type**  | **Description**                                                                                                                                                                                            |
+/// |------------|-----------|----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `skip`     | Flag      | All            | Skips exporting this item from the JavaScript module.                                                                                                                                                      |
+/// | `rename`   | String    | All except use | Change the name from which this value is exported.                                                                                                                                                         |
+/// | `declare`  | Flag      | Functions Only | Marks this function as the declaration function. This function will be called when the module is declared allowing for exporting items which otherwise are difficult to export using the attribute.        |
+/// | `evaluate` | Flag      | Functions Only | Marks this function as the evaluation function. This function will be called when the module is being evaluated allowing for exporting items which otherwise are difficult to export using the attribute.  |
+///
+/// # Example
+///
 /// ```
 ///
 /// use rquickjs::{CatchResultExt, Context, Module, Runtime};
@@ -257,7 +371,10 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     ///
 ///     /// Note that this tries to export the type, not the value,
 ///     /// So this won't work for functions.
-///     pub use super::Test;
+///     ///
+///     /// By using `as` you can change under which name the constructor is exported.
+///     /// The below type will exported as `RenamedTest`.
+///     pub use super::Test as RenamedTest;
 ///
 ///     /// A class which will be exported from the module under the name `FooBar`.
 ///     #[derive(rquickjs::class::Trace)]
@@ -309,7 +426,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///         1 + 1
 ///     }
 ///
-///     /// You can make items public but not export them to javascript by adding the skip attribute.
+///     /// You can make items public but not export them to JavaScript by adding the skip attribute.
 ///     #[qjs(skip)]
 ///     pub fn ignore_function() -> u32 {
 ///         2 + 2
@@ -331,7 +448,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///             ctx.clone(),
 ///             "test2",
 ///             r"
-///             import { foo,aManuallyExportedValue, aConstValue, aStaticValue, FooBar } from 'test';
+///             import { RenamedTest, foo,aManuallyExportedValue, aConstValue, aStaticValue, FooBar } from 'test';
 ///             if (foo() !== 2){
 ///                 throw new Error(1);
 ///             }
@@ -363,9 +480,9 @@ pub fn trace(stream: TokenStream1) -> TokenStream1 {
     trace::expand(derive_input).into()
 }
 
-/// A macro for embedding javascript code into a binary.
+/// A macro for embedding JavaScript code into a binary.
 ///
-/// Compiles a javascript module to bytecode and then compiles the resulting bytecode into the
+/// Compiles a JavaScript module to bytecode and then compiles the resulting bytecode into the
 /// binary. Each file loaded is turned into its own module. The macro takes a list of paths to
 /// files to be compiled into a module with an option name. Module paths are relative to the crate
 /// manifest file.

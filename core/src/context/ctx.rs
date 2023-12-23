@@ -234,7 +234,7 @@ impl<'js> Ctx<'js> {
 
     /// Parse json into a JavaScript value, possibly allowing extended syntax support.
     ///
-    /// If allow_extensions is true, this function will allow extended json syntax.
+    /// If `allow_extensions` is `true`, this function will allow extended json syntax.
     /// Extended syntax allows comments, single quoted strings, non string property names, trailing
     /// comma's and hex, oct and binary numbers.
     pub fn json_parse_ext<S>(&self, json: S, allow_extensions: bool) -> Result<Value<'js>>

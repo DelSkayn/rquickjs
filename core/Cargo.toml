@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-core"
-version = "0.4.0-beta.4"
+version = "0.4.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 license = "MIT"
@@ -31,7 +31,7 @@ version = "0.4"
 optional = true
 
 [dependencies.rquickjs-sys]
-version = "0.4.0-beta.4"
+version = "0.4.0"
 path = "../sys"
 
 [dependencies.dlopen]
@@ -89,18 +89,6 @@ futures = ["async-lock"]
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
 
-# Max number of function args
-max-args-7 = []
-max-args-8 = ["max-args-7"]
-max-args-9 = ["max-args-8"]
-max-args-10 = ["max-args-9"]
-max-args-11 = ["max-args-10"]
-max-args-12 = ["max-args-11"]
-max-args-13 = ["max-args-12"]
-max-args-14 = ["max-args-13"]
-max-args-15 = ["max-args-14"]
-max-args-16 = ["max-args-15"]
-
 # Enable QuickJS dumps for debug
 dump-bytecode = ["rquickjs-sys/dump-bytecode"]
 dump-gc = ["rquickjs-sys/dump-gc"]
@@ -129,7 +117,7 @@ version = "0.3"
 [dev-dependencies.tokio]
 version = "1.0"
 default-features = false
-features = ["rt", "rt-multi-thread", "time", "macros"]
+features = ["rt", "rt-multi-thread", "time", "macros", "sync"]
 
 [dev-dependencies.rquickjs]
 path = ".."

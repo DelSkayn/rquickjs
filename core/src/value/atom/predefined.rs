@@ -109,6 +109,8 @@ pub enum PredefinedAtom {
     FileName = qjs::JS_ATOM_fileName as u32,
     /// "lineNumber"
     LineNumber = qjs::JS_ATOM_lineNumber as u32,
+    /// "columnNumber
+    ColumnNumber = qjs::JS_ATOM_columnNumber as u32,
     /// "message"
     Message = qjs::JS_ATOM_message as u32,
     /// "errors"
@@ -505,6 +507,7 @@ impl PredefinedAtom {
             PredefinedAtom::Length => "length",
             PredefinedAtom::FileName => "fileName",
             PredefinedAtom::LineNumber => "lineNumber",
+            PredefinedAtom::ColumnNumber => "columnNumber",
             PredefinedAtom::Message => "message",
             PredefinedAtom::Errors => "errors",
             PredefinedAtom::Stack => "stack",

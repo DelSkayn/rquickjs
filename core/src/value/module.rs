@@ -53,7 +53,7 @@ pub type ModuleLoadFn =
 pub enum ModuleDataKind {
     /// Module source text,
     Source(Vec<u8>),
-    /// A function which loads a module from rust.
+    /// A function which loads a module from Rust.
     Native(for<'js> unsafe fn(ctx: &Ctx<'js>, name: Vec<u8>) -> Result<Module<'js>>),
     /// A raw loading function, used for loading from dynamic libraries.
     Raw(ModuleLoadFn),
@@ -153,7 +153,7 @@ impl ModuleData {
     /// Create module data for a module loaded from a native Rust definition.
     ///
     /// # Safety
-    /// User must ensure that load_fn behaves like a loader function.
+    /// User must ensure that `load_fn` behaves like a loader function.
     ///
     /// The function must take a context and a c string without taking ownership of either values
     /// and return a pointer to `qjs::JSModuleDef`, or a null pointer if there was some error.
@@ -297,7 +297,7 @@ impl Declarations {
         Ok(self)
     }
 
-    /// Define a new export in a module using a static CStr.
+    /// Define a new export in a module using a static `CStr`.
     ///
     /// This method is can be used to avoid some allocation in the case that the name is static.
     pub fn declare_static(&mut self, name: &'static CStr) -> Result<&mut Self> {
