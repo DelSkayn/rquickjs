@@ -1,4 +1,7 @@
-use std::{env, fs, path::Path};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
 
 use diffy::{apply, Patch};
 use newline_converter::dos2unix;
@@ -166,7 +169,13 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
         for patch in Patches(&patch) {
             let original = patch
                 .original()
-                .and_then(|x| x.split_once('/').map(|(_, b)| b))
+                .and_then(|x| {
+                    if x.chars().next().unwrap_or_default() == '/' {
+                        Some(x)
+                    } else {
+                        x.split_once('/').map(|(_, b)| b)
+                    }
+                })
                 .or(patch.original())
                 .expect("Cannot find original file name");
             let modified = patch
@@ -175,10 +184,18 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
                 .or(patch.modified())
                 .expect("Cannot find modified file name");
 
-            let original_path = out_dir.join(original).absolutize().unwrap().to_path_buf();
+            let original_path = if original.chars().next().unwrap_or_default() == '/' {
+                PathBuf::new()
+            } else {
+                out_dir.to_path_buf()
+            }
+            .join(original)
+            .absolutize()
+            .unwrap()
+            .to_path_buf();
             let modified_path = out_dir.join(modified).absolutize().unwrap().to_path_buf();
 
-            let original = if !original_path.exists() && !modified_path.exists() {
+            let original = if !original_path.exists() {
                 String::new()
             } else {
                 fs::read_to_string(original_path).expect("Unable to read original file")
@@ -191,9 +208,8 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
                             fs::create_dir_all(parent).unwrap();
                         }
                     }
-                    fs::write(modified_path, patched)
-                                    .expect("Unable to write the patched content")
-                },
+                    fs::write(modified_path, patched).expect("Unable to write the patched content")
+                }
                 Err(e) => eprintln!("Unable to write the patched content: {}", e),
             }
         }
