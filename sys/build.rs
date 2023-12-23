@@ -136,8 +136,15 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
         type Item = Patch<'a, str>;
         fn next(&mut self) -> Option<Self::Item> {
             let mut range = self.0.len();
+
             loop {
-                match Patch::from_str(&self.0[..range]) {
+                let input = if let Some(input) = self.0.get(..range) {
+                    input
+                } else {
+                    range -= 1;
+                    continue;
+                };
+                match Patch::from_str(input) {
                     Ok(x) if x.hunks().is_empty() => break None,
                     Err(_) if range < 1 => break None,
                     Ok(x) => {
@@ -167,15 +174,25 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
                 .or(patch.modified())
                 .expect("Cannot find modified file name");
 
-            // for now
-            assert_eq!(original, modified);
+            let original_path = out_dir.join(original);
+            let modified_path = out_dir.join(modified);
 
-            let original =
-                fs::read_to_string(out_dir.join(original)).expect("Unable to read original file");
+            let original = if !original_path.exists() && !modified_path.exists() {
+                String::new()
+            } else {
+                fs::read_to_string(original_path).expect("Unable to read original file")
+            };
             let original = dos2unix(&original);
             match apply(&original, &patch) {
-                Ok(patched) => fs::write(out_dir.join(modified), patched)
-                    .expect("Unable to write the patched content"),
+                Ok(patched) => {
+                    if let Some(parent) = modified_path.parent() {
+                        if !parent.exists() {
+                            fs::create_dir_all(parent).unwrap();
+                        }
+                    }
+                    fs::write(modified_path, patched)
+                                    .expect("Unable to write the patched content")
+                },
                 Err(e) => eprintln!("Unable to write the patched content: {}", e),
             }
         }
