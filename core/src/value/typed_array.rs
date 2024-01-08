@@ -328,7 +328,7 @@ impl<'js> Object<'js> {
 
     pub fn as_typed_array<T: TypedArrayItem>(&self) -> Option<&TypedArray<T>> {
         self.is_typed_array::<T>()
-            .then_some(unsafe { self.ref_typed_array() })
+            .then(|| unsafe { self.ref_typed_array() })
     }
 }
 
