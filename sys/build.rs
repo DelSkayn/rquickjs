@@ -1,11 +1,93 @@
 use std::{
     env, fs,
     io::Write,
-    path::Path,
-    process::{Command, Stdio},
+    path::{Path, PathBuf},
+    process::{self, Command, Stdio},
 };
 
-fn main() {
+use anyhow::{anyhow, Result};
+
+const WASI_SDK_VERSION_MAJOR: usize = 20;
+const WASI_SDK_VERSION_MINOR: usize = 0;
+
+fn download_wasi_sdk() -> Result<PathBuf> {
+    let mut wasi_sdk_dir: PathBuf = env::var("OUT_DIR")?.into();
+    wasi_sdk_dir.push("wasi-sdk");
+
+    fs::create_dir_all(&wasi_sdk_dir)?;
+
+    const MAJOR_VERSION_ENV_VAR: &str = "QUICKJS_WASM_SYS_WASI_SDK_MAJOR_VERSION";
+    const MINOR_VERSION_ENV_VAR: &str = "QUICKJS_WASM_SYS_WASI_SDK_MINOR_VERSION";
+    println!("cargo:rerun-if-env-changed={MAJOR_VERSION_ENV_VAR}");
+    println!("cargo:rerun-if-env-changed={MINOR_VERSION_ENV_VAR}");
+    let major_version =
+        env::var(MAJOR_VERSION_ENV_VAR).unwrap_or(WASI_SDK_VERSION_MAJOR.to_string());
+    let minor_version =
+        env::var(MINOR_VERSION_ENV_VAR).unwrap_or(WASI_SDK_VERSION_MINOR.to_string());
+
+    let mut archive_path = wasi_sdk_dir.clone();
+    archive_path.push(format!("wasi-sdk-{major_version}-{minor_version}.tar.gz"));
+
+    // Download archive if necessary
+    if !archive_path.try_exists()? {
+        let file_suffix = match (env::consts::OS, env::consts::ARCH) {
+            ("linux", "x86") | ("linux", "x86_64") => "linux",
+            ("macos", "x86") | ("macos", "x86_64") | ("macos", "aarch64") => "macos",
+            ("windows", "x86") => "mingw-x86",
+            ("windows", "x86_64") => "mingw",
+            other => return Err(anyhow!("Unsupported platform tuple {:?}", other)),
+        };
+
+        let uri = format!("https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{major_version}/wasi-sdk-{major_version}.{minor_version}-{file_suffix}.tar.gz");
+
+        println!("Downloading WASI SDK archive from {uri} to {archive_path:?}");
+
+        let output = process::Command::new("curl")
+            .args(["-o", archive_path.to_string_lossy().as_ref(), uri.as_ref()])
+            .output()?;
+        if !output.status.success() {
+            return Err(anyhow!(
+                "curl WASI SDK failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+
+    let mut test_binary = wasi_sdk_dir.clone();
+    test_binary.extend(["bin", "wasm-ld"]);
+    // Extract archive if necessary
+    if !test_binary.try_exists()? {
+        println!("Extracting WASI SDK archive");
+        let output = process::Command::new("tar")
+            .args([
+                "-xf",
+                archive_path.to_string_lossy().as_ref(),
+                "--strip-components",
+                "1",
+            ])
+            .current_dir(&wasi_sdk_dir)
+            .output()?;
+        if !output.status.success() {
+            return Err(anyhow!(
+                "Unpacking WASI SDK failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            ));
+        }
+    }
+
+    Ok(wasi_sdk_dir)
+}
+
+fn get_wasi_sdk_path() -> Result<PathBuf> {
+    const WASI_SDK_PATH_ENV_VAR: &str = "QUICKJS_WASM_SYS_WASI_SDK_PATH";
+    println!("cargo:rerun-if-env-changed={WASI_SDK_PATH_ENV_VAR}");
+    if let Ok(path) = env::var(WASI_SDK_PATH_ENV_VAR) {
+        return Ok(path.into());
+    }
+    download_wasi_sdk()
+}
+
+fn main() -> Result<()> {
     #[cfg(feature = "logging")]
     pretty_env_logger::init();
 
@@ -104,6 +186,21 @@ fn main() {
     // generating bindings
     bindgen(out_dir, out_dir.join("quickjs.bind.h"), &defines);
 
+    let wasi_sdk_path = get_wasi_sdk_path()?;
+    if !wasi_sdk_path.try_exists()? {
+        return Err(anyhow!(
+            "wasi-sdk not installed in specified path of {}",
+            wasi_sdk_path.display()
+        ));
+    }
+    env::set_var("CC", wasi_sdk_path.join("bin/clang").to_str().unwrap());
+    env::set_var("AR", wasi_sdk_path.join("bin/ar").to_str().unwrap());
+    let sysroot = format!(
+        "--sysroot={}",
+        wasi_sdk_path.join("share/wasi-sysroot").display()
+    );
+    env::set_var("CFLAGS", &sysroot);
+
     let mut builder = cc::Build::new();
     builder
         .extra_warnings(false)
@@ -120,6 +217,8 @@ fn main() {
     }
 
     builder.compile("libquickjs.a");
+
+    Ok(())
 }
 
 fn feature_to_cargo(name: impl AsRef<str>) -> String {
