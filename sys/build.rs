@@ -28,6 +28,8 @@ fn download_wasi_sdk() -> Result<PathBuf> {
     let mut archive_path = wasi_sdk_dir.clone();
     archive_path.push(format!("wasi-sdk-{major_version}-{minor_version}.tar.gz"));
 
+    println!("SDK tar: {archive_path:?}");
+
     // Download archive if necessary
     if !archive_path.try_exists()? {
         let file_suffix = match (env::consts::OS, env::consts::ARCH) {
@@ -43,8 +45,15 @@ fn download_wasi_sdk() -> Result<PathBuf> {
         println!("Downloading WASI SDK archive from {uri} to {archive_path:?}");
 
         let output = process::Command::new("curl")
-            .args(["-o", archive_path.to_string_lossy().as_ref(), uri.as_ref()])
+            .args([
+                "--location",
+                "-o",
+                archive_path.to_string_lossy().as_ref(),
+                uri.as_ref(),
+            ])
             .output()?;
+        println!("curl output: {}", String::from_utf8_lossy(&output.stdout));
+        println!("curl err: {}", String::from_utf8_lossy(&output.stderr));
         if !output.status.success() {
             return Err(anyhow!(
                 "curl WASI SDK failed: {}",
@@ -57,10 +66,10 @@ fn download_wasi_sdk() -> Result<PathBuf> {
     test_binary.extend(["bin", "wasm-ld"]);
     // Extract archive if necessary
     if !test_binary.try_exists()? {
-        println!("Extracting WASI SDK archive");
+        println!("Extracting WASI SDK archive {archive_path:?}");
         let output = process::Command::new("tar")
             .args([
-                "-xf",
+                "-zxf",
                 archive_path.to_string_lossy().as_ref(),
                 "--strip-components",
                 "1",
@@ -174,7 +183,8 @@ fn main() -> Result<()> {
     }
 
     for file in source_files.iter().chain(header_files.iter()) {
-        fs::copy(src_dir.join(file), out_dir.join(file)).expect("Unable to copy source");
+        fs::copy(src_dir.join(file), out_dir.join(file))
+            .expect("Unable to copy source; try 'git submodule update --init'");
     }
     fs::copy("quickjs.bind.h", out_dir.join("quickjs.bind.h")).expect("Unable to copy source");
 
@@ -183,30 +193,49 @@ fn main() -> Result<()> {
         patch(out_dir, patches_dir.join(file));
     }
 
-    // generating bindings
-    bindgen(out_dir, out_dir.join("quickjs.bind.h"), &defines);
-
-    let wasi_sdk_path = get_wasi_sdk_path()?;
-    if !wasi_sdk_path.try_exists()? {
-        return Err(anyhow!(
-            "wasi-sdk not installed in specified path of {}",
-            wasi_sdk_path.display()
-        ));
+    let mut add_cflags = vec![];
+    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+        let wasi_sdk_path = get_wasi_sdk_path()?;
+        if !wasi_sdk_path.try_exists()? {
+            return Err(anyhow!(
+                "wasi-sdk not installed in specified path of {}",
+                wasi_sdk_path.display()
+            ));
+        }
+        env::set_var("CC", wasi_sdk_path.join("bin/clang").to_str().unwrap());
+        env::set_var("AR", wasi_sdk_path.join("bin/ar").to_str().unwrap());
+        let sysroot = format!(
+            "--sysroot={}",
+            wasi_sdk_path.join("share/wasi-sysroot").display()
+        );
+        env::set_var("CFLAGS", &sysroot);
+        add_cflags.push(sysroot);
     }
-    env::set_var("CC", wasi_sdk_path.join("bin/clang").to_str().unwrap());
-    env::set_var("AR", wasi_sdk_path.join("bin/ar").to_str().unwrap());
-    let sysroot = format!(
-        "--sysroot={}",
-        wasi_sdk_path.join("share/wasi-sysroot").display()
+
+    // generating bindings
+    bindgen(
+        out_dir,
+        out_dir.join("quickjs.bind.h"),
+        &defines,
+        add_cflags,
     );
-    env::set_var("CFLAGS", &sysroot);
 
     let mut builder = cc::Build::new();
     builder
         .extra_warnings(false)
+        .flag("-Wno-implicit-const-int-float-conversion")
         //.flag("-Wno-array-bounds")
         //.flag("-Wno-format-truncation")
         ;
+
+    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+        // pretend we're emscripten - there are already ifdefs that match
+        // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
+        builder
+            .define("EMSCRIPTEN", "1")
+            .define("FE_DOWNWARD", "0")
+            .define("FE_UPWARD", "0");
+    }
 
     for (name, value) in &defines {
         builder.define(name, *value);
@@ -248,7 +277,7 @@ fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
 }
 
 #[cfg(not(feature = "bindgen"))]
-fn bindgen<'a, D, H, X, K, V>(out_dir: D, _header_file: H, _defines: X)
+fn bindgen<'a, D, H, X, K, V>(out_dir: D, _header_file: H, _defines: X, _add_cflags: Vec<String>)
 where
     D: AsRef<Path>,
     H: AsRef<Path>,
@@ -267,7 +296,7 @@ where
         .unwrap_or(false)
     {
         println!(
-            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
+            "cargo:warning=rquickjs x probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
             target
         );
     }
@@ -286,7 +315,7 @@ where
 }
 
 #[cfg(feature = "bindgen")]
-fn bindgen<'a, D, H, X, K, V>(out_dir: D, header_file: H, defines: X)
+fn bindgen<'a, D, H, X, K, V>(out_dir: D, header_file: H, defines: X, mut add_cflags: Vec<String>)
 where
     D: AsRef<Path>,
     H: AsRef<Path>,
@@ -299,6 +328,7 @@ where
     let header_file = header_file.as_ref();
 
     let mut cflags = vec![format!("--target={}", target)];
+    cflags.append(&mut add_cflags);
 
     //format!("-I{}", out_dir.parent().display()),
 
@@ -309,6 +339,8 @@ where
             format!("-D{}", name.as_ref())
         });
     }
+
+    println!("Bindings for target: {}", target);
 
     let bindings = bindgen_rs::Builder::default()
         .detect_include_paths(true)
