@@ -5,6 +5,8 @@ use std::{
     process::{self, Command, Stdio},
 };
 
+// WASI logic lifted from https://github.com/bytecodealliance/javy/blob/61616e1507d2bf896f46dc8d72687273438b58b2/crates/quickjs-wasm-sys/build.rs#L18
+
 const WASI_SDK_VERSION_MAJOR: usize = 20;
 const WASI_SDK_VERSION_MINOR: usize = 0;
 
