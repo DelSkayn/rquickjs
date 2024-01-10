@@ -12,7 +12,6 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [build-dependencies]
 cc = "1"
-anyhow = "1.0.79"
 
 [build-dependencies.bindgen-rs]
 package = "bindgen"
@@ -45,4 +44,3 @@ dump-shapes = []
 dump-module-resolve = []
 dump-promise = []
 dump-read-object = []
-
