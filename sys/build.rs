@@ -214,7 +214,7 @@ fn main() {
     let mut builder = cc::Build::new();
     builder
         .extra_warnings(false)
-        .flag("-Wno-implicit-const-int-float-conversion")
+        .flag_if_supported("-Wno-implicit-const-int-float-conversion")
         //.flag("-Wno-array-bounds")
         //.flag("-Wno-format-truncation")
         ;
@@ -285,7 +285,7 @@ where
         .unwrap_or(false)
     {
         println!(
-            "cargo:warning=rquickjs x probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
+            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
             target
         );
     }
