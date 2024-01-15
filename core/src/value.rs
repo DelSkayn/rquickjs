@@ -15,11 +15,11 @@ mod symbol;
 pub use array::Array;
 pub use atom::Atom;
 pub use bigint::BigInt;
-pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
+pub use convert::{FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
 pub use exception::Exception;
 pub use function::{Constructor, Function};
 pub use module::Module;
-pub use object::{Filter, Object};
+pub use object::Object;
 pub use string::String;
 pub use symbol::Symbol;
 
