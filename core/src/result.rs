@@ -12,8 +12,8 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
 use crate::{
-    atom::PredefinedAtom, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
-    value::::{exception::ERROR_FORMAT_STR}
+    atom::PredefinedAtom, qjs, value::exception::ERROR_FORMAT_STR, Context, Ctx, Exception, Object,
+    StdResult, StdString, Type, Value,
 };
 
 #[cfg(feature = "array-buffer")]
@@ -307,10 +307,13 @@ impl Error {
             }
             Unknown => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowInternalError(ctx.as_ptr(), 
+                unsafe {
+                    qjs::JS_ThrowInternalError(
+                        ctx.as_ptr(),
                         ERROR_FORMAT_STR.as_ptr(),
-
-                    message.as_ptr()) }
+                        message.as_ptr(),
+                    )
+                }
             }
             error => {
                 unsafe {
