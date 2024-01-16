@@ -5,7 +5,7 @@ pub mod array;
 pub mod atom;
 mod bigint;
 pub mod convert;
-mod exception;
+pub(crate) mod exception;
 pub mod function;
 pub mod module;
 pub mod object;

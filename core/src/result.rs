@@ -281,7 +281,13 @@ impl Error {
             | TooManyArgs { .. }
             | MissingArgs { .. } => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
+                unsafe {
+                    qjs::JS_ThrowTypeError(
+                        ctx.as_ptr(),
+                        ERROR_FORMAT_STR.as_ptr(),
+                        message.as_ptr(),
+                    )
+                }
             }
             #[cfg(feature = "array-buffer")]
             AsSlice(_) => {

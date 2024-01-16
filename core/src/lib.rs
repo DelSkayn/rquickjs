@@ -62,8 +62,8 @@ mod value;
 pub use persistent::{Outlive, Persistent};
 pub use value::{
     array, atom, convert, function, module, object, Array, Atom, BigInt, Coerced, Exception,
-    FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs, Module, Null, Object,
-    String, Symbol, Type, Undefined, Value,
+    Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs, Module, Null,
+    Object, String, Symbol, Type, Undefined, Value,
 };
 
 pub mod class;
