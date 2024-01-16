@@ -23,7 +23,8 @@ impl fmt::Debug for Exception<'_> {
     }
 }
 
-static ERROR_FORMAT_STR: &CStr = unsafe { CStr::from_bytes_with_nul_unchecked("%s\0".as_bytes()) };
+pub(crate) static ERROR_FORMAT_STR: &CStr =
+    unsafe { CStr::from_bytes_with_nul_unchecked("%s\0".as_bytes()) };
 
 fn truncate_str(mut max: usize, bytes: &[u8]) -> &[u8] {
     if bytes.len() <= max {
