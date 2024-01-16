@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 rust-version = "1.65"
@@ -12,11 +12,11 @@ categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [dependencies.rquickjs-core]
-version = "0.4.1"
+version = "0.4.2"
 path = "core"
 
 [dependencies.rquickjs-macro]
-version = "0.4.1"
+version = "0.4.2"
 path = "macro"
 optional = true
 
