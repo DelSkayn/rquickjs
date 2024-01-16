@@ -610,7 +610,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{prelude::*, *};
+    use crate::*;
 
     #[test]
     fn from_javascript() {
