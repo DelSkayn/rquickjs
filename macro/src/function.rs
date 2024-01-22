@@ -1,3 +1,4 @@
+use convert_case::Casing;
 use proc_macro2::{Ident, TokenStream};
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
@@ -11,7 +12,7 @@ use syn::{
 
 use crate::{
     attrs::{take_attributes, OptionList, ValueOption},
-    common::{crate_ident, kw, AbortResultExt, SelfReplacer, BASE_PREFIX},
+    common::{crate_ident, kw, AbortResultExt, Case, SelfReplacer, BASE_PREFIX},
 };
 
 #[derive(Debug, Default)]
@@ -51,13 +52,34 @@ impl FunctionConfig {
                 self.rename = Some(x.value.value());
             }
             FunctionOption::Prefix(ref x) => {
-                self.rename = Some(x.value.value());
+                self.prefix = Some(x.value.value());
             }
         }
     }
 
+    /// Returns a name under which we can access the rquickjs crate.
     pub fn crate_name(&self) -> String {
         self.crate_.clone().unwrap_or_else(crate_ident)
+    }
+
+    /// Returns the name of the carry type for which JsFunction will be implemented
+    pub fn carry_name(&self, name: &Ident) -> Ident {
+        Ident::new(
+            &format!("{}{}", self.prefix.as_deref().unwrap_or("js_"), name),
+            name.span(),
+        )
+    }
+
+    /// The name for the JavaScript side
+    pub fn js_name(&self, rust_name: &Ident, case: Option<Case>) -> String {
+        if let Some(x) = self.rename.as_ref() {
+            return x.clone();
+        }
+        let name = rust_name.to_string();
+        if let Some(case) = case {
+            return name.to_case(case.to_convert_case());
+        }
+        name
     }
 }
 
@@ -82,13 +104,14 @@ pub(crate) fn expand(options: OptionList<FunctionOption>, mut item: syn::ItemFn)
     .unwrap_or_abort();
 
     let crate_name = format_ident!("{}", config.crate_name());
-    let prefix = config.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
+    let prefix = config.prefix.as_deref().unwrap_or(BASE_PREFIX);
 
     let func = JsFunction::new(item.vis.clone(), &item.sig, None);
 
-    let carry_type = func.expand_carry_type(&prefix);
-    let impl_ = func.expand_to_js_function_impl(&prefix, &crate_name);
-    let into_js = func.expand_into_js_impl(&prefix, &crate_name);
+    let carry_type = func.expand_carry_type(prefix);
+    let impl_ = func.expand_to_js_function_impl(prefix, &crate_name);
+    let into_js = func.expand_into_js_impl(prefix, &crate_name);
+    let _js_name = config.js_name(&item.sig.ident, None);
 
     quote! {
         #item
@@ -125,17 +148,17 @@ impl JsFunction {
         if let Some(unsafe_) = unsafety {
             abort!(
                 unsafe_,
-                "implementing javascript callbacks for unsafe functions is not allowed."
+                "implementing JavaScript callbacks for unsafe functions is not allowed."
             )
         }
         if let Some(abi) = abi {
             abort!(
                 abi,
-                "implementing javascript callbacks functions with an non rust abi is not supported."
+                "implementing JavaScript callbacks functions with an non Rust abi is not supported."
             )
         }
         if let Some(variadic) = variadic {
-            abort!(variadic,"implementing javascript callbacks for functions with variadic params is not supported.")
+            abort!(variadic,"implementing JavaScript callbacks for functions with variadic params is not supported.")
         }
         let is_async = asyncness.is_some();
 

@@ -1,4 +1,4 @@
-//! Javascript array types.
+//! JavaScript array types.
 
 use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
 use std::{
@@ -8,17 +8,17 @@ use std::{
 
 use super::convert::FromIteratorJs;
 
-/// Rust representation of a javascript object optimized as an array.
+/// Rust representation of a JavaScript object optimized as an array.
 ///
-/// Javascript array's are objects and can be used as such.
-/// However arrays in quickjs are optimized when they do not have any holes.
-/// This value represents such a optimized array.
+/// JavaScript array's are objects and can be used as such.
+/// However arrays in QuickJS are optimized when they do not have any holes.
+/// This value represents such an optimized array.
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 #[repr(transparent)]
 pub struct Array<'js>(pub(crate) Object<'js>);
 
 impl<'js> Array<'js> {
-    /// Create a new javascript array.
+    /// Create a new JavaScript array.
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
         Ok(Array(unsafe {
             let val = qjs::JS_NewArray(ctx.as_ptr());
@@ -29,7 +29,7 @@ impl<'js> Array<'js> {
         }))
     }
 
-    /// Get the lenght of the javascript array.
+    /// Get the length of the JavaScript array.
     pub fn len(&self) -> usize {
         let ctx = self.ctx();
         let value = self.0.as_js_value();
@@ -40,12 +40,12 @@ impl<'js> Array<'js> {
         }
     }
 
-    /// Returns wether a javascript array is empty.
+    /// Returns whether a JavaScript array is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// Get the value at an index in the javascript array.
+    /// Get the value at an index in the JavaScript array.
     pub fn get<V: FromJs<'js>>(&self, idx: usize) -> Result<V> {
         let ctx = self.ctx();
         let obj = self.0.as_js_value();
@@ -57,7 +57,7 @@ impl<'js> Array<'js> {
         V::from_js(ctx, val)
     }
 
-    /// Set the value at an index in the javascript array.
+    /// Set the value at an index in the JavaScript array.
     pub fn set<V: IntoJs<'js>>(&self, idx: usize, val: V) -> Result<()> {
         let ctx = self.ctx();
         let obj = self.0.as_js_value();
@@ -70,7 +70,7 @@ impl<'js> Array<'js> {
         Ok(())
     }
 
-    /// Get iterator over elments of an array
+    /// Get an iterator over elements of an array
     pub fn iter<T: FromJs<'js>>(&self) -> ArrayIter<'js, T> {
         let count = self.len() as _;
         ArrayIter {

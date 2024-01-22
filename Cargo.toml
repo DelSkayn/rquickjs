@@ -1,22 +1,22 @@
 [package]
 name = "rquickjs"
-version = "0.4.0-beta.4"
+version = "0.4.2"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 rust-version = "1.65"
 license = "MIT"
 readme = "README.md"
-description = "High level bindings to the QuickJS javascript engine"
+description = "High level bindings to the QuickJS JavaScript engine"
 keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
 categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [dependencies.rquickjs-core]
-version = "0.4.0-beta.4"
+version = "0.4.2"
 path = "core"
 
 [dependencies.rquickjs-macro]
-version = "0.4.0-beta.4"
+version = "0.4.2"
 path = "macro"
 optional = true
 
@@ -95,24 +95,12 @@ array-buffer = ["rquickjs-core/array-buffer"]
 # Enable helper macros
 macro = ["rquickjs-macro"]
 
-# Allows transfering objects between different contexts of the same runtime.
+# Allows transferring objects between different contexts of the same runtime.
 # Disabled for now as it can be used to create unsound code.
 # multi-ctx = ["rquickjs-core/multi-ctx"]
 
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]
-
-# Max number of function args
-max-args-7 = ["rquickjs-core/max-args-7"]
-max-args-8 = ["rquickjs-core/max-args-7"]
-max-args-9 = ["rquickjs-core/max-args-8"]
-max-args-10 = ["rquickjs-core/max-args-9"]
-max-args-11 = ["rquickjs-core/max-args-10"]
-max-args-12 = ["rquickjs-core/max-args-11"]
-max-args-13 = ["rquickjs-core/max-args-12"]
-max-args-14 = ["rquickjs-core/max-args-13"]
-max-args-15 = ["rquickjs-core/max-args-14"]
-max-args-16 = ["rquickjs-core/max-args-15"]
 
 # Enable QuickJS dumps for debug
 dump-bytecode = ["rquickjs-core/dump-bytecode"]

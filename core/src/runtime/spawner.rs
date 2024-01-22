@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     future::Future,
     pin::{pin, Pin},
     task::ready,
@@ -11,18 +12,20 @@ use crate::AsyncRuntime;
 
 use super::{AsyncWeakRuntime, InnerRuntime};
 
+type FuturesVec<T> = RefCell<Vec<Option<T>>>;
+
 /// A structure to hold futures spawned inside the runtime.
 ///
 /// TODO: change future lookup in poll from O(n) to O(1).
 pub struct Spawner<'js> {
-    futures: Vec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
+    futures: FuturesVec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
     wakeup: Vec<Waker>,
 }
 
 impl<'js> Spawner<'js> {
     pub fn new() -> Self {
         Spawner {
-            futures: Vec::new(),
+            futures: RefCell::new(Vec::new()),
             wakeup: Vec::new(),
         }
     }
@@ -32,7 +35,7 @@ impl<'js> Spawner<'js> {
         F: Future<Output = ()> + 'js,
     {
         self.wakeup.drain(..).for_each(Waker::wake);
-        self.futures.push(Box::pin(f))
+        self.futures.borrow_mut().push(Some(Box::pin(f)))
     }
 
     pub fn listen(&mut self, wake: Waker) {
@@ -40,12 +43,12 @@ impl<'js> Spawner<'js> {
     }
 
     // Drives the runtime futures forward, returns false if their where no futures
-    pub fn drive<'a>(&'a mut self) -> SpawnFuture<'a, 'js> {
+    pub fn drive<'a>(&'a self) -> SpawnFuture<'a, 'js> {
         SpawnFuture(self)
     }
 
     pub fn is_empty(&mut self) -> bool {
-        self.futures.is_empty()
+        self.futures.borrow().is_empty()
     }
 }
 
@@ -55,32 +58,35 @@ impl Drop for Spawner<'_> {
     }
 }
 
-pub struct SpawnFuture<'a, 'js>(&'a mut Spawner<'js>);
+pub struct SpawnFuture<'a, 'js>(&'a Spawner<'js>);
 
 impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
     type Output = bool;
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        if self.0.futures.is_empty() {
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        if self.0.futures.borrow().is_empty() {
             return Poll::Ready(false);
         }
 
-        let item =
-            self.0
-                .futures
-                .iter_mut()
-                .enumerate()
-                .find_map(|(i, f)| match f.as_mut().poll(cx) {
-                    Poll::Ready(_) => Some(i),
-                    Poll::Pending => None,
-                });
-
-        match item {
-            Some(idx) => {
-                self.0.futures.swap_remove(idx);
-                Poll::Ready(true)
+        let mut i = 0;
+        let mut did_complete = false;
+        while i < self.0.futures.borrow().len() {
+            let mut borrow = self.0.futures.borrow_mut()[i].take().unwrap();
+            if borrow.as_mut().poll(cx).is_pending() {
+                // put back.
+                self.0.futures.borrow_mut()[i] = Some(borrow);
+            } else {
+                did_complete = true;
             }
-            None => Poll::Pending,
+            i += 1;
+        }
+
+        self.0.futures.borrow_mut().retain_mut(|f| f.is_some());
+
+        if did_complete {
+            Poll::Ready(true)
+        } else {
+            Poll::Pending
         }
     }
 }
@@ -124,9 +130,6 @@ impl Future for DriveFuture {
                         return Poll::Ready(());
                     };
 
-                    // Dirty hack to get a owned lock,
-                    // We know the lock will remain alive and won't be moved since it is inside a
-                    // arc like structure and we keep it alive in the lock.
                     let lock_future = _runtime.inner.lock_arc();
                     self.state = DriveFutureState::Lock {
                         lock_future,
@@ -160,7 +163,7 @@ impl Future for DriveFuture {
                 match drive.poll(cx) {
                     Poll::Pending => {
                         // Execute pending jobs to ensure we don't dead lock when waiting on
-                        // quickjs futures.
+                        // QuickJS futures.
                         while let Ok(true) = lock.runtime.execute_pending_job() {}
                         self.state = DriveFutureState::Initial;
                         return Poll::Pending;

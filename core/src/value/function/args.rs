@@ -17,7 +17,7 @@ pub enum ArgsSlice {
 
 /// Argument input for a functions
 ///
-/// Arguments on the rust side for calling into the JavaScript context.
+/// Arguments on the Rust side for calling into the JavaScript context.
 pub struct Args<'js> {
     ctx: Ctx<'js>,
     pub(crate) this: qjs::JSValue,

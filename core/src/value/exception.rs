@@ -1,10 +1,10 @@
-use std::{error::Error as ErrorTrait, fmt};
+use std::{error::Error as ErrorTrait, ffi::CStr, fmt, usize};
 
 use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Result, Value};
 
-/// A javascript instance of Error
+/// A JavaScript instance of Error
 ///
-/// Will turn into a error when converted to javascript but won't autmatically be thrown.
+/// Will turn into a error when converted to JavaScript but won't automatically be thrown.
 #[repr(transparent)]
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct Exception<'js>(pub(crate) Object<'js>);
@@ -17,9 +17,24 @@ impl fmt::Debug for Exception<'_> {
             .field("message", &self.message())
             .field("file", &self.file())
             .field("line", &self.line())
+            .field("column", &self.column())
             .field("stack", &self.stack())
             .finish()
     }
+}
+
+pub(crate) static ERROR_FORMAT_STR: &CStr =
+    unsafe { CStr::from_bytes_with_nul_unchecked("%s\0".as_bytes()) };
+
+fn truncate_str(mut max: usize, bytes: &[u8]) -> &[u8] {
+    if bytes.len() <= max {
+        return bytes;
+    }
+    // while the byte at len is a continue byte shorten the byte.
+    while (bytes[max] & 0b1100_0000) == 0b1000_0000 {
+        max -= 1;
+    }
+    &bytes[..max]
 }
 
 impl<'js> Exception<'js> {
@@ -42,7 +57,7 @@ impl<'js> Exception<'js> {
         }
     }
 
-    /// Creates a new exception with a give message.
+    /// Creates a new exception with a given message.
     pub fn from_message(ctx: Ctx<'js>, message: &str) -> Result<Self> {
         let obj = unsafe {
             let value = ctx.handle_exception(qjs::JS_NewError(ctx.as_ptr()))?;
@@ -54,7 +69,7 @@ impl<'js> Exception<'js> {
         Ok(Exception(obj))
     }
 
-    /// Creates a new exception with a give message, file name and line number.
+    /// Creates a new exception with a given message, file name and line number.
     pub fn from_message_location(
         ctx: Ctx<'js>,
         message: &str,
@@ -75,7 +90,7 @@ impl<'js> Exception<'js> {
 
     /// Returns the message of the error.
     ///
-    /// Same as retrieving `error.message` in javascript.
+    /// Same as retrieving `error.message` in JavaScript.
     pub fn message(&self) -> Option<String> {
         self.get::<_, Option<Coerced<String>>>("message")
             .ok()
@@ -85,7 +100,7 @@ impl<'js> Exception<'js> {
 
     /// Returns the file name from with the error originated..
     ///
-    /// Same as retrieving `error.fileName` in javascript.
+    /// Same as retrieving `error.fileName` in JavaScript.
     pub fn file(&self) -> Option<String> {
         self.get::<_, Option<Coerced<String>>>(PredefinedAtom::FileName)
             .ok()
@@ -95,7 +110,7 @@ impl<'js> Exception<'js> {
 
     /// Returns the file line from with the error originated..
     ///
-    /// Same as retrieving `error.lineNumber` in javascript.
+    /// Same as retrieving `error.lineNumber` in JavaScript.
     pub fn line(&self) -> Option<i32> {
         self.get::<_, Option<Coerced<i32>>>(PredefinedAtom::LineNumber)
             .ok()
@@ -103,9 +118,19 @@ impl<'js> Exception<'js> {
             .map(|x| x.0)
     }
 
+    /// Returns the file line from with the error originated..
+    ///
+    /// Same as retrieving `error.lineNumber` in JavaScript.
+    pub fn column(&self) -> Option<i32> {
+        self.get::<_, Option<Coerced<i32>>>(PredefinedAtom::ColumnNumber)
+            .ok()
+            .and_then(|x| x)
+            .map(|x| x.0)
+    }
+
     /// Returns the error stack.
     ///
-    /// Same as retrieving `error.stack` in javascript.
+    /// Same as retrieving `error.stack` in JavaScript.
     pub fn stack(&self) -> Option<String> {
         self.get::<_, Option<Coerced<String>>>(PredefinedAtom::Stack)
             .ok()
@@ -142,14 +167,18 @@ impl<'js> Exception<'js> {
     /// Throws a new syntax error.
     pub fn throw_syntax(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
-        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str_len = message.as_bytes().len().min(255);
+        let str = truncate_str(255, message.as_bytes());
         unsafe {
-            std::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str_len);
-            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowSyntaxError(ctx.as_ptr(), buffer.as_ptr().cast());
+            std::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
+            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
+            let res = qjs::JS_ThrowSyntaxError(
+                ctx.as_ptr(),
+                ERROR_FORMAT_STR.as_ptr(),
+                buffer.as_ptr().cast::<*mut u8>(),
+            );
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -158,18 +187,18 @@ impl<'js> Exception<'js> {
     /// Throws a new type error.
     pub fn throw_type(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
-        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str_len = message.as_bytes().len().min(255);
+        let str = truncate_str(255, message.as_bytes());
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                message.as_ptr(),
-                buffer.as_mut_ptr().cast::<u8>(),
-                str_len,
+            std::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
+            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
+            let res = qjs::JS_ThrowTypeError(
+                ctx.as_ptr(),
+                ERROR_FORMAT_STR.as_ptr(),
+                buffer.as_ptr().cast::<*mut u8>(),
             );
-            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowTypeError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -178,18 +207,18 @@ impl<'js> Exception<'js> {
     /// Throws a new reference error.
     pub fn throw_reference(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
-        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str_len = message.as_bytes().len().min(255);
+        let str = truncate_str(255, message.as_bytes());
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                message.as_ptr(),
-                buffer.as_mut_ptr().cast::<u8>(),
-                str_len,
+            std::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
+            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
+            let res = qjs::JS_ThrowReferenceError(
+                ctx.as_ptr(),
+                ERROR_FORMAT_STR.as_ptr(),
+                buffer.as_ptr().cast::<*mut u8>(),
             );
-            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowReferenceError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -198,18 +227,18 @@ impl<'js> Exception<'js> {
     /// Throws a new range error.
     pub fn throw_range(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
-        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str_len = message.as_bytes().len().min(255);
+        let str = truncate_str(255, message.as_bytes());
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                message.as_ptr(),
-                buffer.as_mut_ptr().cast::<u8>(),
-                str_len,
+            std::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
+            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
+            let res = qjs::JS_ThrowRangeError(
+                ctx.as_ptr(),
+                ERROR_FORMAT_STR.as_ptr(),
+                buffer.as_ptr().cast::<*mut u8>(),
             );
-            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowRangeError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -218,18 +247,18 @@ impl<'js> Exception<'js> {
     /// Throws a new internal error.
     pub fn throw_internal(ctx: &Ctx<'js>, message: &str) -> Error {
         // generate C string inline.
-        // quickjs implementation doesn't allow error strings longer then 256 anyway so truncating
+        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
         // here is fine.
         let mut buffer = std::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str_len = message.as_bytes().len().min(255);
+        let str = truncate_str(255, message.as_bytes());
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                message.as_ptr(),
-                buffer.as_mut_ptr().cast::<u8>(),
-                str_len,
+            std::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
+            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
+            let res = qjs::JS_ThrowInternalError(
+                ctx.as_ptr(),
+                ERROR_FORMAT_STR.as_ptr(),
+                buffer.as_ptr().cast::<*mut u8>(),
             );
-            buffer.as_mut_ptr().cast::<u8>().add(str_len).write(b'\0');
-            let res = qjs::JS_ThrowInternalError(ctx.as_ptr(), buffer.as_ptr().cast());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -245,14 +274,26 @@ impl<'js> Exception<'js> {
 impl fmt::Display for Exception<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         "Error:".fmt(f)?;
+        let mut has_file = false;
         if let Some(file) = self.file() {
             '['.fmt(f)?;
             file.fmt(f)?;
             ']'.fmt(f)?;
+            has_file = true;
         }
         if let Some(line) = self.line() {
-            ':'.fmt(f)?;
-            line.fmt(f)?;
+            if line > -1 {
+                if has_file {
+                    ':'.fmt(f)?;
+                }
+                line.fmt(f)?;
+            }
+        }
+        if let Some(column) = self.column() {
+            if column > -1 {
+                ':'.fmt(f)?;
+                column.fmt(f)?;
+            }
         }
         if let Some(message) = self.message() {
             ' '.fmt(f)?;

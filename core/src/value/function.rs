@@ -1,4 +1,4 @@
-//! Javascript function functionality
+//! JavaScript function functionality
 
 use crate::{
     atom::PredefinedAtom,
@@ -20,7 +20,7 @@ pub use params::{FromParam, FromParams, ParamRequirement, Params, ParamsAccessor
 pub use types::Async;
 pub use types::{Exhaustive, Flat, Func, FuncArg, MutFn, Null, OnceFn, Opt, Rest, This};
 
-/// A trait for converting a rust function to a javascript function.
+/// A trait for converting a Rust function to a JavaScript function.
 pub trait IntoJsFunc<'js, P> {
     /// Returns the requirements this function has for the set of arguments used to call this
     /// function.
@@ -30,19 +30,19 @@ pub trait IntoJsFunc<'js, P> {
     fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
 }
 
-/// A trait for functions callable from javascript but static,
+/// A trait for functions callable from JavaScript but static,
 /// Used for implementing callable objects.
 pub trait StaticJsFunction {
     fn call<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>>;
 }
 
-/// A javascript function.
+/// A JavaScript function.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
 pub struct Function<'js>(pub(crate) Object<'js>);
 
 impl<'js> Function<'js> {
-    /// Create a new function from a rust function which implements [`IntoJsFunc`].
+    /// Create a new function from a Rust function which implements [`IntoJsFunc`].
     pub fn new<P, F>(ctx: Ctx<'js>, f: F) -> Result<Self>
     where
         F: IntoJsFunc<'js, P> + 'js,
@@ -80,7 +80,7 @@ impl<'js> Function<'js> {
 
     /// Defer call the function with given arguments.
     ///
-    /// Calling a function with defer is equivalent to calling a javascript function with
+    /// Calling a function with defer is equivalent to calling a JavaScript function with
     /// `setTimeout(func,0)`.
     pub fn defer<A>(&self, args: A) -> Result<()>
     where
@@ -147,7 +147,7 @@ impl<'js> Function<'js> {
         Ok(self)
     }
 
-    /// Returns the prototype which all javascript function by default have as its prototype, i.e.
+    /// Returns the prototype which all JavaScript function by default have as its prototype, i.e.
     /// `Function.prototype`.
     pub fn prototype(ctx: Ctx<'js>) -> Object<'js> {
         let res = unsafe {
@@ -159,7 +159,7 @@ impl<'js> Function<'js> {
             .expect("`Function.prototype` wasn't an object")
     }
 
-    /// Returns wether this function is an constructor.
+    /// Returns whether this function is an constructor.
     pub fn is_constructor(&self) -> bool {
         let res = unsafe { qjs::JS_IsConstructor(self.ctx().as_ptr(), self.0.as_js_value()) };
         res != 0
@@ -183,12 +183,15 @@ impl<'js> Function<'js> {
     }
 }
 
+/// A function which can be used as a constructor.
+///
+/// Is a subtype of function.
 #[derive(Debug, Clone)]
 #[repr(transparent)]
 pub struct Constructor<'js>(pub(crate) Function<'js>);
 
 impl<'js> Constructor<'js> {
-    /// Creates a rust constructor function for a rust class.
+    /// Creates a Rust constructor function for a Rust class.
     ///
     /// Note that this function creates a constructor from a given function, the returned constructor
     /// is thus not the same as the one returned from [`JsClass::constructor`].
@@ -231,9 +234,9 @@ impl<'js> Constructor<'js> {
         Ok(Constructor(func))
     }
 
-    /// Create a new rust constructor function with a given prototype.
+    /// Create a new Rust constructor function with a given prototype.
     ///
-    /// Usefull if the function does not return a rust class.
+    /// Useful if the function does not return a Rust class.
     pub fn new_prototype<F, P>(ctx: &Ctx<'js>, prototype: Object<'js>, f: F) -> Result<Self>
     where
         F: IntoJsFunc<'js, P> + 'js,
@@ -267,7 +270,7 @@ impl<'js> Constructor<'js> {
 
     /// Call the constructor as a constructor.
     ///
-    /// Equivalent to calling any constructor function with the new keyword..
+    /// Equivalent to calling any constructor function with the new keyword.
     pub fn construct<A, R>(&self, args: A) -> Result<R>
     where
         A: IntoArgs<'js>,
@@ -282,7 +285,7 @@ impl<'js> Constructor<'js> {
 
     /// Call the constructor as a constructor with an [`Args`] object.
     ///
-    /// Equivalent to calling any constructor function with the new keyword..
+    /// Equivalent to calling any constructor function with the new keyword.
     pub fn construct_args<R>(&self, args: Args<'js>) -> Result<R>
     where
         R: FromJs<'js>,

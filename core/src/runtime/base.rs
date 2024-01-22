@@ -1,4 +1,4 @@
-//! Quickjs runtime related types.
+//! QuickJS runtime related types.
 
 #[cfg(feature = "loader")]
 use crate::loader::{RawLoader, Resolver};
@@ -14,6 +14,8 @@ use super::{
 };
 
 /// A weak handle to the runtime.
+///
+/// Holding onto this struct does not prevent the runtime from being dropped.
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct WeakRuntime(Weak<Mut<RawRuntime>>);
@@ -24,7 +26,7 @@ impl WeakRuntime {
     }
 }
 
-/// Quickjs runtime, entry point of the library.
+/// QuickJS runtime, entry point of the library.
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Runtime {
@@ -130,8 +132,8 @@ impl Runtime {
 
     /// Manually run the garbage collection.
     ///
-    /// Most of quickjs values are reference counted and
-    /// will automaticly free themselfs when they have no more
+    /// Most of QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub fn run_gc(&self) {
@@ -161,7 +163,7 @@ impl Runtime {
         self.inner.lock().execute_pending_job().map_err(|e| {
             JobException(unsafe {
                 Context::from_raw(
-                    NonNull::new(e).expect("quickjs returned null ptr for job error"),
+                    NonNull::new(e).expect("QuickJS returned null ptr for job error"),
                     self.clone(),
                 )
             })
@@ -178,7 +180,7 @@ unsafe impl Send for WeakRuntime {}
 
 // Since a global lock needs to be locked for safe use
 // using runtime in a sync way should be safe as
-// simultanious accesses is syncronized behind a lock.
+// simultaneous accesses is synchronized behind a lock.
 #[cfg(feature = "parallel")]
 unsafe impl Sync for Runtime {}
 #[cfg(feature = "parallel")]

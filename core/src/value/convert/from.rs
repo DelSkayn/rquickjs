@@ -56,7 +56,7 @@ where
     T: FromJs<'js>,
 {
     // TODO this function seems a bit hacky.
-    // Expections are generally by the marshalling handled when returned callback.
+    // Exceptions are generally by the marshalling handled when returned callback.
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         unsafe {
             match ctx.handle_exception(value.into_js_value()) {

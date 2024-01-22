@@ -58,7 +58,7 @@ jobs:
       - name: Documentation
         env:
           DOCS_RS: 1
-        run: cargo doc --features full-async,parallel,doc-cfg
+        run: cargo doc --no-deps --features full-async,parallel,doc-cfg
       - name: Upload docs
         uses: actions/upload-artifact@v3
         with:
@@ -95,7 +95,7 @@ jobs:
         run: cargo clippy --all --all-targets --features full-async
 
   msrv:
-    # Check to see if rquickjs builds on minimal supported rust version.
+    # Check to see if rquickjs builds on minimal supported Rust version.
     runs-on: ubuntu-latest
     # we use a matrix here just because env can't be used in job names
     # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability

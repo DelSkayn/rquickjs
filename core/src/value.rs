@@ -5,17 +5,12 @@ pub mod array;
 pub mod atom;
 mod bigint;
 pub mod convert;
-mod exception;
+pub(crate) mod exception;
 pub mod function;
 pub mod module;
 pub mod object;
 mod string;
 mod symbol;
-
-#[cfg(feature = "array-buffer")]
-mod array_buffer;
-#[cfg(feature = "array-buffer")]
-mod typed_array;
 
 pub use array::Array;
 pub use atom::Atom;
@@ -29,11 +24,16 @@ pub use string::String;
 pub use symbol::Symbol;
 
 #[cfg(feature = "array-buffer")]
+pub mod array_buffer;
+#[cfg(feature = "array-buffer")]
+pub mod typed_array;
+
+#[cfg(feature = "array-buffer")]
 pub use array_buffer::ArrayBuffer;
 #[cfg(feature = "array-buffer")]
 pub use typed_array::TypedArray;
 
-/// Any javascript value
+/// Any JavaScript value
 pub struct Value<'js> {
     pub(crate) ctx: Ctx<'js>,
     pub(crate) value: qjs::JSValue,
@@ -121,7 +121,7 @@ impl<'js> fmt::Debug for Value<'js> {
 }
 
 impl<'js> Value<'js> {
-    // unsafe becuase the value must belong the context and the lifetime must be constrained by its lifetime
+    // unsafe because the value must belong the context and the lifetime must be constrained by its lifetime
     #[inline]
     pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
         Self { ctx, value }
@@ -359,7 +359,7 @@ impl<'js> Value<'js> {
         0 != unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) }
     }
 
-    /// Check if the value is a constructor function
+    /// Check if the value is an exception
     #[inline]
     pub fn is_exception(&self) -> bool {
         unsafe { qjs::JS_IsException(self.value) }
@@ -387,7 +387,7 @@ impl<'js> Value<'js> {
         T::from_js(self.ctx(), self.clone())
     }
 
-    /// Returns the raw C library javascript value.
+    /// Returns the raw C library JavaScript value.
     pub fn as_raw(&self) -> qjs::JSValue {
         self.value
     }
@@ -395,9 +395,9 @@ impl<'js> Value<'js> {
     /// Create a value from the C library JavaScript value.
     ///
     /// # Safety
-    /// the value cannot be from an unrelated runtime and the value must be owned.
-    /// Quickjs javascript values are reference counted. The drop implementation of this type
-    /// decrements the referece count so the value must have count which won't be decremented
+    /// The value cannot be from an unrelated runtime and the value must be owned.
+    /// QuickJS JavaScript values are reference counted. The drop implementation of this type
+    /// decrements the reference count so the value must have count which won't be decremented
     /// elsewhere. Use [`qjs::JS_DupValue`] to increment the reference count of the value.
     pub unsafe fn from_raw(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
         Self::from_js_value(ctx, value)
@@ -413,7 +413,7 @@ impl<'js> AsRef<Value<'js>> for Value<'js> {
 macro_rules! type_impls {
     // type: name => tag
     ($($type:ident: $name:ident => $tag:ident,)*) => {
-        /// The type of Javascript value
+        /// The type of JavaScript value
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[repr(u8)]
         pub enum Type {
@@ -589,7 +589,7 @@ macro_rules! sub_types {
             sub_types!(@imp_as_ref $head$(,$sub_type)*);
 
             impl<'js> Value<'js> {
-                #[doc = concat!("Interprete as [`",stringify!($head),"`]")]
+                #[doc = concat!("Interpret as [`",stringify!($head),"`]")]
                 ///
                 /// # Safety
                 /// You should be sure that the value already is of required type before to do it.
@@ -598,7 +598,7 @@ macro_rules! sub_types {
                     &*(self as *const _ as *const $head)
                 }
 
-                #[doc = concat!("Try reinterprete as [`",stringify!($head),"`]")]
+                #[doc = concat!("Try reinterpret as [`",stringify!($head),"`]")]
                 pub fn $as(&self) -> Option<&$head<'js>> {
                     if self.type_of().interpretable_as(Type::$head) {
                         Some(unsafe { self.$ref() })

@@ -12,13 +12,17 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
 use crate::{
-    atom::PredefinedAtom, qjs, Context, Ctx, Exception, Object, StdResult, StdString, Type, Value,
+    atom::PredefinedAtom, qjs, value::exception::ERROR_FORMAT_STR, Context, Ctx, Exception, Object,
+    StdResult, StdString, Type, Value,
 };
 
-/// Result type used throught the library.
+#[cfg(feature = "array-buffer")]
+use crate::value::array_buffer::AsSliceError;
+
+/// Result type used throughout the library.
 pub type Result<T> = StdResult<T, Error>;
 
-/// Result type containing an the javascript exception if there was one.
+/// Result type containing an the JavaScript exception if there was one.
 pub type CaughtResult<'js, T> = StdResult<T, CaughtError<'js>>;
 
 #[derive(Debug)]
@@ -69,23 +73,23 @@ pub enum Error {
     Utf8(Utf8Error),
     /// An io error
     Io(IoError),
-    /// An error happened while trying to borrow a rust class object.
+    /// An error happened while trying to borrow a Rust class object.
     ClassBorrow(BorrowError),
-    /// An error happened while trying to borrow a rust function.
+    /// An error happened while trying to borrow a Rust function.
     FunctionBorrow(BorrowError),
-    /// An exception raised by quickjs itself.
-    /// The actual javascript value can be retrieved by calling [`Ctx::catch`].
+    /// An exception raised by QuickJS itself.
+    /// The actual JavaScript value can be retrieved by calling [`Ctx::catch`].
     ///
-    /// When returned from a callback the javascript will continue to unwind with the current
+    /// When returned from a callback the JavaScript will continue to unwind with the current
     /// error.
     Exception,
-    /// Error converting from javascript to a rust type.
+    /// Error converting from JavaScript to a Rust type.
     FromJs {
         from: &'static str,
         to: &'static str,
         message: Option<StdString>,
     },
-    /// Error converting to javascript from a rust type.
+    /// Error converting to JavaScript from a Rust type.
     IntoJs {
         from: &'static str,
         to: &'static str,
@@ -113,9 +117,12 @@ pub enum Error {
         name: StdString,
         message: Option<StdString>,
     },
+
+    #[cfg(feature = "array-buffer")]
+    AsSlice(AsSliceError),
     /// Error when restoring a Persistent in a runtime other than the original runtime.
     UnrelatedRuntime,
-    /// An error from quickjs from which the specifics are unknown.
+    /// An error from QuickJS from which the specifics are unknown.
     /// Should eventually be removed as development progresses.
     Unknown,
 }
@@ -183,7 +190,7 @@ impl Error {
         matches!(self, Error::Loading { .. })
     }
 
-    /// Returns whether the error is a quickjs generated exception.
+    /// Returns whether the error is a QuickJS generated exception.
     pub fn is_exception(&self) -> bool {
         matches!(self, Error::Exception)
     }
@@ -250,7 +257,7 @@ impl Error {
         matches!(self, Self::TooManyArgs { .. } | Self::MissingArgs { .. })
     }
 
-    /// Optimized conversion to CString
+    /// Optimized conversion to [`CString`]
     pub(crate) fn to_cstring(&self) -> CString {
         // stringify error with NUL at end
         let mut message = format!("{self}\0").into_bytes();
@@ -274,16 +281,45 @@ impl Error {
             | TooManyArgs { .. }
             | MissingArgs { .. } => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), message.as_ptr()) }
+                unsafe {
+                    qjs::JS_ThrowTypeError(
+                        ctx.as_ptr(),
+                        ERROR_FORMAT_STR.as_ptr(),
+                        message.as_ptr(),
+                    )
+                }
+            }
+            #[cfg(feature = "array-buffer")]
+            AsSlice(_) => {
+                let message = self.to_cstring();
+                unsafe {
+                    qjs::JS_ThrowReferenceError(
+                        ctx.as_ptr(),
+                        ERROR_FORMAT_STR.as_ptr(),
+                        message.as_ptr(),
+                    )
+                }
             }
             #[cfg(feature = "loader")]
             Resolving { .. } | Loading { .. } => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowReferenceError(ctx.as_ptr(), message.as_ptr()) }
+                unsafe {
+                    qjs::JS_ThrowReferenceError(
+                        ctx.as_ptr(),
+                        ERROR_FORMAT_STR.as_ptr(),
+                        message.as_ptr(),
+                    )
+                }
             }
             Unknown => {
                 let message = self.to_cstring();
-                unsafe { qjs::JS_ThrowInternalError(ctx.as_ptr(), message.as_ptr()) }
+                unsafe {
+                    qjs::JS_ThrowInternalError(
+                        ctx.as_ptr(),
+                        ERROR_FORMAT_STR.as_ptr(),
+                        message.as_ptr(),
+                    )
+                }
             }
             error => {
                 unsafe {
@@ -332,8 +368,8 @@ impl Display for Error {
                 "Conversion from string failed: ".fmt(f)?;
                 error.fmt(f)?;
             }
-            Unknown => "quickjs library created a unknown error".fmt(f)?,
-            Exception => "Exception generated by quickjs".fmt(f)?,
+            Unknown => "QuickJS library created a unknown error".fmt(f)?,
+            Exception => "Exception generated by QuickJS".fmt(f)?,
             FromJs { from, to, message } => {
                 "Error converting from js '".fmt(f)?;
                 from.fmt(f)?;
@@ -417,6 +453,11 @@ impl Display for Error {
                 "Error borrowing function: ".fmt(f)?;
                 x.fmt(f)?;
             }
+            #[cfg(feature = "array-buffer")]
+            AsSlice(x) => {
+                "Could not convert array buffer to slice: ".fmt(f)?;
+                x.fmt(f)?;
+            }
             UnrelatedRuntime => "Restoring Persistent in an unrelated runtime".fmt(f)?,
         }
         Ok(())
@@ -445,6 +486,13 @@ from_impls! {
 impl From<FromUtf8Error> for Error {
     fn from(error: FromUtf8Error) -> Self {
         Error::Utf8(error.utf8_error())
+    }
+}
+
+#[cfg(feature = "array-buffer")]
+impl From<AsSliceError> for Error {
+    fn from(value: AsSliceError) -> Self {
+        Error::AsSlice(value)
     }
 }
 
@@ -623,11 +671,11 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Handle possible exceptions in JSValue's and turn them into errors
-    /// Will return the JSValue if it is not an exception
+    /// Handle possible exceptions in [`JSValue`]'s and turn them into errors
+    /// Will return the [`JSValue`] if it is not an exception
     ///
     /// # Safety
-    /// Assumes to have ownership of the JSValue
+    /// Assumes to have ownership of the [`JSValue`]
     pub(crate) unsafe fn handle_exception(&self, js_val: qjs::JSValue) -> Result<qjs::JSValue> {
         if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
             Ok(js_val)
@@ -639,7 +687,7 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Returns Error::Exception if there is no existing panic,
+    /// Returns [`Error::Exception`] if there is no existing panic,
     /// otherwise continues panicking.
     pub(crate) fn raise_exception(&self) -> Error {
         // Safety

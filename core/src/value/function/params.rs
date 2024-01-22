@@ -6,7 +6,7 @@ use std::slice;
 
 /// A struct which contains the values a callback is called with.
 ///
-/// Arguments retrieved from the JavaScript side for calling rust functions.
+/// Arguments retrieved from the JavaScript side for calling Rust functions.
 pub struct Params<'a, 'js> {
     ctx: Ctx<'js>,
     function: qjs::JSValue,
@@ -53,7 +53,7 @@ impl<'a, 'js> Params<'a, 'js> {
         Ok(())
     }
 
-    /// Returns the context assiociated with call.
+    /// Returns the context associated with call.
     pub fn ctx(&self) -> &Ctx<'js> {
         &self.ctx
     }
@@ -85,9 +85,9 @@ impl<'a, 'js> Params<'a, 'js> {
         self.args.is_empty()
     }
 
-    /// returns if the function is called as a constructor.
+    /// Returns if the function is called as a constructor.
     ///
-    /// If it is the value return by [`this`] is actually the `new.target` value.
+    /// If it is the value return by `this` is actually the `new.target` value.
     pub fn is_constructor(&self) -> bool {
         self.is_constructor
     }

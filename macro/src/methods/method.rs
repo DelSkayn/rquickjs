@@ -199,7 +199,7 @@ impl Method {
         }
     }
 
-    /// The name on of this method on the javascript side.
+    /// The name on of this method on the JavaScript side.
     pub fn name(&self, case: Option<Case>) -> Expr {
         if let Some(x) = self.config.rename.clone() {
             x

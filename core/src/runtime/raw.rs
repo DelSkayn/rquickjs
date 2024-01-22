@@ -13,7 +13,7 @@ use crate::qjs;
 use super::spawner::Spawner;
 use super::InterruptHandler;
 
-/// Opaque book keeping data for rust.
+/// Opaque book keeping data for Rust.
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
     pub panic: Option<Box<dyn Any + Send + 'static>>,
@@ -209,8 +209,8 @@ impl RawRuntime {
 
     /// Manually run the garbage collection.
     ///
-    /// Most of quickjs values are reference counted and
-    /// will automaticly free themselfs when they have no more
+    /// Most of QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub unsafe fn run_gc(&mut self) {
@@ -241,7 +241,7 @@ impl RawRuntime {
                     let opaque = &mut *(opaque as *mut Opaque);
                     opaque.panic = Some(panic);
                     // Returning true here will cause the interpreter to raise an un-catchable exception.
-                    // The rust code that is running the interpreter will see that exception and continue
+                    // The Rust code that is running the interpreter will see that exception and continue
                     // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
                     true
                 }

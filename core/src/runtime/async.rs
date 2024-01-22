@@ -49,6 +49,9 @@ impl Drop for InnerRuntime {
 #[cfg(feature = "parallel")]
 unsafe impl Send for InnerRuntime {}
 
+/// A weak handle to the async runtime.
+///
+/// Holding onto this struct does not prevent the runtime from being dropped.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncWeakRuntime {
@@ -67,7 +70,7 @@ impl AsyncWeakRuntime {
     }
 }
 
-/// Asynchronous Quickjs runtime, entry point of the library.
+/// Asynchronous QuickJS runtime, entry point of the library.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncRuntime {
@@ -86,7 +89,7 @@ unsafe impl Send for AsyncWeakRuntime {}
 
 // Since a global lock needs to be locked for safe use
 // using runtime in a sync way should be safe as
-// simultanious accesses is syncronized behind a lock.
+// simultaneous accesses is synchronized behind a lock.
 #[cfg(feature = "parallel")]
 unsafe impl Sync for AsyncRuntime {}
 #[cfg(feature = "parallel")]
@@ -223,8 +226,8 @@ impl AsyncRuntime {
 
     /// Manually run the garbage collection.
     ///
-    /// Most of quickjs values are reference counted and
-    /// will automaticly free themselfs when they have no more
+    /// Most QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub async fn run_gc(&self) {
@@ -293,7 +296,7 @@ impl AsyncRuntime {
                     let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx.as_ptr()) };
                     let err = ctx.catch();
                     if let Some(x) = err.clone().into_object().and_then(Exception::from_object) {
-                        // TODO do somthing better with errors.
+                        // TODO do something better with errors.
                         println!("error executing job: {}", x);
                     } else {
                         println!("error executing job: {:?}", err);
@@ -448,6 +451,42 @@ mod test {
         assert_eq!(number.load(Ordering::SeqCst),0);
         rt.idle().await;
         assert_eq!(number.load(Ordering::SeqCst),1);
+
+    });
+
+    async_test_case!(recursive_spawn => (rt,ctx){
+        use tokio::sync::oneshot;
+
+        async_with!(&ctx => |ctx|{
+            let ctx_clone = ctx.clone();
+            let (tx,rx) = oneshot::channel::<()>();
+            let (tx2,rx2) = oneshot::channel::<()>();
+            ctx.spawn(async move {
+                tokio::task::yield_now().await;
+
+                let ctx = ctx_clone.clone();
+
+                ctx_clone.spawn(async move {
+                    tokio::task::yield_now().await;
+                    ctx.spawn(async move {
+                        tokio::task::yield_now().await;
+                        tx2.send(()).unwrap();
+                        tokio::task::yield_now().await;
+                    });
+                    tokio::task::yield_now().await;
+                    tx.send(()).unwrap();
+                });
+
+                // Add a bunch of futures just to make sure possible segfaults are more likely to
+                // happen
+                for _ in 0..32{
+                    ctx_clone.spawn(async move {})
+                }
+
+            });
+            tokio::time::timeout(Duration::from_millis(500), rx).await.unwrap().unwrap();
+            tokio::time::timeout(Duration::from_millis(500), rx2).await.unwrap().unwrap();
+        }).await;
 
     });
 }

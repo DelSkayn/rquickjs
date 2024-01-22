@@ -30,7 +30,7 @@ impl<T> DerefMut for Coerced<T> {
     }
 }
 
-/// Coerce a value to a string in the same way javascript would coerce values.
+/// Coerce a value to a string in the same way JavaScript would coerce values.
 impl<'js> FromJs<'js> for Coerced<String<'js>> {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Ok(Coerced(unsafe {
@@ -44,7 +44,7 @@ impl<'js> FromJs<'js> for Coerced<String<'js>> {
     }
 }
 
-/// Coerce a value to a string in the same way javascript would coerce values.
+/// Coerce a value to a string in the same way JavaScript would coerce values.
 impl<'js> FromJs<'js> for Coerced<StdString> {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         <Coerced<String>>::from_js(ctx, value)
@@ -73,17 +73,17 @@ macro_rules! coerce_impls {
 }
 
 coerce_impls! {
-    /// Coerce a value to a `i32` in the same way javascript would coerce values
+    /// Coerce a value to a `i32` in the same way JavaScript would coerce values
     i32 JS_ToInt32,
-    /// Coerce a value to a `i64` in the same way javascript would coerce values
+    /// Coerce a value to a `i64` in the same way JavaScript would coerce values
     i64 JS_ToInt64Ext,
-    /// Coerce a value to a `u64` in the same way javascript would coerce values
+    /// Coerce a value to a `u64` in the same way JavaScript would coerce values
     u64 JS_ToIndex,
-    /// Coerce a value to a `f64` in the same way javascript would coerce values
+    /// Coerce a value to a `f64` in the same way JavaScript would coerce values
     f64 JS_ToFloat64,
 }
 
-/// Coerce a value to a `bool` in the same way javascript would coerce values
+/// Coerce a value to a `bool` in the same way JavaScript would coerce values
 impl<'js> FromJs<'js> for Coerced<bool> {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Ok(Coerced(unsafe {

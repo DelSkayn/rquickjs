@@ -1,4 +1,4 @@
-//! Utilites for converting to and from javascript values.
+//! Utilities for converting to and from JavaScript values.
 
 use crate::{Atom, Ctx, Result, Value};
 
@@ -42,7 +42,7 @@ mod into;
 #[repr(transparent)]
 pub struct Coerced<T>(pub T);
 
-/// For converting javascript values to rust values
+/// For converting JavaScript values to Rust values
 ///
 /// This trait automatically converts any value which can be
 /// represented as an object, like [`Array`](crate::Array)
@@ -65,7 +65,7 @@ pub trait FromIteratorJs<'js, A>: Sized {
         T: IntoIterator<Item = A>;
 }
 
-/// For converting rust values to javascript values
+/// For converting Rust values to JavaScript values
 pub trait IntoJs<'js> {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>>;
 }
@@ -94,6 +94,6 @@ where
     }
 }
 
-/// A helper type for turning a tuple into a javascript array.
-/// Implementes [`IntoJs`] and [`FromJs`] for tuples of various lengths
+/// A helper type for turning a tuple into a JavaScript array.
+/// Implements [`IntoJs`] and [`FromJs`] for tuples of various lengths
 pub struct List<T>(pub T);

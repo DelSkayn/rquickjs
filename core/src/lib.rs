@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-//! # High-level bindings to quickjs
+//! # High-level bindings to QuickJS
 //!
-//! The `rquickjs` crate provides safe high-level bindings to the [quickjs](https://bellard.org/quickjs/) javascript engine.
+//! The `rquickjs` crate provides safe high-level bindings to the [QuickJS](https://bellard.org/quickjs/) JavaScript engine.
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
 
 #![allow(clippy::needless_lifetimes)]
@@ -22,7 +22,7 @@ pub mod phf {
 
 /// Short macro to define a cstring literal.
 ///
-/// Make sure the string does not contain any internal null characters or it panic.
+/// Make sure the string does not contain any internal null characters or it will panic.
 #[macro_export]
 macro_rules! cstr {
     ($str:tt) => {{
@@ -61,9 +61,9 @@ mod persistent;
 mod value;
 pub use persistent::{Outlive, Persistent};
 pub use value::{
-    array, atom, convert, function, module, object, Array, Atom, BigInt, Exception, FromAtom,
-    FromJs, Function, IntoAtom, IntoJs, Module, Null, Object, String, Symbol, Type, Undefined,
-    Value,
+    array, atom, convert, function, module, object, Array, Atom, BigInt, Coerced, Exception,
+    Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs, Module, Null,
+    Object, String, Symbol, Type, Undefined, Value,
 };
 
 pub mod class;
@@ -92,7 +92,7 @@ pub mod prelude {
     #[cfg(feature = "multi-ctx")]
     pub use crate::context::MultiWith;
     pub use crate::{
-        convert::{Coerced, FromAtom, FromJs, IntoAtom, IntoJs, IteratorJs, List},
+        convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs, List},
         function::{
             Exhaustive, Flat, Func, FuncArg, IntoArg, IntoArgs, MutFn, OnceFn, Opt, Rest, This,
         },

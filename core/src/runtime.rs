@@ -1,4 +1,4 @@
-//! Quickjs runtime related types.
+//! QuickJS runtime related types.
 
 pub(crate) mod raw;
 
@@ -21,4 +21,5 @@ pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
 #[cfg(feature = "futures")]
 mod spawner;
 
-pub use crate::qjs::JSMemoryUsage as MemoryUsage;
+/// A struct with information about the runtimes memory usage.
+pub type MemoryUsage = crate::qjs::JSMemoryUsage;

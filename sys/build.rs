@@ -60,6 +60,7 @@ fn main() {
     ];
 
     let mut patch_files = vec![
+        "error_column_number.patch",
         "get_function_proto.patch",
         "check_stack_overflow.patch",
         "infinity_handling.patch",
@@ -131,12 +132,12 @@ fn feature_to_define(name: impl AsRef<str>) -> String {
 
 fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
     let mut child = Command::new("patch")
-        .arg("-p1")
+        .args(["-p1"])
         .stdin(Stdio::piped())
         .current_dir(out_dir)
         .spawn()
         .expect("Unable to execute patch, you may need to install it: {}");
-    println!("Appliyng patch {}", patch.as_ref().display());
+    println!("Applying patch {}", patch.as_ref().display());
     {
         let patch = fs::read(patch).expect("Unable to read patch");
 

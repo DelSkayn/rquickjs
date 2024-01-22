@@ -8,11 +8,11 @@ use std::{
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
-    ptr::null_mut,
+    ptr::{null_mut, NonNull},
     slice,
 };
 
-use super::Constructor;
+use super::{array_buffer::RawArrayBuffer, Constructor};
 
 /// The trait which implements types which capable to be TypedArray items
 ///
@@ -42,7 +42,7 @@ typedarray_items! {
     BigUint64Array: u64,
 }
 
-/// Rust representation of a javascript objects of TypedArray classes.
+/// Rust representation of a JavaScript objects of TypedArray classes.
 ///
 /// | ES Type            | Rust Type             |
 /// | ------------------ | --------------------- |
@@ -114,7 +114,7 @@ impl<'js, T> TypedArray<'js, T> {
         }
     }
 
-    /// Returns wether a typed array is empty.
+    /// Returns whether a typed array is empty.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -166,13 +166,18 @@ impl<'js, T> TypedArray<'js, T> {
 
     /// Returns the underlying bytes of the buffer,
     ///
-    /// Returns None if the array is detached.
+    /// Returns `None` if the array is detached.
     pub fn as_bytes(&self) -> Option<&[u8]> {
         let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
-        Some(unsafe { slice::from_raw_parts(ptr, len) })
+        Some(unsafe { slice::from_raw_parts(ptr.as_ptr(), len) })
     }
 
-    /// Get underlaying ArrayBuffer
+    pub fn as_raw(&self) -> Option<RawArrayBuffer> {
+        let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
+        Some(RawArrayBuffer { len, ptr })
+    }
+
+    /// Get underlying ArrayBuffer
     pub fn arraybuffer(&self) -> Result<ArrayBuffer<'js>> {
         let ctx = self.ctx().clone();
         let val = self.0.as_js_value();
@@ -195,7 +200,7 @@ impl<'js, T> TypedArray<'js, T> {
         ctor.construct((arraybuffer,))
     }
 
-    pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, *mut u8)> {
+    pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, NonNull<u8>)> {
         let ctx = &val.ctx;
         let val = val.as_js_value();
         let mut off = MaybeUninit::<qjs::size_t>::uninit();
@@ -221,20 +226,21 @@ impl<'js, T> TypedArray<'js, T> {
         let stp: usize = unsafe { stp.assume_init() }
             .try_into()
             .expect(qjs::SIZE_T_ERROR);
-        let (full_len, ptr) = ArrayBuffer::get_raw(&buf)?;
-        if (off + len) > full_len {
+        let raw = ArrayBuffer::get_raw(&buf)?;
+        if (off + len) > raw.len {
             return None;
         }
-        let ptr = unsafe { ptr.add(off) };
+        // SAFETY: ptr was non-null and then we added an offset so it should still be non null
+        let ptr = unsafe { NonNull::new_unchecked(raw.ptr.as_ptr().add(off)) };
         Some((stp, len, ptr))
     }
 
-    pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, *mut T)> {
+    pub(crate) fn get_raw(val: &Value<'js>) -> Option<(usize, NonNull<T>)> {
         let (stp, len, ptr) = Self::get_raw_bytes(val)?;
         if stp != mem::size_of::<T>() {
             return None;
         }
-        debug_assert_eq!(ptr.align_offset(mem::align_of::<T>()), 0);
+        debug_assert_eq!(ptr.as_ptr().align_offset(mem::align_of::<T>()), 0);
         let ptr = ptr.cast::<T>();
         Some((len / mem::size_of::<T>(), ptr))
     }
@@ -244,7 +250,7 @@ impl<'js, T: TypedArrayItem> AsRef<[T]> for TypedArray<'js, T> {
     fn as_ref(&self) -> &[T] {
         let (len, ptr) =
             Self::get_raw(&self.0).unwrap_or_else(|| panic!("{}", T::CLASS_NAME.to_str()));
-        unsafe { slice::from_raw_parts(ptr as _, len) }
+        unsafe { slice::from_raw_parts(ptr.as_ptr().cast(), len) }
     }
 }
 
@@ -312,7 +318,7 @@ impl<'js> Object<'js> {
         self.is_instance_of(class)
     }
 
-    /// Interprete as [`TypedArray`]
+    /// Interpret as [`TypedArray`]
     ///
     /// # Safety
     /// Yous should be sure that the object actually is the required type.
@@ -322,7 +328,7 @@ impl<'js> Object<'js> {
 
     pub fn as_typed_array<T: TypedArrayItem>(&self) -> Option<&TypedArray<T>> {
         self.is_typed_array::<T>()
-            .then_some(unsafe { self.ref_typed_array() })
+            .then(|| unsafe { self.ref_typed_array() })
     }
 }
 

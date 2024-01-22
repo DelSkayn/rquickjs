@@ -4,9 +4,9 @@ use crate::{markers::Invariant, qjs, Class, Ctx, Value};
 
 use super::JsClass;
 
-/// A trait for classes for tracing references to quickjs objects.
+/// A trait for classes for tracing references to QuickJS objects.
 ///
-/// Quickjs uses reference counting with tracing to break cycles. As a result implementing this
+/// QuickJS uses reference counting with tracing to break cycles. As a result implementing this
 /// trait incorrectly by not tracing an object cannot result in unsound code. It will however
 /// result in memory leaks as the GC will be unable to break cycles which in turn result in cyclic
 /// references being kept alive forever.
@@ -26,11 +26,11 @@ pub struct Tracer<'a, 'js> {
 }
 
 impl<'a, 'js> Tracer<'a, 'js> {
-    /// Create a tracer from the c implemention.
+    /// Create a tracer from the c implementation.
     ///
     /// # Safety
-    /// Caller must ensure that the trace doesn't outlive the lifetime of the mark_func and rt
-    /// pointer
+    /// Caller must ensure that the trace doesn't outlive the lifetime of the `mark_func` and
+    /// `rt` pointer
     pub unsafe fn from_ffi(rt: *mut qjs::JSRuntime, mark_func: qjs::JS_MarkFunc) -> Self {
         Self {
             rt,

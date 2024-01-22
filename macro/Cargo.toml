@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-macro"
-version = "0.4.0-beta.4"
+version = "0.4.2"
 authors = ["K. <kayo@illumium.org>", "Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -28,16 +28,16 @@ version = "2"
 features = ["full","fold","extra-traits"]
 
 [dependencies.phf_shared]
-version = "0.10"
+version = "0.11"
 optional = true
 
 [dependencies.phf_generator]
-version = "0.10"
+version = "0.11"
 optional = true
 
 [dependencies.rquickjs-core]
 path = "../core"
-version = "0.4.0-beta.4"
+version = "0.4.2"
 features = ["loader"]
 
 [dev-dependencies.difference]
@@ -45,8 +45,8 @@ version = "2"
 
 [dev-dependencies.rquickjs]
 path = ".."
-version = "0.4.0-beta.4"
-features = ["macro", "classes", "properties", "futures"]
+version = "0.4.2"
+features = ["macro", "classes", "properties", "futures","phf"]
 
 [dev-dependencies.async-std]
 version = "1"

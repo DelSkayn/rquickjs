@@ -1,4 +1,4 @@
-//! Javascript classes defined from rust.
+//! JavaScript classes defined from Rust.
 
 use crate::{
     function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs, Object, Outlive,
@@ -26,11 +26,14 @@ pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
 
+/// The trait which allows Rust types to be used from JavaScript.
 pub trait JsClass<'js>: Trace<'js> {
-    /// The name the constructor has in javascript
+    /// The name the constructor has in JavaScript
     const NAME: &'static str;
 
-    /// Can the type be mutated while a javascript value.
+    /// Can the type be mutated while a JavaScript value.
+    ///
+    /// This should either be [`Readable`] or [`Writable`].
     type Mutable: Mutability;
 
     /// A unique id for the class.
@@ -51,7 +54,7 @@ pub trait JsClass<'js>: Trace<'js> {
     }
 }
 
-/// A object which is instance of a rust class.
+/// A object which is instance of a Rust class.
 #[repr(transparent)]
 pub struct Class<'js, C: JsClass<'js>>(pub(crate) Object<'js>, PhantomData<C>);
 
@@ -92,7 +95,7 @@ impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
 }
 
 impl<'js, C: JsClass<'js>> Class<'js, C> {
-    /// Create a class from a rust object.
+    /// Create a class from a Rust object.
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
         if !Self::is_registered(&ctx) {
             Self::register(&ctx)?;
@@ -112,7 +115,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         ))
     }
 
-    /// Create a class from a rust object with a given prototype
+    /// Create a class from a Rust object with a given prototype.
     pub fn instance_proto(value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
         if !Self::is_registered(proto.ctx()) {
             Self::register(proto.ctx())?;
@@ -134,7 +137,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Returns the prototype for the class.
     ///
-    /// Returns None if the class is not yet registered or if the class doesn't have a prototype
+    /// Returns `None` if the class is not yet registered or if the class doesn't have a prototype.
     pub fn prototype(ctx: Ctx<'js>) -> Option<Object<'js>> {
         if !Self::is_registered(&ctx) {
             return None;
@@ -224,21 +227,21 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         unsafe { self.get_class_ptr().as_ref() }
     }
 
-    /// Borrow the rust class type.
+    /// Borrow the Rust class type.
     ///
-    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// JavaScript classes behave similar to [`Rc`](std::rc::Rc) in Rust, you can essentially think
     /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// # Panic
-    /// This function panics if the class is already borrowed mutably
+    /// This function panics if the class is already borrowed mutably.
     #[inline]
     pub fn borrow<'a>(&'a self) -> Borrow<'a, 'js, C> {
         self.get_cell().borrow()
     }
 
-    /// Borrow the rust class type mutably.
+    /// Borrow the Rust class type mutably.
     ///
-    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// JavaScript classes behave similar to [`Rc`](std::rc::Rc) in Rust, you can essentially think
     /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// # Panic
@@ -249,9 +252,9 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         self.get_cell().borrow_mut()
     }
 
-    /// Try to borrow the rust class type.
+    /// Try to borrow the Rust class type.
     ///
-    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// JavaScript classes behave similar to [`Rc`](std::rc::Rc) in Rust, you can essentially think
     /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// This returns an error when the class is already borrowed mutably.
@@ -260,9 +263,9 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         self.get_cell().try_borrow().map_err(Error::ClassBorrow)
     }
 
-    /// Try to borrow the rust class type mutably.
+    /// Try to borrow the Rust class type mutably.
     ///
-    /// Javascript classes behave similar to [`Rc`](std::rc::Rc) in rust, you can essentially think
+    /// JavaScript classes behave similar to [`Rc`](std::rc::Rc) in Rust, you can essentially think
     /// of a class object as a `Rc<RefCell<C>>` and with similar borrowing functionality.
     ///
     /// This returns an error when the class is already borrowed mutably, immutably or the class
@@ -324,7 +327,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 }
 
 impl<'js> Object<'js> {
-    /// Returns if the object is of a certain rust class.
+    /// Returns if the object is of a certain Rust class.
     pub fn instance_of<C: JsClass<'js>>(&self) -> bool {
         if !Class::<C>::is_registered(&self.ctx) {
             return false;
@@ -353,7 +356,7 @@ impl<'js> Object<'js> {
     pub fn as_class<C: JsClass<'js>>(&self) -> Option<&Class<'js, C>> {
         if self.instance_of::<C>() {
             // SAFETY:
-            // Safe bacause class is a transparent wrapper
+            // Safe because class is a transparent wrapper
             unsafe { Some(std::mem::transmute::<&Object<'js>, &Class<'js, C>>(self)) }
         } else {
             None
@@ -395,7 +398,7 @@ mod test {
         Class, Context, FromJs, Function, IntoJs, Object, Runtime,
     };
 
-    /// Test circlular references.
+    /// Test circular references.
     #[test]
     fn trace() {
         pub struct Container<'js> {
