@@ -179,6 +179,6 @@ mod test {
         // every object takes atleast a single byte.
         // So the gc must have collected atleast some of the recursive objects if the difference is
         // smaller then number of objects created.
-        assert!(before.abs_diff(after) < 100_000)
+        assert!(after.saturating_sub(before) < 100_000)
     }
 }
