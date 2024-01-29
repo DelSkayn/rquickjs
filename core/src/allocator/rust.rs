@@ -61,7 +61,7 @@ impl Allocator for RustAllocator {
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    fn dealloc(&mut self, ptr: RawMemPtr) {
+    fn dealloc(&mut self, ptr: RawMemPtr) -> usize {
         let ptr = unsafe { ptr.sub(HEADER_SIZE) };
         let alloc_size = {
             let header = unsafe { &*(ptr as *const Header) };
@@ -70,6 +70,8 @@ impl Allocator for RustAllocator {
         let layout = unsafe { Layout::from_size_align_unchecked(alloc_size, ALLOC_ALIGN) };
 
         unsafe { dealloc(ptr, layout) };
+
+        alloc_size
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]

@@ -8,7 +8,8 @@
 use std::ptr;
 
 /// Common error message for converting between C `size_t` and Rust `usize`;
-pub const SIZE_T_ERROR: &str = "C type 'size_t' did not fit into Rust type 'usize'";
+pub const SIZE_T_ERROR: &str =
+    "conversion between C type 'size_t' and Rust type 'usize' overflowed.";
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
