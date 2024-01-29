@@ -45,7 +45,7 @@ impl AllocatorHolder {
         A: Allocator,
     {
         qjs::JSMallocFunctions {
-            js_malloc: Some(Self::malloc),
+            js_malloc: Some(Self::malloc::<A>),
             js_free: Some(Self::free::<A>),
             js_realloc: Some(Self::realloc::<A>),
             js_malloc_usable_size: Some(Self::malloc_usable_size::<A>),
@@ -63,10 +63,13 @@ impl AllocatorHolder {
         self.0
     }
 
-    unsafe extern "C" fn malloc(
+    unsafe extern "C" fn malloc<A>(
         state: *mut qjs::JSMallocState,
         size: qjs::size_t,
-    ) -> *mut qjs::c_void {
+    ) -> *mut qjs::c_void
+    where
+        A: Allocator,
+    {
         if size == 0 {
             return null_mut();
         }
@@ -88,8 +91,12 @@ impl AllocatorHolder {
             return null_mut();
         }
 
+        let size = A::usable_size(res);
+
+        println!("ALLOC: {}", size);
+
         state.malloc_count += 1;
-        state.malloc_size += size;
+        state.malloc_size += qjs::size_t::try_from(size).expect(qjs::SIZE_T_ERROR);
 
         res as *mut qjs::c_void
     }
@@ -113,6 +120,7 @@ impl AllocatorHolder {
         allocator.dealloc(ptr as _);
 
         state.malloc_size -= qjs::size_t::try_from(size).expect(qjs::SIZE_T_ERROR);
+        println!("FREE: {}", size);
     }
 
     unsafe extern "C" fn realloc<A>(
@@ -144,6 +152,8 @@ impl AllocatorHolder {
             state.malloc_count += 1;
             state.malloc_size += size;
 
+            println!("ALLOC: {}", size);
+
             return res as *mut qjs::c_void;
         } else if size == 0 {
             let old_size = A::usable_size(ptr as RawMemPtr);
@@ -152,6 +162,8 @@ impl AllocatorHolder {
 
             state.malloc_count -= 1;
             state.malloc_size -= qjs::size_t::try_from(old_size).expect(qjs::SIZE_T_ERROR);
+
+            println!("FREE: {}", size);
 
             return null_mut();
         }
@@ -170,6 +182,9 @@ impl AllocatorHolder {
         let ptr = allocator.realloc(ptr as _, size) as *mut qjs::c_void;
 
         state.malloc_size = new_malloc_size;
+
+        println!("FREE: {}", old_size);
+        println!("ALLOC: {}", size);
 
         ptr
     }
