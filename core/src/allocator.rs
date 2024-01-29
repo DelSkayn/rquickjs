@@ -73,7 +73,7 @@ impl AllocatorHolder {
 
         let state = &mut *state;
 
-        if (state.malloc_size + size > state.malloc_limit) {
+        if state.malloc_size + size > state.malloc_limit {
             return null_mut();
         }
 
@@ -82,7 +82,7 @@ impl AllocatorHolder {
 
         let allocator = &mut *(state.opaque as *mut DynAllocator);
 
-        let res = allocator.alloc(rust_size as _) as _;
+        let res = allocator.alloc(rust_size as _);
 
         if res.is_null() {
             return null_mut();
@@ -91,7 +91,7 @@ impl AllocatorHolder {
         state.malloc_count += 1;
         state.malloc_size += size;
 
-        res
+        res as *mut qjs::c_void
     }
 
     unsafe extern "C" fn free<A>(state: *mut qjs::JSMallocState, ptr: *mut qjs::c_void)
@@ -107,12 +107,12 @@ impl AllocatorHolder {
         let state = &mut *state;
         state.malloc_count -= 1;
 
-        let size = A::usable_size(ptr);
+        let size = A::usable_size(ptr as RawMemPtr);
 
         let allocator = &mut *(state.opaque as *mut DynAllocator);
         allocator.dealloc(ptr as _);
 
-        state.malloc_size -= size.try_into().expect(qjs::SIZE_T_ERROR);
+        state.malloc_size -= qjs::size_t::try_from(size).expect(qjs::SIZE_T_ERROR);
     }
 
     unsafe extern "C" fn realloc<A>(
@@ -123,18 +123,19 @@ impl AllocatorHolder {
     where
         A: Allocator,
     {
-        let size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
         let state = &mut *state;
         let allocator = &mut *(state.opaque as *mut DynAllocator);
 
         // simulate the default behavior of libc::realloc
         if ptr.is_null() {
-            // alloc new memory chunk
-            let res = allocator.alloc(size) as _;
-
             if state.malloc_size + size > state.malloc_limit {
                 return null_mut();
             }
+
+            let rust_size = size.try_into().expect(qjs::SIZE_T_ERROR);
+
+            // alloc new memory chunk
+            let res = allocator.alloc(rust_size);
 
             if res.is_null() {
                 return null_mut();
@@ -143,32 +144,34 @@ impl AllocatorHolder {
             state.malloc_count += 1;
             state.malloc_size += size;
 
-            res
+            return res as *mut qjs::c_void;
         } else if size == 0 {
-            let old_size = Allocator::usable_size(ptr);
+            let old_size = A::usable_size(ptr as RawMemPtr);
             // free memory chunk
             allocator.dealloc(ptr as _);
 
             state.malloc_count -= 1;
-            state.malloc_size -= old_size.try_into().expect(qjs::SIZE_T_ERROR);
+            state.malloc_size -= qjs::size_t::try_from(old_size).expect(qjs::SIZE_T_ERROR);
 
             return null_mut();
         }
 
-        let old_size = Allocator::usable_size(ptr);
+        let old_size = A::usable_size(ptr as RawMemPtr);
 
-        let new_size = state.malloc_size - old_size.try_into().expect(qjs::SIZE_T_ERROR)
-            + size.try_into().expect(msg);
+        let new_malloc_size =
+            state.malloc_size - qjs::size_t::try_from(old_size).expect(qjs::SIZE_T_ERROR) + size;
 
-        if new_size > state.malloc_limit {
+        if new_malloc_size > state.malloc_limit {
             return null_mut();
         }
+
+        let size = size.try_into().expect(qjs::SIZE_T_ERROR);
 
         let ptr = allocator.realloc(ptr as _, size) as *mut qjs::c_void;
 
-        state.malloc_size = new_size;
+        state.malloc_size = new_malloc_size;
 
-        return ptr;
+        ptr
     }
 
     unsafe extern "C" fn malloc_usable_size<A>(ptr: *const qjs::c_void) -> qjs::size_t
