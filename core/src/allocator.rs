@@ -1,7 +1,7 @@
 //! Tools for using different allocators with QuickJS.
 
 use crate::qjs;
-use std::{convert::TryInto, ptr::null_mut};
+use std::{convert::TryInto, ptr};
 
 mod rust;
 pub use rust::RustAllocator;
@@ -63,6 +63,10 @@ impl AllocatorHolder {
         self.0
     }
 
+    fn size_t(size: usize) -> qjs::size_t {
+        size.try_into().expect(qjs::SIZE_T_ERROR)
+    }
+
     unsafe extern "C" fn malloc<A>(
         state: *mut qjs::JSMallocState,
         size: qjs::size_t,
@@ -71,13 +75,13 @@ impl AllocatorHolder {
         A: Allocator,
     {
         if size == 0 {
-            return null_mut();
+            return ptr::null_mut();
         }
 
         let state = &mut *state;
 
         if state.malloc_size + size > state.malloc_limit {
-            return null_mut();
+            return ptr::null_mut();
         }
 
         let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
@@ -88,15 +92,13 @@ impl AllocatorHolder {
         let res = allocator.alloc(rust_size as _);
 
         if res.is_null() {
-            return null_mut();
+            return ptr::null_mut();
         }
 
         let size = A::usable_size(res);
 
-        println!("ALLOC: {}", size);
-
         state.malloc_count += 1;
-        state.malloc_size += qjs::size_t::try_from(size).expect(qjs::SIZE_T_ERROR);
+        state.malloc_size += Self::size_t(size);
 
         res as *mut qjs::c_void
     }
@@ -119,8 +121,7 @@ impl AllocatorHolder {
         let allocator = &mut *(state.opaque as *mut DynAllocator);
         allocator.dealloc(ptr as _);
 
-        state.malloc_size -= qjs::size_t::try_from(size).expect(qjs::SIZE_T_ERROR);
-        println!("FREE: {}", size);
+        state.malloc_size -= Self::size_t(size);
     }
 
     unsafe extern "C" fn realloc<A>(
@@ -131,60 +132,35 @@ impl AllocatorHolder {
     where
         A: Allocator,
     {
-        let state = &mut *state;
-        let allocator = &mut *(state.opaque as *mut DynAllocator);
+        let state_ref = &mut *state;
+        let allocator = &mut *(state_ref.opaque as *mut DynAllocator);
 
         // simulate the default behavior of libc::realloc
         if ptr.is_null() {
-            if state.malloc_size + size > state.malloc_limit {
-                return null_mut();
-            }
-
-            let rust_size = size.try_into().expect(qjs::SIZE_T_ERROR);
-
-            // alloc new memory chunk
-            let res = allocator.alloc(rust_size);
-
-            if res.is_null() {
-                return null_mut();
-            }
-
-            state.malloc_count += 1;
-            state.malloc_size += size;
-
-            println!("ALLOC: {}", size);
-
-            return res as *mut qjs::c_void;
+            return Self::malloc::<A>(state, size);
         } else if size == 0 {
-            let old_size = A::usable_size(ptr as RawMemPtr);
-            // free memory chunk
-            allocator.dealloc(ptr as _);
-
-            state.malloc_count -= 1;
-            state.malloc_size -= qjs::size_t::try_from(old_size).expect(qjs::SIZE_T_ERROR);
-
-            println!("FREE: {}", size);
-
-            return null_mut();
+            Self::free::<A>(state, ptr);
+            return ptr::null_mut();
         }
 
-        let old_size = A::usable_size(ptr as RawMemPtr);
+        let old_size = Self::size_t(A::usable_size(ptr as RawMemPtr));
 
-        let new_malloc_size =
-            state.malloc_size - qjs::size_t::try_from(old_size).expect(qjs::SIZE_T_ERROR) + size;
-
-        if new_malloc_size > state.malloc_limit {
-            return null_mut();
+        let new_malloc_size = state_ref.malloc_size - old_size + size;
+        if new_malloc_size > state_ref.malloc_limit {
+            return ptr::null_mut();
         }
 
-        let size = size.try_into().expect(qjs::SIZE_T_ERROR);
+        let ptr = allocator.realloc(ptr as _, size.try_into().expect(qjs::SIZE_T_ERROR))
+            as *mut qjs::c_void;
 
-        let ptr = allocator.realloc(ptr as _, size) as *mut qjs::c_void;
+        if ptr.is_null() {
+            return ptr::null_mut();
+        }
 
-        state.malloc_size = new_malloc_size;
+        let actual_size = Self::size_t(A::usable_size(ptr as RawMemPtr));
 
-        println!("FREE: {}", old_size);
-        println!("ALLOC: {}", size);
+        state_ref.malloc_size -= old_size;
+        state_ref.malloc_size += actual_size;
 
         ptr
     }
