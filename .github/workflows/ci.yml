@@ -15,7 +15,7 @@ jobs:
     name: Format
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup Rust
@@ -24,7 +24,7 @@ jobs:
           toolchain: stable
           components: rustfmt
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -37,7 +37,7 @@ jobs:
     name: Documentation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup Rust
@@ -46,14 +46,14 @@ jobs:
           toolchain: nightly
           components: rust-docs
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-doc-${{ hashFiles('**/Cargo.lock') }}
@@ -75,7 +75,7 @@ jobs:
     permissions:
       checks: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - uses: dtolnay/rust-toolchain@v1
@@ -83,14 +83,14 @@ jobs:
           toolchain: nightly
           components: clippy
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
@@ -98,7 +98,7 @@ jobs:
         run: cargo clippy --all --all-targets --features full-async
 
   msrv:
-    name: Check minimal rust compatiblity for ${{ matrix.msrv }}
+    name: Msrv check
     # Check to see if rquickjs builds on minimal supported Rust version.
     runs-on: ubuntu-latest
     # we use a matrix here just because env can't be used in job names
@@ -107,7 +107,7 @@ jobs:
       matrix:
         msrv: [1.65.0] # 1.65.0 introduced GAT stabilization
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install ${{ matrix.msrv }}
@@ -125,11 +125,11 @@ jobs:
         with:
           toolchain: nightly
           components: clippy
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
@@ -301,7 +301,7 @@ jobs:
             optimization: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup cross linux toolchain
@@ -386,7 +386,7 @@ jobs:
           targets: ${{ matrix.target }}
           components: rustfmt
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -395,7 +395,7 @@ jobs:
       - name: Build cache
         if: |
           runner.os != 'macOS'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-opt_${{ matrix.optimization }}-${{ hashFiles('**/Cargo.lock') }}
@@ -443,7 +443,7 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download bindings
         uses: actions/download-artifact@v3
         with:
