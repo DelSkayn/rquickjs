@@ -98,7 +98,7 @@ jobs:
         run: cargo clippy --all --all-targets --features full-async
 
   msrv:
-    name: Minimal rust version
+    name: Check minimal rust compatiblity for ${{ matrix.msrv }}
     # Check to see if rquickjs builds on minimal supported Rust version.
     runs-on: ubuntu-latest
     # we use a matrix here just because env can't be used in job names
@@ -106,7 +106,6 @@ jobs:
     strategy:
       matrix:
         msrv: [1.65.0] # 1.65.0 introduced GAT stabilization
-    name: ubuntu / ${{ matrix.msrv }}
     steps:
       - uses: actions/checkout@v3
         with:
