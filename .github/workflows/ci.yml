@@ -62,7 +62,7 @@ jobs:
           DOCS_RS: 1
         run: cargo doc --no-deps --features full-async,parallel,doc-cfg
       - name: Upload docs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docs
           path: |
@@ -146,7 +146,7 @@ jobs:
         run: cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
             name: code-coverage-report
             path: target/llvm-cov/html/
@@ -409,7 +409,7 @@ jobs:
           cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features exports,bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: bindings
           path: sys/src/bindings/${{ matrix.target }}.rs
