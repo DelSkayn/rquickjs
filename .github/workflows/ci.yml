@@ -12,6 +12,7 @@ concurrency:
 
 jobs:
   format:
+    name: "Format"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -33,6 +34,7 @@ jobs:
         run: cargo fmt --all -- --check
 
   doc:
+    name: "Documentation"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -68,6 +70,7 @@ jobs:
             target/doc/rquickjs-sys
             target/doc/rquickjs-macro
   check:
+    name: "Clippy check"
     runs-on: ubuntu-latest
     permissions:
       checks: write
@@ -95,6 +98,7 @@ jobs:
         run: cargo clippy --all --all-targets --features full-async
 
   msrv:
+    name: "Minimal rust version"
     # Check to see if rquickjs builds on minimal supported Rust version.
     runs-on: ubuntu-latest
     # we use a matrix here just because env can't be used in job names
@@ -115,6 +119,7 @@ jobs:
         run: cargo check
 
   coverage:
+    name: "Test + Converage"
     runs-on: ubuntu-latest
     steps:
       - uses: dtolnay/rust-toolchain@v1
@@ -149,6 +154,7 @@ jobs:
             retention-days: 5
 
   test:
+    name: "Platform tests"
     needs:
       - format
       - doc
