@@ -2580,6 +2580,775 @@ extern "C" {
         idx: ::std::os::raw::c_int,
     ) -> JSAtom;
 }
+pub type slimb_t = i32;
+pub type limb_t = u32;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct bf_t {
+    pub ctx: *mut bf_context_t,
+    pub sign: ::std::os::raw::c_int,
+    pub expn: slimb_t,
+    pub len: limb_t,
+    pub tab: *mut limb_t,
+}
+#[test]
+fn bindgen_test_layout_bf_t() {
+    const UNINIT: ::std::mem::MaybeUninit<bf_t> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<bf_t>(),
+        20usize,
+        concat!("Size of: ", stringify!(bf_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<bf_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(bf_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).ctx) as usize - ptr as usize },
+        0usize,
+        concat!("Offset of field: ", stringify!(bf_t), "::", stringify!(ctx))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).sign) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bf_t),
+            "::",
+            stringify!(sign)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).expn) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bf_t),
+            "::",
+            stringify!(expn)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).len) as usize - ptr as usize },
+        12usize,
+        concat!("Offset of field: ", stringify!(bf_t), "::", stringify!(len))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).tab) as usize - ptr as usize },
+        16usize,
+        concat!("Offset of field: ", stringify!(bf_t), "::", stringify!(tab))
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct bfdec_t {
+    pub ctx: *mut bf_context_t,
+    pub sign: ::std::os::raw::c_int,
+    pub expn: slimb_t,
+    pub len: limb_t,
+    pub tab: *mut limb_t,
+}
+#[test]
+fn bindgen_test_layout_bfdec_t() {
+    const UNINIT: ::std::mem::MaybeUninit<bfdec_t> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<bfdec_t>(),
+        20usize,
+        concat!("Size of: ", stringify!(bfdec_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<bfdec_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(bfdec_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).ctx) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bfdec_t),
+            "::",
+            stringify!(ctx)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).sign) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bfdec_t),
+            "::",
+            stringify!(sign)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).expn) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bfdec_t),
+            "::",
+            stringify!(expn)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).len) as usize - ptr as usize },
+        12usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bfdec_t),
+            "::",
+            stringify!(len)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).tab) as usize - ptr as usize },
+        16usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bfdec_t),
+            "::",
+            stringify!(tab)
+        )
+    );
+}
+pub const bf_rnd_t_BF_RNDN: bf_rnd_t = 0;
+pub const bf_rnd_t_BF_RNDZ: bf_rnd_t = 1;
+pub const bf_rnd_t_BF_RNDD: bf_rnd_t = 2;
+pub const bf_rnd_t_BF_RNDU: bf_rnd_t = 3;
+pub const bf_rnd_t_BF_RNDNA: bf_rnd_t = 4;
+pub const bf_rnd_t_BF_RNDA: bf_rnd_t = 5;
+pub const bf_rnd_t_BF_RNDF: bf_rnd_t = 6;
+pub type bf_rnd_t = ::std::os::raw::c_uint;
+pub type bf_flags_t = u32;
+pub type bf_realloc_func_t = ::std::option::Option<
+    unsafe extern "C" fn(
+        opaque: *mut ::std::os::raw::c_void,
+        ptr: *mut ::std::os::raw::c_void,
+        size: size_t,
+    ) -> *mut ::std::os::raw::c_void,
+>;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct BFConstCache {
+    pub val: bf_t,
+    pub prec: limb_t,
+}
+#[test]
+fn bindgen_test_layout_BFConstCache() {
+    const UNINIT: ::std::mem::MaybeUninit<BFConstCache> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<BFConstCache>(),
+        24usize,
+        concat!("Size of: ", stringify!(BFConstCache))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<BFConstCache>(),
+        4usize,
+        concat!("Alignment of ", stringify!(BFConstCache))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).val) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(BFConstCache),
+            "::",
+            stringify!(val)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).prec) as usize - ptr as usize },
+        20usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(BFConstCache),
+            "::",
+            stringify!(prec)
+        )
+    );
+}
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct bf_context_t {
+    pub realloc_opaque: *mut ::std::os::raw::c_void,
+    pub realloc_func: bf_realloc_func_t,
+    pub log2_cache: BFConstCache,
+    pub pi_cache: BFConstCache,
+    pub ntt_state: *mut BFNTTState,
+}
+#[test]
+fn bindgen_test_layout_bf_context_t() {
+    const UNINIT: ::std::mem::MaybeUninit<bf_context_t> = ::std::mem::MaybeUninit::uninit();
+    let ptr = UNINIT.as_ptr();
+    assert_eq!(
+        ::std::mem::size_of::<bf_context_t>(),
+        60usize,
+        concat!("Size of: ", stringify!(bf_context_t))
+    );
+    assert_eq!(
+        ::std::mem::align_of::<bf_context_t>(),
+        4usize,
+        concat!("Alignment of ", stringify!(bf_context_t))
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).realloc_opaque) as usize - ptr as usize },
+        0usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bf_context_t),
+            "::",
+            stringify!(realloc_opaque)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).realloc_func) as usize - ptr as usize },
+        4usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bf_context_t),
+            "::",
+            stringify!(realloc_func)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).log2_cache) as usize - ptr as usize },
+        8usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bf_context_t),
+            "::",
+            stringify!(log2_cache)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).pi_cache) as usize - ptr as usize },
+        32usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bf_context_t),
+            "::",
+            stringify!(pi_cache)
+        )
+    );
+    assert_eq!(
+        unsafe { ::std::ptr::addr_of!((*ptr).ntt_state) as usize - ptr as usize },
+        56usize,
+        concat!(
+            "Offset of field: ",
+            stringify!(bf_context_t),
+            "::",
+            stringify!(ntt_state)
+        )
+    );
+}
+extern "C" {
+    pub fn bf_context_init(
+        s: *mut bf_context_t,
+        realloc_func: bf_realloc_func_t,
+        realloc_opaque: *mut ::std::os::raw::c_void,
+    );
+}
+extern "C" {
+    pub fn bf_context_end(s: *mut bf_context_t);
+}
+extern "C" {
+    pub fn bf_clear_cache(s: *mut bf_context_t);
+}
+extern "C" {
+    pub fn bf_init(s: *mut bf_context_t, r: *mut bf_t);
+}
+extern "C" {
+    pub fn bf_set_ui(r: *mut bf_t, a: u64) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_set_si(r: *mut bf_t, a: i64) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_set_nan(r: *mut bf_t);
+}
+extern "C" {
+    pub fn bf_set_zero(r: *mut bf_t, is_neg: ::std::os::raw::c_int);
+}
+extern "C" {
+    pub fn bf_set_inf(r: *mut bf_t, is_neg: ::std::os::raw::c_int);
+}
+extern "C" {
+    pub fn bf_set(r: *mut bf_t, a: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_move(r: *mut bf_t, a: *mut bf_t);
+}
+extern "C" {
+    pub fn bf_get_float64(
+        a: *const bf_t,
+        pres: *mut f64,
+        rnd_mode: bf_rnd_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_set_float64(a: *mut bf_t, d: f64) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_cmpu(a: *const bf_t, b: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_cmp_full(a: *const bf_t, b: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_cmp(a: *const bf_t, b: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_add(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_sub(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_add_si(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b1: i64,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_mul(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_mul_ui(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b1: u64,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_mul_si(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b1: i64,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_mul_2exp(
+        r: *mut bf_t,
+        e: slimb_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_div(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_divrem(
+        q: *mut bf_t,
+        r: *mut bf_t,
+        a: *const bf_t,
+        b: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+        rnd_mode: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_rem(
+        r: *mut bf_t,
+        a: *const bf_t,
+        b: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+        rnd_mode: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_remquo(
+        pq: *mut slimb_t,
+        r: *mut bf_t,
+        a: *const bf_t,
+        b: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+        rnd_mode: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_rint(r: *mut bf_t, rnd_mode: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_round(r: *mut bf_t, prec: limb_t, flags: bf_flags_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_sqrtrem(r: *mut bf_t, rem1: *mut bf_t, a: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_sqrt(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_get_exp_min(a: *const bf_t) -> slimb_t;
+}
+extern "C" {
+    pub fn bf_logic_or(r: *mut bf_t, a: *const bf_t, b: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_logic_xor(r: *mut bf_t, a: *const bf_t, b: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_logic_and(r: *mut bf_t, a: *const bf_t, b: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_atof(
+        a: *mut bf_t,
+        str_: *const ::std::os::raw::c_char,
+        pnext: *mut *const ::std::os::raw::c_char,
+        radix: ::std::os::raw::c_int,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_atof2(
+        r: *mut bf_t,
+        pexponent: *mut slimb_t,
+        str_: *const ::std::os::raw::c_char,
+        pnext: *mut *const ::std::os::raw::c_char,
+        radix: ::std::os::raw::c_int,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_mul_pow_radix(
+        r: *mut bf_t,
+        T: *const bf_t,
+        radix: limb_t,
+        expn: slimb_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_ftoa(
+        plen: *mut size_t,
+        a: *const bf_t,
+        radix: ::std::os::raw::c_int,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> *mut ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn bf_get_int32(
+        pres: *mut ::std::os::raw::c_int,
+        a: *const bf_t,
+        flags: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_get_int64(
+        pres: *mut i64,
+        a: *const bf_t,
+        flags: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_get_uint64(pres: *mut u64, a: *const bf_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_print_str(str_: *const ::std::os::raw::c_char, a: *const bf_t);
+}
+extern "C" {
+    pub fn bf_resize(r: *mut bf_t, len: limb_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_get_fft_size(
+        pdpl: *mut ::std::os::raw::c_int,
+        pnb_mods: *mut ::std::os::raw::c_int,
+        len: limb_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_normalize_and_round(
+        r: *mut bf_t,
+        prec1: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_can_round(
+        a: *const bf_t,
+        prec: slimb_t,
+        rnd_mode: bf_rnd_t,
+        k: slimb_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_mul_log2_radix(
+        a1: slimb_t,
+        radix: ::std::os::raw::c_uint,
+        is_inv: ::std::os::raw::c_int,
+        is_ceil1: ::std::os::raw::c_int,
+    ) -> slimb_t;
+}
+extern "C" {
+    pub fn bf_isqrt(a: limb_t) -> limb_t;
+}
+extern "C" {
+    pub fn bf_const_log2(T: *mut bf_t, prec: limb_t, flags: bf_flags_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_const_pi(T: *mut bf_t, prec: limb_t, flags: bf_flags_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_exp(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_log(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_pow(
+        r: *mut bf_t,
+        x: *const bf_t,
+        y: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_cos(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_sin(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_tan(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_atan(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_atan2(
+        r: *mut bf_t,
+        y: *const bf_t,
+        x: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_asin(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bf_acos(
+        r: *mut bf_t,
+        a: *const bf_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_set_ui(r: *mut bfdec_t, a: u64) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_set_si(r: *mut bfdec_t, a: i64) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_add(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_sub(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_add_si(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b1: i64,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_mul(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_mul_si(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b1: i64,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_div(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_divrem(
+        q: *mut bfdec_t,
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+        rnd_mode: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_rem(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        b: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+        rnd_mode: ::std::os::raw::c_int,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_rint(r: *mut bfdec_t, rnd_mode: ::std::os::raw::c_int) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_sqrt(
+        r: *mut bfdec_t,
+        a: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_round(r: *mut bfdec_t, prec: limb_t, flags: bf_flags_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_get_int32(
+        pres: *mut ::std::os::raw::c_int,
+        a: *const bfdec_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_pow_ui(r: *mut bfdec_t, a: *const bfdec_t, b: limb_t) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_ftoa(
+        plen: *mut size_t,
+        a: *const bfdec_t,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> *mut ::std::os::raw::c_char;
+}
+extern "C" {
+    pub fn bfdec_atof(
+        r: *mut bfdec_t,
+        str_: *const ::std::os::raw::c_char,
+        pnext: *mut *const ::std::os::raw::c_char,
+        prec: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn bfdec_print_str(str_: *const ::std::os::raw::c_char, a: *const bfdec_t);
+}
+extern "C" {
+    pub fn bfdec_normalize_and_round(
+        r: *mut bfdec_t,
+        prec1: limb_t,
+        flags: bf_flags_t,
+    ) -> ::std::os::raw::c_int;
+}
 pub const __JS_ATOM_NULL: _bindgen_ty_2 = 0;
 pub const JS_ATOM_null: _bindgen_ty_2 = 1;
 pub const JS_ATOM_false: _bindgen_ty_2 = 2;
@@ -2808,3 +3577,8 @@ pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 224;
 pub const JS_ATOM_Symbol_operatorSet: _bindgen_ty_2 = 225;
 pub const JS_ATOM_END: _bindgen_ty_2 = 226;
 pub type _bindgen_ty_2 = ::std::os::raw::c_uint;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct BFNTTState {
+    pub _address: u8,
+}
