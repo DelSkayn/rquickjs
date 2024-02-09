@@ -2556,6 +2556,30 @@ extern "C" {
         specifier: *const ::std::os::raw::c_char,
     ) -> JSValue;
 }
+extern "C" {
+    pub fn JS_GetModuleExport(
+        ctx: *mut JSContext,
+        m: *mut JSModuleDef,
+        export_name: *const ::std::os::raw::c_char,
+    ) -> JSValue;
+}
+extern "C" {
+    pub fn JS_GetModuleExportEntriesCount(m: *mut JSModuleDef) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_GetModuleExportEntry(
+        ctx: *mut JSContext,
+        m: *mut JSModuleDef,
+        idx: ::std::os::raw::c_int,
+    ) -> JSValue;
+}
+extern "C" {
+    pub fn JS_GetModuleExportEntryName(
+        ctx: *mut JSContext,
+        m: *mut JSModuleDef,
+        idx: ::std::os::raw::c_int,
+    ) -> JSAtom;
+}
 pub const __JS_ATOM_NULL: _bindgen_ty_2 = 0;
 pub const JS_ATOM_null: _bindgen_ty_2 = 1;
 pub const JS_ATOM_false: _bindgen_ty_2 = 2;
