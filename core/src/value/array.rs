@@ -1,6 +1,6 @@
 //! JavaScript array types.
 
-use crate::{atom::PredefinedAtom, qjs, Atom, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
+use crate::{atom::PredefinedAtom, qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
@@ -35,8 +35,12 @@ impl<'js> Array<'js> {
         let value = self.0.as_js_value();
         unsafe {
             let val = qjs::JS_GetProperty(ctx.as_ptr(), value, PredefinedAtom::Length as _);
-            assert!(qjs::JS_IsInt(val));
-            qjs::JS_VALUE_GET_INT(val) as _
+            if qjs::JS_IsInt(val) {
+                qjs::JS_VALUE_GET_INT(val) as _
+            } else {
+                assert!(qjs::JS_IsNumber(val));
+                qjs::JS_VALUE_GET_FLOAT64(val) as usize
+            }
         }
     }
 
@@ -117,8 +121,8 @@ impl<'js> Array<'js> {
 /// The iterator for an array
 pub struct ArrayIter<'js, T> {
     array: Array<'js>,
-    index: u32,
-    count: u32,
+    index: usize,
+    count: usize,
     marker: PhantomData<T>,
 }
 
@@ -130,7 +134,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
-            let res = self.array.get(self.index as _);
+            let res = self.array.get(self.index);
             self.index += 1;
             Some(res)
         } else {
@@ -151,7 +155,7 @@ where
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.index < self.count {
             self.count -= 1;
-            let res = self.array.get(self.count as _);
+            let res = self.array.get(self.count);
             Some(res)
         } else {
             None
