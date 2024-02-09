@@ -300,4 +300,32 @@ mod test {
             assert_eq!(i32::from_js(&ctx, array.get(2).unwrap()).unwrap(), 3);
         })
     }
+
+    #[test]
+    fn test_max_length() {
+        test_with(|ctx| {
+            let array = ctx
+                .eval::<Array, _>(
+                    r#"
+                let a = [];
+                a[4294967294] = 1;
+                a[4294967295] = 1;
+                a
+            "#,
+                )
+                .unwrap();
+            assert_eq!(array.len(), 4294967295)
+        })
+    }
+
+    #[test]
+    fn test_set_array_larger_then_u32() {
+        test_with(|ctx| {
+            let array = Array::new(ctx).unwrap();
+            array.set(4294967294, 42usize).unwrap();
+            assert_eq!(array.get::<usize>(4294967294).unwrap(), 42usize);
+            array.set(4294967295, 43usize).unwrap();
+            assert_eq!(array.get::<usize>(4294967295).unwrap(), 43usize);
+        })
+    }
 }
