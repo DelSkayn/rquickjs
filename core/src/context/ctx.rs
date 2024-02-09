@@ -403,6 +403,19 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Manually run the garbage collection.
+    ///
+    /// Most of QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
+    /// references. The garbage collector is only for collecting
+    /// cyclic references.
+    pub fn run_gc(&self) {
+        unsafe {
+            let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
+            qjs::JS_RunGC(rt)
+        }
+    }
+
     /// Returns the pointer to the C library context.
     pub fn as_raw(&self) -> NonNull<qjs::JSContext> {
         self.ctx

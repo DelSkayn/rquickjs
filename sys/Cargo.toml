@@ -24,6 +24,7 @@ optional = true
 
 [features]
 exports = []
+bignum = []
 bindgen = ["bindgen-rs"]
 
 # Debug logging

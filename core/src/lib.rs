@@ -8,7 +8,6 @@
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
-//#[doc(hidden)]
 pub mod qjs {
     //! Native low-level bindings
     pub use rquickjs_sys::*;

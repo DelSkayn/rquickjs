@@ -2,6 +2,7 @@
 
 #include "quickjs.h";
 
+#include "libbf.h"
 
 #if !defined(EMSCRIPTEN) && !defined(_MSC_VER)
 #define CONFIG_ATOMICS

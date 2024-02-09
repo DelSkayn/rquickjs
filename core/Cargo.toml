@@ -74,6 +74,8 @@ allocator = []
 # otherwise libc allocator will be used
 rust-alloc = ["allocator"]
 
+bignum = ["rquickjs-sys/bignum"]
+
 # Enable user-defined classes support
 classes = []
 

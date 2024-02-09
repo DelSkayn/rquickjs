@@ -12,6 +12,7 @@ fn main() {
     let features = [
         "exports",
         "bindgen",
+        "bignum",
         "update-bindings",
         "dump-bytecode",
         "dump-gc",
@@ -83,6 +84,10 @@ fn main() {
     if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
         patch_files.push("read_module_exports.patch");
         defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
+    }
+
+    if env::var("CARGO_FEATURE_BIGNUM").is_ok() {
+        defines.push(("RQJS_BIGNUM".into(), None));
     }
 
     for feature in &features {
@@ -219,9 +224,12 @@ where
         .size_t_is_usize(false)
         .header(header_file.display().to_string())
         .allowlist_type("JS.*")
+        .allowlist_type("BF.*")
+        .allowlist_type("bf.*")
         .allowlist_function("js.*")
         .allowlist_function("JS.*")
         .allowlist_function("__JS.*")
+        .allowlist_function("bf.*")
         .allowlist_var("JS.*")
         .opaque_type("FILE")
         .blocklist_type("FILE")

@@ -6,6 +6,7 @@ use crate::{
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
+    ffi::{CStr, CString},
     sync::{Mutex, RwLock},
     time::SystemTime,
 };
@@ -43,6 +44,24 @@ impl<'js> IntoJs<'js> for &StdString {
 impl<'js> IntoJs<'js> for &str {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         String::from_str(ctx.clone(), self).map(|String(value)| value)
+    }
+}
+
+impl<'js> IntoJs<'js> for &CStr {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        String::from_c_str(ctx.clone(), self).map(|x| x.into())
+    }
+}
+
+impl<'js> IntoJs<'js> for CString {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        String::from_c_str(ctx.clone(), &self).map(|x| x.into())
+    }
+}
+
+impl<'js> IntoJs<'js> for &CString {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        String::from_c_str(ctx.clone(), self).map(|x| x.into())
     }
 }
 

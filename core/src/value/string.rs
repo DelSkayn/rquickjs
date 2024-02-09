@@ -1,5 +1,8 @@
 use crate::{qjs, Ctx, Error, Result, StdString, Value};
-use std::{mem, slice, str};
+use std::{
+    ffi::{CStr, CString},
+    mem, slice, str,
+};
 
 /// Rust representation of a JavaScript string.
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -7,20 +10,36 @@ use std::{mem, slice, str};
 pub struct String<'js>(pub(crate) Value<'js>);
 
 impl<'js> String<'js> {
-    /// Convert the JavaScript string to a Rust string.
+    /// Convert the JavaScript string a rust CString with the final null byte.
+    pub fn to_c_string(&self) -> Result<CString> {
+        let mut len = mem::MaybeUninit::uninit();
+        let ptr = unsafe {
+            qjs::JS_ToCStringLen(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value())
+        };
+        if ptr.is_null() {
+            return Err(Error::Exception);
+        }
+        let len = unsafe { len.assume_init() };
+        // Qjs returns a string with a null byte at the end, however the len doesn't include the
+        // null byte, therefore we need to add 1 to get it back as part of our slice.
+        let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr as _, (len + 1) as _) };
+        let res = unsafe { CStr::from_bytes_with_nul_unchecked(bytes) }.to_owned();
+        unsafe { qjs::JS_FreeCString(self.0.ctx.as_ptr(), ptr) };
+        Ok(res)
+    }
+
+    /// Convert the JavaScript string a rust String.
     pub fn to_string(&self) -> Result<StdString> {
         let mut len = mem::MaybeUninit::uninit();
         let ptr = unsafe {
             qjs::JS_ToCStringLen(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value())
         };
         if ptr.is_null() {
-            // Might not ever happen but I am not 100% sure
-            // so just incase check it.
-            return Err(Error::Unknown);
+            return Err(Error::Exception);
         }
         let len = unsafe { len.assume_init() };
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr as _, len as _) };
-        let result = str::from_utf8(bytes).map(|s| s.into());
+        let result = str::from_utf8(bytes).map(|s| s.to_owned());
         unsafe { qjs::JS_FreeCString(self.0.ctx.as_ptr(), ptr) };
         Ok(result?)
     }
@@ -29,6 +48,17 @@ impl<'js> String<'js> {
     pub fn from_str(ctx: Ctx<'js>, s: &str) -> Result<Self> {
         let len = s.as_bytes().len();
         let ptr = s.as_ptr();
+        Ok(unsafe {
+            let js_val = qjs::JS_NewStringLen(ctx.as_ptr(), ptr as _, len as _);
+            let js_val = ctx.handle_exception(js_val)?;
+            String::from_js_value(ctx, js_val)
+        })
+    }
+
+    /// Create a new JavaScript string from an Rust string.
+    pub fn from_c_str(ctx: Ctx<'js>, s: &CStr) -> Result<Self> {
+        let ptr = s.as_ptr();
+        let len = s.to_bytes().len();
         Ok(unsafe {
             let js_val = qjs::JS_NewStringLen(ctx.as_ptr(), ptr as _, len as _);
             let js_val = ctx.handle_exception(js_val)?;

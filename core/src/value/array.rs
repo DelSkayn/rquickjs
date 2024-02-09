@@ -1,6 +1,6 @@
 //! JavaScript array types.
 
-use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
+use crate::{atom::PredefinedAtom, qjs, Atom, Ctx, Error, FromJs, IntoJs, Object, Result, Value};
 use std::{
     iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
     marker::PhantomData,
@@ -49,12 +49,26 @@ impl<'js> Array<'js> {
     pub fn get<V: FromJs<'js>>(&self, idx: usize) -> Result<V> {
         let ctx = self.ctx();
         let obj = self.0.as_js_value();
-        let val = unsafe {
-            let val = qjs::JS_GetPropertyUint32(ctx.as_ptr(), obj, idx as _);
-            let val = ctx.handle_exception(val)?;
-            Value::from_js_value(ctx.clone(), val)
-        };
-        V::from_js(ctx, val)
+
+        if idx <= u32::MAX as usize {
+            let val = unsafe {
+                let val = qjs::JS_GetPropertyUint32(ctx.as_ptr(), obj, idx as _);
+                let val = ctx.handle_exception(val)?;
+                Value::from_js_value(ctx.clone(), val)
+            };
+            V::from_js(ctx, val)
+        } else {
+            let val = unsafe {
+                let atom = qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_NewFloat64(idx as f64));
+                if atom == qjs::JS_ATOM_NULL {
+                    return Err(Error::Exception);
+                }
+                let val = qjs::JS_GetProperty(ctx.as_ptr(), obj, atom);
+                let val = ctx.handle_exception(val)?;
+                Value::from_js_value(ctx.clone(), val)
+            };
+            V::from_js(ctx, val)
+        }
     }
 
     /// Set the value at an index in the JavaScript array.
@@ -63,9 +77,19 @@ impl<'js> Array<'js> {
         let obj = self.0.as_js_value();
         let val = val.into_js(ctx)?.into_js_value();
         unsafe {
-            if 0 > qjs::JS_SetPropertyUint32(ctx.as_ptr(), obj, idx as _, val) {
-                return Err(ctx.raise_exception());
-            }
+            if idx <= u32::MAX as usize {
+                if 0 > qjs::JS_SetPropertyUint32(ctx.as_ptr(), obj, idx as u32, val) {
+                    return Err(ctx.raise_exception());
+                }
+            } else {
+                let atom = qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_NewFloat64(idx as f64));
+                if atom == qjs::JS_ATOM_NULL {
+                    return Err(Error::Exception);
+                }
+                if 0 > qjs::JS_SetProperty(ctx.as_ptr(), obj, atom, val) {
+                    return Err(ctx.raise_exception());
+                }
+            };
         }
         Ok(())
     }

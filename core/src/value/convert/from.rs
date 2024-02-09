@@ -5,6 +5,7 @@ use crate::{
 use std::{
     cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
+    ffi::CString,
     hash::{BuildHasher, Hash},
     rc::Rc,
     sync::{Arc, Mutex, RwLock},
@@ -26,6 +27,12 @@ impl<'js> FromJs<'js> for Value<'js> {
 impl<'js> FromJs<'js> for StdString {
     fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         String::from_value(value).and_then(|string| string.to_string())
+    }
+}
+
+impl<'js> FromJs<'js> for CString {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        String::from_value(value).and_then(|string| string.to_c_string())
     }
 }
 
