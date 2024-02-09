@@ -57,7 +57,7 @@ pub const JS_DEF_PROP_DOUBLE: u32 = 6;
 pub const JS_DEF_PROP_UNDEFINED: u32 = 7;
 pub const JS_DEF_OBJECT: u32 = 8;
 pub const JS_DEF_ALIAS: u32 = 9;
-pub type size_t = ::std::os::raw::c_uint;
+pub type size_t = ::std::os::raw::c_ulong;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSRuntime {
@@ -531,7 +531,7 @@ fn bindgen_test_layout_JSMemoryUsage() {
     );
     assert_eq!(
         ::std::mem::align_of::<JSMemoryUsage>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSMemoryUsage))
     );
     assert_eq!(
@@ -907,12 +907,12 @@ fn bindgen_test_layout_JSPropertyDescriptor() {
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::std::mem::size_of::<JSPropertyDescriptor>(),
-        28usize,
+        32usize,
         concat!("Size of: ", stringify!(JSPropertyDescriptor))
     );
     assert_eq!(
         ::std::mem::align_of::<JSPropertyDescriptor>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSPropertyDescriptor))
     );
     assert_eq!(
@@ -927,7 +927,7 @@ fn bindgen_test_layout_JSPropertyDescriptor() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).value) as usize - ptr as usize },
-        4usize,
+        8usize,
         concat!(
             "Offset of field: ",
             stringify!(JSPropertyDescriptor),
@@ -937,7 +937,7 @@ fn bindgen_test_layout_JSPropertyDescriptor() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).getter) as usize - ptr as usize },
-        12usize,
+        16usize,
         concat!(
             "Offset of field: ",
             stringify!(JSPropertyDescriptor),
@@ -947,7 +947,7 @@ fn bindgen_test_layout_JSPropertyDescriptor() {
     );
     assert_eq!(
         unsafe { ::std::ptr::addr_of!((*ptr).setter) as usize - ptr as usize },
-        20usize,
+        24usize,
         concat!(
             "Offset of field: ",
             stringify!(JSPropertyDescriptor),
@@ -2349,7 +2349,7 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1() {
     );
     assert_eq!(
         ::std::mem::align_of::<JSCFunctionListEntry__bindgen_ty_1>(),
-        4usize,
+        8usize,
         concat!(
             "Alignment of ",
             stringify!(JSCFunctionListEntry__bindgen_ty_1)
@@ -2447,7 +2447,7 @@ fn bindgen_test_layout_JSCFunctionListEntry() {
     );
     assert_eq!(
         ::std::mem::align_of::<JSCFunctionListEntry>(),
-        4usize,
+        8usize,
         concat!("Alignment of ", stringify!(JSCFunctionListEntry))
     );
     assert_eq!(
@@ -2555,30 +2555,6 @@ extern "C" {
         ctx: *mut JSContext,
         specifier: *const ::std::os::raw::c_char,
     ) -> JSValue;
-}
-extern "C" {
-    pub fn JS_GetModuleExport(
-        ctx: *mut JSContext,
-        m: *mut JSModuleDef,
-        export_name: *const ::std::os::raw::c_char,
-    ) -> JSValue;
-}
-extern "C" {
-    pub fn JS_GetModuleExportEntriesCount(m: *mut JSModuleDef) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn JS_GetModuleExportEntry(
-        ctx: *mut JSContext,
-        m: *mut JSModuleDef,
-        idx: ::std::os::raw::c_int,
-    ) -> JSValue;
-}
-extern "C" {
-    pub fn JS_GetModuleExportEntryName(
-        ctx: *mut JSContext,
-        m: *mut JSModuleDef,
-        idx: ::std::os::raw::c_int,
-    ) -> JSAtom;
 }
 pub const __JS_ATOM_NULL: _bindgen_ty_2 = 0;
 pub const JS_ATOM_null: _bindgen_ty_2 = 1;
@@ -2804,4 +2780,4 @@ pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 220;
 pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 221;
 pub const JS_ATOM_Symbol_operatorSet: _bindgen_ty_2 = 222;
 pub const JS_ATOM_END: _bindgen_ty_2 = 223;
-pub type _bindgen_ty_2 = ::std::os::raw::c_int;
+pub type _bindgen_ty_2 = ::std::os::raw::c_uint;

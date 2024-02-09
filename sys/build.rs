@@ -173,6 +173,14 @@ fn main() {
         }
     }
 
+    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+        // pretend we're emscripten - there are already ifdefs that match
+        // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
+        defines.push(("EMSCRIPTEN".into(), Some("1")));
+        defines.push(("FE_DOWNWARD".into(), Some("0")));
+        defines.push(("FE_UPWARD".into(), Some("0")));
+    }
+
     for file in source_files.iter().chain(header_files.iter()) {
         fs::copy(src_dir.join(file), out_dir.join(file))
             .expect("Unable to copy source; try 'git submodule update --init'");
@@ -218,15 +226,6 @@ fn main() {
         //.flag("-Wno-array-bounds")
         //.flag("-Wno-format-truncation")
         ;
-
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
-        // pretend we're emscripten - there are already ifdefs that match
-        // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
-        builder
-            .define("EMSCRIPTEN", "1")
-            .define("FE_DOWNWARD", "0")
-            .define("FE_UPWARD", "0");
-    }
 
     for (name, value) in &defines {
         builder.define(name, *value);
@@ -331,7 +330,7 @@ where
 
     println!("Bindings for target: {}", target);
 
-    let bindings = bindgen_rs::Builder::default()
+    let mut builder = bindgen_rs::Builder::default()
         .detect_include_paths(true)
         .clang_arg("-xc")
         .clang_arg("-v")
@@ -345,9 +344,13 @@ where
         .allowlist_var("JS.*")
         .opaque_type("FILE")
         .blocklist_type("FILE")
-        .blocklist_function("JS_DumpMemoryUsage")
-        .generate()
-        .expect("Unable to generate bindings");
+        .blocklist_function("JS_DumpMemoryUsage");
+
+    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+        builder = builder.clang_arg("-fvisibility=default");
+    }
+
+    let bindings = builder.generate().expect("Unable to generate bindings");
 
     let bindings_file = out_dir.join("bindings.rs");
 
