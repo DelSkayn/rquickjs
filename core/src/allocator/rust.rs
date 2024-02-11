@@ -38,7 +38,7 @@ fn round_size(size: usize) -> usize {
 pub struct RustAllocator;
 
 impl Allocator for RustAllocator {
-    fn alloc(&mut self, size: usize) -> RawMemPtr {
+    unsafe fn alloc(&mut self, size: usize) -> RawMemPtr {
         let size = round_size(size);
         let alloc_size = size + HEADER_SIZE;
         let layout = if let Ok(layout) = Layout::from_size_align(alloc_size, ALLOC_ALIGN) {
@@ -61,7 +61,7 @@ impl Allocator for RustAllocator {
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    fn dealloc(&mut self, ptr: RawMemPtr) {
+    unsafe fn dealloc(&mut self, ptr: RawMemPtr) {
         let ptr = unsafe { ptr.sub(HEADER_SIZE) };
         let alloc_size = {
             let header = unsafe { &*(ptr as *const Header) };
@@ -73,7 +73,7 @@ impl Allocator for RustAllocator {
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr {
+    unsafe fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr {
         let new_size = round_size(new_size);
         let ptr = unsafe { ptr.sub(HEADER_SIZE) };
         let alloc_size = {
@@ -116,18 +116,18 @@ mod test {
     struct TestAllocator;
 
     impl Allocator for TestAllocator {
-        fn alloc(&mut self, size: usize) -> crate::allocator::RawMemPtr {
+        unsafe fn alloc(&mut self, size: usize) -> crate::allocator::RawMemPtr {
             let res = RustAllocator.alloc(size);
             ALLOC_SIZE.fetch_add(RustAllocator::usable_size(res), Ordering::AcqRel);
             res
         }
 
-        fn dealloc(&mut self, ptr: crate::allocator::RawMemPtr) {
+        unsafe fn dealloc(&mut self, ptr: crate::allocator::RawMemPtr) {
             ALLOC_SIZE.fetch_sub(RustAllocator::usable_size(ptr), Ordering::AcqRel);
             RustAllocator.dealloc(ptr);
         }
 
-        fn realloc(
+        unsafe fn realloc(
             &mut self,
             ptr: crate::allocator::RawMemPtr,
             new_size: usize,

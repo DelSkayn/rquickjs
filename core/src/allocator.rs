@@ -14,13 +14,13 @@ pub type RawMemPtr = *mut u8;
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
 pub trait Allocator {
     /// Allocate new memory
-    fn alloc(&mut self, size: usize) -> RawMemPtr;
+    unsafe fn alloc(&mut self, size: usize) -> RawMemPtr;
 
     /// De-allocate previously allocated memory
-    fn dealloc(&mut self, ptr: RawMemPtr);
+    unsafe fn dealloc(&mut self, ptr: RawMemPtr);
 
     /// Re-allocate previously allocated memory
-    fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr;
+    unsafe fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr;
 
     /// Get usable size of allocated memory region
     fn usable_size(ptr: RawMemPtr) -> usize
