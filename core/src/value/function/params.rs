@@ -25,15 +25,17 @@ impl<'a, 'js> Params<'a, 'js> {
         argv: *mut qjs::JSValue,
         _flags: qjs::c_int,
     ) -> Self {
-        let argc = usize::try_from(argc).expect("invalid argument number");
-        dbg!(
-            argv,
-            argc,
-            std::mem::size_of::<qjs::JSValue>(),
-            std::mem::align_of::<qjs::JSValue>(),
-            std::mem::size_of::<*mut qjs::JSValue>()
-        );
-        let args = slice::from_raw_parts(argv, argc);
+        let args = if argv.is_null() {
+            let argc = usize::try_from(argc).expect("invalid argument number");
+            slice::from_raw_parts(argv, argc)
+        } else {
+            assert_eq!(
+                argc, 0,
+                "got a null pointer from quickjs for a non-zero number of args"
+            );
+            [].as_slice()
+        };
+
         Self {
             ctx: Ctx::from_ptr(ctx),
             function,
