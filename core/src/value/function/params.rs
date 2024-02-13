@@ -26,6 +26,13 @@ impl<'a, 'js> Params<'a, 'js> {
         _flags: qjs::c_int,
     ) -> Self {
         let argc = usize::try_from(argc).expect("invalid argument number");
+        dbg!(
+            argv,
+            argc,
+            std::mem::size_of::<qjs::JSValue>(),
+            std::mem::align_of::<qjs::JSValue>(),
+            std::mem::size_of::<*mut qjs::JSValue>()
+        );
         let args = slice::from_raw_parts(argv, argc);
         Self {
             ctx: Ctx::from_ptr(ctx),
