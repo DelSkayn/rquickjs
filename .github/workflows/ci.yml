@@ -139,7 +139,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Run cargo test coverage
-        run: cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
+        run: RUST_BACKTRACE=1 cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v3
