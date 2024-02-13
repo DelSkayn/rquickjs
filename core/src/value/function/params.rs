@@ -26,14 +26,14 @@ impl<'a, 'js> Params<'a, 'js> {
         _flags: qjs::c_int,
     ) -> Self {
         let args = if argv.is_null() {
-            let argc = usize::try_from(argc).expect("invalid argument number");
-            slice::from_raw_parts(argv, argc)
-        } else {
             assert_eq!(
                 argc, 0,
                 "got a null pointer from quickjs for a non-zero number of args"
             );
             [].as_slice()
+        } else {
+            let argc = usize::try_from(argc).expect("invalid argument number");
+            slice::from_raw_parts(argv, argc)
         };
 
         Self {
