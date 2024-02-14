@@ -139,7 +139,7 @@ jobs:
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Run cargo test coverage
-        run: cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
+        run: RUST_BACKTRACE=1 cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v3
@@ -226,6 +226,12 @@ jobs:
             target: aarch64-unknown-linux-musl
             features: full-async
             optimization: false
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: aarch64-unknown-linux-gnu
+            features: full-async
+            optimization: false
           # Test features
           - task: features
             os: ubuntu-latest
@@ -294,7 +300,7 @@ jobs:
         with:
           submodules: true
       - name: Setup cross linux toolchain
-        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
+        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
         run: |
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
@@ -309,7 +315,7 @@ jobs:
         if: startsWith(matrix.target, 'x86_64-') && endsWith(matrix.target, '-musl')
         run: sudo apt-get update -y && sudo apt-get install -y musl-tools
       - name: Setup musl aarch64
-        if: startsWith(matrix.target, 'aarch64') && endsWith(matrix.target, '-musl')
+        if: startsWith(matrix.target, 'aarch64') && contains(matrix.target, '-linux-')
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
@@ -330,12 +336,24 @@ jobs:
           echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> $GITHUB_ENV
           echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> $GITHUB_ENV
           echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
+
+          echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-aarch64" >> $GITHUB_ENV
+
+          echo "LD_LIBRARY_PATH=/usr/aarch64-linux-gnu/lib" >> $GITHUB_ENV
+
+          sudo ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
 
           mkdir -p ~/.cargo/
           echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
           echo 'rustflags = ["-C", "link-self-contained=yes","-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
+          echo "[target.aarch64-unknown-linux-gnu]" >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "linker=aarch64-linux-gnu-gcc"]' >> ~/.cargo/config.toml
 
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
           echo "/musl/bin" >> $GITHUB_PATH
       - name: Setup msys2 toolchains
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')

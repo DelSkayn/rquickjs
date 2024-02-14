@@ -1,6 +1,6 @@
 // A header which imports the all symbols of the quickjs header but also exports the static atoms.
 
-#include "quickjs.h";
+#include "quickjs.h"
 
 
 #if !defined(EMSCRIPTEN) && !defined(_MSC_VER)
