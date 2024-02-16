@@ -23,7 +23,7 @@ pub trait Allocator {
     unsafe fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr;
 
     /// Get usable size of allocated memory region
-    fn usable_size(ptr: RawMemPtr) -> usize
+    unsafe fn usable_size(ptr: RawMemPtr) -> usize
     where
         Self: Sized;
 }
