@@ -286,11 +286,12 @@ impl AsyncRuntime {
         lock.drop_pending();
 
         loop {
-            match lock.runtime.execute_pending_job().map_err(|e| {
+            let pending = lock.runtime.execute_pending_job().map_err(|e| {
                 let ptr = NonNull::new(e)
                     .expect("executing pending job returned a null context on error");
                 AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
-            }) {
+            });
+            match pending {
                 Err(e) => {
                     // SAFETY: Runtime is already locked so creating a context is safe.
                     let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx.as_ptr()) };

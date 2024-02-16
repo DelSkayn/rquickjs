@@ -11,19 +11,42 @@ pub use rust::RustAllocator;
 pub type RawMemPtr = *mut u8;
 
 /// The allocator interface
+///
+/// # Safety
+/// Failure to implement this trait correctly will result in undefined behavior.
+/// - `alloc` must return a either a null pointer or a pointer to an available region of memory
+/// atleast `size` bytes and aligned to the size of `usize`.
+/// - `realloc` must either return a null pointer or return a pointer to an available region of
+/// memory atleast `new_size` bytes and aligned to the size of `usize`.
+/// - `usable_size` must return the amount of available memory for any allocation allocated with
+/// this allocator.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
-pub trait Allocator {
+pub unsafe trait Allocator {
     /// Allocate new memory
-    unsafe fn alloc(&mut self, size: usize) -> RawMemPtr;
+    ///
+    ///
+    fn alloc(&mut self, size: usize) -> RawMemPtr;
 
     /// De-allocate previously allocated memory
+    ///
+    /// # Safety
+    /// Caller must ensure that the pointer that is being deallocated was allocated by the same
+    /// Allocator instance.
     unsafe fn dealloc(&mut self, ptr: RawMemPtr);
 
     /// Re-allocate previously allocated memory
+    ///
+    /// # Safety
+    /// Caller must ensure that the pointer points to an allocation that was allocated by the same
+    /// Allocator instance.
     unsafe fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr;
 
     /// Get usable size of allocated memory region
-    fn usable_size(ptr: RawMemPtr) -> usize
+    ///
+    /// # Safety
+    /// Caller must ensure that the pointer handed to this function points to an allocation
+    /// allocated by the same allocator instance.
+    unsafe fn usable_size(ptr: RawMemPtr) -> usize
     where
         Self: Sized;
 }
