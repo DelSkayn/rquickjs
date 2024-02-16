@@ -232,10 +232,11 @@ impl RawRuntime {
             _rt: *mut qjs::JSRuntime,
             opaque: *mut ::std::os::raw::c_void,
         ) -> ::std::os::raw::c_int {
-            let should_interrupt = match panic::catch_unwind(move || {
+            let catch_unwind = panic::catch_unwind(move || {
                 let opaque = &mut *(opaque as *mut Opaque);
                 opaque.interrupt_handler.as_mut().expect("handler is set")()
-            }) {
+            });
+            let should_interrupt = match catch_unwind {
                 Ok(should_interrupt) => should_interrupt,
                 Err(panic) => {
                     let opaque = &mut *(opaque as *mut Opaque);

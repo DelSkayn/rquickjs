@@ -116,10 +116,12 @@ mod test {
     struct TestAllocator;
 
     unsafe impl Allocator for TestAllocator {
-        unsafe fn alloc(&mut self, size: usize) -> crate::allocator::RawMemPtr {
-            let res = RustAllocator.alloc(size);
-            ALLOC_SIZE.fetch_add(RustAllocator::usable_size(res), Ordering::AcqRel);
-            res
+        fn alloc(&mut self, size: usize) -> crate::allocator::RawMemPtr {
+            unsafe {
+                let res = RustAllocator.alloc(size);
+                ALLOC_SIZE.fetch_add(RustAllocator::usable_size(res), Ordering::AcqRel);
+                res
+            }
         }
 
         unsafe fn dealloc(&mut self, ptr: crate::allocator::RawMemPtr) {
