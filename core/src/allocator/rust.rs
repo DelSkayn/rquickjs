@@ -37,8 +37,8 @@ fn round_size(size: usize) -> usize {
 /// The allocator which uses Rust global allocator
 pub struct RustAllocator;
 
-impl Allocator for RustAllocator {
-    unsafe fn alloc(&mut self, size: usize) -> RawMemPtr {
+unsafe impl Allocator for RustAllocator {
+    fn alloc(&mut self, size: usize) -> RawMemPtr {
         let size = round_size(size);
         let alloc_size = size + HEADER_SIZE;
         let layout = if let Ok(layout) = Layout::from_size_align(alloc_size, ALLOC_ALIGN) {
@@ -98,7 +98,7 @@ impl Allocator for RustAllocator {
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
-    fn usable_size(ptr: RawMemPtr) -> usize {
+    unsafe fn usable_size(ptr: RawMemPtr) -> usize {
         let ptr = unsafe { ptr.sub(HEADER_SIZE) };
         let header = unsafe { &*(ptr as *const Header) };
         header.size
@@ -115,7 +115,7 @@ mod test {
 
     struct TestAllocator;
 
-    impl Allocator for TestAllocator {
+    unsafe impl Allocator for TestAllocator {
         unsafe fn alloc(&mut self, size: usize) -> crate::allocator::RawMemPtr {
             let res = RustAllocator.alloc(size);
             ALLOC_SIZE.fetch_add(RustAllocator::usable_size(res), Ordering::AcqRel);
@@ -143,7 +143,7 @@ mod test {
             res
         }
 
-        fn usable_size(ptr: crate::allocator::RawMemPtr) -> usize
+        unsafe fn usable_size(ptr: crate::allocator::RawMemPtr) -> usize
         where
             Self: Sized,
         {
