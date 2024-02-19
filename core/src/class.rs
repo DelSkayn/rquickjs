@@ -1,8 +1,8 @@
 //! JavaScript classes defined from Rust.
 
 use crate::{
-    function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs, Object, Outlive,
-    Result, Value,
+    atom::PredefinedAtom, function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs,
+    IntoJs, Object, Outlive, Result, Value,
 };
 use std::{
     ffi::CString,
@@ -165,6 +165,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Defines the predefined constructor of this class, if there is one, onto the given object.
     pub fn define(object: &Object<'js>) -> Result<()> {
         if let Some(constructor) = Self::create_constructor(object.ctx())? {
+            constructor.set(PredefinedAtom::Name, C::NAME)?;
             object.set(C::NAME, constructor)?;
         }
         Ok(())
