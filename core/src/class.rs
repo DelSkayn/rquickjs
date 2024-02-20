@@ -1,8 +1,8 @@
 //! JavaScript classes defined from Rust.
 
 use crate::{
-    atom::PredefinedAtom, function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs,
-    IntoJs, Object, Outlive, Result, Value,
+    function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs, Object, Outlive,
+    Result, Value,
 };
 use std::{
     ffi::CString,
