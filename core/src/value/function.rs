@@ -220,6 +220,7 @@ impl<'js> Constructor<'js> {
             Ok(res)
         });
         let func = Function(Class::instance(ctx.clone(), RustFunction(func))?.into_inner())
+            .with_name(C::NAME)?
             .with_constructor(true);
         unsafe {
             qjs::JS_SetConstructor(
