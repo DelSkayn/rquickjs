@@ -248,7 +248,7 @@ fn feature_to_define(name: impl AsRef<str>) -> String {
 
 fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
     let mut child = Command::new("patch")
-        .args(["-p1"])
+        .args(["-p1", "-f"])
         .stdin(Stdio::piped())
         .current_dir(out_dir)
         .spawn()
