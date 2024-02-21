@@ -395,7 +395,7 @@ mod test {
         function::This,
         test_with,
         value::Constructor,
-        Class, Context, FromJs, Function, IntoJs, Object, Runtime,
+        Class, Context, FromJs, Function, IntoJs, Object, Runtime, Value,
     };
 
     /// Test circular references.
@@ -560,6 +560,9 @@ mod test {
             approx::assert_abs_diff_eq!(v.x, 5.0);
             approx::assert_abs_diff_eq!(v.y, 4.0);
             approx::assert_abs_diff_eq!(v.z, 11.0);
+
+            let name: String = ctx.eval("new Vec3(1,2,3).constructor.name").unwrap();
+            assert_eq!(name, Vec3::NAME);
         })
     }
 
