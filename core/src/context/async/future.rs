@@ -5,7 +5,7 @@ use std::{
     task::{ready, Context, Poll},
 };
 
-use async_lock::futures::Lock;
+use futures_util::lock::MutexLockFuture;
 
 use crate::{markers::ParallelSend, runtime::InnerRuntime, AsyncContext, Ctx};
 
@@ -17,7 +17,7 @@ pub struct WithFuture<'a, F, R> {
 
 enum LockState<'a> {
     Initial,
-    Pending(ManuallyDrop<Lock<'a, InnerRuntime>>),
+    Pending(ManuallyDrop<MutexLockFuture<'a, InnerRuntime>>),
 }
 
 impl<'a> Drop for LockState<'a> {
@@ -74,13 +74,11 @@ where
                 // The pinned memory is dropped so now we can freely move into it.
                 this.lock_state = LockState::Initial;
                 break lock;
-            } else {
-                // we assign a state with manually drop so we can drop the value when we need to
-                // replace it.
-                // Assign
-                this.lock_state =
-                    LockState::Pending(ManuallyDrop::new(this.context.0.rt.inner.lock()));
             }
+            // we assign a state with manually drop so we can drop the value when we need to
+            // replace it.
+            // Assign
+            this.lock_state = LockState::Pending(ManuallyDrop::new(this.context.0.rt.inner.lock()));
         };
 
         lock.runtime.update_stack_top();

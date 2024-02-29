@@ -38,3 +38,9 @@ impl ClassId {
         })
     }
 }
+
+impl Default for ClassId {
+    fn default() -> Self {
+        Self::new()
+    }
+}

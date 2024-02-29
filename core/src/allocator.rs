@@ -1,7 +1,7 @@
 //! Tools for using different allocators with QuickJS.
 
 use crate::qjs;
-use std::{convert::TryInto, ptr};
+use std::ptr;
 
 mod rust;
 pub use rust::RustAllocator;
@@ -161,7 +161,8 @@ impl AllocatorHolder {
         // simulate the default behavior of libc::realloc
         if ptr.is_null() {
             return Self::malloc::<A>(state, size);
-        } else if size == 0 {
+        }
+        if size == 0 {
             Self::free::<A>(state, ptr);
             return ptr::null_mut();
         }

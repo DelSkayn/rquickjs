@@ -1,5 +1,4 @@
 use std::{
-    convert::TryInto,
     ffi::{CStr, CString},
     fs, mem,
     path::Path,

@@ -8,7 +8,7 @@ use std::{
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use async_lock::Mutex;
+use futures_util::lock::Mutex;
 
 #[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
@@ -32,6 +32,7 @@ pub(crate) struct InnerRuntime {
 }
 
 impl InnerRuntime {
+    /// Drop freed contexts which where freed while the runtime was locked.
     pub fn drop_pending(&self) {
         #[cfg(feature = "parallel")]
         while let Ok(x) = self.drop_recv.try_recv() {

@@ -1,10 +1,7 @@
 //! JavaScript array types.
 
 use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
-use std::{
-    iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
-    marker::PhantomData,
-};
+use std::{iter::FusedIterator, marker::PhantomData};
 
 use super::convert::FromIteratorJs;
 
@@ -182,7 +179,6 @@ where
 
 #[cfg(test)]
 mod test {
-    use convert::IteratorJs;
 
     use crate::*;
     #[test]

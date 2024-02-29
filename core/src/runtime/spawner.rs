@@ -2,11 +2,13 @@ use std::{
     cell::RefCell,
     future::Future,
     pin::{pin, Pin},
-    task::ready,
-    task::{Poll, Waker},
+    task::{ready, Poll, Waker},
 };
 
-use async_lock::futures::LockArc;
+use futures_util::{
+    lock::OwnedMutexLockFuture,
+    stream::{FuturesUnordered, StreamExt},
+};
 
 use crate::AsyncRuntime;
 
@@ -18,15 +20,17 @@ type FuturesVec<T> = RefCell<Vec<Option<T>>>;
 ///
 /// TODO: change future lookup in poll from O(n) to O(1).
 pub struct Spawner<'js> {
-    futures: FuturesVec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
-    wakeup: Vec<Waker>,
+    futures: RefCell<FuturesUnordered<Pin<Box<dyn Future<Output = ()> + 'js>>>>,
+    pending: RefCell<Vec<Pin<Box<dyn Future<Output = ()> + 'js>>>>,
+    waiting: Vec<Waker>,
 }
 
 impl<'js> Spawner<'js> {
     pub fn new() -> Self {
         Spawner {
-            futures: RefCell::new(Vec::new()),
-            wakeup: Vec::new(),
+            futures: RefCell::new(FuturesUnordered::new()),
+            pending: RefCell::new(Vec::new()),
+            waiting: Vec::new(),
         }
     }
 
@@ -34,12 +38,18 @@ impl<'js> Spawner<'js> {
     where
         F: Future<Output = ()> + 'js,
     {
-        self.wakeup.drain(..).for_each(Waker::wake);
-        self.futures.borrow_mut().push(Some(Box::pin(f)))
+        let f = Box::pin(f);
+        if let Ok(x) = self.futures.try_borrow_mut() {
+            x.push(f);
+        } else {
+            self.pending.borrow_mut().push(f);
+        }
+        //self.wakeup.drain(..).for_each(Waker::wake);
+        //self.futures.borrow_mut().push(Some(Box::pin(f)))
     }
 
     pub fn listen(&mut self, wake: Waker) {
-        self.wakeup.push(wake);
+        self.waiting.push(wake);
     }
 
     // Drives the runtime futures forward, returns false if their where no futures
@@ -54,7 +64,7 @@ impl<'js> Spawner<'js> {
 
 impl Drop for Spawner<'_> {
     fn drop(&mut self) {
-        self.wakeup.drain(..).for_each(Waker::wake)
+        //self.wakeup.drain(..).for_each(Waker::wake)
     }
 }
 
@@ -64,37 +74,31 @@ impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
     type Output = bool;
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        if self.0.futures.borrow().is_empty() {
+        let mut borrow = self.0.futures.borrow_mut();
+        self.0.pending.borrow_mut().drain(..).for_each(|x| {
+            borrow.push(x);
+        });
+
+        if borrow.is_empty() {
             return Poll::Ready(false);
         }
 
-        let mut i = 0;
-        let mut did_complete = false;
-        while i < self.0.futures.borrow().len() {
-            let mut borrow = self.0.futures.borrow_mut()[i].take().unwrap();
-            if borrow.as_mut().poll(cx).is_pending() {
-                // put back.
-                self.0.futures.borrow_mut()[i] = Some(borrow);
-            } else {
-                did_complete = true;
-            }
-            i += 1;
-        }
+        let res = match borrow.poll_next_unpin(cx) {
+            Poll::Ready(_) => Poll::Ready(true),
+            Poll::Pending => Poll::Pending,
+        };
 
-        self.0.futures.borrow_mut().retain_mut(|f| f.is_some());
-
-        if did_complete {
-            Poll::Ready(true)
-        } else {
-            Poll::Pending
-        }
+        self.0.pending.borrow_mut().drain(..).for_each(|x| {
+            borrow.push(x);
+        });
+        res
     }
 }
 
 enum DriveFutureState {
     Initial,
     Lock {
-        lock_future: LockArc<InnerRuntime>,
+        lock_future: OwnedMutexLockFuture<InnerRuntime>,
         // Here to ensure the lock remains valid.
         _runtime: AsyncRuntime,
     },
@@ -130,7 +134,7 @@ impl Future for DriveFuture {
                         return Poll::Ready(());
                     };
 
-                    let lock_future = _runtime.inner.lock_arc();
+                    let lock_future = _runtime.inner.clone().lock_owned();
                     self.state = DriveFutureState::Lock {
                         lock_future,
                         _runtime,

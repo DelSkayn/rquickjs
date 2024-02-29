@@ -5,7 +5,7 @@ use crate::{
 };
 use std::{
     collections::{hash_map::Iter as HashMapIter, HashMap},
-    iter::{ExactSizeIterator, FusedIterator},
+    iter::FusedIterator,
     ops::{Deref, DerefMut},
 };
 
