@@ -302,8 +302,8 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Convert from value.
     #[inline]
-    pub fn from_value(value: Value<'js>) -> Result<Self> {
-        if let Some(cls) = value.clone().into_object().and_then(Self::from_object) {
+    pub fn from_value(value: &Value<'js>) -> Result<Self> {
+        if let Some(cls) = value.as_object().and_then(Self::from_object) {
             return Ok(cls);
         }
         Err(Error::FromJs {
@@ -321,7 +321,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Converts a generic object into a class if the object is of the right class.
     #[inline]
-    pub fn from_object(object: Object<'js>) -> Option<Self> {
+    pub fn from_object(object: &Object<'js>) -> Option<Self> {
         object.into_class().ok()
     }
 }
@@ -344,11 +344,11 @@ impl<'js> Object<'js> {
     }
 
     /// Turn the object into the class if it is an instance of that class.
-    pub fn into_class<C: JsClass<'js>>(self) -> std::result::Result<Class<'js, C>, Self> {
+    pub fn into_class<C: JsClass<'js>>(&self) -> std::result::Result<Class<'js, C>, &Self> {
         if self.instance_of::<C>() {
-            Ok(Class(self, PhantomData))
+            Ok(Class(self.clone(), PhantomData))
         } else {
-            Err(self)
+            Err(&self)
         }
     }
 
@@ -366,14 +366,7 @@ impl<'js> Object<'js> {
 
 impl<'js, C: JsClass<'js>> FromJs<'js> for Class<'js, C> {
     fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
-        if let Some(cls) = value.clone().into_object().and_then(Self::from_object) {
-            return Ok(cls);
-        }
-        Err(Error::FromJs {
-            from: value.type_name(),
-            to: C::NAME,
-            message: None,
-        })
+        Self::from_value(&value)
     }
 }
 
