@@ -147,7 +147,7 @@ mod test {
     use crate::{
         async_with,
         function::{Async, Func},
-        AsyncContext, AsyncRuntime, CaughtError, Exception, Function, Result,
+        AsyncContext, AsyncRuntime,
     };
 
     async fn set_timeout<'js>(cb: Function<'js>, number: f64) -> Result<()> {

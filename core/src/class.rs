@@ -388,7 +388,7 @@ mod test {
         function::This,
         test_with,
         value::Constructor,
-        Class, Context, FromJs, Function, IntoJs, Object, Runtime, Value,
+        Class, Context, FromJs, Function, IntoJs, Object, Runtime,
     };
 
     /// Test circular references.

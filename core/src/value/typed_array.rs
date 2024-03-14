@@ -3,7 +3,6 @@ use crate::{
     Result, Value,
 };
 use std::{
-    convert::{TryFrom, TryInto},
     fmt,
     marker::PhantomData,
     mem::{self, MaybeUninit},

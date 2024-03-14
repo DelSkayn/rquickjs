@@ -14,6 +14,7 @@ unsafe impl Sync for ClassId {}
 
 impl ClassId {
     /// Create a new class id.
+    #[allow(clippy::new_without_default)]
     pub const fn new() -> Self {
         Self {
             id: Cell::new(0),

@@ -185,10 +185,6 @@ where
 }
 
 impl<T> Persistent<T> {
-    fn new_raw(rt: *mut qjs::JSRuntime, value: T) -> Self {
-        Self { rt, value }
-    }
-
     unsafe fn outlive_transmute<'from, 'to, U>(t: U) -> U::Target<'to>
     where
         U: Outlive<'from>,

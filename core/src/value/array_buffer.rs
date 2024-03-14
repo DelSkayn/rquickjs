@@ -1,7 +1,6 @@
 use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value};
 use core::fmt;
 use std::{
-    convert::TryInto,
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
     os::raw::c_void,

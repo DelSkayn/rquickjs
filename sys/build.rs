@@ -85,7 +85,7 @@ fn download_wasi_sdk() -> PathBuf {
 
 fn get_wasi_sdk_path() -> PathBuf {
     std::env::var_os("WASI_SDK")
-        .map(|path| PathBuf::from(path))
+        .map(PathBuf::from)
         .unwrap_or_else(download_wasi_sdk)
 }
 

@@ -99,7 +99,8 @@ impl Context {
         &self.0.rt
     }
 
-    pub(crate) fn get_runtime_ptr(&self) -> *mut qjs::JSRuntime {
+    #[allow(dead_code)]
+    pub fn get_runtime_ptr(&self) -> *mut qjs::JSRuntime {
         unsafe { qjs::JS_GetRuntime(self.0.ctx.as_ptr()) }
     }
 
