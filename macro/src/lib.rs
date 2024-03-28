@@ -55,6 +55,7 @@ mod trace;
 /// | `set`          | Flag      | Creates a setter for this field, allowing write access to the field from JavaSccript.   |
 /// | `enumerable`   | Flag      | Makes the field, if it has a getter or setter, enumerable in JavaScript.                |
 /// | `configurable` | Flag      | Makes the field, if it has a getter or setter, configurable in JavaScript.              |
+/// | `skip_trace`   | Flag      | Skips the field deriving the `Trace` trait.                                             |
 /// | `rename`       | String    | Changes the name of the field getter and/or setter to the specified name in JavaScript. |
 ///
 ///
