@@ -22,7 +22,7 @@ pub(crate) struct Opaque<'js> {
     pub interrupt_handler: Option<InterruptHandler>,
 
     #[cfg(feature = "futures")]
-    pub spawner: Option<Spawner<'js>>,
+    pub spawner: Option<Spawner>,
 
     _marker: PhantomData<&'js ()>,
 }
@@ -50,7 +50,7 @@ impl<'js> Opaque<'js> {
     }
 
     #[cfg(feature = "futures")]
-    pub fn spawner(&mut self) -> &mut Spawner<'js> {
+    pub fn spawner(&mut self) -> &mut Spawner {
         self.spawner
             .as_mut()
             .expect("tried to use async function in non async runtime")

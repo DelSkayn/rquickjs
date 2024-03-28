@@ -348,7 +348,7 @@ impl<'js> Object<'js> {
         if self.instance_of::<C>() {
             Ok(Class(self.clone(), PhantomData))
         } else {
-            Err(&self)
+            Err(self)
         }
     }
 

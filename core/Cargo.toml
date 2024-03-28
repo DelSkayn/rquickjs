@@ -42,6 +42,11 @@ optional = true
 version = "1.3"
 optional = true
 
+[dependencies.atomic-waker]
+version = "1.1.2"
+optional = true
+
+
 [features]
 default = []
 
@@ -84,7 +89,7 @@ properties = []
 array-buffer = []
 
 # Enable interop between Rust futures and JS Promises
-futures = ["async-lock"]
+futures = ["dep:async-lock","dep:atomic-waker"]
 
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
@@ -128,3 +133,4 @@ trybuild = "1.0.23"
 
 [package.metadata.docs.rs]
 features = ["full-async", "doc-cfg"]
+
