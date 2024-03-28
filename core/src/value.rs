@@ -402,6 +402,12 @@ impl<'js> Value<'js> {
     pub unsafe fn from_raw(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
         Self::from_js_value(ctx, value)
     }
+
+    /// Get reference count of value
+    #[inline]
+    pub fn ref_count(&self) -> i32 {
+        unsafe { qjs::JS_ValueRefCount(self.value) }
+    }
 }
 
 impl<'js> AsRef<Value<'js>> for Value<'js> {
