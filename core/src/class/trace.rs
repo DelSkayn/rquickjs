@@ -77,6 +77,17 @@ where
     }
 }
 
+impl<'js, T> Trace<'js> for Option<T>
+where
+    T: Trace<'js>,
+{
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        if let Some(inner) = &self {
+            inner.trace(tracer);
+        }
+    }
+}
+
 macro_rules! trace_impls {
 
     (primitive: $( $(#[$meta:meta])* $($type:ident)::+$(<$lt:lifetime>)?,)*) => {
