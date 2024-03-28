@@ -1,5 +1,8 @@
 use std::marker::PhantomData;
 
+#[cfg(feature = "either")]
+use either::{Either, Left, Right};
+
 use crate::{markers::Invariant, qjs, Class, Ctx, Value};
 
 use super::JsClass;
@@ -84,6 +87,21 @@ where
     fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
         if let Some(inner) = &self {
             inner.trace(tracer);
+        }
+    }
+}
+
+#[cfg(feature = "either")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "either")))]
+impl<'js, L, R> Trace<'js> for Either<L, R>
+where
+    L: Trace<'js>,
+    R: Trace<'js>,
+{
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        match self {
+            Left(l) => l.trace(tracer),
+            Right(r) => r.trace(tracer),
         }
     }
 }
