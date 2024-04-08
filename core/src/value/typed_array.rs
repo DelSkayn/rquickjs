@@ -320,7 +320,7 @@ impl<'js> Object<'js> {
     /// Interpret as [`TypedArray`]
     ///
     /// # Safety
-    /// Yous should be sure that the object actually is the required type.
+    /// You should be sure that the object actually is the required type.
     pub unsafe fn ref_typed_array<'a, T: TypedArrayItem>(&'a self) -> &'a TypedArray<T> {
         mem::transmute(self)
     }
