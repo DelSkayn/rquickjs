@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicPtr, Ordering},
 };
 
-use atomic_waker::AtomicWaker;
+use super::atomic_waker::AtomicWaker;
 
 pub struct NodeHeader {
     next: AtomicPtr<NodeHeader>,

@@ -19,6 +19,8 @@ use vtable::VTable;
 
 mod waker;
 
+mod atomic_waker;
+
 use self::queue::NodeHeader;
 
 use std::ops::{Deref, DerefMut};
