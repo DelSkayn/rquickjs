@@ -30,6 +30,7 @@ package = "either"
 version = "1"
 optional = true
 
+
 [workspace]
 members = [
     "sys",
@@ -128,3 +129,4 @@ trybuild = "1.0.82"
 
 [package.metadata.docs.rs]
 features = ["full-async", "parallel", "doc-cfg"]
+

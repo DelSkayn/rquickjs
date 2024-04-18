@@ -1,41 +1,37 @@
 use std::{
-    cell::RefCell,
     future::Future,
     pin::{pin, Pin},
-    task::ready,
-    task::{Poll, Waker},
+    task::{ready, Poll, Waker},
 };
 
 use async_lock::futures::LockArc;
 
 use crate::AsyncRuntime;
 
-use super::{AsyncWeakRuntime, InnerRuntime};
-
-type FuturesVec<T> = RefCell<Vec<Option<T>>>;
+use super::{schedular::Schedular, AsyncWeakRuntime, InnerRuntime};
 
 /// A structure to hold futures spawned inside the runtime.
 ///
 /// TODO: change future lookup in poll from O(n) to O(1).
-pub struct Spawner<'js> {
-    futures: FuturesVec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
+pub struct Spawner {
+    schedular: Schedular,
     wakeup: Vec<Waker>,
 }
 
-impl<'js> Spawner<'js> {
+impl Spawner {
     pub fn new() -> Self {
         Spawner {
-            futures: RefCell::new(Vec::new()),
+            schedular: Schedular::new(),
             wakeup: Vec::new(),
         }
     }
 
-    pub fn push<F>(&mut self, f: F)
+    pub unsafe fn push<F>(&mut self, f: F)
     where
-        F: Future<Output = ()> + 'js,
+        F: Future<Output = ()>,
     {
+        unsafe { self.schedular.push(f) };
         self.wakeup.drain(..).for_each(Waker::wake);
-        self.futures.borrow_mut().push(Some(Box::pin(f)))
     }
 
     pub fn listen(&mut self, wake: Waker) {
@@ -43,51 +39,22 @@ impl<'js> Spawner<'js> {
     }
 
     // Drives the runtime futures forward, returns false if their where no futures
-    pub fn drive<'a>(&'a self) -> SpawnFuture<'a, 'js> {
+    pub fn drive<'a>(&'a self) -> SpawnFuture<'a> {
         SpawnFuture(self)
     }
 
     pub fn is_empty(&mut self) -> bool {
-        self.futures.borrow().is_empty()
+        self.schedular.is_empty()
     }
 }
 
-impl Drop for Spawner<'_> {
-    fn drop(&mut self) {
-        self.wakeup.drain(..).for_each(Waker::wake)
-    }
-}
+pub struct SpawnFuture<'a>(&'a Spawner);
 
-pub struct SpawnFuture<'a, 'js>(&'a Spawner<'js>);
-
-impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
+impl<'a> Future for SpawnFuture<'a> {
     type Output = bool;
 
     fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        if self.0.futures.borrow().is_empty() {
-            return Poll::Ready(false);
-        }
-
-        let mut i = 0;
-        let mut did_complete = false;
-        while i < self.0.futures.borrow().len() {
-            let mut borrow = self.0.futures.borrow_mut()[i].take().unwrap();
-            if borrow.as_mut().poll(cx).is_pending() {
-                // put back.
-                self.0.futures.borrow_mut()[i] = Some(borrow);
-            } else {
-                did_complete = true;
-            }
-            i += 1;
-        }
-
-        self.0.futures.borrow_mut().retain_mut(|f| f.is_some());
-
-        if did_complete {
-            Poll::Ready(true)
-        } else {
-            Poll::Pending
-        }
+        unsafe { self.0.schedular.poll(cx) }
     }
 }
 

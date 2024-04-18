@@ -19,6 +19,8 @@ pub(crate) use r#async::InnerRuntime;
 #[cfg(feature = "futures")]
 pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
 #[cfg(feature = "futures")]
+mod schedular;
+#[cfg(feature = "futures")]
 mod spawner;
 
 /// A struct with information about the runtimes memory usage.
