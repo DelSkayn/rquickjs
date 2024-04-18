@@ -1,5 +1,5 @@
 diff --git a/cutils.c b/cutils.c
-index a02fb76..f28e6f6 100644
+index c0aacef..c861f74 100644
 --- a/cutils.c
 +++ b/cutils.c
 @@ -29,6 +29,32 @@
@@ -36,13 +36,14 @@ index a02fb76..f28e6f6 100644
  {
      int c;
 diff --git a/cutils.h b/cutils.h
-index 31f7cd8..3363ec5 100644
+index f079e5c..deca4dd 100644
 --- a/cutils.h
 +++ b/cutils.h
-@@ -28,14 +28,34 @@
- #include <stdlib.h>
+@@ -29,11 +29,33 @@
+ #include <string.h>
  #include <inttypes.h>
  
++
 +#ifdef _MSC_VER
 +#include <windows.h>
 +#include <intrin.h>
@@ -52,9 +53,7 @@ index 31f7cd8..3363ec5 100644
 +#include <sys/time.h>
 +#endif
 +
- /* set if CPU is big endian */
- #undef WORDS_BIGENDIAN
- 
++
 +#ifndef __has_attribute
 +#define likely(x)    (x)
 +#define unlikely(x)  (x)
@@ -74,7 +73,7 @@ index 31f7cd8..3363ec5 100644
  
  #define xglue(x, y) x ## y
  #define glue(x, y) xglue(x, y)
-@@ -114,27 +134,88 @@ static inline int64_t min_int64(int64_t a, int64_t b)
+@@ -128,27 +150,90 @@ static inline int64_t min_int64(int64_t a, int64_t b)
  /* WARNING: undefined if a = 0 */
  static inline int clz32(unsigned int a)
  {
@@ -94,15 +93,15 @@ index 31f7cd8..3363ec5 100644
 +    unsigned long idx;
 +    // BitScanReverse scans from MSB to LSB for first set bit.
 +    // Returns 0 if no set bit is found.
-+#  if INTPTR_MAX >= INT64_MAX // 64-bit
++#if INTPTR_MAX >= INT64_MAX // 64-bit
 +    _BitScanReverse64(&idx, a);
-+#  else
++#else
 +    // Scan the high 32 bits.
 +    if (_BitScanReverse(&idx, (uint32_t)(a >> 32)))
 +        return 63 ^ (idx + 32);
 +    // Scan the low 32 bits.
 +    _BitScanReverse(&idx, (uint32_t)(a));
-+#  endif
++#endif
 +    return 63 ^ idx;
 +#else
      return __builtin_clzll(a);
@@ -128,10 +127,10 @@ index 31f7cd8..3363ec5 100644
 +    unsigned long idx;
 +    // Search from LSB to MSB for first set bit.
 +    // Returns zero if no set bit is found.
-+#  if INTPTR_MAX >= INT64_MAX // 64-bit
++#if INTPTR_MAX >= INT64_MAX // 64-bit
 +    _BitScanForward64(&idx, a);
 +    return idx;
-+#  else
++#else
 +    // Win32 doesn't have _BitScanForward64 so emulate it with two 32 bit calls.
 +    // Scan the Low Word.
 +    if (_BitScanForward(&idx, (uint32_t)(a)))
@@ -139,12 +138,14 @@ index 31f7cd8..3363ec5 100644
 +    // Scan the High Word.
 +    _BitScanForward(&idx, (uint32_t)(a >> 32));
 +    return idx + 32;
-+#  endif
++#endif
++
 +#else
      return __builtin_ctzll(a);
 +#endif
  }
  
++
 +#ifdef _MSC_VER
 +#pragma pack(push, 1)
 +struct packed_u64 {
@@ -163,7 +164,7 @@ index 31f7cd8..3363ec5 100644
  struct __attribute__((packed)) packed_u64 {
      uint64_t v;
  };
-@@ -146,6 +227,7 @@ struct __attribute__((packed)) packed_u32 {
+@@ -160,6 +245,7 @@ struct __attribute__((packed)) packed_u32 {
  struct __attribute__((packed)) packed_u16 {
      uint16_t v;
  };
@@ -172,31 +173,32 @@ index 31f7cd8..3363ec5 100644
  static inline uint64_t get_u64(const uint8_t *tab)
  {
 diff --git a/libbf.h b/libbf.h
-index 48e9d95..dc2137a 100644
+index a1436ab..65e111c 100644
 --- a/libbf.h
 +++ b/libbf.h
 @@ -27,7 +27,7 @@
  #include <stddef.h>
  #include <stdint.h>
  
--#if INTPTR_MAX >= INT64_MAX
-+#if INTPTR_MAX >= INT64_MAX && !defined(_MSC_VER)
+-#if defined(__SIZEOF_INT128__) && (INTPTR_MAX >= INT64_MAX)
++#if defined(__SIZEOF_INT128__) && (INTPTR_MAX >= INT64_MAX) && !defined(_MSC_VER)
  #define LIMB_LOG2_BITS 6
  #else
  #define LIMB_LOG2_BITS 5
 diff --git a/quickjs.c b/quickjs.c
-index 5098719..de6741e 100644
+index e8fdd8a..9c121a9 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -28,7 +28,6 @@
- #include <inttypes.h>
- #include <string.h>
- #include <assert.h>
--#include <sys/time.h>
- #include <time.h>
- #include <fenv.h>
- #include <math.h>
-@@ -50,7 +49,7 @@
+@@ -14,7 +14,7 @@
+  * The above copyright notice and this permission notice shall be included in
+  * all copies or substantial portions of the Software.
+  *
+- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR && !defined(_MSC_VER)
+  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+  * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+@@ -48,7 +48,7 @@
  
  #define OPTIMIZE         1
  #define SHORT_OPCODES    1
@@ -205,7 +207,7 @@ index 5098719..de6741e 100644
  #define DIRECT_DISPATCH  0
  #else
  #define DIRECT_DISPATCH  1
-@@ -69,11 +68,11 @@
+@@ -67,11 +67,11 @@
  
  /* define to include Atomics.* operations which depend on the OS
     threads */
@@ -219,7 +221,16 @@ index 5098719..de6741e 100644
  /* enable stack limitation */
  #define CONFIG_STACK_CHECK
  #endif
-@@ -7250,7 +7249,7 @@ static int JS_DefinePrivateField(JSContext *ctx, JSValueConst obj,
+@@ -1595,7 +1595,7 @@ static void set_dummy_numeric_ops(JSNumericOperations *ops)
+     ops->mul_pow10 = invalid_mul_pow10;
+ }
+ 
+-#if !defined(CONFIG_STACK_CHECK)
++#if !defined(CONFIG_STACK_CHECK) && 
+ /* no stack limitation */
+ static inline uintptr_t js_get_stack_pointer(void)
+ {
+@@ -7302,7 +7302,7 @@ static int JS_DefinePrivateField(JSContext *ctx, JSValueConst obj,
          JS_ThrowTypeErrorNotASymbol(ctx);
          goto fail;
      }
@@ -228,7 +239,7 @@ index 5098719..de6741e 100644
      p = JS_VALUE_GET_OBJ(obj);
      prs = find_own_property(&pr, p, prop);
      if (prs) {
-@@ -7281,7 +7280,7 @@ static JSValue JS_GetPrivateField(JSContext *ctx, JSValueConst obj,
+@@ -7333,7 +7333,7 @@ static JSValue JS_GetPrivateField(JSContext *ctx, JSValueConst obj,
      /* safety check */
      if (unlikely(JS_VALUE_GET_TAG(name) != JS_TAG_SYMBOL))
          return JS_ThrowTypeErrorNotASymbol(ctx);
@@ -237,7 +248,7 @@ index 5098719..de6741e 100644
      p = JS_VALUE_GET_OBJ(obj);
      prs = find_own_property(&pr, p, prop);
      if (!prs) {
-@@ -7308,7 +7307,7 @@ static int JS_SetPrivateField(JSContext *ctx, JSValueConst obj,
+@@ -7360,7 +7360,7 @@ static int JS_SetPrivateField(JSContext *ctx, JSValueConst obj,
          JS_ThrowTypeErrorNotASymbol(ctx);
          goto fail;
      }
@@ -246,16 +257,16 @@ index 5098719..de6741e 100644
      p = JS_VALUE_GET_OBJ(obj);
      prs = find_own_property(&pr, p, prop);
      if (!prs) {
-@@ -7398,7 +7397,7 @@ static int JS_CheckBrand(JSContext *ctx, JSValueConst obj, JSValueConst func)
-     if (unlikely(JS_VALUE_GET_TAG(obj) != JS_TAG_OBJECT))
-         goto not_obj;
+@@ -7459,7 +7459,7 @@ static int JS_CheckBrand(JSContext *ctx, JSValueConst obj, JSValueConst func)
+         return -1;
+     }
      p = JS_VALUE_GET_OBJ(obj);
 -    prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, (JSValue)brand));
-+    prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, *(JSValue*)&brand));
-     if (!prs) {
-         JS_ThrowTypeError(ctx, "invalid brand on object");
-         return -1;
-@@ -9050,7 +9049,7 @@ int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
++    prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, *(JSValue&)&brand));
+     return (prs != NULL);
+ }
+ 
+@@ -9079,7 +9079,7 @@ int JS_DefineProperty(JSContext *ctx, JSValueConst this_obj,
                  return -1;
              }
              /* this code relies on the fact that Uint32 are never allocated */
@@ -264,7 +275,7 @@ index 5098719..de6741e 100644
              /* prs may have been modified */
              prs = find_own_property(&pr, p, prop);
              assert(prs != NULL);
-@@ -16051,7 +16050,7 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
+@@ -15980,7 +15980,7 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
  #else
      sf->js_mode = 0;
  #endif
@@ -273,16 +284,7 @@ index 5098719..de6741e 100644
      sf->arg_count = argc;
      arg_buf = argv;
  
-@@ -16064,7 +16063,7 @@ static JSValue js_call_c_function(JSContext *ctx, JSValueConst func_obj,
-             arg_buf[i] = JS_UNDEFINED;
-         sf->arg_count = arg_count;
-     }
--    sf->arg_buf = (JSValue*)arg_buf;
-+    sf->arg_buf = (JSValueConst*)arg_buf;
- 
-     func = p->u.cfunc.c_function;
-     switch(cproto) {
-@@ -16295,7 +16294,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
+@@ -16225,7 +16225,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
      sf->js_mode = b->js_mode;
      arg_buf = argv;
      sf->arg_count = argc;
@@ -291,7 +293,7 @@ index 5098719..de6741e 100644
      init_list_head(&sf->var_ref_list);
      var_refs = p->u.func.var_refs;
  
-@@ -39266,8 +39265,8 @@ static int64_t JS_FlattenIntoArray(JSContext *ctx, JSValueConst target,
+@@ -40392,8 +40392,8 @@ static int64_t JS_FlattenIntoArray(JSContext *ctx, JSValueConst target,
          if (!JS_IsUndefined(mapperFunction)) {
              JSValueConst args[3] = { element, JS_NewInt64(ctx, sourceIndex), source };
              element = JS_Call(ctx, mapperFunction, thisArg, 3, args);
@@ -302,7 +304,7 @@ index 5098719..de6741e 100644
              if (JS_IsException(element))
                  return -1;
          }
-@@ -40684,7 +40683,7 @@ static JSValue js_string_match(JSContext *ctx, JSValueConst this_val,
+@@ -41959,7 +41959,7 @@ static JSValue js_string_match(JSContext *ctx, JSValueConst this_val,
          str = JS_NewString(ctx, "g");
          if (JS_IsException(str))
              goto fail;
@@ -311,29 +313,7 @@ index 5098719..de6741e 100644
      }
      rx = JS_CallConstructor(ctx, ctx->regexp_ctor, args_len, args);
      JS_FreeValue(ctx, str);
-@@ -41914,6 +41913,10 @@ static JSValue js_math_random(JSContext *ctx, JSValueConst this_val,
-     return __JS_NewFloat64(ctx, u.d - 1.0);
- }
- 
-+#pragma function (ceil)
-+#pragma function (floor)
-+#pragma function (log2)
-+
- static const JSCFunctionListEntry js_math_funcs[] = {
-     JS_CFUNC_MAGIC_DEF("min", 2, js_math_min_max, 0 ),
-     JS_CFUNC_MAGIC_DEF("max", 2, js_math_min_max, 1 ),
-@@ -41997,7 +42000,9 @@ static JSValue js___date_clock(JSContext *ctx, JSValueConst this_val,
-    between UTC time and local time 'd' in minutes */
- static int getTimezoneOffset(int64_t time) {
- #if defined(_WIN32)
--    /* XXX: TODO */
-+    TIME_ZONE_INFORMATION tzi;
-+    if (!GetTimeZoneInformation(&tzi))
-+        return tzi.Bias;
-     return 0;
- #else
-     time_t ti;
-@@ -45712,7 +45717,7 @@ static JSMapRecord *map_add_record(JSContext *ctx, JSMapState *s,
+@@ -47158,7 +47158,7 @@ static JSMapRecord *map_add_record(JSContext *ctx, JSMapState *s,
      } else {
          JS_DupValue(ctx, key);
      }
@@ -342,7 +322,7 @@ index 5098719..de6741e 100644
      h = map_hash_key(ctx, key) & (s->hash_size - 1);
      list_add_tail(&mr->hash_link, &s->hash_table[h]);
      list_add_tail(&mr->link, &s->records);
-@@ -45934,7 +45939,7 @@ static JSValue js_map_forEach(JSContext *ctx, JSValueConst this_val,
+@@ -47380,7 +47380,7 @@ static JSValue js_map_forEach(JSContext *ctx, JSValueConst this_val,
                  args[0] = args[1];
              else
                  args[0] = JS_DupValue(ctx, mr->value);
@@ -351,26 +331,19 @@ index 5098719..de6741e 100644
              ret = JS_Call(ctx, func, this_arg, 3, (JSValueConst *)args);
              JS_FreeValue(ctx, args[0]);
              if (!magic)
-@@ -46912,7 +46917,7 @@ static JSValue js_promise_all(JSContext *ctx, JSValueConst this_val,
-                 goto fail_reject;
-             }
-             resolve_element_data[0] = JS_NewBool(ctx, FALSE);
--            resolve_element_data[1] = (JSValueConst)JS_NewInt32(ctx, index);
-+            resolve_element_data[1] = JS_NewInt32(ctx, index);
-             resolve_element_data[2] = values;
-             resolve_element_data[3] = resolving_funcs[is_promise_any];
-             resolve_element_data[4] = resolve_element_env;
-@@ -47271,7 +47276,7 @@ static JSValue js_async_from_sync_iterator_unwrap_func_create(JSContext *ctx,
- {
-     JSValueConst func_data[1];
- 
--    func_data[0] = (JSValueConst)JS_NewBool(ctx, done);
-+    func_data[0] = JS_NewBool(ctx, done);
-     return JS_NewCFunctionData(ctx, js_async_from_sync_iterator_unwrap,
-                                1, 0, 1, func_data);
+@@ -48804,6 +48804,10 @@ static JSValue js_promise_finally(JSContext *ctx, JSValueConst this_val,
+     return ret;
  }
-@@ -52700,8 +52705,8 @@ static int js_TA_cmp_generic(const void *a, const void *b, void *opaque) {
-             psc->exception = 1;
+ 
++#pragma function (ciel)
++#pragma function (floor)
++#pragma function (log2)
++
+ static const JSCFunctionListEntry js_promise_funcs[] = {
+     JS_CFUNC_MAGIC_DEF("resolve", 1, js_promise_resolve, 0 ),
+     JS_CFUNC_MAGIC_DEF("reject", 1, js_promise_resolve, 1 ),
+@@ -54601,8 +54605,8 @@ static int js_TA_cmp_generic(const void *a, const void *b, void *opaque) {
+             psc->exception = 2;
          }
      done:
 -        JS_FreeValue(ctx, (JSValue)argv[0]);
@@ -381,10 +354,10 @@ index 5098719..de6741e 100644
      return cmp;
  }
 diff --git a/quickjs.h b/quickjs.h
-index d4a5cd3..299d938 100644
+index 7199936..30fdb2f 100644
 --- a/quickjs.h
 +++ b/quickjs.h
-@@ -666,7 +666,7 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
+@@ -670,7 +670,7 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
          JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
          p->ref_count++;
      }
@@ -393,7 +366,7 @@ index d4a5cd3..299d938 100644
  }
  
  static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
-@@ -675,7 +675,7 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
+@@ -679,7 +679,7 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
          JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
          p->ref_count++;
      }
