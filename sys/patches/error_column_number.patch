@@ -1,5 +1,5 @@
 diff --git a/cutils.c b/cutils.c
-index a02fb768..3c0e47a6 100644
+index c0aacef..37ed9c2 100644
 --- a/cutils.c
 +++ b/cutils.c
 @@ -303,6 +303,16 @@ int unicode_from_utf8(const uint8_t *p, int max_len, const uint8_t **pp)
@@ -20,19 +20,19 @@ index a02fb768..3c0e47a6 100644
  
  #if defined(EMSCRIPTEN) || defined(__ANDROID__)
 diff --git a/cutils.h b/cutils.h
-index 31f7cd84..4e0519c9 100644
+index f079e5c..75ab735 100644
 --- a/cutils.h
 +++ b/cutils.h
-@@ -277,6 +277,7 @@ static inline void dbuf_set_error(DynBuf *s)
+@@ -297,6 +297,7 @@ static inline void dbuf_set_error(DynBuf *s)
  
  int unicode_to_utf8(uint8_t *buf, unsigned int c);
  int unicode_from_utf8(const uint8_t *p, int max_len, const uint8_t **pp);
 +int utf8_str_len(const uint8_t *p_start, const uint8_t *p_end);
  
- static inline int from_hex(int c)
+ static inline BOOL is_surrogate(uint32_t c)
  {
 diff --git a/quickjs-atom.h b/quickjs-atom.h
-index 4c227945..d7fe9ced 100644
+index f4d5838..481ddb0 100644
 --- a/quickjs-atom.h
 +++ b/quickjs-atom.h
 @@ -81,6 +81,7 @@ DEF(empty_string, "")
@@ -41,25 +41,25 @@ index 4c227945..d7fe9ced 100644
  DEF(lineNumber, "lineNumber")
 +DEF(columnNumber, "columnNumber")
  DEF(message, "message")
+ DEF(cause, "cause")
  DEF(errors, "errors")
- DEF(stack, "stack")
 diff --git a/quickjs-opcode.h b/quickjs-opcode.h
-index c731a14a..458a8828 100644
+index 1e18212..40cb15e 100644
 --- a/quickjs-opcode.h
 +++ b/quickjs-opcode.h
-@@ -284,6 +284,7 @@ def(scope_put_private_field, 7, 1, 1, atom_u16) /* obj value ->, emitted in phas
+@@ -291,6 +291,7 @@ def(get_array_el_opt_chain, 1, 2, 1, none) /* emitted in phase 1, removed in pha
  def( set_class_name, 5, 1, 1, u32) /* emitted in phase 1, removed in phase 2 */
-     
+ 
  def(       line_num, 5, 0, 0, u32) /* emitted in phase 1, removed in phase 3 */
 +def(       column_num, 5, 0, 0, u32) /* emitted in phase 1, removed in phase 3 */
  
  #if SHORT_OPCODES
  DEF(    push_minus1, 1, 0, 1, none_int)
 diff --git a/quickjs.c b/quickjs.c
-index 79160139..3fb3c09e 100644
+index e8fdd8a..bb9eadc 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -574,6 +574,10 @@ typedef struct JSVarDef {
+@@ -573,6 +573,10 @@ typedef struct JSVarDef {
  #define PC2LINE_RANGE    5
  #define PC2LINE_OP_FIRST 1
  #define PC2LINE_DIFF_PC_MAX ((255 - PC2LINE_OP_FIRST) / PC2LINE_RANGE)
@@ -83,7 +83,7 @@ index 79160139..3fb3c09e 100644
          char *source;
      } debug;
  } JSFunctionBytecode;
-@@ -5829,6 +5836,8 @@ typedef struct JSMemoryUsage_helper {
+@@ -5891,6 +5898,8 @@ typedef struct JSMemoryUsage_helper {
      int64_t js_func_code_size;
      int64_t js_func_pc2line_count;
      int64_t js_func_pc2line_size;
@@ -92,7 +92,7 @@ index 79160139..3fb3c09e 100644
  } JSMemoryUsage_helper;
  
  static void compute_value_size(JSValueConst val, JSMemoryUsage_helper *hp);
-@@ -5876,6 +5885,11 @@ static void compute_bytecode_size(JSFunctionBytecode *b, JSMemoryUsage_helper *h
+@@ -5938,6 +5947,11 @@ static void compute_bytecode_size(JSFunctionBytecode *b, JSMemoryUsage_helper *h
              hp->js_func_pc2line_count += 1;
              hp->js_func_pc2line_size += b->debug.pc2line_len;
          }
@@ -104,7 +104,7 @@ index 79160139..3fb3c09e 100644
      }
      hp->js_func_size += js_func_size;
      hp->js_func_count += 1;
-@@ -6179,13 +6193,17 @@ void JS_ComputeMemoryUsage(JSRuntime *rt, JSMemoryUsage *s)
+@@ -6239,13 +6253,17 @@ void JS_ComputeMemoryUsage(JSRuntime *rt, JSMemoryUsage *s)
      s->js_func_code_size = mem.js_func_code_size;
      s->js_func_pc2line_count = mem.js_func_pc2line_count;
      s->js_func_pc2line_size = mem.js_func_pc2line_size;
@@ -124,7 +124,7 @@ index 79160139..3fb3c09e 100644
  }
  
  void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
-@@ -6297,6 +6315,12 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
+@@ -6357,6 +6375,12 @@ void JS_DumpMemoryUsage(FILE *fp, const JSMemoryUsage *s, JSRuntime *rt)
                      s->js_func_pc2line_size,
                      (double)s->js_func_pc2line_size / s->js_func_pc2line_count);
          }
@@ -137,7 +137,7 @@ index 79160139..3fb3c09e 100644
      }
      if (s->c_func_count) {
          fprintf(fp, "%-20s %8"PRId64"\n", "C functions", s->c_func_count);
-@@ -6441,6 +6465,55 @@ static int find_line_num(JSContext *ctx, JSFunctionBytecode *b,
+@@ -6501,6 +6525,55 @@ static int find_line_num(JSContext *ctx, JSFunctionBytecode *b,
      return line_num;
  }
  
@@ -193,7 +193,7 @@ index 79160139..3fb3c09e 100644
  /* in order to avoid executing arbitrary code during the stack trace
     generation, we only look at simple 'name' properties containing a
     string. */
-@@ -6471,7 +6544,7 @@ static const char *get_func_name(JSContext *ctx, JSValueConst func)
+@@ -6531,7 +6604,7 @@ static const char *get_func_name(JSContext *ctx, JSValueConst func)
     and line number information (used for parse error). */
  static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
                              const char *filename, int line_num,
@@ -202,13 +202,14 @@ index 79160139..3fb3c09e 100644
  {
      JSStackFrame *sf;
      JSValue str;
-@@ -6480,18 +6553,24 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
+@@ -6540,18 +6613,24 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
      const char *str1;
      JSObject *p;
      BOOL backtrace_barrier;
+-
 +    int latest_line_num = -1;
 +    int latest_column_num = -1;
-     
++    
      js_dbuf_init(ctx, &dbuf);
      if (filename) {
          dbuf_printf(&dbuf, "    at %s", filename);
@@ -230,7 +231,7 @@ index 79160139..3fb3c09e 100644
          if (backtrace_flags & JS_BACKTRACE_FLAG_SINGLE_LEVEL)
              goto done;
      }
-@@ -6513,19 +6592,33 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
+@@ -6573,19 +6652,33 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
          if (js_class_has_bytecode(p->class_id)) {
              JSFunctionBytecode *b;
              const char *atom_str;
@@ -269,7 +270,7 @@ index 79160139..3fb3c09e 100644
                  dbuf_putc(&dbuf, ')');
              }
          } else {
-@@ -6545,6 +6638,15 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
+@@ -6605,6 +6698,15 @@ static void build_backtrace(JSContext *ctx, JSValueConst error_obj,
      dbuf_free(&dbuf);
      JS_DefinePropertyValue(ctx, error_obj, JS_ATOM_stack, str,
                             JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
@@ -285,7 +286,7 @@ index 79160139..3fb3c09e 100644
  }
  
  /* Note: it is important that no exception is returned by this function */
-@@ -6584,7 +6686,7 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
+@@ -6644,7 +6746,7 @@ static JSValue JS_ThrowError2(JSContext *ctx, JSErrorEnum error_num,
                                 JS_PROP_WRITABLE | JS_PROP_CONFIGURABLE);
      }
      if (add_backtrace) {
@@ -294,7 +295,7 @@ index 79160139..3fb3c09e 100644
      }
      ret = JS_Throw(ctx, obj);
      return ret;
-@@ -14921,6 +15023,14 @@ static JSValue js_function_proto_lineNumber(JSContext *ctx,
+@@ -14794,6 +14896,14 @@ static JSValue js_function_proto_lineNumber(JSContext *ctx,
      return JS_UNDEFINED;
  }
  
@@ -309,7 +310,7 @@ index 79160139..3fb3c09e 100644
  static int js_arguments_define_own_property(JSContext *ctx,
                                              JSValueConst this_obj,
                                              JSAtom prop, JSValueConst val,
-@@ -18664,7 +18774,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
+@@ -18637,7 +18747,7 @@ static JSValue JS_CallInternal(JSContext *caller_ctx, JSValueConst func_obj,
             before if the exception happens in a bytecode
             operation */
          sf->cur_pc = pc;
@@ -318,7 +319,7 @@ index 79160139..3fb3c09e 100644
      }
      if (!JS_IsUncatchableError(ctx, rt->current_exception)) {
          while (sp > stack_buf) {
-@@ -19928,6 +20038,11 @@ typedef struct LineNumberSlot {
+@@ -19911,6 +20021,11 @@ typedef struct LineNumberSlot {
      int line_num;
  } LineNumberSlot;
  
@@ -330,7 +331,7 @@ index 79160139..3fb3c09e 100644
  typedef enum JSParseFunctionEnum {
      JS_PARSE_FUNC_STATEMENT,
      JS_PARSE_FUNC_VAR,
-@@ -20046,10 +20161,18 @@ typedef struct JSFunctionDef {
+@@ -20030,10 +20145,18 @@ typedef struct JSFunctionDef {
      int line_number_last;
      int line_number_last_pc;
  
@@ -349,7 +350,7 @@ index 79160139..3fb3c09e 100644
  
      char *source;  /* raw source, utf-8 encoded */
      int source_len;
-@@ -20059,7 +20182,8 @@ typedef struct JSFunctionDef {
+@@ -20044,7 +20167,8 @@ typedef struct JSFunctionDef {
  
  typedef struct JSToken {
      int val;
@@ -359,7 +360,7 @@ index 79160139..3fb3c09e 100644
      const uint8_t *ptr;
      union {
          struct {
-@@ -20088,6 +20212,9 @@ typedef struct JSParseState {
+@@ -20073,6 +20197,9 @@ typedef struct JSParseState {
      JSContext *ctx;
      int last_line_num;  /* line number of last token */
      int line_num;       /* line number of current offset */
@@ -369,7 +370,7 @@ index 79160139..3fb3c09e 100644
      const char *filename;
      JSToken token;
      BOOL got_lf; /* true if got line feed before the current token */
-@@ -20230,11 +20357,19 @@ static void __attribute((unused)) dump_token(JSParseState *s,
+@@ -20213,19 +20340,28 @@ static void __attribute((unused)) dump_token(JSParseState *s,
      }
  }
  
@@ -386,11 +387,11 @@ index 79160139..3fb3c09e 100644
      JSContext *ctx = s->ctx;
      va_list ap;
 -    int backtrace_flags;
+-
 +    int backtrace_flags, column_num;
-     
      va_start(ap, fmt);
      JS_ThrowError2(ctx, JS_SYNTAX_ERROR, fmt, ap, FALSE);
-@@ -20242,7 +20377,9 @@ int __attribute__((format(printf, 2, 3))) js_parse_error(JSParseState *s, const
+     va_end(ap);
      backtrace_flags = 0;
      if (s->cur_func && s->cur_func->backtrace_barrier)
          backtrace_flags = JS_BACKTRACE_FLAG_SINGLE_LEVEL;
@@ -400,7 +401,7 @@ index 79160139..3fb3c09e 100644
                      backtrace_flags);
      return -1;
  }
-@@ -20280,6 +20417,7 @@ static __exception int js_parse_template_part(JSParseState *s, const uint8_t *p)
+@@ -20263,6 +20399,7 @@ static __exception int js_parse_template_part(JSParseState *s, const uint8_t *p)
  {
      uint32_t c;
      StringBuffer b_s, *b = &b_s;
@@ -408,7 +409,7 @@ index 79160139..3fb3c09e 100644
  
      /* p points to the first byte of the template part */
      if (string_buffer_init(s->ctx, b, 32))
-@@ -20312,6 +20450,8 @@ static __exception int js_parse_template_part(JSParseState *s, const uint8_t *p)
+@@ -20295,6 +20432,8 @@ static __exception int js_parse_template_part(JSParseState *s, const uint8_t *p)
          }
          if (c == '\n') {
              s->line_num++;
@@ -417,7 +418,7 @@ index 79160139..3fb3c09e 100644
          } else if (c >= 0x80) {
              const uint8_t *p_next;
              c = unicode_from_utf8(p - 1, UTF8_CHAR_LEN_MAX, &p_next);
-@@ -20344,6 +20484,7 @@ static __exception int js_parse_string(JSParseState *s, int sep,
+@@ -20327,6 +20466,7 @@ static __exception int js_parse_string(JSParseState *s, int sep,
      int ret;
      uint32_t c;
      StringBuffer b_s, *b = &b_s;
@@ -425,7 +426,7 @@ index 79160139..3fb3c09e 100644
  
      /* string */
      if (string_buffer_init(s->ctx, b, 32))
-@@ -20399,8 +20540,11 @@ static __exception int js_parse_string(JSParseState *s, int sep,
+@@ -20382,8 +20522,11 @@ static __exception int js_parse_string(JSParseState *s, int sep,
              case '\n':
                  /* ignore escaped newline sequence */
                  p++;
@@ -439,7 +440,7 @@ index 79160139..3fb3c09e 100644
                  continue;
              default:
                  if (c >= '0' && c <= '9') {
-@@ -20673,7 +20817,9 @@ static __exception int next_token(JSParseState *s)
+@@ -20698,7 +20841,9 @@ static __exception int next_token(JSParseState *s)
      s->got_lf = FALSE;
      s->last_line_num = s->token.line_num;
   redo:
@@ -449,7 +450,7 @@ index 79160139..3fb3c09e 100644
      s->token.ptr = p;
      c = *p;
      switch(c) {
-@@ -20704,6 +20850,8 @@ static __exception int next_token(JSParseState *s)
+@@ -20729,6 +20874,8 @@ static __exception int next_token(JSParseState *s)
      line_terminator:
          s->got_lf = TRUE;
          s->line_num++;
@@ -458,16 +459,17 @@ index 79160139..3fb3c09e 100644
          goto redo;
      case '\f':
      case '\v':
-@@ -20727,6 +20875,8 @@ static __exception int next_token(JSParseState *s)
+@@ -20752,7 +20899,8 @@ static __exception int next_token(JSParseState *s)
                  if (*p == '\n') {
                      s->line_num++;
                      s->got_lf = TRUE; /* considered as LF for ASI */
+-                    p++;
 +                    s->column_ptr = ++p;
 +                    s->column_num_count = 0;
-                     p++;
                  } else if (*p == '\r') {
                      s->got_lf = TRUE; /* considered as LF for ASI */
-@@ -21161,6 +21311,9 @@ static __exception int next_token(JSParseState *s)
+                     p++;
+@@ -21164,6 +21312,9 @@ static __exception int next_token(JSParseState *s)
          break;
      }
      s->buf_ptr = p;
@@ -477,7 +479,7 @@ index 79160139..3fb3c09e 100644
  
      //    dump_token(s, &s->token);
      return 0;
-@@ -21219,7 +21372,9 @@ static __exception int json_next_token(JSParseState *s)
+@@ -21222,7 +21373,9 @@ static __exception int json_next_token(JSParseState *s)
      p = s->last_ptr = s->buf_ptr;
      s->last_line_num = s->token.line_num;
   redo:
@@ -487,7 +489,7 @@ index 79160139..3fb3c09e 100644
      s->token.ptr = p;
      c = *p;
      switch(c) {
-@@ -21248,6 +21403,8 @@ static __exception int json_next_token(JSParseState *s)
+@@ -21251,6 +21404,8 @@ static __exception int json_next_token(JSParseState *s)
      case '\n':
          p++;
          s->line_num++;
@@ -496,18 +498,19 @@ index 79160139..3fb3c09e 100644
          goto redo;
      case '\f':
      case '\v':
-@@ -21278,7 +21435,9 @@ static __exception int json_next_token(JSParseState *s)
+@@ -21281,8 +21436,9 @@ static __exception int json_next_token(JSParseState *s)
                      break;
                  }
                  if (*p == '\n') {
 -                    s->line_num++;
+-                    p++;
 +                    s->line_num++;           
 +                    s->column_ptr = ++p;
 +                    s->column_num_count = 0;
-                     p++;
                  } else if (*p == '\r') {
                      p++;
-@@ -21389,6 +21548,9 @@ static __exception int json_next_token(JSParseState *s)
+                 } else if (*p >= 0x80) {
+@@ -21392,6 +21548,9 @@ static __exception int json_next_token(JSParseState *s)
          break;
      }
      s->buf_ptr = p;
@@ -517,7 +520,7 @@ index 79160139..3fb3c09e 100644
  
      //    dump_token(s, &s->token);
      return 0;
-@@ -21569,6 +21731,11 @@ static void emit_atom(JSParseState *s, JSAtom name)
+@@ -21599,6 +21758,11 @@ static void emit_atom(JSParseState *s, JSAtom name)
      emit_u32(s, JS_DupAtom(s->ctx, name));
  }
  
@@ -529,7 +532,7 @@ index 79160139..3fb3c09e 100644
  static int update_label(JSFunctionDef *s, int label, int delta)
  {
      LabelSlot *ls;
-@@ -22123,7 +22290,7 @@ static __exception int js_parse_function_decl(JSParseState *s,
+@@ -22162,7 +22326,7 @@ static __exception int js_parse_function_decl(JSParseState *s,
                                                JSParseFunctionEnum func_type,
                                                JSFunctionKindEnum func_kind,
                                                JSAtom func_name, const uint8_t *ptr,
@@ -538,7 +541,7 @@ index 79160139..3fb3c09e 100644
  static JSFunctionDef *js_parse_function_class_fields_init(JSParseState *s);
  static __exception int js_parse_function_decl2(JSParseState *s,
                                                 JSParseFunctionEnum func_type,
-@@ -22131,6 +22298,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
+@@ -22170,6 +22334,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                                                 JSAtom func_name,
                                                 const uint8_t *ptr,
                                                 int function_line_num,
@@ -546,7 +549,7 @@ index 79160139..3fb3c09e 100644
                                                 JSParseExportEnum export_flag,
                                                 JSFunctionDef **pfd);
  static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags);
-@@ -22424,12 +22592,18 @@ typedef struct JSParsePos {
+@@ -22463,12 +22628,18 @@ typedef struct JSParsePos {
      int line_num;
      BOOL got_lf;
      const uint8_t *ptr;
@@ -565,7 +568,7 @@ index 79160139..3fb3c09e 100644
      sp->ptr = s->token.ptr;
      sp->got_lf = s->got_lf;
      return 0;
-@@ -22439,6 +22613,9 @@ static __exception int js_parse_seek_token(JSParseState *s, const JSParsePos *sp
+@@ -22478,6 +22649,9 @@ static __exception int js_parse_seek_token(JSParseState *s, const JSParsePos *sp
  {
      s->token.line_num = sp->last_line_num;
      s->line_num = sp->line_num;
@@ -575,7 +578,7 @@ index 79160139..3fb3c09e 100644
      s->buf_ptr = sp->ptr;
      s->got_lf = sp->got_lf;
      return next_token(s);
-@@ -22644,7 +22821,7 @@ static __exception int js_parse_object_literal(JSParseState *s)
+@@ -22683,7 +22857,7 @@ static __exception int js_parse_object_literal(JSParseState *s)
  {
      JSAtom name = JS_ATOM_NULL;
      const uint8_t *start_ptr;
@@ -584,7 +587,7 @@ index 79160139..3fb3c09e 100644
      BOOL has_proto;
  
      if (next_token(s))
-@@ -22655,7 +22832,8 @@ static __exception int js_parse_object_literal(JSParseState *s)
+@@ -22694,7 +22868,8 @@ static __exception int js_parse_object_literal(JSParseState *s)
      while (s->token.val != '}') {
          /* specific case for getter/setter */
          start_ptr = s->token.ptr;
@@ -594,7 +597,7 @@ index 79160139..3fb3c09e 100644
  
          if (s->token.val == TOK_ELLIPSIS) {
              if (next_token(s))
-@@ -22701,7 +22879,7 @@ static __exception int js_parse_object_literal(JSParseState *s)
+@@ -22740,7 +22915,7 @@ static __exception int js_parse_object_literal(JSParseState *s)
                      func_kind = JS_FUNC_ASYNC_GENERATOR;
              }
              if (js_parse_function_decl(s, func_type, func_kind, JS_ATOM_NULL,
@@ -603,7 +606,7 @@ index 79160139..3fb3c09e 100644
                  goto fail;
              if (name == JS_ATOM_NULL) {
                  emit_op(s, OP_define_method_computed);
-@@ -22779,7 +22957,7 @@ static __exception int js_parse_class_default_ctor(JSParseState *s,
+@@ -22816,7 +22991,7 @@ static __exception int js_parse_class_default_ctor(JSParseState *s,
  {
      JSParsePos pos;
      const char *str;
@@ -611,8 +614,8 @@ index 79160139..3fb3c09e 100644
 +    int ret, line_num, column_num;
      JSParseFunctionEnum func_type;
      const uint8_t *saved_buf_end;
-     
-@@ -22793,14 +22971,17 @@ static __exception int js_parse_class_default_ctor(JSParseState *s,
+ 
+@@ -22830,14 +23005,17 @@ static __exception int js_parse_class_default_ctor(JSParseState *s,
          func_type = JS_PARSE_FUNC_CLASS_CONSTRUCTOR;
      }
      line_num = s->token.line_num;
@@ -632,7 +635,7 @@ index 79160139..3fb3c09e 100644
      }
      s->buf_end = saved_buf_end;
      ret |= js_parse_seek_token(s, &pos);
-@@ -23084,7 +23265,8 @@ static __exception int js_parse_class(JSParseState *s, BOOL is_class_expr,
+@@ -23146,7 +23324,8 @@ static __exception int js_parse_class(JSParseState *s, BOOL is_class_expr,
              if (js_parse_function_decl2(s, JS_PARSE_FUNC_GETTER + is_set,
                                          JS_FUNC_NORMAL, JS_ATOM_NULL,
                                          start_ptr, s->token.line_num,
@@ -642,38 +645,39 @@ index 79160139..3fb3c09e 100644
                  goto fail;
              if (is_private) {
                  method_fd->need_home_object = TRUE; /* needed for brand check */
-@@ -23228,7 +23410,7 @@ static __exception int js_parse_class(JSParseState *s, BOOL is_class_expr,
-                 if (add_brand(s, &class_fields[is_static]) < 0)
-                     goto fail;
+@@ -23289,7 +23468,7 @@ static __exception int js_parse_class(JSParseState *s, BOOL is_class_expr,
+             if (is_private) {
+                 class_fields[is_static].need_brand = TRUE;
              }
 -            if (js_parse_function_decl2(s, func_type, func_kind, JS_ATOM_NULL, start_ptr, s->token.line_num, JS_PARSE_EXPORT_NONE, &method_fd))
 +            if (js_parse_function_decl2(s, func_type, func_kind, JS_ATOM_NULL, start_ptr, s->token.line_num, s->token.column_num, JS_PARSE_EXPORT_NONE, &method_fd))
                  goto fail;
              if (func_type == JS_PARSE_FUNC_DERIVED_CLASS_CONSTRUCTOR ||
                  func_type == JS_PARSE_FUNC_CLASS_CONSTRUCTOR) {
-@@ -23893,6 +24075,7 @@ static int js_parse_destructuring_element(JSParseState *s, int tok, int is_arg,
+@@ -23979,7 +24158,7 @@ static int js_parse_destructuring_element(JSParseState *s, int tok, int is_arg,
      JSAtom prop_name, var_name;
      int opcode, scope, tok1, skip_bits;
      BOOL has_initializer;
+-
 +    emit_column(s, s->token.column_num);
-     
      if (has_ellipsis < 0) {
          /* pre-parse destructuration target for spread detection */
-@@ -24330,10 +24513,12 @@ static void optional_chain_test(JSParseState *s, int *poptional_chaining_label,
+         js_parse_skip_parens_token(s, &skip_bits, FALSE);
+@@ -24416,10 +24595,12 @@ static void optional_chain_test(JSParseState *s, int *poptional_chaining_label,
  static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
  {
      FuncCallType call_type;
 -    int optional_chaining_label;
 +    int optional_chaining_label, column_num;
      BOOL accept_lparen = (parse_flags & PF_POSTFIX_CALL) != 0;
-     
+ 
      call_type = FUNC_CALL_NORMAL;
 +    column_num = s->token.column_num;
 +    emit_column(s, column_num);
      switch(s->token.val) {
      case TOK_NUMBER:
          {
-@@ -24413,7 +24598,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
+@@ -24499,7 +24680,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
                      backtrace_flags = JS_BACKTRACE_FLAG_SINGLE_LEVEL;
                  build_backtrace(s->ctx, s->ctx->rt->current_exception,
                                  s->filename, s->token.line_num,
@@ -682,17 +686,7 @@ index 79160139..3fb3c09e 100644
                  return -1;
              }
              ret = emit_push_const(s, str, 0);
-@@ -24433,7 +24618,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
-             js_parse_skip_parens_token(s, NULL, TRUE) == TOK_ARROW) {
-             if (js_parse_function_decl(s, JS_PARSE_FUNC_ARROW,
-                                        JS_FUNC_NORMAL, JS_ATOM_NULL,
--                                       s->token.ptr, s->token.line_num))
-+                                       s->token.ptr, s->token.line_num,
-+                                       s->token.column_num))
-                 return -1;
-         } else {
-             if (js_parse_expr_paren(s))
-@@ -24443,7 +24629,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
+@@ -24521,7 +24702,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
      case TOK_FUNCTION:
          if (js_parse_function_decl(s, JS_PARSE_FUNC_EXPR,
                                     JS_FUNC_NORMAL, JS_ATOM_NULL,
@@ -702,16 +696,8 @@ index 79160139..3fb3c09e 100644
              return -1;
          break;
      case TOK_CLASS:
-@@ -24482,21 +24669,25 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
-                 peek_token(s, TRUE) == TOK_ARROW) {
-                 if (js_parse_function_decl(s, JS_PARSE_FUNC_ARROW,
-                                            JS_FUNC_NORMAL, JS_ATOM_NULL,
--                                           s->token.ptr, s->token.line_num))
-+                                           s->token.ptr, s->token.line_num,
-+                                           s->token.column_num))
-                     return -1;
-             } else if (token_is_pseudo_keyword(s, JS_ATOM_async) &&
-                        peek_token(s, TRUE) != '\n') {
+@@ -24560,15 +24742,18 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
+                 peek_token(s, TRUE) != '\n') {
                  const uint8_t *source_ptr;
                  int source_line_num;
 +                int source_column_num;
@@ -728,19 +714,9 @@ index 79160139..3fb3c09e 100644
 +                                               source_ptr, source_line_num,
 +                                               source_column_num))
                          return -1;
-                 } else if ((parse_flags & PF_ARROW_FUNC) &&
-                            ((s->token.val == '(' &&
-@@ -24505,7 +24696,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
-                              peek_token(s, TRUE) == TOK_ARROW))) {
-                     if (js_parse_function_decl(s, JS_PARSE_FUNC_ARROW,
-                                                JS_FUNC_ASYNC, JS_ATOM_NULL,
--                                               source_ptr, source_line_num))
-+                                               source_ptr, source_line_num,
-+                                               source_column_num))
-                         return -1;
                  } else {
                      name = JS_DupAtom(s->ctx, JS_ATOM_async);
-@@ -24857,6 +25049,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
+@@ -24960,6 +25145,7 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
                      break;
                  }
              } else {
@@ -748,7 +724,7 @@ index 79160139..3fb3c09e 100644
                  if (next_token(s))
                      return -1;
              emit_func_call:
-@@ -24900,6 +25093,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
+@@ -25003,6 +25189,8 @@ static __exception int js_parse_postfix_expr(JSParseState *s, int parse_flags)
          } else if (s->token.val == '.') {
              if (next_token(s))
                  return -1;
@@ -757,7 +733,7 @@ index 79160139..3fb3c09e 100644
          parse_property:
              if (s->token.val == TOK_PRIVATE_NAME) {
                  /* private class field */
-@@ -24968,6 +25163,7 @@ static __exception int js_parse_delete(JSParseState *s)
+@@ -25086,6 +25274,7 @@ static __exception int js_parse_delete(JSParseState *s)
      JSFunctionDef *fd = s->cur_func;
      JSAtom name;
      int opcode;
@@ -765,25 +741,23 @@ index 79160139..3fb3c09e 100644
  
      if (next_token(s))
          return -1;
-@@ -25342,6 +25538,7 @@ static __exception int js_parse_logical_and_or(JSParseState *s, int op,
+@@ -25514,6 +25703,7 @@ static __exception int js_parse_logical_and_or(JSParseState *s, int op,
              emit_op(s, OP_drop);
  
              if (op == TOK_LAND) {
 +                emit_column(s, s->token.column_num);
-                 if (js_parse_expr_binary(s, 8, parse_flags & ~PF_ARROW_FUNC))
+                 if (js_parse_expr_binary(s, 8, parse_flags))
                      return -1;
              } else {
-@@ -25377,7 +25574,8 @@ static __exception int js_parse_coalesce_expr(JSParseState *s, int parse_flags)
+@@ -25549,6 +25739,7 @@ static __exception int js_parse_coalesce_expr(JSParseState *s, int parse_flags)
              emit_op(s, OP_is_undefined_or_null);
              emit_goto(s, OP_if_false, label1);
              emit_op(s, OP_drop);
--            
 +            emit_column(s, s->token.column_num);
-+
-             if (js_parse_expr_binary(s, 8, parse_flags & ~PF_ARROW_FUNC))
+ 
+             if (js_parse_expr_binary(s, 8, parse_flags))
                  return -1;
-             if (s->token.val != TOK_DOUBLE_QUESTION_MARK)
-@@ -25425,6 +25623,7 @@ static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags)
+@@ -25597,6 +25788,7 @@ static __exception int js_parse_assign_expr2(JSParseState *s, int parse_flags)
      int opcode, op, scope;
      JSAtom name0 = JS_ATOM_NULL;
      JSAtom name;
@@ -791,7 +765,7 @@ index 79160139..3fb3c09e 100644
  
      if (s->token.val == TOK_YIELD) {
          BOOL is_star = FALSE, is_async;
-@@ -26289,6 +26488,7 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
+@@ -26496,6 +26688,7 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
      JSContext *ctx = s->ctx;
      JSAtom label_name;
      int tok;
@@ -799,7 +773,7 @@ index 79160139..3fb3c09e 100644
  
      /* specific label handling */
      /* XXX: support multiple labels on loop statements */
-@@ -26973,7 +27173,8 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
+@@ -27185,7 +27378,8 @@ static __exception int js_parse_statement_or_decl(JSParseState *s,
          parse_func_var:
              if (js_parse_function_decl(s, JS_PARSE_FUNC_VAR,
                                         JS_FUNC_NORMAL, JS_ATOM_NULL,
@@ -809,7 +783,7 @@ index 79160139..3fb3c09e 100644
                  goto fail;
              break;
          }
-@@ -28387,7 +28588,8 @@ static __exception int js_parse_export(JSParseState *s)
+@@ -29096,7 +29290,8 @@ static __exception int js_parse_export(JSParseState *s)
          return js_parse_function_decl2(s, JS_PARSE_FUNC_STATEMENT,
                                         JS_FUNC_NORMAL, JS_ATOM_NULL,
                                         s->token.ptr, s->token.line_num,
@@ -819,7 +793,7 @@ index 79160139..3fb3c09e 100644
      }
  
      if (next_token(s))
-@@ -28497,7 +28699,8 @@ static __exception int js_parse_export(JSParseState *s)
+@@ -29206,7 +29401,8 @@ static __exception int js_parse_export(JSParseState *s)
              return js_parse_function_decl2(s, JS_PARSE_FUNC_STATEMENT,
                                             JS_FUNC_NORMAL, JS_ATOM_NULL,
                                             s->token.ptr, s->token.line_num,
@@ -829,7 +803,7 @@ index 79160139..3fb3c09e 100644
          } else {
              if (js_parse_assign_expr(s))
                  return -1;
-@@ -28694,7 +28897,8 @@ static __exception int js_parse_source_element(JSParseState *s)
+@@ -29403,7 +29599,8 @@ static __exception int js_parse_source_element(JSParseState *s)
           peek_token(s, TRUE) == TOK_FUNCTION)) {
          if (js_parse_function_decl(s, JS_PARSE_FUNC_STATEMENT,
                                     JS_FUNC_NORMAL, JS_ATOM_NULL,
@@ -839,7 +813,7 @@ index 79160139..3fb3c09e 100644
              return -1;
      } else if (s->token.val == TOK_EXPORT && fd->module) {
          if (js_parse_export(s))
-@@ -28716,7 +28920,9 @@ static JSFunctionDef *js_new_function_def(JSContext *ctx,
+@@ -29425,7 +29622,9 @@ static JSFunctionDef *js_new_function_def(JSContext *ctx,
                                            JSFunctionDef *parent,
                                            BOOL is_eval,
                                            BOOL is_func_expr,
@@ -850,7 +824,7 @@ index 79160139..3fb3c09e 100644
  {
      JSFunctionDef *fd;
  
-@@ -28764,8 +28970,10 @@ static JSFunctionDef *js_new_function_def(JSContext *ctx,
+@@ -29473,8 +29672,10 @@ static JSFunctionDef *js_new_function_def(JSContext *ctx,
  
      fd->filename = JS_NewAtom(ctx, filename);
      fd->line_num = line_num;
@@ -861,7 +835,7 @@ index 79160139..3fb3c09e 100644
      //fd->pc2line_last_line_num = line_num;
      //fd->pc2line_last_pc = 0;
      fd->last_opcode_line_num = line_num;
-@@ -28824,6 +29032,7 @@ static void js_free_function_def(JSContext *ctx, JSFunctionDef *fd)
+@@ -29533,6 +29734,7 @@ static void js_free_function_def(JSContext *ctx, JSFunctionDef *fd)
      js_free(ctx, fd->jump_slots);
      js_free(ctx, fd->label_slots);
      js_free(ctx, fd->line_number_slots);
@@ -869,7 +843,7 @@ index 79160139..3fb3c09e 100644
  
      for(i = 0; i < fd->cpool_count; i++) {
          JS_FreeValue(ctx, fd->cpool[i]);
-@@ -28857,6 +29066,7 @@ static void js_free_function_def(JSContext *ctx, JSFunctionDef *fd)
+@@ -29566,6 +29768,7 @@ static void js_free_function_def(JSContext *ctx, JSFunctionDef *fd)
  
      JS_FreeAtom(ctx, fd->filename);
      dbuf_free(&fd->pc2line);
@@ -877,7 +851,7 @@ index 79160139..3fb3c09e 100644
  
      js_free(ctx, fd->source);
  
-@@ -30842,6 +31052,10 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
+@@ -31563,6 +31766,10 @@ static __exception int resolve_variables(JSContext *ctx, JSFunctionDef *s)
              s->line_number_size++;
              goto no_change;
  
@@ -888,7 +862,7 @@ index 79160139..3fb3c09e 100644
          case OP_eval: /* convert scope index to adjusted variable index */
              {
                  int call_argc = get_u16(bc_buf + pos + 1);
-@@ -31143,6 +31357,21 @@ static void add_pc2line_info(JSFunctionDef *s, uint32_t pc, int line_num)
+@@ -31877,6 +32084,21 @@ static void add_pc2line_info(JSFunctionDef *s, uint32_t pc, int line_num)
      }
  }
  
@@ -910,7 +884,7 @@ index 79160139..3fb3c09e 100644
  static void compute_pc2line_info(JSFunctionDef *s)
  {
      if (!(s->js_mode & JS_MODE_STRIP) && s->line_number_slots) {
-@@ -31181,6 +31410,45 @@ static void compute_pc2line_info(JSFunctionDef *s)
+@@ -31915,6 +32137,45 @@ static void compute_pc2line_info(JSFunctionDef *s)
      }
  }
  
@@ -956,7 +930,7 @@ index 79160139..3fb3c09e 100644
  static RelocEntry *add_reloc(JSContext *ctx, LabelSlot *ls, uint32_t addr, int size)
  {
      RelocEntry *re;
-@@ -31345,7 +31613,7 @@ static void put_short_code(DynBuf *bc_out, int op, int idx)
+@@ -32079,7 +32340,7 @@ static void put_short_code(DynBuf *bc_out, int op, int idx)
  /* peephole optimizations and resolve goto/labels */
  static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
  {
@@ -965,7 +939,7 @@ index 79160139..3fb3c09e 100644
      const uint8_t *bc_buf;
      DynBuf bc_out;
      LabelSlot *label_slots, *ls;
-@@ -31359,7 +31627,7 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
+@@ -32093,7 +32354,7 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
      label_slots = s->label_slots;
  
      line_num = s->line_num;
@@ -974,7 +948,7 @@ index 79160139..3fb3c09e 100644
      cc.bc_buf = bc_buf = s->byte_code.buf;
      cc.bc_len = bc_len = s->byte_code.size;
      js_dbuf_init(ctx, &bc_out);
-@@ -31380,6 +31648,14 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
+@@ -32114,6 +32375,14 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
          s->line_number_last_pc = 0;
      }
  
@@ -989,7 +963,7 @@ index 79160139..3fb3c09e 100644
      /* initialize the 'home_object' variable if needed */
      if (s->home_object_var_idx >= 0) {
          dbuf_putc(&bc_out, OP_special_object);
-@@ -31453,6 +31729,12 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
+@@ -32187,6 +32456,12 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
              line_num = get_u32(bc_buf + pos + 1);
              break;
  
@@ -1002,7 +976,7 @@ index 79160139..3fb3c09e 100644
          case OP_label:
              {
                  label = get_u32(bc_buf + pos + 1);
-@@ -32176,6 +32458,11 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
+@@ -32910,6 +33185,11 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
                          if (s->line_number_slots[j].pc > pos)
                              s->line_number_slots[j].pc -= delta;
                      }
@@ -1014,7 +988,7 @@ index 79160139..3fb3c09e 100644
                      continue;
                  }
                  break;
-@@ -32207,8 +32494,11 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
+@@ -32941,8 +33221,11 @@ static __exception int resolve_labels(JSContext *ctx, JSFunctionDef *s)
      s->label_slots = NULL;
      /* XXX: should delay until copying to runtime bytecode function */
      compute_pc2line_info(s);
@@ -1026,7 +1000,7 @@ index 79160139..3fb3c09e 100644
      /* set the new byte code */
      dbuf_free(&s->byte_code);
      s->byte_code = bc_out;
-@@ -32615,6 +32905,7 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
+@@ -33413,6 +33696,7 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
      if (fd->js_mode & JS_MODE_STRIP) {
          JS_FreeAtom(ctx, fd->filename);
          dbuf_free(&fd->pc2line);    // probably useless
@@ -1034,7 +1008,7 @@ index 79160139..3fb3c09e 100644
      } else {
          /* XXX: source and pc2line info should be packed at the end of the
             JSFunctionBytecode structure, avoiding allocation overhead
-@@ -32622,14 +32913,20 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
+@@ -33420,14 +33704,19 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
          b->has_debug = 1;
          b->debug.filename = fd->filename;
          b->debug.line_num = fd->line_num;
@@ -1047,15 +1021,14 @@ index 79160139..3fb3c09e 100644
 +        b->debug.pc2column_buf = js_realloc(ctx, fd->pc2column.buf, fd->pc2column.size);
          if (!b->debug.pc2line_buf)
              b->debug.pc2line_buf = fd->pc2line.buf;
-+        if(!b->debug.pc2column_buf) {
++        if(!b->debug.pc2column_buf)
 +            b->debug.pc2column_buf = fd->pc2column.buf;
-+        }
          b->debug.pc2line_len = fd->pc2line.size;
 +        b->debug.pc2column_len = fd->pc2column.size;
          b->debug.source = fd->source;
          b->debug.source_len = fd->source_len;
      }
-@@ -32710,6 +33007,7 @@ static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
+@@ -33510,6 +33799,7 @@ static void free_function_bytecode(JSRuntime *rt, JSFunctionBytecode *b)
      if (b->has_debug) {
          JS_FreeAtomRT(rt, b->debug.filename);
          js_free_rt(rt, b->debug.pc2line_buf);
@@ -1063,16 +1036,16 @@ index 79160139..3fb3c09e 100644
          js_free_rt(rt, b->debug.source);
      }
  
-@@ -32873,7 +33171,7 @@ static JSFunctionDef *js_parse_function_class_fields_init(JSParseState *s)
+@@ -33673,7 +33963,7 @@ static JSFunctionDef *js_parse_function_class_fields_init(JSParseState *s)
      JSFunctionDef *fd;
-     
+ 
      fd = js_new_function_def(s->ctx, s->cur_func, FALSE, FALSE,
 -                             s->filename, 0);
 +                             s->filename, 0, 0);
      if (!fd)
          return NULL;
      fd->func_name = JS_ATOM_NULL;
-@@ -32901,6 +33199,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
+@@ -33701,6 +33991,7 @@ static __exception int js_parse_function_decl2(JSParseState *s,
                                                 JSAtom func_name,
                                                 const uint8_t *ptr,
                                                 int function_line_num,
@@ -1080,7 +1053,7 @@ index 79160139..3fb3c09e 100644
                                                 JSParseExportEnum export_flag,
                                                 JSFunctionDef **pfd)
  {
-@@ -33014,7 +33313,8 @@ static __exception int js_parse_function_decl2(JSParseState *s,
+@@ -33815,7 +34106,8 @@ static __exception int js_parse_function_decl2(JSParseState *s,
      }
  
      fd = js_new_function_def(ctx, fd, FALSE, is_expr,
@@ -1090,7 +1063,7 @@ index 79160139..3fb3c09e 100644
      if (!fd) {
          JS_FreeAtom(ctx, func_name);
          return -1;
-@@ -33448,11 +33748,12 @@ static __exception int js_parse_function_decl(JSParseState *s,
+@@ -34265,11 +34557,12 @@ static __exception int js_parse_function_decl(JSParseState *s,
                                                JSFunctionKindEnum func_kind,
                                                JSAtom func_name,
                                                const uint8_t *ptr,
@@ -1106,7 +1079,7 @@ index 79160139..3fb3c09e 100644
  }
  
  static __exception int js_parse_program(JSParseState *s)
-@@ -33503,10 +33804,14 @@ static void js_parse_init(JSContext *ctx, JSParseState *s,
+@@ -34332,10 +34625,14 @@ static void js_parse_init(JSContext *ctx, JSParseState *s,
      s->ctx = ctx;
      s->filename = filename;
      s->line_num = 1;
@@ -1121,7 +1094,7 @@ index 79160139..3fb3c09e 100644
  }
  
  static JSValue JS_EvalFunctionInternal(JSContext *ctx, JSValue fun_obj,
-@@ -33620,7 +33925,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
+@@ -34423,7 +34720,7 @@ static JSValue __JS_EvalInternal(JSContext *ctx, JSValueConst this_obj,
              js_mode |= JS_MODE_STRICT;
          }
      }
@@ -1130,7 +1103,7 @@ index 79160139..3fb3c09e 100644
      if (!fd)
          goto fail1;
      s->cur_func = fd;
-@@ -34363,6 +34668,9 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
+@@ -35174,6 +35471,9 @@ static int JS_WriteFunctionTag(BCWriterState *s, JSValueConst obj)
          bc_put_leb128(s, b->debug.line_num);
          bc_put_leb128(s, b->debug.pc2line_len);
          dbuf_put(&s->dbuf, b->debug.pc2line_buf, b->debug.pc2line_len);
@@ -1138,9 +1111,9 @@ index 79160139..3fb3c09e 100644
 +        bc_put_leb128(s, b->debug.pc2column_len);
 +        dbuf_put(&s->dbuf, b->debug.pc2column_buf, b->debug.pc2column_len);
      }
-     
+ 
      for(i = 0; i < b->cpool_count; i++) {
-@@ -35385,6 +35693,17 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
+@@ -36216,6 +36516,17 @@ static JSValue JS_ReadFunctionTag(BCReaderState *s)
              if (bc_get_buf(s, b->debug.pc2line_buf, b->debug.pc2line_len))
                  goto fail;
          }
@@ -1158,7 +1131,7 @@ index 79160139..3fb3c09e 100644
  #ifdef DUMP_READ_OBJECT
          bc_read_trace(s, "filename: "); print_atom(s->ctx, b->debug.filename); printf("\n");
  #endif
-@@ -37839,6 +38158,7 @@ static const JSCFunctionListEntry js_function_proto_funcs[] = {
+@@ -38674,6 +38985,7 @@ static const JSCFunctionListEntry js_function_proto_funcs[] = {
      JS_CFUNC_DEF("[Symbol.hasInstance]", 1, js_function_hasInstance ),
      JS_CGETSET_DEF("fileName", js_function_proto_fileName, NULL ),
      JS_CGETSET_DEF("lineNumber", js_function_proto_lineNumber, NULL ),
@@ -1166,7 +1139,7 @@ index 79160139..3fb3c09e 100644
  };
  
  /* Error class */
-@@ -37934,7 +38254,7 @@ static JSValue js_error_constructor(JSContext *ctx, JSValueConst new_target,
+@@ -38783,7 +39095,7 @@ static JSValue js_error_constructor(JSContext *ctx, JSValueConst new_target,
      }
  
      /* skip the Error() function in the backtrace */
@@ -1176,10 +1149,10 @@ index 79160139..3fb3c09e 100644
   exception:
      JS_FreeValue(ctx, obj);
 diff --git a/quickjs.h b/quickjs.h
-index d4a5cd31..61630280 100644
+index 7199936..1986647 100644
 --- a/quickjs.h
 +++ b/quickjs.h
-@@ -407,6 +407,7 @@ typedef struct JSMemoryUsage {
+@@ -410,6 +410,7 @@ typedef struct JSMemoryUsage {
      int64_t shape_count, shape_size;
      int64_t js_func_count, js_func_size, js_func_code_size;
      int64_t js_func_pc2line_count, js_func_pc2line_size;
@@ -1189,7 +1162,7 @@ index d4a5cd31..61630280 100644
      int64_t binary_object_count, binary_object_size;
 diff --git a/tests/test_line_column.js b/tests/test_line_column.js
 new file mode 100644
-index 00000000..d1c5989c
+index 0000000..d1c5989
 --- /dev/null
 +++ b/tests/test_line_column.js
 @@ -0,0 +1,240 @@
@@ -1434,58 +1407,3 @@ index 00000000..d1c5989c
 +test_line_column12();
 +test_line_column13();
 \ No newline at end of file
-
-From c5b00eea281d7bad49277c4878279171370b8dc6 Mon Sep 17 00:00:00 2001
-From: ErosZy <zyeros1991@gmail.com>
-Date: Sat, 12 Nov 2022 23:25:18 +0800
-Subject: [PATCH 2/3] fix: comments parse error because of column number
-
----
- quickjs.c | 2 --
- 1 file changed, 2 deletions(-)
-
-diff --git a/quickjs.c b/quickjs.c
-index 3fb3c09e..f99b3e57 100644
---- a/quickjs.c
-+++ b/quickjs.c
-@@ -20877,7 +20877,6 @@ static __exception int next_token(JSParseState *s)
-                     s->got_lf = TRUE; /* considered as LF for ASI */
-                     s->column_ptr = ++p;
-                     s->column_num_count = 0;
--                    p++;
-                 } else if (*p == '\r') {
-                     s->got_lf = TRUE; /* considered as LF for ASI */
-                     p++;
-@@ -21438,7 +21437,6 @@ static __exception int json_next_token(JSParseState *s)
-                     s->line_num++;           
-                     s->column_ptr = ++p;
-                     s->column_num_count = 0;
--                    p++;
-                 } else if (*p == '\r') {
-                     p++;
-                 } else if (*p >= 0x80) {
-
-From 5a1c24872dbaa44cbd6c2df5081e94aedf0f2aec Mon Sep 17 00:00:00 2001
-From: ErosZy <zyeros1991@gmail.com>
-Date: Sat, 12 Nov 2022 23:59:49 +0800
-Subject: [PATCH 3/3] fix: format line
-
----
- quickjs.c | 3 +--
- 1 file changed, 1 insertion(+), 2 deletions(-)
-
-diff --git a/quickjs.c b/quickjs.c
-index f99b3e57..49f30bae 100644
---- a/quickjs.c
-+++ b/quickjs.c
-@@ -32920,9 +32920,8 @@ static JSValue js_create_function(JSContext *ctx, JSFunctionDef *fd)
-         b->debug.pc2column_buf = js_realloc(ctx, fd->pc2column.buf, fd->pc2column.size);
-         if (!b->debug.pc2line_buf)
-             b->debug.pc2line_buf = fd->pc2line.buf;
--        if(!b->debug.pc2column_buf) {
-+        if(!b->debug.pc2column_buf)
-             b->debug.pc2column_buf = fd->pc2column.buf;
--        }
-         b->debug.pc2line_len = fd->pc2line.size;
-         b->debug.pc2column_len = fd->pc2column.size;
-         b->debug.source = fd->source;
