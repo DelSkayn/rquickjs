@@ -163,6 +163,12 @@ jobs:
           - task: bindings
             os: ubuntu-latest
             rust: stable
+            target: aarch64-linux-android
+            features: exports
+            optimization: false
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
             target: i686-unknown-linux-gnu
             features: exports
             optimization: false
