@@ -186,7 +186,7 @@ index a1436ab..65e111c 100644
  #else
  #define LIMB_LOG2_BITS 5
 diff --git a/quickjs.c b/quickjs.c
-index e8fdd8a..2b5894f 100644
+index e8fdd8a..44a453c 100644
 --- a/quickjs.c
 +++ b/quickjs.c
 @@ -48,7 +48,7 @@
@@ -212,15 +212,6 @@ index e8fdd8a..2b5894f 100644
  /* enable stack limitation */
  #define CONFIG_STACK_CHECK
  #endif
-@@ -1595,7 +1595,7 @@ static void set_dummy_numeric_ops(JSNumericOperations *ops)
-     ops->mul_pow10 = invalid_mul_pow10;
- }
- 
--#if !defined(CONFIG_STACK_CHECK)
-+#if !defined(CONFIG_STACK_CHECK) && 
- /* no stack limitation */
- static inline uintptr_t js_get_stack_pointer(void)
- {
 @@ -7302,7 +7302,7 @@ static int JS_DefinePrivateField(JSContext *ctx, JSValueConst obj,
          JS_ThrowTypeErrorNotASymbol(ctx);
          goto fail;
@@ -253,7 +244,7 @@ index e8fdd8a..2b5894f 100644
      }
      p = JS_VALUE_GET_OBJ(obj);
 -    prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, (JSValue)brand));
-+    prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, *(JSValue&)&brand));
++    prs = find_own_property(&pr, p, js_symbol_to_atom(ctx, *(JSValue*)&brand));
      return (prs != NULL);
  }
  
