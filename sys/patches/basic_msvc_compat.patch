@@ -186,18 +186,9 @@ index a1436ab..65e111c 100644
  #else
  #define LIMB_LOG2_BITS 5
 diff --git a/quickjs.c b/quickjs.c
-index e8fdd8a..9c121a9 100644
+index e8fdd8a..2b5894f 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -14,7 +14,7 @@
-  * The above copyright notice and this permission notice shall be included in
-  * all copies or substantial portions of the Software.
-  *
-- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR && !defined(_MSC_VER)
-  * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-  * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-  * THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 @@ -48,7 +48,7 @@
  
  #define OPTIMIZE         1
