@@ -59,9 +59,9 @@ mod persistent;
 mod value;
 pub use persistent::{Outlive, Persistent};
 pub use value::{
-    array, atom, convert, function, module, object, Array, Atom, BigInt, Coerced, Exception,
-    Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs, Module, Null,
-    Object, String, Symbol, Type, Undefined, Value,
+    array, atom, convert, function, module, object, promise, Array, Atom, BigInt, Coerced,
+    Exception, Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs,
+    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value,
 };
 
 pub mod class;
@@ -72,10 +72,6 @@ pub use class::Class;
 pub use value::{ArrayBuffer, TypedArray};
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
-
-#[cfg(feature = "futures")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-pub mod promise;
 
 #[cfg(feature = "allocator")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]

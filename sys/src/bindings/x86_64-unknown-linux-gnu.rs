@@ -1925,9 +1925,6 @@ extern "C" {
 extern "C" {
     pub fn JS_GetModuleNamespace(ctx: *mut JSContext, m: *mut JSModuleDef) -> JSValue;
 }
-extern "C" {
-    pub fn JS_FreeUnevaluatedModules(ctx: *mut JSContext);
-}
 pub type JSJobFunc = ::std::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,
@@ -2663,12 +2660,6 @@ extern "C" {
         tab: *const JSCFunctionListEntry,
         len: ::std::os::raw::c_int,
     ) -> ::std::os::raw::c_int;
-}
-extern "C" {
-    pub fn JS_DynamicImportSync(
-        ctx: *mut JSContext,
-        specifier: *const ::std::os::raw::c_char,
-    ) -> JSValue;
 }
 extern "C" {
     pub fn JS_GetModuleExport(

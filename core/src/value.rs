@@ -9,6 +9,7 @@ pub(crate) mod exception;
 pub mod function;
 pub mod module;
 pub mod object;
+pub mod promise;
 mod string;
 mod symbol;
 
@@ -20,6 +21,7 @@ pub use exception::Exception;
 pub use function::{Constructor, Function};
 pub use module::Module;
 pub use object::{Filter, Object};
+pub use promise::Promise;
 pub use string::String;
 pub use symbol::Symbol;
 
@@ -99,7 +101,7 @@ impl<'js> fmt::Debug for Value<'js> {
                 unsafe { self.ref_string() }.to_string().fmt(f)?;
                 write!(f, ")")?;
             }
-            Symbol | Object | Array | Function | Constructor => {
+            Symbol | Object | Array | Function | Constructor | Promise => {
                 write!(f, "(")?;
                 unsafe { self.get_ptr() }.fmt(f)?;
                 write!(f, ")")?;
@@ -124,11 +126,13 @@ impl<'js> Value<'js> {
     // unsafe because the value must belong the context and the lifetime must be constrained by its lifetime
     #[inline]
     pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
+        dbg!(qjs::JS_VALUE_GET_PTR(value));
         Self { ctx, value }
     }
 
     #[inline]
     pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
+        dbg!(qjs::JS_VALUE_GET_PTR(value));
         let value = qjs::JS_DupValue(value);
         Self { ctx, value }
     }
@@ -359,6 +363,12 @@ impl<'js> Value<'js> {
         0 != unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) }
     }
 
+    /// Check if the value is a promise.
+    #[inline]
+    pub fn is_promise(&self) -> bool {
+        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } > 0)
+    }
+
     /// Check if the value is an exception
     #[inline]
     pub fn is_exception(&self) -> bool {
@@ -495,6 +505,7 @@ macro_rules! type_impls {
     (@cond Array $self:expr) => { $self.is_array() };
     (@cond Constructor $self:expr) => { $self.is_constructor() };
     (@cond Function $self:expr) => { $self.is_function() };
+    (@cond Promise $self:expr) => { $self.is_promise() };
     (@cond Exception $self:expr) => { $self.is_error() };
     (@cond $type:ident $self:expr) => { true };
 }
@@ -511,6 +522,7 @@ type_impls! {
     Array: array => JS_TAG_OBJECT,
     Constructor: constructor => JS_TAG_OBJECT,
     Function: function => JS_TAG_OBJECT,
+    Promise: promise => JS_TAG_OBJECT,
     Exception: exception => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
@@ -700,6 +712,7 @@ sub_types! {
     Object->Value as_object ref_object into_object try_into_object from_object,
     Function->Object->Value as_function ref_function into_function try_into_function from_function,
     Constructor->Function->Object->Value as_constructor ref_constructor into_constructor try_into_constructor from_constructor,
+    Promise->Object->Value as_promise ref_promise into_promise try_into_promise from_promise,
     Array->Object->Value as_array ref_array into_array try_into_array from_array,
     Exception->Object->Value as_exception ref_exception into_exception try_into_exception from_exception,
     BigInt->Value as_big_int ref_big_int into_big_int try_into_big_int from_big_int,

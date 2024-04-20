@@ -1,6 +1,7 @@
 use std::{
     ffi::{CStr, CString},
-    fs, mem,
+    fs,
+    mem::{self, MaybeUninit},
     path::Path,
     ptr::NonNull,
 };
@@ -12,7 +13,7 @@ use std::future::Future;
 use crate::AsyncContext;
 use crate::{
     markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, IntoJs,
-    Module, Object, Result, String, Value,
+    Module, Object, Promise, Result, String, Value,
 };
 
 /// Eval options.
@@ -127,6 +128,7 @@ impl<'js> Ctx<'js> {
             file_name.as_ptr(),
             flag,
         );
+        dbg!(qjs::JS_VALUE_GET_PTR(val));
         self.handle_exception(val)
     }
 
@@ -344,8 +346,8 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    // Creates promise and resolving functions.
-    pub fn promise(&self) -> Result<(Object<'js>, Function<'js>, Function<'js>)> {
+    /// Creates javascipt promise along with its reject and resolve functions.
+    pub fn promise(&self) -> Result<(Promise<'js>, Function<'js>, Function<'js>)> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
 
         Ok(unsafe {
@@ -353,13 +355,24 @@ impl<'js> Ctx<'js> {
                 self.ctx.as_ptr(),
                 funcs.as_mut_ptr() as _,
             ))?;
-            let (then, catch) = funcs.assume_init();
+            let (resolve, reject) = funcs.assume_init();
             (
-                Object::from_js_value(self.clone(), promise),
-                Function::from_js_value(self.clone(), then),
-                Function::from_js_value(self.clone(), catch),
+                Promise::from_js_value(self.clone(), promise),
+                Function::from_js_value(self.clone(), resolve),
+                Function::from_js_value(self.clone(), reject),
             )
         })
+    }
+
+    /// Executes a quickjs job.
+    ///
+    /// Returns wether a job was actually executed.
+    /// If this function returned false, no job was pending.
+    pub fn execute_pending_job(&self) -> bool {
+        let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
+        let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
+        let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
+        res != 0
     }
 
     pub(crate) unsafe fn get_opaque(&self) -> *mut Opaque<'js> {
@@ -407,18 +420,20 @@ impl<'js> Ctx<'js> {
         self.ctx
     }
 
-    /// Frees modules which aren't evaluated.
-    ///
-    /// When a module is compiled and the compilation results in an error the module can already
-    /// have resolved several modules. Originally QuickJS freed all these module when compiling
-    /// (but not when a it was dynamically imported), this library patched that behavior out
-    /// because it proved to be hard to make safe. This function will free those modules.
-    ///
-    /// # Safety
-    /// Caller must ensure that this method is not called from a module being evaluated.
+    /*
+    // Frees modules which aren't evaluated.
+    //
+    // When a module is compiled and the compilation results in an error the module can already
+    // have resolved several modules. Originally QuickJS freed all these module when compiling
+    // (but not when a it was dynamically imported), this library patched that behavior out
+    // because it proved to be hard to make safe. This function will free those modules.
+    //
+    // # Safety
+    // Caller must ensure that this method is not called from a module being evaluated.
     pub unsafe fn free_unevaluated_modules(&self) {
         qjs::JS_FreeUnevaluatedModules(self.ctx.as_ptr())
     }
+    */
 }
 
 #[cfg(test)]
@@ -438,6 +453,19 @@ mod test {
             let func: Function = module.get("default").unwrap();
             func.call::<(), ()>(()).unwrap();
         });
+    }
+
+    #[test]
+    fn compile_minimal_test() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let module = ctx.compile("test", "export let foo = 1 + 1;").unwrap();
+            let v: i32 = module.get("foo").unwrap();
+            assert_eq!(v, 2)
+        })
     }
 
     #[test]
@@ -461,6 +489,18 @@ mod test {
                 .unwrap();
 
             assert_eq!("bar".to_string(), res);
+        })
+    }
+
+    #[test]
+    fn eval_minimal_test() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let res: i32 = ctx.eval(" 1 + 1 ").unwrap();
+            assert_eq!(2, res);
         })
     }
 

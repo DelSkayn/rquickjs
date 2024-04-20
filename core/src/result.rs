@@ -117,11 +117,13 @@ pub enum Error {
         name: StdString,
         message: Option<StdString>,
     },
-
     #[cfg(feature = "array-buffer")]
     AsSlice(AsSliceError),
     /// Error when restoring a Persistent in a runtime other than the original runtime.
     UnrelatedRuntime,
+    /// An error returned by a blocked on promise if block on the promise would result in a dead
+    /// lock.
+    WouldBlock,
     /// An error from QuickJS from which the specifics are unknown.
     /// Should eventually be removed as development progresses.
     Unknown,
@@ -453,6 +455,7 @@ impl Display for Error {
                 "Error borrowing function: ".fmt(f)?;
                 x.fmt(f)?;
             }
+            WouldBlock => "Error blocking on a promise resulted in a dead lock".fmt(f)?,
             #[cfg(feature = "array-buffer")]
             AsSlice(x) => {
                 "Could not convert array buffer to slice: ".fmt(f)?;

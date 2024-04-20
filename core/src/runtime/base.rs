@@ -160,7 +160,9 @@ impl Runtime {
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        self.inner.lock().execute_pending_job().map_err(|e| {
+        let mut lock = self.inner.lock();
+        lock.update_stack_top();
+        lock.execute_pending_job().map_err(|e| {
             JobException(unsafe {
                 Context::from_raw(
                     NonNull::new(e).expect("QuickJS returned null ptr for job error"),

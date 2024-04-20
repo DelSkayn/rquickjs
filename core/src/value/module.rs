@@ -668,10 +668,13 @@ impl<'js> Module<'js> {
         let flag =
             qjs::JS_EVAL_TYPE_MODULE | qjs::JS_EVAL_FLAG_STRICT | qjs::JS_EVAL_FLAG_COMPILE_ONLY;
 
-        let module = unsafe { ctx.eval_raw(source, name.as_c_str(), flag as i32)? };
-        let module = ctx.handle_exception(module)?;
-        debug_assert_eq!(qjs::JS_TAG_MODULE, unsafe { qjs::JS_VALUE_GET_TAG(module) });
-        let module = qjs::JS_VALUE_GET_PTR(module).cast::<qjs::JSModuleDef>();
+        let module_val = unsafe { ctx.eval_raw(source, name.as_c_str(), flag as i32)? };
+        let module_val = ctx.handle_exception(module_val)?;
+        debug_assert_eq!(qjs::JS_TAG_MODULE, unsafe {
+            qjs::JS_VALUE_GET_TAG(module_val)
+        });
+        let module = qjs::JS_VALUE_GET_PTR(module_val).cast::<qjs::JSModuleDef>();
+        qjs::JS_FreeValue(ctx.as_ptr(), module_val);
         // QuickJS should throw an exception on allocation errors
         // So this should always be non-null.
         let module = NonNull::new(module).unwrap();
@@ -756,6 +759,7 @@ impl<'js> Module<'js> {
         Ok(())
     }
 
+    /*
     /// Import and evaluate a module
     ///
     /// This will work similar to an `await import(specifier)` statement in JavaScript but will return the import and not a promise
@@ -768,6 +772,7 @@ impl<'js> Module<'js> {
                 specifier.len() as qjs::size_t,
             );
             let js_string = qjs::JS_ToCString(ctx.as_ptr(), js_string_val);
+            let va = qjs::JS_LoadModule(ctx, basename, filename)
             let val = qjs::JS_DynamicImportSync(ctx.as_ptr(), js_string);
             qjs::JS_FreeValue(ctx.as_ptr(), js_string_val);
             let val = ctx.handle_exception(val)?;
@@ -776,6 +781,7 @@ impl<'js> Module<'js> {
 
         V::from_js(ctx, val)
     }
+    */
 }
 
 #[cfg(feature = "exports")]
@@ -986,6 +992,7 @@ mod test {
         })
     }
 
+    /*
     #[test]
     fn import() {
         test_with(|ctx| {
@@ -996,6 +1003,7 @@ mod test {
             assert_eq!(&hello, "world");
         })
     }
+
 
     #[test]
     #[should_panic(expected = "kaboom")]
@@ -1009,6 +1017,7 @@ mod test {
             let _: Value = Module::import(&ctx, "bad_rust_mod").catch(&ctx).unwrap();
         });
     }
+    */
 
     #[test]
     fn holding_onto_unevaluated() {

@@ -148,7 +148,7 @@ fn main() {
         "get_function_proto.patch",
         "check_stack_overflow.patch",
         "infinity_handling.patch",
-        "dynamic_import_sync.patch",
+        //"dynamic_import_sync.patch",
     ];
 
     let mut defines = vec![
