@@ -2,7 +2,7 @@
 
 use std::{ffi::CStr, ptr};
 
-use crate::{module::ModuleData, qjs, Ctx, Module, Result};
+use crate::{qjs, Ctx, Module, Result};
 
 mod builtin_resolver;
 pub use builtin_resolver::BuiltinResolver;
@@ -69,37 +69,12 @@ pub trait Resolver {
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Loader {
     /// Load module by name
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<ModuleData>;
-}
-
-/// The Raw Module loader interface.
-///
-/// When implementing a module loader prefer the to implement [`Loader`] instead.
-/// All struct which implement [`Loader`] will automatically implement this trait.
-///
-/// # Safety
-/// Implementors must ensure that all module declaration and evaluation errors are returned from
-/// this function.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-pub unsafe trait RawLoader {
-    /// Load module by name, should return an unevaluated module.
-    ///
-    /// # Safety
-    /// Callers must ensure that the module returned by this function is not used after an module
-    /// declaration or evaluation failed.
-    unsafe fn raw_load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>>;
-}
-
-unsafe impl<T: Loader> RawLoader for T {
-    unsafe fn raw_load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
-        let res = self.load(ctx, name)?.unsafe_declare(ctx.clone())?;
-        Ok(res)
-    }
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>>;
 }
 
 struct LoaderOpaque {
     resolver: Box<dyn Resolver>,
-    loader: Box<dyn RawLoader>,
+    loader: Box<dyn Loader>,
 }
 
 #[derive(Debug)]
@@ -116,7 +91,7 @@ impl LoaderHolder {
     pub fn new<R, L>(resolver: R, loader: L) -> Self
     where
         R: Resolver + 'static,
-        L: RawLoader + 'static,
+        L: Loader + 'static,
     {
         Self(Box::into_raw(Box::new(LoaderOpaque {
             resolver: Box::new(resolver),
@@ -180,7 +155,7 @@ impl LoaderHolder {
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
 
-        Ok(opaque.loader.raw_load(ctx, name)?.as_module_def().as_ptr())
+        Ok(opaque.loader.load(ctx, name)?.as_ptr())
     }
 
     unsafe extern "C" fn load_raw(
@@ -238,17 +213,17 @@ macro_rules! loader_impls {
                 }
             }
 
-            unsafe impl< $($t,)*> $crate::loader::RawLoader for ($($t,)*)
+            impl< $($t,)*> $crate::loader::Loader for ($($t,)*)
             where
-                $($t: $crate::loader::RawLoader,)*
+                $($t: $crate::loader::Loader,)*
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                unsafe fn raw_load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+                fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
                     let mut messages = Vec::<std::string::String>::new();
                     let ($($t,)*) = self;
                     $(
-                        match $t.raw_load(_ctx, name) {
+                        match $t.load(_ctx, name) {
                             // Still could try the next loader
                             Err($crate::Error::Loading { message, .. }) => {
                                 message.map(|message| messages.push(message));
@@ -270,7 +245,7 @@ loader_impls!(A B C D E F G H);
 
 #[cfg(test)]
 mod test {
-    use crate::{module::ModuleData, Context, Ctx, Error, Result, Runtime};
+    use crate::{Context, Ctx, Error, Module, Result, Runtime};
 
     use super::{Loader, Resolver};
 
@@ -293,15 +268,16 @@ mod test {
     struct TestLoader;
 
     impl Loader for TestLoader {
-        fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<ModuleData> {
+        fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
             if name == "test" {
-                Ok(ModuleData::source(
+                Module::declare(
+                    ctx.clone(),
                     "test",
                     r#"
                       export const n = 123;
                       export const s = "abc";
                     "#,
-                ))
+                )
             } else {
                 Err(Error::new_loading_message(name, "unable to load"))
             }

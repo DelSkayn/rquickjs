@@ -207,6 +207,8 @@ mod test {
                     export { b, t}
                 "#,
                 )
+                .unwrap()
+                .finish()
                 .unwrap();
         });
     }

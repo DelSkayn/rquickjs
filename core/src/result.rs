@@ -63,6 +63,8 @@ pub enum Error {
     Allocation,
     /// A module defined two exported values with the same name.
     DuplicateExports,
+    /// Tried to export a entry which was not previously declared.
+    InvalidExport,
     /// Found a string with a internal null byte while converting
     /// to C string.
     InvalidString(NulError),
@@ -358,6 +360,7 @@ impl Display for Error {
             DuplicateExports => {
                 "Tried to export two values with the same name from one module".fmt(f)?
             }
+            InvalidExport => "Tried to export a value which was not previously declared".fmt(f)?,
             InvalidString(error) => {
                 "String contained internal null bytes: ".fmt(f)?;
                 error.fmt(f)?;

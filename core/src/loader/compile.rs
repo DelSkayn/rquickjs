@@ -1,6 +1,5 @@
 use crate::{
-    loader::{util::resolve_simple, Loader, RawLoader, Resolver},
-    module::ModuleDataKind,
+    loader::{util::resolve_simple, Loader, Resolver},
     Ctx, Lock, Module, Mut, Ref, Result,
 };
 use std::{
@@ -182,19 +181,13 @@ where
     }
 }
 
-unsafe impl<L> RawLoader for Compile<L>
+impl<L> Loader for Compile<L>
 where
     L: Loader,
 {
-    unsafe fn raw_load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
-        let data = self.inner.load(ctx, path)?;
-        assert!(
-            matches!(data.kind(), ModuleDataKind::Source(_) | ModuleDataKind::ByteCode(_)) ,
-            "can't compile native modules, loader `{}` returned a native module, but `Compile` can only handle modules loaded from source or bytecode",
-            std::any::type_name::<L>()
-        );
-        let module = data.unsafe_declare(ctx.clone())?;
-        let data = module.write_object(false)?;
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
+        let module = self.inner.load(ctx, path)?;
+        let data = module.write(false)?;
         self.data.lock().bytecodes.push((path.into(), data));
         Ok(module)
     }

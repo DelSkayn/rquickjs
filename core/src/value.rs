@@ -571,12 +571,16 @@ macro_rules! sub_types {
 
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
-                    sub_types!(@wrap $head$(->$sub_type)* Value::from_js_value_const(ctx, value))
+                    let v = Value::from_js_value_const(ctx, value);
+                    debug_assert!(v.$as().is_some());
+                    sub_types!(@wrap $head$(->$sub_type)*  v)
                 }
 
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
-                    sub_types!(@wrap $head$(->$sub_type)* Value::from_js_value(ctx, value))
+                    let v = Value::from_js_value(ctx, value);
+                    debug_assert!(v.$as().is_some());
+                    sub_types!(@wrap $head$(->$sub_type)*  v)
                 }
 
                 #[allow(unused)]
@@ -716,6 +720,7 @@ sub_types! {
     Array->Object->Value as_array ref_array into_array try_into_array from_array,
     Exception->Object->Value as_exception ref_exception into_exception try_into_exception from_exception,
     BigInt->Value as_big_int ref_big_int into_big_int try_into_big_int from_big_int,
+    Module->Value as_module ref_module into_module try_into_module from_module,
 }
 
 macro_rules! void_types {

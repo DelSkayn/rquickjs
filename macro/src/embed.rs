@@ -96,9 +96,7 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
 
         ctx.with(|ctx| -> Result<()> {
             for f in files.into_iter() {
-                let bc = unsafe {
-                    Module::unsafe_declare(ctx.clone(), f.0.clone(), f.1)?.write_object(false)?
-                };
+                let bc = Module::declare(ctx.clone(), f.0.clone(), f.1)?.write(false)?;
                 modules.push((f.0, bc));
             }
             Ok(())

@@ -6,7 +6,7 @@ use std::{
 #[cfg(feature = "allocator")]
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
-use crate::loader::{LoaderHolder, RawLoader, Resolver};
+use crate::loader::{Loader, LoaderHolder, Resolver};
 use crate::qjs;
 
 #[cfg(feature = "futures")]
@@ -171,7 +171,7 @@ impl RawRuntime {
     pub unsafe fn set_loader<R, L>(&mut self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
-        L: RawLoader + 'static,
+        L: Loader + 'static,
     {
         let loader = LoaderHolder::new(resolver, loader);
         loader.set_to_runtime(self.rt.as_ptr());

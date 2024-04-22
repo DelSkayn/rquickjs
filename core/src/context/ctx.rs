@@ -177,7 +177,7 @@ impl<'js> Ctx<'js> {
     }
 
     /// Compile a module for later use.
-    pub fn compile<N, S>(self, name: N, source: S) -> Result<Module<'js>>
+    pub fn compile<N, S>(self, name: N, source: S) -> Result<Promise<'js>>
     where
         N: Into<Vec<u8>>,
         S: Into<Vec<u8>>,
