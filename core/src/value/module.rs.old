@@ -714,28 +714,6 @@ impl<'js> Module<'js> {
         Ok(module)
     }
 
-    unsafe extern "C" fn eval_fn<D>(
-        ctx: *mut qjs::JSContext,
-        ptr: *mut qjs::JSModuleDef,
-    ) -> qjs::c_int
-    where
-        D: ModuleDef,
-    {
-        let ctx = Ctx::from_ptr(ctx);
-        // Should never be null
-        debug_assert_ne!(ptr, ptr::null_mut());
-        let ptr = NonNull::new_unchecked(ptr);
-        let module = Self::from_module_def(ctx.clone(), ptr);
-        let mut exports = Exports::new(ctx.clone());
-        match D::evaluate(&ctx, &mut exports).and_then(|_| exports.apply(module)) {
-            Ok(_) => 0,
-            Err(error) => {
-                error.throw(&ctx);
-                -1
-            }
-        }
-    }
-
     /// Evaluates an unevaluated module.
     ///
     /// # Safety
