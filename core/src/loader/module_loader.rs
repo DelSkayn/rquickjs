@@ -1,5 +1,5 @@
 use crate::{module::ModuleDef, Ctx, Error, Module, Result};
-use std::{collections::HashMap, ffi::CStr, fmt::Debug};
+use std::{collections::HashMap, fmt::Debug};
 
 use super::Loader;
 

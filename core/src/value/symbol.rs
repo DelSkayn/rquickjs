@@ -1,4 +1,4 @@
-use crate::{qjs, Atom, Ctx, Result, String, Value};
+use crate::{qjs, Atom, Ctx, Result, Value};
 
 /// Rust representation of a JavaScript symbol.
 #[derive(Debug, Clone, PartialEq, Hash)]
@@ -7,12 +7,12 @@ pub struct Symbol<'js>(pub(crate) Value<'js>);
 
 impl<'js> Symbol<'js> {
     /// Get the symbol description
-    pub fn description(&self) -> Result<String<'js>> {
+    pub fn description(&self) -> Result<Value<'js>> {
         let atom = Atom::from_str(self.0.ctx.clone(), "description")?;
         unsafe {
             let val = qjs::JS_GetProperty(self.0.ctx.as_ptr(), self.0.as_js_value(), atom.atom);
             let val = self.0.ctx.handle_exception(val)?;
-            Ok(String::from_js_value(self.0.ctx.clone(), val))
+            Ok(Value::from_js_value(self.0.ctx.clone(), val))
         }
     }
 
@@ -77,10 +77,18 @@ mod test {
     fn description() {
         test_with(|ctx| {
             let s: Symbol<'_> = ctx.eval("Symbol('foo bar baz')").unwrap();
-            assert_eq!(s.description().unwrap().to_string().unwrap(), "foo bar baz");
+            assert_eq!(
+                s.description()
+                    .unwrap()
+                    .into_string()
+                    .unwrap()
+                    .to_string()
+                    .unwrap(),
+                "foo bar baz"
+            );
 
             let s: Symbol<'_> = ctx.eval("Symbol()").unwrap();
-            assert_eq!(s.description().unwrap().to_string().unwrap(), "undefined");
+            assert!(s.description().unwrap().is_undefined());
         });
     }
 }

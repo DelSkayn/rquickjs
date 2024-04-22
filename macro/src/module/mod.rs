@@ -438,12 +438,12 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
         #vis struct #name;
 
         impl #crate_name::module::ModuleDef for #name{
-            fn declare(_declare: &mut #crate_name::module::Declarations) -> #crate_name::Result<()>{
+            fn declare(_declare: &#crate_name::module::Declarations) -> #crate_name::Result<()>{
                 #declarations
                 #declare
                 Ok(())
             }
-            fn evaluate<'js>(_ctx: &#crate_name::Ctx<'js>, _exports: &mut #crate_name::module::Exports<'js>) -> #crate_name::Result<()>{
+            fn evaluate<'js>(_ctx: &#crate_name::Ctx<'js>, _exports: &#crate_name::module::Exports<'js>) -> #crate_name::Result<()>{
                 #exports
                 #evaluate
                 Ok(())

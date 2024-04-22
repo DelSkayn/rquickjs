@@ -57,7 +57,7 @@ unsafe impl Allocator for RustAllocator {
             header.size = size;
         }
 
-        unsafe { dbg!(ptr.add(HEADER_SIZE)) }
+        unsafe { ptr.add(HEADER_SIZE) }
     }
 
     #[allow(clippy::not_unsafe_ptr_arg_deref)]

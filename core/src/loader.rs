@@ -245,7 +245,7 @@ loader_impls!(A B C D E F G H);
 
 #[cfg(test)]
 mod test {
-    use crate::{Context, Ctx, Error, Module, Result, Runtime};
+    use crate::{CatchResultExt, Context, Ctx, Error, Module, Result, Runtime};
 
     use super::{Loader, Resolver};
 
@@ -290,41 +290,39 @@ mod test {
         let ctx = Context::full(&rt).unwrap();
         rt.set_loader(TestResolver, TestLoader);
         ctx.with(|ctx| {
-            let _module = ctx
-                .compile(
-                    "loader",
-                    r#"
+            Module::evaluate(
+                ctx,
+                "loader",
+                r#"
                       import { n, s } from "test";
                       export default [n, s];
                     "#,
-                )
-                .unwrap();
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
         })
     }
 
     #[test]
-    #[should_panic(expected = "Unable to resolve")]
+    #[should_panic(expected = "Error resolving module")]
     fn resolving_error() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         rt.set_loader(TestResolver, TestLoader);
         ctx.with(|ctx| {
-            let _ = ctx
-                .compile(
-                    "loader",
-                    r#"
+            Module::evaluate(
+                ctx.clone(),
+                "loader",
+                r#"
                       import { n, s } from "test_";
                     "#,
-                )
-                .map_err(|error| {
-                    println!("{error:?}");
-                    // TODO: Error::Resolving
-                    if let Error::Exception = error {
-                    } else {
-                        panic!();
-                    }
-                })
-                .expect("Unable to resolve");
+            )
+            .catch(&ctx)
+            .unwrap()
+            .finish::<()>()
+            .catch(&ctx)
+            .expect("Unable to resolve");
         })
     }
 }

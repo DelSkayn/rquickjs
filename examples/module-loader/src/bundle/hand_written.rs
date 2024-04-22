@@ -3,7 +3,7 @@ use rquickjs::{module::ModuleDef, Ctx, Function, Result};
 pub struct NativeModule;
 
 impl ModuleDef for NativeModule {
-    fn declare<'js>(decl: &rquickjs::module::Declarations<'js>) -> Result<()> {
+    fn declare(decl: &rquickjs::module::Declarations) -> Result<()> {
         decl.declare("n")?;
         decl.declare("s")?;
         decl.declare("f")?;

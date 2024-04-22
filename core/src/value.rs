@@ -126,13 +126,11 @@ impl<'js> Value<'js> {
     // unsafe because the value must belong the context and the lifetime must be constrained by its lifetime
     #[inline]
     pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
-        dbg!(qjs::JS_VALUE_GET_PTR(value));
         Self { ctx, value }
     }
 
     #[inline]
     pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
-        dbg!(qjs::JS_VALUE_GET_PTR(value));
         let value = qjs::JS_DupValue(value);
         Self { ctx, value }
     }
@@ -366,7 +364,7 @@ impl<'js> Value<'js> {
     /// Check if the value is a promise.
     #[inline]
     pub fn is_promise(&self) -> bool {
-        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } > 0)
+        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as std::os::raw::c_int) > 0
     }
 
     /// Check if the value is an exception
@@ -447,7 +445,7 @@ macro_rules! type_impls {
                 }
                 match other{
                     Float => matches!(self, Int),
-                    Object => matches!(self, Array | Function | Constructor | Exception),
+                    Object => matches!(self, Array | Function | Constructor | Exception | Promise),
                     Function => matches!(self, Constructor),
                     _ => false
                 }

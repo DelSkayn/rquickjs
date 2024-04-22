@@ -60,7 +60,7 @@ mod test_mod {
     /// If our module doesn't quite fit with how this macro exports you can manually export from
     /// the declare and evaluate functions.
     #[qjs(declare)]
-    pub fn declare(declare: &mut rquickjs::module::Declarations) -> rquickjs::Result<()> {
+    pub fn declare(declare: &rquickjs::module::Declarations) -> rquickjs::Result<()> {
         declare.declare("aManuallyExportedValue")?;
         Ok(())
     }
@@ -68,7 +68,7 @@ mod test_mod {
     #[qjs(evaluate)]
     pub fn evaluate<'js>(
         _ctx: &Ctx<'js>,
-        exports: &mut rquickjs::module::Exports<'js>,
+        exports: &rquickjs::module::Exports<'js>,
     ) -> rquickjs::Result<()> {
         exports.export("aManuallyExportedValue", "Some Value")?;
         Ok(())

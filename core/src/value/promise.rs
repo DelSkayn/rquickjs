@@ -120,7 +120,7 @@ impl<'js> Promise<'js> {
     /// indicating that no more work can be done at the momement.
     ///
     /// This function only drives the quickjs job queue, futures are not polled.
-    pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {
+    pub fn finish<T: FromJs<'js> + std::fmt::Debug>(&self) -> Result<T> {
         loop {
             if let Some(x) = self.result() {
                 return x;

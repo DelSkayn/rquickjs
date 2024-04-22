@@ -3,11 +3,15 @@
 use std::{
     ffi::{CStr, CString},
     mem::MaybeUninit,
-    ptr::{self, NonNull},
-    slice,
+    ptr, slice,
 };
 
+#[cfg(feature = "exports")]
+use std::marker::PhantomData;
+
 use crate::{qjs, Context, Ctx, Error, IntoJs, Promise, Result, Value};
+#[cfg(feature = "exports")]
+use crate::{Atom, FromAtom, FromJs};
 
 /// Helper macro to provide module init function.
 /// Use for exporting module definitions to be loaded as part of a dynamic library.
@@ -49,7 +53,7 @@ pub trait ModuleDef {
     }
 
     fn evaluate<'js>(ctx: &Ctx<'js>, exports: &Exports<'js>) -> Result<()> {
-        let _ = exports;
+        let _ = (exports, ctx);
         Ok(())
     }
 }
@@ -114,6 +118,7 @@ impl<'js> Module<'js> {
         unsafe { qjs::JS_VALUE_GET_PTR(self.as_js_value()).cast() }
     }
 
+    /// Declare a module but don't evaluate it.
     pub fn declare<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
@@ -131,15 +136,54 @@ impl<'js> Module<'js> {
         unsafe { Ok(Module::from_js_value(ctx, module_val)) }
     }
 
+    /// Declare a rust native module but don't evaluate it.
     pub fn declare_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Module<'js>>
     where
         N: Into<Vec<u8>>,
         D: ModuleDef,
     {
-        todo!()
+        let name = CString::new(name)?;
+        let ptr =
+            unsafe { qjs::JS_NewCModule(ctx.as_ptr(), name.as_ptr(), Some(Self::eval_fn::<D>)) };
+        let value = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, ptr.cast());
+        let m = unsafe { Module::from_js_value_const(ctx, value) };
+
+        let decl = Declarations(m);
+        D::declare(&decl)?;
+
+        Ok(decl.0)
         //Ok(())
     }
 
+    unsafe extern "C" fn eval_fn<D>(
+        ctx: *mut qjs::JSContext,
+        ptr: *mut qjs::JSModuleDef,
+    ) -> qjs::c_int
+    where
+        D: ModuleDef,
+    {
+        let ctx = Ctx::from_ptr(ctx);
+        // Should never be null
+        debug_assert_ne!(ptr, ptr::null_mut());
+        let value = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, ptr.cast());
+        let module = unsafe { Module::from_js_value_const(ctx.clone(), value) };
+        let exports = Exports(module);
+        match D::evaluate(&ctx, &exports) {
+            Ok(_) => 0,
+            Err(error) => {
+                error.throw(&ctx);
+                -1
+            }
+        }
+    }
+
+    /// Evaluate the source of a module.
+    ///
+    /// This function returns a promise which resolved when the modules was fully compiled and
+    /// returns undefined.
+    ///
+    /// If the module itself is required, you should first declare it and then call eval on the
+    /// module.
     pub fn evaluate<N, S>(ctx: Ctx<'js>, name: N, source: S) -> Result<Promise<'js>>
     where
         N: Into<Vec<u8>>,
@@ -190,6 +234,10 @@ impl<'js> Module<'js> {
         unsafe { Ok(Module::from_js_value(ctx, val)) }
     }
 
+    /// Evaluate the module.
+    ///
+    /// Returns a promise which resolves when the module has completely resolved.
+    /// The return value of the promise is the JavaScript value undefined.
     pub fn eval(&self) -> Result<Promise<'js>> {
         // JS_EvalFunction `free's` the module so we should dup first
         let ret = unsafe {
@@ -265,5 +313,142 @@ impl<'js> Module<'js> {
                 ptr::null_mut()
             }
         }
+    }
+}
+
+#[cfg(feature = "exports")]
+impl<'js> Module<'js> {
+    /// Return exported value by name
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
+    pub fn get<N, T>(&self, name: N) -> Result<T>
+    where
+        N: AsRef<str>,
+        T: FromJs<'js>,
+    {
+        let name = CString::new(name.as_ref())?;
+        let value = unsafe {
+            Value::from_js_value(
+                self.ctx.clone(),
+                self.ctx.handle_exception(qjs::JS_GetModuleExport(
+                    self.ctx.as_ptr(),
+                    self.as_ptr(),
+                    name.as_ptr(),
+                ))?,
+            )
+        };
+        T::from_js(&self.ctx, value)
+    }
+
+    /// Returns a iterator over the exported names of the module export.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
+    pub fn names<N>(self) -> ExportNamesIter<'js, N>
+    where
+        N: FromAtom<'js>,
+    {
+        let count = unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_ptr()) };
+        ExportNamesIter {
+            module: self,
+            count,
+            index: 0,
+            marker: PhantomData,
+        }
+    }
+
+    /// Returns a iterator over the items the module export.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
+    pub fn entries<N, T>(self) -> ExportEntriesIter<'js, N, T>
+    where
+        N: FromAtom<'js>,
+        T: FromJs<'js>,
+    {
+        let count = unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_ptr()) };
+        ExportEntriesIter {
+            module: self,
+            count,
+            index: 0,
+            marker: PhantomData,
+        }
+    }
+
+    #[doc(hidden)]
+    pub unsafe fn dump_exports(&self) {
+        let ptr = self.as_ptr();
+        let count = qjs::JS_GetModuleExportEntriesCount(ptr);
+        for i in 0..count {
+            let atom_name = Atom::from_atom_val(
+                self.ctx.clone(),
+                qjs::JS_GetModuleExportEntryName(self.ctx.as_ptr(), ptr, i),
+            );
+            println!("{}", atom_name.to_string().unwrap());
+        }
+    }
+}
+
+/// An iterator over the items exported out a module
+#[cfg(feature = "exports")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
+pub struct ExportNamesIter<'js, N> {
+    module: Module<'js>,
+    count: i32,
+    index: i32,
+    marker: PhantomData<N>,
+}
+
+#[cfg(feature = "exports")]
+impl<'js, N> Iterator for ExportNamesIter<'js, N>
+where
+    N: FromAtom<'js>,
+{
+    type Item = Result<N>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index == self.count {
+            return None;
+        }
+        let ctx = &self.module.ctx;
+        let ptr = self.module.as_ptr();
+        let atom = unsafe {
+            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
+            Atom::from_atom_val(ctx.clone(), atom_val)
+        };
+        self.index += 1;
+        Some(N::from_atom(atom))
+    }
+}
+
+/// An iterator over the items exported out a module
+#[cfg(feature = "exports")]
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
+pub struct ExportEntriesIter<'js, N, T> {
+    module: Module<'js>,
+    count: i32,
+    index: i32,
+    marker: PhantomData<(N, T)>,
+}
+
+#[cfg(feature = "exports")]
+impl<'js, N, T> Iterator for ExportEntriesIter<'js, N, T>
+where
+    N: FromAtom<'js>,
+    T: FromJs<'js>,
+{
+    type Item = Result<(N, T)>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index == self.count {
+            return None;
+        }
+        let ctx = &self.module.ctx;
+        let ptr = self.module.as_ptr();
+        let name = unsafe {
+            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
+            Atom::from_atom_val(ctx.clone(), atom_val)
+        };
+        let value = unsafe {
+            let js_val = qjs::JS_GetModuleExportEntry(ctx.as_ptr(), ptr, self.index);
+            Value::from_js_value(ctx.clone(), js_val)
+        };
+        self.index += 1;
+        Some(N::from_atom(name).and_then(|name| T::from_js(ctx, value).map(|value| (name, value))))
     }
 }

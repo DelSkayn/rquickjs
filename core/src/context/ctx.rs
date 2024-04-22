@@ -13,10 +13,11 @@ use std::future::Future;
 use crate::AsyncContext;
 use crate::{
     markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, IntoJs,
-    Module, Object, Promise, Result, String, Value,
+    Object, Promise, Result, String, Value,
 };
 
 /// Eval options.
+#[non_exhaustive]
 pub struct EvalOptions {
     /// Global code.
     pub global: bool,
@@ -24,6 +25,8 @@ pub struct EvalOptions {
     pub strict: bool,
     /// Don't include the stack frames before this eval in the Error() backtraces.
     pub backtrace_barrier: bool,
+    /// Support top-level-await.
+    pub promise: bool,
 }
 
 impl EvalOptions {
@@ -42,6 +45,10 @@ impl EvalOptions {
             flag |= qjs::JS_EVAL_FLAG_BACKTRACE_BARRIER;
         }
 
+        if self.promise {
+            flag |= qjs::JS_EVAL_FLAG_ASYNC;
+        }
+
         flag as i32
     }
 }
@@ -52,6 +59,7 @@ impl Default for EvalOptions {
             global: true,
             strict: true,
             backtrace_barrier: false,
+            promise: false,
         }
     }
 }
@@ -128,13 +136,26 @@ impl<'js> Ctx<'js> {
             file_name.as_ptr(),
             flag,
         );
-        dbg!(qjs::JS_VALUE_GET_PTR(val));
         self.handle_exception(val)
     }
 
     /// Evaluate a script in global context.
     pub fn eval<V: FromJs<'js>, S: Into<Vec<u8>>>(&self, source: S) -> Result<V> {
         self.eval_with_options(source, Default::default())
+    }
+
+    /// Evaluate a script in global context with top level await support.
+    ///
+    /// This function always returns a promise which resolves to the result of the evaluated
+    /// expression.
+    pub fn eval_promise<S: Into<Vec<u8>>>(&self, source: S) -> Result<Promise<'js>> {
+        self.eval_with_options(
+            source,
+            EvalOptions {
+                promise: true,
+                ..Default::default()
+            },
+        )
     }
 
     /// Evaluate a script with the given options.
@@ -174,15 +195,6 @@ impl<'js> Ctx<'js> {
             let val = self.eval_raw(buffer, file_name.as_c_str(), options.to_flag())?;
             Value::from_js_value(self.clone(), val)
         })
-    }
-
-    /// Compile a module for later use.
-    pub fn compile<N, S>(self, name: N, source: S) -> Result<Promise<'js>>
-    where
-        N: Into<Vec<u8>>,
-        S: Into<Vec<u8>>,
-    {
-        Module::evaluate(self, name, source)
     }
 
     /// Returns the global object of this context.
@@ -442,30 +454,16 @@ mod test {
     #[cfg(feature = "exports")]
     #[test]
     fn exports() {
-        use crate::{context::intrinsic, Context, Function, Runtime};
+        use crate::{context::intrinsic, Context, Function, Module, Promise, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
         ctx.with(|ctx| {
-            let module = ctx
-                .compile("test", "export default async () => 1;")
-                .unwrap();
+            let module = Module::declare(ctx, "test", "export default async () => 1;").unwrap();
+            module.eval().unwrap();
             let func: Function = module.get("default").unwrap();
-            func.call::<(), ()>(()).unwrap();
+            func.call::<(), Promise>(()).unwrap();
         });
-    }
-
-    #[test]
-    fn compile_minimal_test() {
-        use crate::{Context, Runtime};
-
-        let runtime = Runtime::new().unwrap();
-        let ctx = Context::full(&runtime).unwrap();
-        ctx.with(|ctx| {
-            let module = ctx.compile("test", "export let foo = 1 + 1;").unwrap();
-            let v: i32 = module.get("foo").unwrap();
-            assert_eq!(v, 2)
-        })
     }
 
     #[test]
