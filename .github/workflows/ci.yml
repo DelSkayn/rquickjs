@@ -306,7 +306,7 @@ jobs:
         with:
           submodules: true
       - name: Setup android toolchain
-        if: contains(matrix.target, '-android-')
+        if: contains(matrix.target, 'android')
         run: |
           sudo apt-get update -y
           sudo apt-get install -y gcc-multilib
