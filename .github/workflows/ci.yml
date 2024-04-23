@@ -311,7 +311,7 @@ jobs:
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
           esac
-
+          SYSTEM_ARCH=aarch64
           sudo apt-get update -y
           sudo apt-get install -y
 
@@ -323,10 +323,7 @@ jobs:
       - name: Setup cross linux toolchain
         if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
         run: |
-          case "${{ matrix.target }}" in
-            i686-*) SYSTEM_ARCH=i386 ;;
-          esac
-
+          SYSTEM_ARCH=aarch64
           GCC_TARGET=$(printf "${{ matrix.target }}" | sed 's/-unknown-/-/' | sed 's/arm[^-]*/arm/g')
           ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
           sudo dpkg --add-architecture ${SYSTEM_ARCH}
