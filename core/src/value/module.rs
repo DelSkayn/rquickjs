@@ -9,9 +9,10 @@ use std::{
 #[cfg(feature = "exports")]
 use std::marker::PhantomData;
 
-use crate::{qjs, Context, Ctx, Error, IntoJs, Promise, Result, Value};
-#[cfg(feature = "exports")]
-use crate::{Atom, FromAtom, FromJs};
+use crate::{
+    atom::PredefinedAtom, qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs, Promise,
+    Result, Value,
+};
 
 /// Helper macro to provide module init function.
 /// Use for exporting module definitions to be loaded as part of a dynamic library.
@@ -198,6 +199,16 @@ impl<'js> Module<'js> {
         Ok(v.into_promise().expect("evaluate should return a promise"))
     }
 
+    /// Declares a module in the runtime and evaluates it.
+    pub fn evaluate_def<D, N>(ctx: Ctx<'js>, name: N) -> Result<Promise<'js>>
+    where
+        N: Into<Vec<u8>>,
+        D: ModuleDef,
+    {
+        let module = Self::declare_def::<D, N>(ctx, name)?;
+        module.eval()
+    }
+
     /// Load a module from quickjs bytecode.
     ///
     /// # Safety
@@ -312,6 +323,57 @@ impl<'js> Module<'js> {
                 error.throw(&ctx);
                 ptr::null_mut()
             }
+        }
+    }
+
+    /// Returns the name of the module
+    pub fn name<N>(&self) -> Result<N>
+    where
+        N: FromAtom<'js>,
+    {
+        let name = unsafe {
+            Atom::from_atom_val(
+                self.ctx.clone(),
+                qjs::JS_GetModuleName(self.ctx.as_ptr(), self.as_ptr()),
+            )
+        };
+        N::from_atom(name)
+    }
+
+    /// Return the `import.meta` object of a module
+    pub fn meta<T>(&self) -> Result<T>
+    where
+        T: FromJs<'js>,
+    {
+        let meta = unsafe {
+            Value::from_js_value(
+                self.ctx.clone(),
+                self.ctx
+                    .handle_exception(qjs::JS_GetImportMeta(self.ctx.as_ptr(), self.as_ptr()))?,
+            )
+        };
+        T::from_js(&self.ctx, meta)
+    }
+
+    /// Import and evaluate a module
+    ///
+    /// This will work similar to an `import(specifier)` statement in JavaScript returning a promise with the result of the imported module.
+    pub fn import<S: Into<Vec<u8>>>(ctx: &Ctx<'js>, specifier: S) -> Result<Promise<'js>> {
+        let specifier = CString::new(specifier)?;
+        unsafe {
+            let base_name = ctx
+                .script_or_module_name(1)
+                .unwrap_or_else(|| Atom::from_predefined(ctx.clone(), PredefinedAtom::Empty));
+
+            let base_name_c_str = qjs::JS_AtomToCString(ctx.as_ptr(), base_name.atom);
+
+            let res = qjs::JS_LoadModule(ctx.as_ptr(), base_name_c_str, specifier.as_ptr());
+
+            qjs::JS_FreeCString(ctx.as_ptr(), base_name_c_str);
+
+            let res = ctx.handle_exception(res)?;
+
+            Ok(Promise::from_js_value(ctx.clone(), res))
         }
     }
 }
@@ -450,5 +512,177 @@ where
         };
         self.index += 1;
         Some(N::from_atom(name).and_then(|name| T::from_js(ctx, value).map(|value| (name, value))))
+    }
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use crate::*;
+
+    pub struct RustModule;
+
+    impl ModuleDef for RustModule {
+        fn declare(define: &Declarations) -> Result<()> {
+            define.declare_c_str(CStr::from_bytes_with_nul(b"hello\0")?)?;
+            Ok(())
+        }
+
+        fn evaluate<'js>(_ctx: &Ctx<'js>, exports: &Exports<'js>) -> Result<()> {
+            exports.export_c_str(CStr::from_bytes_with_nul(b"hello\0")?, "world")?;
+            Ok(())
+        }
+    }
+
+    pub struct CrashingRustModule;
+
+    impl ModuleDef for CrashingRustModule {
+        fn declare(_: &Declarations) -> Result<()> {
+            Ok(())
+        }
+
+        fn evaluate<'js>(ctx: &Ctx<'js>, _exports: &Exports<'js>) -> Result<()> {
+            ctx.eval::<(), _>(r#"throw new Error("kaboom")"#)?;
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn from_rust_def() {
+        test_with(|ctx| {
+            Module::declare_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+        })
+    }
+
+    #[test]
+    fn from_rust_def_eval() {
+        test_with(|ctx| {
+            let _ = Module::evaluate_def::<RustModule, _>(ctx, "rust_mod").unwrap();
+        })
+    }
+
+    #[test]
+    fn import_native() {
+        test_with(|ctx| {
+            Module::declare_def::<RustModule, _>(ctx.clone(), "rust_mod").unwrap();
+            Module::evaluate(
+                ctx.clone(),
+                "test",
+                r#"
+                import { hello } from "rust_mod";
+
+                globalThis.hello = hello;
+            "#,
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
+            let text = ctx
+                .globals()
+                .get::<_, String>("hello")
+                .unwrap()
+                .to_string()
+                .unwrap();
+            assert_eq!(text.as_str(), "world");
+        })
+    }
+
+    #[test]
+    fn import() {
+        test_with(|ctx| {
+            Module::declare_def::<RustModule, _>(ctx.clone(), "rust_mod").unwrap();
+            let val: Object = Module::import(&ctx, "rust_mod").unwrap().finish().unwrap();
+            let hello: StdString = val.get("hello").unwrap();
+
+            assert_eq!(&hello, "world");
+        })
+    }
+
+    #[test]
+    #[should_panic(expected = "kaboom")]
+    fn import_crashing() {
+        use crate::{CatchResultExt, Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            Module::declare_def::<CrashingRustModule, _>(ctx.clone(), "bad_rust_mod").unwrap();
+            let _: Value = Module::import(&ctx, "bad_rust_mod")
+                .catch(&ctx)
+                .unwrap()
+                .finish()
+                .catch(&ctx)
+                .unwrap();
+        });
+    }
+
+    #[test]
+    fn eval_crashing_module_inside_module() {
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        ctx.with(|ctx| {
+            let globals = ctx.globals();
+            let eval_crashing = |ctx: Ctx| {
+                Module::evaluate(ctx, "test2", "throw new Error(1)").map(|x| x.finish::<()>())
+            };
+            let function = Function::new(ctx.clone(), eval_crashing).unwrap();
+            globals.set("eval_crashing", function).unwrap();
+
+            let res = Module::evaluate(ctx, "test", " eval_crashing(); ")
+                .unwrap()
+                .finish::<()>();
+            assert!(res.is_err())
+        });
+    }
+
+    #[test]
+    fn from_javascript() {
+        test_with(|ctx| {
+            let module = Module::declare(
+                ctx.clone(),
+                "Test",
+                r#"
+            export var a = 2;
+            export function foo(){ return "bar"}
+            export class Baz{
+                quel = 3;
+                constructor(){
+                }
+            }
+                "#,
+            )
+            .unwrap();
+
+            module.eval().unwrap().finish::<()>().unwrap();
+
+            assert_eq!(module.name::<StdString>().unwrap(), "Test");
+            let _ = module.meta::<Object>().unwrap();
+
+            #[cfg(feature = "exports")]
+            {
+                let names = module
+                    .clone()
+                    .names()
+                    .collect::<Result<Vec<StdString>>>()
+                    .unwrap();
+
+                assert_eq!(names[0], "a");
+                assert_eq!(names[1], "foo");
+                assert_eq!(names[2], "Baz");
+
+                let entries = module
+                    .clone()
+                    .entries()
+                    .collect::<Result<Vec<(StdString, Value)>>>()
+                    .unwrap();
+
+                assert_eq!(entries[0].0, "a");
+                assert_eq!(i32::from_js(&ctx, entries[0].1.clone()).unwrap(), 2);
+                assert_eq!(entries[1].0, "foo");
+                assert_eq!(entries[2].0, "Baz");
+            }
+        });
     }
 }
