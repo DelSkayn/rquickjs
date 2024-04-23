@@ -364,7 +364,7 @@ impl<'js> Value<'js> {
     /// Check if the value is a promise.
     #[inline]
     pub fn is_promise(&self) -> bool {
-        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as std::os::raw::c_int) > 0
+        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as std::os::raw::c_int) >= 0
     }
 
     /// Check if the value is an exception

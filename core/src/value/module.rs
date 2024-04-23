@@ -589,6 +589,41 @@ mod test {
     }
 
     #[test]
+    fn import_async() {
+        test_with(|ctx| {
+            Module::declare(
+                ctx.clone(),
+                "rust_mod",
+                "
+                async function foo(){
+                    return 'world';
+                };
+                export let hello = await foo();
+            ",
+            )
+            .unwrap();
+            Module::evaluate(
+                ctx.clone(),
+                "test",
+                r#"
+                import { hello } from "rust_mod";
+                globalThis.hello = hello;
+            "#,
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
+            let text = ctx
+                .globals()
+                .get::<_, String>("hello")
+                .unwrap()
+                .to_string()
+                .unwrap();
+            assert_eq!(text.as_str(), "world");
+        })
+    }
+
+    #[test]
     fn import() {
         test_with(|ctx| {
             Module::declare_def::<RustModule, _>(ctx.clone(), "rust_mod").unwrap();
