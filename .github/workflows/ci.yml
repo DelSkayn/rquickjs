@@ -308,8 +308,13 @@ jobs:
       - name: Setup android toolchain
         if: contains(matrix.target, 'android')
         run: |
+          case "${{ matrix.target }}" in
+            i686-*) SYSTEM_ARCH=i386 ;;
+          esac
+
           sudo apt-get update -y
           sudo apt-get install -y
+
           GCC_TARGET=$(printf "${{ matrix.target }}" | sed 's/-unknown-/-/' | sed 's/arm[^-]*/arm/g')
           ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
           sudo dpkg --add-architecture ${SYSTEM_ARCH}
@@ -321,6 +326,7 @@ jobs:
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
           esac
+
           GCC_TARGET=$(printf "${{ matrix.target }}" | sed 's/-unknown-/-/' | sed 's/arm[^-]*/arm/g')
           ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
           sudo dpkg --add-architecture ${SYSTEM_ARCH}
