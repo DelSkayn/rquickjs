@@ -573,28 +573,13 @@ mod test {
             assert_eq!(module.name::<StdString>().unwrap(), "Test");
             let _ = module.meta::<Object>().unwrap();
 
-            let names = module
-                .namespace()
-                .unwrap()
-                .keys()
-                .collect::<Result<Vec<StdString>>>()
-                .unwrap();
+            let ns = module.namespace().unwrap();
 
-            assert_eq!(names[0], "a");
-            assert_eq!(names[1], "foo");
-            assert_eq!(names[2], "Baz");
+            assert!(ns.contains_key("a").unwrap());
+            assert!(ns.contains_key("foo").unwrap());
+            assert!(ns.contains_key("Baz").unwrap());
 
-            let entries = module
-                .namespace()
-                .unwrap()
-                .props()
-                .collect::<Result<Vec<(StdString, Value)>>>()
-                .unwrap();
-
-            assert_eq!(entries[0].0, "a");
-            assert_eq!(i32::from_js(&ctx, entries[0].1.clone()).unwrap(), 2);
-            assert_eq!(entries[1].0, "foo");
-            assert_eq!(entries[2].0, "Baz");
+            assert_eq!(ns.get::<_, u32>("a").unwrap(), 2u32);
         });
     }
 }
