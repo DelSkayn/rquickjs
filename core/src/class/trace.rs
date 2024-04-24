@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 #[cfg(feature = "either")]
 use either::{Either, Left, Right};
 
-use crate::{markers::Invariant, qjs, Class, Ctx, Value};
+use crate::{markers::Invariant, qjs, Class, Ctx, Module, Value};
 
 use super::JsClass;
 
@@ -78,6 +78,10 @@ where
     fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
         self.0.trace(tracer)
     }
+}
+
+impl<'js, T> Trace<'js> for Module<'js, T> {
+    fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
 }
 
 impl<'js, T> Trace<'js> for Option<T>
@@ -200,7 +204,6 @@ trace_impls! {
     bool,char,
     String,
     crate::Atom<'js>,
-    crate::Module<'js>,
 }
 
 trace_impls! {

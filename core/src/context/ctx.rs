@@ -468,8 +468,11 @@ mod test {
         let runtime = Runtime::new().unwrap();
         let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
         ctx.with(|ctx| {
-            let module = Module::declare(ctx, "test", "export default async () => 1;").unwrap();
-            module.eval().unwrap();
+            let (module, promise) = Module::declare(ctx, "test", "export default async () => 1;")
+                .unwrap()
+                .eval()
+                .unwrap();
+            promise.finish::<()>().unwrap();
             let func: Function = module.get("default").unwrap();
             func.call::<(), Promise>(()).unwrap();
         });

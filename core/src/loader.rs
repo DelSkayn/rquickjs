@@ -2,7 +2,7 @@
 
 use std::{ffi::CStr, ptr};
 
-use crate::{qjs, Ctx, Module, Result};
+use crate::{module::Declared, qjs, Ctx, Module, Result};
 
 mod builtin_resolver;
 pub use builtin_resolver::BuiltinResolver;
@@ -69,7 +69,7 @@ pub trait Resolver {
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Loader {
     /// Load module by name
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>>;
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js, Declared>>;
 }
 
 struct LoaderOpaque {
@@ -219,7 +219,7 @@ macro_rules! loader_impls {
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+                fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js, Declared>> {
                     let mut messages = Vec::<std::string::String>::new();
                     let ($($t,)*) = self;
                     $(

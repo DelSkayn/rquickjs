@@ -718,7 +718,6 @@ sub_types! {
     Array->Object->Value as_array ref_array into_array try_into_array from_array,
     Exception->Object->Value as_exception ref_exception into_exception try_into_exception from_exception,
     BigInt->Value as_big_int ref_big_int into_big_int try_into_big_int from_big_int,
-    Module->Value as_module ref_module into_module try_into_module from_module,
 }
 
 macro_rules! void_types {
