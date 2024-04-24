@@ -6,12 +6,9 @@ use std::{
     ptr, slice,
 };
 
-#[cfg(feature = "exports")]
-use std::marker::PhantomData;
-
 use crate::{
-    atom::PredefinedAtom, qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoJs, Promise,
-    Result, Value,
+    atom::PredefinedAtom, qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoAtom, IntoJs,
+    Object, Promise, Result, Value,
 };
 
 /// Helper macro to provide module init function.
@@ -376,142 +373,23 @@ impl<'js> Module<'js> {
             Ok(Promise::from_js_value(ctx.clone(), res))
         }
     }
-}
 
-#[cfg(feature = "exports")]
-impl<'js> Module<'js> {
+    /// Returns the module namespace, an object containing all the module exported values.
+    pub fn namespace(&self) -> Result<Object<'js>> {
+        unsafe {
+            let v = qjs::JS_GetModuleNamespace(self.ctx().as_ptr(), self.as_ptr());
+            let v = self.ctx().handle_exception(v)?;
+            Ok(Object::from_js_value(self.ctx().clone(), v))
+        }
+    }
+
     /// Return exported value by name
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
     pub fn get<N, T>(&self, name: N) -> Result<T>
     where
-        N: AsRef<str>,
+        N: IntoAtom<'js>,
         T: FromJs<'js>,
     {
-        let name = CString::new(name.as_ref())?;
-        let value = unsafe {
-            Value::from_js_value(
-                self.ctx.clone(),
-                self.ctx.handle_exception(qjs::JS_GetModuleExport(
-                    self.ctx.as_ptr(),
-                    self.as_ptr(),
-                    name.as_ptr(),
-                ))?,
-            )
-        };
-        T::from_js(&self.ctx, value)
-    }
-
-    /// Returns a iterator over the exported names of the module export.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
-    pub fn names<N>(self) -> ExportNamesIter<'js, N>
-    where
-        N: FromAtom<'js>,
-    {
-        let count = unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_ptr()) };
-        ExportNamesIter {
-            module: self,
-            count,
-            index: 0,
-            marker: PhantomData,
-        }
-    }
-
-    /// Returns a iterator over the items the module export.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
-    pub fn entries<N, T>(self) -> ExportEntriesIter<'js, N, T>
-    where
-        N: FromAtom<'js>,
-        T: FromJs<'js>,
-    {
-        let count = unsafe { qjs::JS_GetModuleExportEntriesCount(self.as_ptr()) };
-        ExportEntriesIter {
-            module: self,
-            count,
-            index: 0,
-            marker: PhantomData,
-        }
-    }
-
-    #[doc(hidden)]
-    pub unsafe fn dump_exports(&self) {
-        let ptr = self.as_ptr();
-        let count = qjs::JS_GetModuleExportEntriesCount(ptr);
-        for i in 0..count {
-            let atom_name = Atom::from_atom_val(
-                self.ctx.clone(),
-                qjs::JS_GetModuleExportEntryName(self.ctx.as_ptr(), ptr, i),
-            );
-            println!("{}", atom_name.to_string().unwrap());
-        }
-    }
-}
-
-/// An iterator over the items exported out a module
-#[cfg(feature = "exports")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
-pub struct ExportNamesIter<'js, N> {
-    module: Module<'js>,
-    count: i32,
-    index: i32,
-    marker: PhantomData<N>,
-}
-
-#[cfg(feature = "exports")]
-impl<'js, N> Iterator for ExportNamesIter<'js, N>
-where
-    N: FromAtom<'js>,
-{
-    type Item = Result<N>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.count {
-            return None;
-        }
-        let ctx = &self.module.ctx;
-        let ptr = self.module.as_ptr();
-        let atom = unsafe {
-            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
-            Atom::from_atom_val(ctx.clone(), atom_val)
-        };
-        self.index += 1;
-        Some(N::from_atom(atom))
-    }
-}
-
-/// An iterator over the items exported out a module
-#[cfg(feature = "exports")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "exports")))]
-pub struct ExportEntriesIter<'js, N, T> {
-    module: Module<'js>,
-    count: i32,
-    index: i32,
-    marker: PhantomData<(N, T)>,
-}
-
-#[cfg(feature = "exports")]
-impl<'js, N, T> Iterator for ExportEntriesIter<'js, N, T>
-where
-    N: FromAtom<'js>,
-    T: FromJs<'js>,
-{
-    type Item = Result<(N, T)>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index == self.count {
-            return None;
-        }
-        let ctx = &self.module.ctx;
-        let ptr = self.module.as_ptr();
-        let name = unsafe {
-            let atom_val = qjs::JS_GetModuleExportEntryName(ctx.as_ptr(), ptr, self.index);
-            Atom::from_atom_val(ctx.clone(), atom_val)
-        };
-        let value = unsafe {
-            let js_val = qjs::JS_GetModuleExportEntry(ctx.as_ptr(), ptr, self.index);
-            Value::from_js_value(ctx.clone(), js_val)
-        };
-        self.index += 1;
-        Some(N::from_atom(name).and_then(|name| T::from_js(ctx, value).map(|value| (name, value))))
+        self.namespace()?.get(name)
     }
 }
 
@@ -695,29 +573,28 @@ mod test {
             assert_eq!(module.name::<StdString>().unwrap(), "Test");
             let _ = module.meta::<Object>().unwrap();
 
-            #[cfg(feature = "exports")]
-            {
-                let names = module
-                    .clone()
-                    .names()
-                    .collect::<Result<Vec<StdString>>>()
-                    .unwrap();
+            let names = module
+                .namespace()
+                .unwrap()
+                .keys()
+                .collect::<Result<Vec<StdString>>>()
+                .unwrap();
 
-                assert_eq!(names[0], "a");
-                assert_eq!(names[1], "foo");
-                assert_eq!(names[2], "Baz");
+            assert_eq!(names[0], "a");
+            assert_eq!(names[1], "foo");
+            assert_eq!(names[2], "Baz");
 
-                let entries = module
-                    .clone()
-                    .entries()
-                    .collect::<Result<Vec<(StdString, Value)>>>()
-                    .unwrap();
+            let entries = module
+                .namespace()
+                .unwrap()
+                .props()
+                .collect::<Result<Vec<(StdString, Value)>>>()
+                .unwrap();
 
-                assert_eq!(entries[0].0, "a");
-                assert_eq!(i32::from_js(&ctx, entries[0].1.clone()).unwrap(), 2);
-                assert_eq!(entries[1].0, "foo");
-                assert_eq!(entries[2].0, "Baz");
-            }
+            assert_eq!(entries[0].0, "a");
+            assert_eq!(i32::from_js(&ctx, entries[0].1.clone()).unwrap(), 2);
+            assert_eq!(entries[1].0, "foo");
+            assert_eq!(entries[2].0, "Baz");
         });
     }
 }

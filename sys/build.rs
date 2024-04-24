@@ -94,7 +94,6 @@ fn main() {
     pretty_env_logger::init();
 
     let features = [
-        "exports",
         "bindgen",
         "update-bindings",
         "dump-bytecode",
@@ -148,7 +147,6 @@ fn main() {
         "get_function_proto.patch",
         "check_stack_overflow.patch",
         "infinity_handling.patch",
-        //"dynamic_import_sync.patch",
     ];
 
     let mut defines = vec![
@@ -161,11 +159,6 @@ fn main() {
         && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
     {
         patch_files.push("basic_msvc_compat.patch");
-    }
-
-    if env::var("CARGO_FEATURE_EXPORTS").is_ok() {
-        patch_files.push("read_module_exports.patch");
-        defines.push(("CONFIG_MODULE_EXPORTS".into(), None));
     }
 
     for feature in &features {
