@@ -9,11 +9,9 @@ use std::{
     task::{Context as TaskContext, Poll, Waker},
 };
 
-use crate::{atom::PredefinedAtom, qjs, Ctx, Error, FromJs, Function, Result, Value};
+use crate::{atom::PredefinedAtom, qjs, Ctx, Error, FromJs, Function, Object, Result, Value};
 #[cfg(feature = "futures")]
 use crate::{function::This, CatchResultExt, CaughtError, IntoJs};
-
-use super::Object;
 
 /// The execution state of a promise.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -150,11 +148,16 @@ impl<'js> Promise<'js> {
 /// Future-aware promise
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[cfg(feature = "futures")]
+#[must_use = "futures do nothing unless you `.await` or poll them"]
 pub struct PromiseFuture<'js, T> {
     state: Option<Rc<RefCell<Waker>>>,
     promise: Promise<'js>,
     _marker: PhantomData<T>,
 }
+
+// Nothing is actually pinned so promise future is unpin.
+#[cfg(feature = "futures")]
+impl<'js, T> Unpin for PromiseFuture<'js, T> {}
 
 #[cfg(feature = "futures")]
 impl<'js, T> Future for PromiseFuture<'js, T>
@@ -164,8 +167,7 @@ where
     type Output = Result<T>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
-        // Nothing is actually pinned so this is safe.
-        let this = unsafe { self.get_unchecked_mut() };
+        let this = self.get_mut();
 
         if let Some(x) = this.promise.result() {
             return Poll::Ready(x);
