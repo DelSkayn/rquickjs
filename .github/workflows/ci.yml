@@ -164,13 +164,13 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: i686-unknown-linux-gnu
-            features: exports
+            features: full-async 
             optimization: false
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: exports
+            features: full-async 
             optimization: false
           - task: bindings
             os: macos-latest
@@ -233,12 +233,6 @@ jobs:
             features: full-async
             optimization: false
           # Test features
-          - task: features
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: exports
-            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable

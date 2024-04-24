@@ -196,7 +196,6 @@ mod test {
         });
     }
 
-    #[cfg(feature = "exports")]
     #[test]
     fn module() {
         test_with(|ctx| {

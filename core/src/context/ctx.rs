@@ -461,7 +461,6 @@ impl<'js> Ctx<'js> {
 #[cfg(test)]
 mod test {
 
-    #[cfg(feature = "exports")]
     #[test]
     fn exports() {
         use crate::{context::intrinsic, Context, Function, Module, Promise, Runtime};

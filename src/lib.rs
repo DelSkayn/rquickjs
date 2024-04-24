@@ -37,7 +37,6 @@
 //! - `classes` enables support for ES6 classes. Any user-defined Rust
 //! type can be exported to JS as an ES6 class which can be derived and extended by JS.
 //! - `properties` enables support for object properties (`Object.defineProperty`).
-//! - `exports` adds an ability to read the module exports.
 //!
 //! ## Advanced
 //!
