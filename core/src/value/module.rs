@@ -433,6 +433,8 @@ impl<'js, Evaluated> Module<'js, Evaluated> {
     }
 
     /// Change the module back to being only declared.
+    ///
+    /// This is always safe to do since calling eval again on an already evaluated module is safe.
     pub fn into_declared(self) -> Module<'js, Declared> {
         Module {
             ptr: self.ptr,
@@ -596,6 +598,38 @@ mod test {
                 .unwrap()
                 .finish::<()>();
             assert!(res.is_err())
+        });
+    }
+
+    #[test]
+    fn access_before_fully_evaluating_module() {
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        ctx.with(|ctx| {
+            let decl = Module::declare(
+                ctx,
+                "test",
+                r#"
+                async function async_res(){
+                    return await (async () => {
+                        return "OK"
+                    })()
+                };
+
+                export let res = await async_res()
+            "#,
+            )
+            .unwrap();
+
+            let (decl, promise) = decl.eval().unwrap();
+
+            let ns = decl.namespace().unwrap();
+            ns.get::<_, ()>("res").unwrap_err();
+
+            promise.finish::<()>().unwrap();
+
+            assert_eq!(ns.get::<_, std::string::String>("res").unwrap(), "OK");
         });
     }
 

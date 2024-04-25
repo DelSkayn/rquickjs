@@ -220,3 +220,127 @@ where
         Promise::wrap_future(ctx, self.0).map(|x| x.into_value())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use super::*;
+    #[cfg(feature = "futures")]
+    use crate::{
+        async_with,
+        function::{Async, Func},
+        AsyncContext, AsyncRuntime,
+    };
+
+    #[cfg(feature = "futures")]
+    async fn set_timeout<'js>(cb: Function<'js>, number: f64) -> Result<()> {
+        tokio::time::sleep(Duration::from_secs_f64(number / 1000.0)).await;
+        cb.call::<_, ()>(())
+    }
+
+    #[cfg(feature = "futures")]
+    #[tokio::test]
+    async fn promise() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        async_with!(ctx => |ctx| {
+            ctx.globals().set("setTimeout",Func::from(Async(set_timeout))).unwrap();
+
+            let func = ctx
+                .eval::<Function, _>(
+                    r"
+                    (function(){
+                        return new Promise((resolve) => {
+                            setTimeout(x => {
+                                resolve(42)
+                            },100)
+                        })
+                    })
+                    ",
+                )
+                .catch(&ctx)
+                .unwrap();
+            let promise: Promise = func.call(()).unwrap();
+            assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
+
+            let func = ctx
+                .eval::<Function, _>(
+                    r"
+                    (function(){
+                        return new Promise((_,reject) => {
+                            setTimeout(x => {
+                                reject(42)
+                            },100)
+                        })
+                    })
+                    ",
+                )
+                .catch(&ctx)
+                .unwrap();
+            let promise: Promise = func.call(()).unwrap();
+            let err = promise.into_future::<()>().await.catch(&ctx);
+            match err {
+                Err(CaughtError::Value(v)) => {
+                    assert_eq!(v.as_int().unwrap(), 42)
+                }
+                _ => panic!(),
+            }
+        })
+        .await
+    }
+
+    #[cfg(feature = "futures")]
+    #[tokio::test]
+    async fn promised() {
+        use crate::Exception;
+
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        async_with!(ctx => |ctx| {
+            let promised = Promised::from(async {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                42
+            });
+
+            let function = ctx.eval::<Function,_>(r"
+                (async function(v){
+                    let val = await v;
+                    if(val !== 42){
+                        throw new Error('not correct value')
+                    }
+                })
+            ").catch(&ctx).unwrap();
+
+            function.call::<_,Promise>((promised,)).unwrap().into_future::<()>().await.unwrap();
+
+            let ctx_clone = ctx.clone();
+            let promised = Promised::from(async move {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                Result::<()>::Err(Exception::throw_message(&ctx_clone, "some_message"))
+            });
+
+            let function = ctx.eval::<Function,_>(r"
+                (async function(v){
+                    try{
+                        await v;
+                    }catch(e) {
+                        if (e.message !== 'some_message'){
+                            throw new Error('wrong error')
+                        }
+                        return
+                    }
+                    throw new Error('no error thrown')
+                })
+            ")
+                .catch(&ctx)
+                .unwrap();
+
+
+            function.call::<_,Promise>((promised,)).unwrap().into_future::<()>().await.unwrap()
+        })
+        .await
+    }
+}
