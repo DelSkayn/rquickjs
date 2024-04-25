@@ -171,7 +171,7 @@ pub unsafe fn JS_SetProperty(
     prop: JSAtom,
     val: JSValue,
 ) -> i32 {
-    JS_SetPropertyInternal(ctx, this_obj, prop, val, JS_PROP_THROW as i32)
+    JS_SetPropertyInternal(ctx, this_obj, prop, val, this_obj, JS_PROP_THROW as i32)
 }
 
 #[inline]

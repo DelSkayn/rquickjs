@@ -23,7 +23,6 @@ version = "0.5"
 optional = true
 
 [features]
-exports = []
 bindgen = ["bindgen-rs"]
 
 # Debug logging

@@ -47,7 +47,7 @@ optional = true
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "exports", "loader", "allocator", "dyn-load", "either", "indexmap", "classes", "properties", "array-buffer"]
+full = ["chrono", "loader", "allocator", "dyn-load", "either", "indexmap", "classes", "properties", "array-buffer"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
@@ -58,9 +58,6 @@ bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
 parallel = []
-
-# Enable support of reading module exports
-exports = ["rquickjs-sys/exports"]
 
 # Enable user-defined module loader support
 loader = ["relative-path"]

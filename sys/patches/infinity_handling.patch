@@ -1,8 +1,8 @@
 diff --git a/quickjs.c b/quickjs.c
-index b315256..ccf0916 100644
+index e8fdd8a..9e9b8db 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -10239,7 +10239,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
+@@ -10286,7 +10286,7 @@ static JSValue js_atof(JSContext *ctx, const char *str, const char **pp,
              } else
  #endif
              {
@@ -11,7 +11,7 @@ index b315256..ccf0916 100644
                  if (is_neg)
                      d = -d;
                  val = JS_NewFloat64(ctx, d);
-@@ -41736,7 +41736,7 @@ static JSValue js_math_min_max(JSContext *ctx, JSValueConst this_val,
+@@ -43090,7 +43090,7 @@ static JSValue js_math_min_max(JSContext *ctx, JSValueConst this_val,
      uint32_t tag;
  
      if (unlikely(argc == 0)) {
@@ -20,7 +20,7 @@ index b315256..ccf0916 100644
      }
  
      tag = JS_VALUE_GET_TAG(argv[0]);
-@@ -47843,7 +47843,7 @@ static const JSCFunctionListEntry js_global_funcs[] = {
+@@ -49418,7 +49418,7 @@ static const JSCFunctionListEntry js_global_funcs[] = {
      JS_CFUNC_MAGIC_DEF("encodeURIComponent", 1, js_global_encodeURI, 1 ),
      JS_CFUNC_DEF("escape", 1, js_global_escape ),
      JS_CFUNC_DEF("unescape", 1, js_global_unescape ),
@@ -28,4 +28,4 @@ index b315256..ccf0916 100644
 +    JS_PROP_DOUBLE_DEF("Infinity", INFINITY, 0 ),
      JS_PROP_DOUBLE_DEF("NaN", NAN, 0 ),
      JS_PROP_UNDEFINED_DEF("undefined", 0 ),
- 
+     JS_PROP_STRING_DEF("[Symbol.toStringTag]", "global", JS_PROP_CONFIGURABLE ),

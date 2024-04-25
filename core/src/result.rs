@@ -63,6 +63,8 @@ pub enum Error {
     Allocation,
     /// A module defined two exported values with the same name.
     DuplicateExports,
+    /// Tried to export a entry which was not previously declared.
+    InvalidExport,
     /// Found a string with a internal null byte while converting
     /// to C string.
     InvalidString(NulError),
@@ -117,11 +119,13 @@ pub enum Error {
         name: StdString,
         message: Option<StdString>,
     },
-
     #[cfg(feature = "array-buffer")]
     AsSlice(AsSliceError),
     /// Error when restoring a Persistent in a runtime other than the original runtime.
     UnrelatedRuntime,
+    /// An error returned by a blocked on promise if block on the promise would result in a dead
+    /// lock.
+    WouldBlock,
     /// An error from QuickJS from which the specifics are unknown.
     /// Should eventually be removed as development progresses.
     Unknown,
@@ -356,6 +360,7 @@ impl Display for Error {
             DuplicateExports => {
                 "Tried to export two values with the same name from one module".fmt(f)?
             }
+            InvalidExport => "Tried to export a value which was not previously declared".fmt(f)?,
             InvalidString(error) => {
                 "String contained internal null bytes: ".fmt(f)?;
                 error.fmt(f)?;
@@ -453,6 +458,7 @@ impl Display for Error {
                 "Error borrowing function: ".fmt(f)?;
                 x.fmt(f)?;
             }
+            WouldBlock => "Error blocking on a promise resulted in a dead lock".fmt(f)?,
             #[cfg(feature = "array-buffer")]
             AsSlice(x) => {
                 "Could not convert array buffer to slice: ".fmt(f)?;

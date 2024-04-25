@@ -13,7 +13,7 @@ use async_lock::Mutex;
 #[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
-use crate::loader::{RawLoader, Resolver};
+use crate::loader::{Loader, Resolver};
 #[cfg(feature = "parallel")]
 use crate::qjs;
 use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Error, Exception, Result};
@@ -180,7 +180,7 @@ impl AsyncRuntime {
     pub async fn set_loader<R, L>(&self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
-        L: RawLoader + 'static,
+        L: Loader + 'static,
     {
         unsafe {
             self.inner.lock().await.runtime.set_loader(resolver, loader);

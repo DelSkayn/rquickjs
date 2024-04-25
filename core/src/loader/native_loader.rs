@@ -1,6 +1,4 @@
-use crate::{
-    loader::util::check_extensions, module::ModuleData, module::ModuleLoadFn, Ctx, Error, Result,
-};
+use crate::{loader::util::check_extensions, module::ModuleLoadFn, Ctx, Error, Module, Result};
 
 use super::Loader;
 
@@ -49,7 +47,7 @@ impl Default for NativeLoader {
 }
 
 impl Loader for NativeLoader {
-    fn load<'js>(&mut self, _ctx: &Ctx<'js>, path: &str) -> Result<ModuleData> {
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
         use dlopen::raw::Library;
 
         if !check_extensions(path, &self.extensions) {
@@ -62,7 +60,7 @@ impl Loader for NativeLoader {
             Error::new_loading_message(path, "Unable to find symbol `js_init_module`")
         })?;
 
-        let module = unsafe { ModuleData::raw(path, load) };
+        let module = unsafe { Module::from_load_fn(ctx.clone(), path, load)? };
 
         self.libs.push(lib);
 

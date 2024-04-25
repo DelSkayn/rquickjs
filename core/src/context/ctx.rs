@@ -1,6 +1,7 @@
 use std::{
     ffi::{CStr, CString},
-    fs, mem,
+    fs,
+    mem::{self, MaybeUninit},
     path::Path,
     ptr::NonNull,
 };
@@ -11,11 +12,12 @@ use std::future::Future;
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    markers::Invariant, qjs, runtime::raw::Opaque, Context, Error, FromJs, Function, IntoJs,
-    Module, Object, Result, String, Value,
+    atom::PredefinedAtom, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context, Error,
+    FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
 
 /// Eval options.
+#[non_exhaustive]
 pub struct EvalOptions {
     /// Global code.
     pub global: bool,
@@ -23,6 +25,8 @@ pub struct EvalOptions {
     pub strict: bool,
     /// Don't include the stack frames before this eval in the Error() backtraces.
     pub backtrace_barrier: bool,
+    /// Support top-level-await.
+    pub promise: bool,
 }
 
 impl EvalOptions {
@@ -41,6 +45,10 @@ impl EvalOptions {
             flag |= qjs::JS_EVAL_FLAG_BACKTRACE_BARRIER;
         }
 
+        if self.promise {
+            flag |= qjs::JS_EVAL_FLAG_ASYNC;
+        }
+
         flag as i32
     }
 }
@@ -51,6 +59,7 @@ impl Default for EvalOptions {
             global: true,
             strict: true,
             backtrace_barrier: false,
+            promise: false,
         }
     }
 }
@@ -135,6 +144,20 @@ impl<'js> Ctx<'js> {
         self.eval_with_options(source, Default::default())
     }
 
+    /// Evaluate a script in global context with top level await support.
+    ///
+    /// This function always returns a promise which resolves to the result of the evaluated
+    /// expression.
+    pub fn eval_promise<S: Into<Vec<u8>>>(&self, source: S) -> Result<Promise<'js>> {
+        self.eval_with_options(
+            source,
+            EvalOptions {
+                promise: true,
+                ..Default::default()
+            },
+        )
+    }
+
     /// Evaluate a script with the given options.
     pub fn eval_with_options<V: FromJs<'js>, S: Into<Vec<u8>>>(
         &self,
@@ -172,15 +195,6 @@ impl<'js> Ctx<'js> {
             let val = self.eval_raw(buffer, file_name.as_c_str(), options.to_flag())?;
             Value::from_js_value(self.clone(), val)
         })
-    }
-
-    /// Compile a module for later use.
-    pub fn compile<N, S>(self, name: N, source: S) -> Result<Module<'js>>
-    where
-        N: Into<Vec<u8>>,
-        S: Into<Vec<u8>>,
-    {
-        Module::evaluate(self, name, source)
     }
 
     /// Returns the global object of this context.
@@ -344,8 +358,8 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    // Creates promise and resolving functions.
-    pub fn promise(&self) -> Result<(Object<'js>, Function<'js>, Function<'js>)> {
+    /// Creates javascipt promise along with its reject and resolve functions.
+    pub fn promise(&self) -> Result<(Promise<'js>, Function<'js>, Function<'js>)> {
         let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
 
         Ok(unsafe {
@@ -353,13 +367,24 @@ impl<'js> Ctx<'js> {
                 self.ctx.as_ptr(),
                 funcs.as_mut_ptr() as _,
             ))?;
-            let (then, catch) = funcs.assume_init();
+            let (resolve, reject) = funcs.assume_init();
             (
-                Object::from_js_value(self.clone(), promise),
-                Function::from_js_value(self.clone(), then),
-                Function::from_js_value(self.clone(), catch),
+                Promise::from_js_value(self.clone(), promise),
+                Function::from_js_value(self.clone(), resolve),
+                Function::from_js_value(self.clone(), reject),
             )
         })
+    }
+
+    /// Executes a quickjs job.
+    ///
+    /// Returns wether a job was actually executed.
+    /// If this function returned false, no job was pending.
+    pub fn execute_pending_job(&self) -> bool {
+        let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
+        let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
+        let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
+        res != 0
     }
 
     pub(crate) unsafe fn get_opaque(&self) -> *mut Opaque<'js> {
@@ -402,41 +427,54 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    pub fn script_or_module_name(&self, stack_level: isize) -> Option<Atom<'js>> {
+        let stack_level = std::os::raw::c_int::try_from(stack_level).unwrap();
+        let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
+        if PredefinedAtom::Null as u32 == atom {
+            unsafe { qjs::JS_FreeAtom(self.as_ptr(), atom) };
+            return None;
+        }
+        unsafe { Some(Atom::from_atom_val(self.clone(), atom)) }
+    }
+
     /// Returns the pointer to the C library context.
     pub fn as_raw(&self) -> NonNull<qjs::JSContext> {
         self.ctx
     }
 
-    /// Frees modules which aren't evaluated.
-    ///
-    /// When a module is compiled and the compilation results in an error the module can already
-    /// have resolved several modules. Originally QuickJS freed all these module when compiling
-    /// (but not when a it was dynamically imported), this library patched that behavior out
-    /// because it proved to be hard to make safe. This function will free those modules.
-    ///
-    /// # Safety
-    /// Caller must ensure that this method is not called from a module being evaluated.
+    /*
+    // Frees modules which aren't evaluated.
+    //
+    // When a module is compiled and the compilation results in an error the module can already
+    // have resolved several modules. Originally QuickJS freed all these module when compiling
+    // (but not when a it was dynamically imported), this library patched that behavior out
+    // because it proved to be hard to make safe. This function will free those modules.
+    //
+    // # Safety
+    // Caller must ensure that this method is not called from a module being evaluated.
     pub unsafe fn free_unevaluated_modules(&self) {
         qjs::JS_FreeUnevaluatedModules(self.ctx.as_ptr())
     }
+    */
 }
 
 #[cfg(test)]
 mod test {
 
-    #[cfg(feature = "exports")]
     #[test]
     fn exports() {
-        use crate::{context::intrinsic, Context, Function, Runtime};
+        use crate::{context::intrinsic, Context, Function, Module, Promise, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
         ctx.with(|ctx| {
-            let module = ctx
-                .compile("test", "export default async () => 1;")
+            let (module, promise) = Module::declare(ctx, "test", "export default async () => 1;")
+                .unwrap()
+                .eval()
                 .unwrap();
+            promise.finish::<()>().unwrap();
             let func: Function = module.get("default").unwrap();
-            func.call::<(), ()>(()).unwrap();
+            func.call::<(), Promise>(()).unwrap();
         });
     }
 
@@ -461,6 +499,18 @@ mod test {
                 .unwrap();
 
             assert_eq!("bar".to_string(), res);
+        })
+    }
+
+    #[test]
+    fn eval_minimal_test() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let res: i32 = ctx.eval(" 1 + 1 ").unwrap();
+            assert_eq!(2, res);
         })
     }
 

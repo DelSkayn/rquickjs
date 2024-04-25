@@ -1,7 +1,7 @@
 //! QuickJS runtime related types.
 
 #[cfg(feature = "loader")]
-use crate::loader::{RawLoader, Resolver};
+use crate::loader::{Loader, Resolver};
 use crate::{result::JobException, Context, Error, Mut, Ref, Result, Weak};
 use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
 
@@ -86,7 +86,7 @@ impl Runtime {
     pub fn set_loader<R, L>(&self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
-        L: RawLoader + 'static,
+        L: Loader + 'static,
     {
         unsafe {
             self.inner.lock().set_loader(resolver, loader);
@@ -160,7 +160,9 @@ impl Runtime {
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        self.inner.lock().execute_pending_job().map_err(|e| {
+        let mut lock = self.inner.lock();
+        lock.update_stack_top();
+        lock.execute_pending_job().map_err(|e| {
             JobException(unsafe {
                 Context::from_raw(
                     NonNull::new(e).expect("QuickJS returned null ptr for job error"),

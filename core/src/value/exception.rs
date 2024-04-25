@@ -1,4 +1,4 @@
-use std::{error::Error as ErrorTrait, ffi::CStr, fmt, usize};
+use std::{error::Error as ErrorTrait, ffi::CStr, fmt};
 
 use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Result, Value};
 

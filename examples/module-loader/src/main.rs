@@ -2,7 +2,7 @@ use rquickjs::{
     loader::{
         BuiltinLoader, BuiltinResolver, FileResolver, ModuleLoader, NativeLoader, ScriptLoader,
     },
-    Context, Function, Runtime,
+    Context, Function, Module, Runtime,
 };
 
 mod bundle;
@@ -46,58 +46,63 @@ fn main() {
             .unwrap();
 
         println!("import script module");
-        let _ = ctx
-            .clone()
-            .compile(
-                "test",
-                r#"
+        Module::evaluate(
+            ctx.clone(),
+            "test",
+            r#"
 import { n, s, f } from "script_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
 "#,
-            )
-            .unwrap();
+        )
+        .unwrap()
+        .finish::<()>()
+        .unwrap();
 
         println!("import native module");
-        let _ = ctx
-            .clone()
-            .compile(
-                "test",
-                r#"
+        Module::evaluate(
+            ctx.clone(),
+            "test",
+            r#"
 import { n, s, f } from "native_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
                 "#,
-            )
-            .unwrap();
+        )
+        .unwrap()
+        .finish::<()>()
+        .unwrap();
 
         println!("import bundled script module");
-        let _ = ctx
-            .clone()
-            .compile(
-                "test",
-                r#"
+        Module::evaluate(
+            ctx.clone(),
+            "test",
+            r#"
 import { n, s, f } from "bundle/script_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
 "#,
-            )
-            .unwrap();
+        )
+        .unwrap()
+        .finish::<()>()
+        .unwrap();
 
         println!("import bundled native module");
-        let _ = ctx
-            .compile(
-                "test",
-                r#"
+        Module::evaluate(
+            ctx.clone(),
+            "test",
+            r#"
 import { n, s, f } from "bundle/native_module";
 print(`n = ${n}`);
 print(`s = "${s}"`);
 print(`f(2, 4) = ${f(2, 4)}`);
 "#,
-            )
-            .unwrap();
+        )
+        .unwrap()
+        .finish::<()>()
+        .unwrap();
     });
 }

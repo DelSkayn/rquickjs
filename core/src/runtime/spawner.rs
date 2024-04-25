@@ -11,8 +11,6 @@ use crate::AsyncRuntime;
 use super::{schedular::Schedular, AsyncWeakRuntime, InnerRuntime};
 
 /// A structure to hold futures spawned inside the runtime.
-///
-/// TODO: change future lookup in poll from O(n) to O(1).
 pub struct Spawner {
     schedular: Schedular,
     wakeup: Vec<Waker>,

@@ -339,7 +339,6 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// # Example
 ///
 /// ```
-///
 /// use rquickjs::{CatchResultExt, Context, Module, Runtime};
 ///
 /// /// A class which will be exported from the module.
@@ -407,7 +406,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     /// If your module doesn't quite fit with how this macro exports you can manually export from
 ///     /// the declare and evaluate functions.
 ///     #[qjs(declare)]
-///     pub fn declare(declare: &mut rquickjs::module::Declarations) -> rquickjs::Result<()> {
+///     pub fn declare(declare: &rquickjs::module::Declarations) -> rquickjs::Result<()> {
 ///         declare.declare("aManuallyExportedValue")?;
 ///         Ok(())
 ///     }
@@ -415,7 +414,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     #[qjs(evaluate)]
 ///     pub fn evaluate<'js>(
 ///         _ctx: &Ctx<'js>,
-///         exports: &mut rquickjs::module::Exports<'js>,
+///         exports: &rquickjs::module::Exports<'js>,
 ///     ) -> rquickjs::Result<()> {
 ///         exports.export("aManuallyExportedValue", "Some Value")?;
 ///         Ok(())
@@ -434,30 +433,29 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     }
 /// }
 ///
-///
 /// fn main() {
 ///     assert_eq!(test_mod::ignore_function(), 4);
 ///     let rt = Runtime::new().unwrap();
 ///     let ctx = Context::full(&rt).unwrap();
 ///
 ///     ctx.with(|ctx| {
-///         // These modules are declared like normal with the declare_def function.
-///         // The name of the module is js_ + the name of the module. This prefix can be changed
-///         // by writing for example `#[rquickjs::module(prefix = "prefix_")]`.
-///         Module::declare_def::<js_test_mod, _>(ctx.clone(), "test").unwrap();
-///         let _ = Module::evaluate(
-///             ctx.clone(),
-///             "test2",
-///             r"
-///             import { RenamedTest, foo,aManuallyExportedValue, aConstValue, aStaticValue, FooBar } from 'test';
-///             if (foo() !== 2){
-///                 throw new Error(1);
-///             }
-///             "
-///         )
-///         .catch(&ctx)
-///         .unwrap();
-///     })
+///          // These modules are declared like normal with the declare_def function.
+///          // The name of the module is js_ + the name of the module. This prefix can be changed
+///          // by writing for example `#[rquickjs::module(prefix = "prefix_")]`.
+///          Module::declare_def::<js_test_mod, _>(ctx.clone(), "test").unwrap();
+///          let _ = Module::evaluate(
+///              ctx.clone(),
+///              "test2",
+///              r"
+///              import { RenamedTest, foo,aManuallyExportedValue, aConstValue, aStaticValue, FooBar } from 'test';
+///              if (foo() !== 2){
+///                  throw new Error(1);
+///              }
+///              "
+///          )
+///          .catch(&ctx)
+///          .unwrap();
+///      })
 /// }
 /// ```
 #[proc_macro_attribute]
@@ -491,7 +489,7 @@ pub fn trace(stream: TokenStream1) -> TokenStream1 {
 /// # Usage
 ///
 /// ```
-/// use rquickjs::{embed, loader::Bundle, CatchResultExt, Context, Runtime};
+/// use rquickjs::{embed, loader::Bundle, CatchResultExt, Context, Module, Runtime};
 ///
 /// /// load the `my_module.js` file and name it myModule
 /// static BUNDLE: Bundle = embed! {
@@ -504,19 +502,20 @@ pub fn trace(stream: TokenStream1) -> TokenStream1 {
 ///
 ///     rt.set_loader(BUNDLE, BUNDLE);
 ///     ctx.with(|ctx| {
-///         let _ = ctx
-///             .clone()
-///             .compile(
-///                 "testModule",
-///                 r#"
+///         Module::evaluate(
+///             ctx.clone(),
+///             "testModule",
+///             r#"
 ///             import { foo } from 'myModule';
 ///             if(foo() !== 2){
 ///                 throw new Error("Function didn't return the correct value");
 ///             }
 ///         "#,
-///             )
-///             .catch(&ctx)
-///             .unwrap();
+///         )
+///         .unwrap()
+///         .finish::<()>()
+///         .catch(&ctx)
+///         .unwrap();
 ///     })
 /// }
 /// ```
