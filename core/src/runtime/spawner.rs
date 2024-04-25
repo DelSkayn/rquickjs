@@ -59,7 +59,7 @@ impl<'a> Future for SpawnFuture<'a> {
 enum DriveFutureState {
     Initial,
     Lock {
-        lock_future: LockArc<InnerRuntime>,
+        lock_future: Option<LockArc<InnerRuntime>>,
         // Here to ensure the lock remains valid.
         _runtime: AsyncRuntime,
     },
@@ -87,17 +87,19 @@ impl DriveFuture {
 impl Future for DriveFuture {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+        // Safety: We manually ensure that pinned values remained properly pinned.
+        let this = unsafe { self.get_unchecked_mut() };
         loop {
-            let mut lock = match self.state {
+            let mut lock = match this.state {
                 DriveFutureState::Initial => {
-                    let Some(_runtime) = self.rt.try_ref() else {
+                    let Some(_runtime) = this.rt.try_ref() else {
                         return Poll::Ready(());
                     };
 
                     let lock_future = _runtime.inner.lock_arc();
-                    self.state = DriveFutureState::Lock {
-                        lock_future,
+                    this.state = DriveFutureState::Lock {
+                        lock_future: Some(lock_future),
                         _runtime,
                     };
                     continue;
@@ -106,7 +108,13 @@ impl Future for DriveFuture {
                     ref mut lock_future,
                     ..
                 } => {
-                    ready!(Pin::new(lock_future).poll(cx))
+                    // Safety: The future will not be moved until it is ready and then dropped.
+                    let res = unsafe {
+                        ready!(Pin::new_unchecked(lock_future.as_mut().unwrap()).poll(cx))
+                    };
+                    // Assign none explicitly so it we don't move out of the future.
+                    *lock_future = None;
+                    res
                 }
             };
 
@@ -130,7 +138,7 @@ impl Future for DriveFuture {
                         // Execute pending jobs to ensure we don't dead lock when waiting on
                         // QuickJS futures.
                         while let Ok(true) = lock.runtime.execute_pending_job() {}
-                        self.state = DriveFutureState::Initial;
+                        this.state = DriveFutureState::Initial;
                         return Poll::Pending;
                     }
                     Poll::Ready(false) => {}
@@ -142,7 +150,7 @@ impl Future for DriveFuture {
                 break;
             }
 
-            self.state = DriveFutureState::Initial;
+            this.state = DriveFutureState::Initial;
             return Poll::Pending;
         }
     }
