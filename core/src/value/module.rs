@@ -46,6 +46,7 @@ macro_rules! module_init {
 pub type ModuleLoadFn =
     unsafe extern "C" fn(*mut qjs::JSContext, *const qjs::c_char) -> *mut qjs::JSModuleDef;
 
+/// A class which can be used to declare rust-native JavaScript modules.
 pub trait ModuleDef {
     fn declare<'js>(decl: &Declarations<'js>) -> Result<()> {
         let _ = decl;
@@ -58,6 +59,7 @@ pub trait ModuleDef {
     }
 }
 
+/// A struct used for setting declarations on a module.
 pub struct Declarations<'js>(Module<'js, Declared>);
 
 impl<'js> Declarations<'js> {
@@ -80,6 +82,7 @@ impl<'js> Declarations<'js> {
     }
 }
 
+/// A struct used for setting the value of previously declared exporsts of a module.
 pub struct Exports<'js>(Module<'js, Declared>);
 
 impl<'js> Exports<'js> {
@@ -117,6 +120,7 @@ pub struct Declared;
 #[derive(Clone, Copy, Debug)]
 pub struct Evaluated;
 
+/// A JavaScript module.
 #[derive(Clone, Debug)]
 pub struct Module<'js, T = Declared> {
     ptr: NonNull<qjs::JSModuleDef>,

@@ -9,9 +9,11 @@ use std::{
     task::{Context as TaskContext, Poll, Waker},
 };
 
-use crate::{atom::PredefinedAtom, qjs, Ctx, Error, FromJs, Function, Object, Result, Value};
+use crate::{
+    atom::PredefinedAtom, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
+};
 #[cfg(feature = "futures")]
-use crate::{function::This, CatchResultExt, CaughtError, IntoJs};
+use crate::{function::This, CatchResultExt, CaughtError};
 
 /// The execution state of a promise.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -118,7 +120,7 @@ impl<'js> Promise<'js> {
     /// indicating that no more work can be done at the momement.
     ///
     /// This function only drives the quickjs job queue, futures are not polled.
-    pub fn finish<T: FromJs<'js> + std::fmt::Debug>(&self) -> Result<T> {
+    pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {
         loop {
             if let Some(x) = self.result() {
                 return x;
@@ -149,6 +151,7 @@ impl<'js> Promise<'js> {
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[cfg(feature = "futures")]
 #[must_use = "futures do nothing unless you `.await` or poll them"]
+#[derive(Debug)]
 pub struct PromiseFuture<'js, T> {
     state: Option<Rc<RefCell<Waker>>>,
     promise: Promise<'js>,
@@ -218,6 +221,121 @@ where
 {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         Promise::wrap_future(ctx, self.0).map(|x| x.into_value())
+    }
+}
+
+/// A type which behaves like a promise but can wrap any javascript value.
+///
+/// This type is usefull when you are unsure if a function will return a promise.
+/// You can call finish and turn it into a future like a normal promise.
+/// When the value this type us converted isn't a promise it will behave like an promise which is
+/// already resolved, otherwise it will call the right functions on the promise.
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
+pub struct MaybePromise<'js>(Value<'js>);
+
+impl<'js> FromJs<'js> for MaybePromise<'js> {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        Ok(MaybePromise(value))
+    }
+}
+
+impl<'js> IntoJs<'js> for MaybePromise<'js> {
+    fn into_js(self, _ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        Ok(self.0)
+    }
+}
+
+impl<'js> MaybePromise<'js> {
+    /// Reference to the inner value
+    pub fn as_value(&self) -> &Value<'js> {
+        &self.0
+    }
+
+    /// Convert into the inner value
+    pub fn into_value(self) -> Value<'js> {
+        self.0
+    }
+
+    /// Convert into the inner value
+    pub fn from_value(value: Value<'js>) -> Self {
+        MaybePromise(value)
+    }
+
+    /// Returns the [`Ctx`] object associated with this value
+    pub fn ctx(&self) -> &Ctx<'js> {
+        self.0.ctx()
+    }
+
+    /// Returns [`PromiseState::Resolved`] if the wrapped value isn't a promise, otherwise calls
+    /// [`Promise::state`] on the promise and returns it's value.
+    pub fn state(&self) -> PromiseState {
+        if let Some(x) = self.0.as_promise() {
+            x.state()
+        } else {
+            PromiseState::Resolved
+        }
+    }
+
+    /// Returns the value if self isn't a promise, otherwise calls [`Promise::result`] on the promise.
+    pub fn result<T: FromJs<'js>>(&self) -> Option<Result<T>> {
+        if let Some(x) = self.0.as_promise() {
+            x.result::<T>()
+        } else {
+            Some(T::from_js(self.0.ctx(), self.0.clone()))
+        }
+    }
+
+    /// Returns the value if self isn't a promise, otherwise calls [`Promise::finish`] on the promise.
+    pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {
+        if let Some(x) = self.0.as_promise() {
+            x.finish::<T>()
+        } else {
+            T::from_js(self.0.ctx(), self.0.clone())
+        }
+    }
+
+    /// Convert self into a future which will return ready if the wrapped value isn't a promise,
+    /// otherwise it will handle the promise like the future returned from
+    /// [`Promise::into_future`].
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    #[cfg(feature = "futures")]
+    pub fn into_future<T: FromJs<'js>>(self) -> MaybePromiseFuture<'js, T> {
+        if self.0.is_promise() {
+            let fut = self.0.into_promise().unwrap().into_future();
+            MaybePromiseFuture(MaybePromiseFutureInner::Future(fut))
+        } else {
+            MaybePromiseFuture(MaybePromiseFutureInner::Ready(self.0))
+        }
+    }
+}
+
+/// Future-aware maybe promise
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+#[cfg(feature = "futures")]
+#[must_use = "futures do nothing unless you `.await` or poll them"]
+#[derive(Debug)]
+pub struct MaybePromiseFuture<'js, T>(MaybePromiseFutureInner<'js, T>);
+
+#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+#[cfg(feature = "futures")]
+#[derive(Debug)]
+enum MaybePromiseFutureInner<'js, T> {
+    Ready(Value<'js>),
+    Future(PromiseFuture<'js, T>),
+}
+
+#[cfg(feature = "futures")]
+impl<'js, T> Future for MaybePromiseFuture<'js, T>
+where
+    T: FromJs<'js>,
+{
+    type Output = Result<T>;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+        match self.get_mut().0 {
+            MaybePromiseFutureInner::Ready(ref x) => Poll::Ready(T::from_js(x.ctx(), x.clone())),
+            MaybePromiseFutureInner::Future(ref mut x) => Pin::new(x).poll(cx),
+        }
     }
 }
 
