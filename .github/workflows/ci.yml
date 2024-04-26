@@ -232,6 +232,12 @@ jobs:
             target: aarch64-unknown-linux-gnu
             features: full-async
             optimization: false
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: wasm32-wasi 
+            features: full-async 
+            optimization: false
           # Test features
           - task: features
             os: ubuntu-latest
