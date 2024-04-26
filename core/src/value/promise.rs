@@ -42,7 +42,11 @@ impl<'js> Promise<'js> {
         let (promise, resolve, reject) = ctx.promise()?;
         let ctx_clone = ctx.clone();
         let future = async move {
-            let err = match future.await.into_js(&ctx_clone).catch(&ctx_clone) {
+            println!("Awaiting promised future");
+            let res = future.await.into_js(&ctx_clone).catch(&ctx_clone);
+            println!("Promised future returned");
+
+            let err = match res {
                 Ok(x) => resolve.call::<_, ()>((x,)),
                 Err(e) => match e {
                     CaughtError::Exception(e) => reject.call::<_, ()>((e,)),
@@ -82,12 +86,12 @@ impl<'js> Promise<'js> {
 
     /// Returns the `then` function, used for chaining promises.
     pub fn then(&self) -> Result<Function<'js>> {
-        self.get(PredefinedAtom::Then)
+        self.0.get(PredefinedAtom::Then)
     }
 
     /// Returns the `catch` function, used for retrieving the result of a rejected promise.
     pub fn catch(&self) -> Result<Function<'js>> {
-        self.get(PredefinedAtom::Catch)
+        self.0.get(PredefinedAtom::Catch)
     }
 
     /// Returns the result of the future if there is one.
@@ -170,6 +174,7 @@ where
     type Output = Result<T>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+        println!("PromiseFuture::poll");
         let this = self.get_mut();
 
         if let Some(x) = this.promise.result() {
@@ -177,10 +182,12 @@ where
         }
 
         if this.state.is_none() {
+            println!("PromiseFuture waiting on result");
             let inner = Rc::new(RefCell::new(cx.waker().clone()));
             this.state = Some(inner.clone());
 
             let resolve = Function::new(this.promise.ctx.clone(), move || {
+                println!("PromiseFuture::waking schedular");
                 inner.borrow().wake_by_ref();
             })?;
 
@@ -341,14 +348,19 @@ where
 
 #[cfg(test)]
 mod test {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    #[cfg(feature = "futures")]
     use std::time::Duration;
 
-    use super::*;
+    use super::Promise;
     #[cfg(feature = "futures")]
     use crate::{
-        async_with,
-        function::{Async, Func},
-        AsyncContext, AsyncRuntime,
+        async_with, function::Async, promise::Promised, AsyncContext, AsyncRuntime, CaughtError,
+        Result,
+    };
+    use crate::{
+        function::Func, prelude::This, promise::PromiseState, CatchResultExt, Context, Function,
+        Runtime,
     };
 
     #[cfg(feature = "futures")]
@@ -460,5 +472,39 @@ mod test {
             function.call::<_,Promise>((promised,)).unwrap().into_future::<()>().await.unwrap()
         })
         .await
+    }
+
+    #[test]
+    fn promise_then() {
+        static DID_EXECUTE: AtomicBool = AtomicBool::new(false);
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        ctx.with(|ctx| {
+            let (promise, resolve, _) = Promise::new(&ctx).unwrap();
+
+            let cb = Func::new(|s: String| {
+                assert_eq!(s, "FOO");
+                DID_EXECUTE.store(true, Ordering::SeqCst);
+            });
+
+            assert_eq!(promise.state(), PromiseState::Pending);
+
+            promise
+                .get::<_, Function>("then")
+                .catch(&ctx)
+                .unwrap()
+                .call::<_, ()>((This(promise.clone()), cb))
+                .catch(&ctx)
+                .unwrap();
+
+            resolve.call::<_, ()>(("FOO",)).unwrap();
+            assert_eq!(promise.state(), PromiseState::Resolved);
+
+            while ctx.execute_pending_job() {}
+
+            assert!(DID_EXECUTE.load(Ordering::SeqCst));
+        })
     }
 }

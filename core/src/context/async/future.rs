@@ -59,6 +59,7 @@ where
 {
     type Output = R;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        println!("WithFuture::poll");
         // Implementation ensures we don't break pin guarantees.
         let this = unsafe { self.get_unchecked_mut() };
 
@@ -86,54 +87,53 @@ where
         lock.runtime.update_stack_top();
 
         // At this point we have locked the runtime so we start running the actual future
-        let res = loop {
-            // we can move this memory since the future is boxed and thus movable.
-            match mem::replace(&mut this.state, WithFutureState::Done) {
-                WithFutureState::Initial { closure } => {
-                    // SAFETY: we have a lock, so creating this ctx is save.
-                    let ctx = unsafe { Ctx::new_async(this.context) };
-                    let future = Box::pin(closure(ctx));
-                    this.state = WithFutureState::FutureCreated { future };
-                }
-                WithFutureState::FutureCreated { mut future } => match future.as_mut().poll(cx) {
-                    Poll::Ready(x) => {
-                        break Poll::Ready(x);
-                    }
-                    Poll::Pending => {
-                        // put the future back
-                        this.state = WithFutureState::FutureCreated { future };
-                        break Poll::Pending;
-                    }
-                },
-                // The future was called an additional time,
-                // We don't have anything valid to do here so just panic.
-                WithFutureState::Done => panic!("With future called after it returned"),
+        // we can move this memory since the future is boxed and thus movable.
+        let mut future = match mem::replace(&mut this.state, WithFutureState::Done) {
+            WithFutureState::Initial { closure } => {
+                // SAFETY: we have a lock, so creating this ctx is save.
+                let ctx = unsafe { Ctx::new_async(this.context) };
+                Box::pin(closure(ctx))
             }
+            WithFutureState::FutureCreated { future } => future,
+            // The future was called an additional time,
+            // We don't have anything valid to do here so just panic.
+            WithFutureState::Done => panic!("With future called after it returned"),
         };
 
-        // the future was pending so it is possibly waiting on some JavaScript job, so drive the
-        // JavaScript runtime for as long as possible.
-        if res.is_pending() {
-            loop {
-                // drive the futures stored in the runtime.
-                let future = unsafe { lock.runtime.get_opaque_mut() }.spawner().drive();
-                let future = pin!(future);
-                match future.poll(cx) {
-                    // A future completed, try again in case any other future can complete.
-                    Poll::Ready(true) => continue,
-                    Poll::Ready(false) | Poll::Pending => {}
-                }
+        let res = loop {
+            println!("WithFuture::loop");
+            let mut did_drive = false;
+            if let Poll::Ready(x) = future.as_mut().poll(cx) {
+                println!("inner ready");
+                break Poll::Ready(x);
+            };
 
-                lock.runtime.is_job_pending();
-                match lock.runtime.execute_pending_job() {
+            let spawner_future = unsafe { lock.runtime.get_opaque_mut() }.spawner().drive();
+            let spawner_future = pin!(spawner_future);
+
+            if let Poll::Ready(true) | Poll::Pending = dbg!(spawner_future.poll(cx)) {
+                did_drive = true;
+            }
+
+            loop {
+                match dbg!(lock.runtime.execute_pending_job()) {
                     Ok(false) => break,
-                    Ok(true) => {}
+                    Ok(true) => {
+                        did_drive = true;
+                    }
                     Err(_ctx) => {
-                        //TODO figure out what to do with job errors.
+                        // TODO figure out what to do with a job error.
+                        did_drive = true;
                     }
                 }
             }
-        }
+
+            // If no work could be done we should yield back.
+            if !did_drive {
+                this.state = WithFutureState::FutureCreated { future };
+                break Poll::Pending;
+            }
+        };
 
         // Manually drop the lock so it isn't accidentally moved into somewhere.
         mem::drop(lock);

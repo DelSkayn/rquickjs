@@ -191,6 +191,7 @@ impl Schedular {
     }
 
     pub unsafe fn poll(&self, cx: &mut Context) -> Poll<bool> {
+        println!("Schedular::poll");
         // During polling ownership is upheld by making sure arc counts are properly tranfered.
         // Both ques, should_poll and all, have ownership of the arc count.
         // Whenever a task is pushed onto the should_poll queue ownership is transfered.
@@ -213,14 +214,17 @@ impl Schedular {
             let cur = match Pin::new_unchecked(&*self.should_poll).pop() {
                 queue::Pop::Empty => {
                     if pending {
+                        println!("Schedular has pending");
                         return Poll::Pending;
                     } else {
+                        println!("Schedular ready: {}", iteration > 0);
                         return Poll::Ready(iteration > 0);
                     }
                 }
                 queue::Pop::Value(x) => x,
                 queue::Pop::Inconsistant => {
                     cx.waker().wake_by_ref();
+                    println!("Schedular temp yield");
                     return Poll::Pending;
                 }
             };
@@ -237,7 +241,7 @@ impl Schedular {
             assert!(prev);
 
             // ownership transfered into the waker, which won't drop until the iteration completes.
-            let waker = waker::get(cur);
+            let waker = dbg!(waker::get(cur));
             // if drive_task panics we still want to remove the task from the list.
             // So handle it with a drop
             let remove = Defer::new(self, |this| (*this).pop_task_all(cur));
@@ -245,7 +249,7 @@ impl Schedular {
 
             iteration += 1;
 
-            match Self::drive_task(cur, &mut ctx) {
+            match dbg!(Self::drive_task(cur, &mut ctx)) {
                 Poll::Ready(_) => {
                     // Nothing todo the defer will remove the task from the list.
                 }
@@ -256,6 +260,7 @@ impl Schedular {
                     yielded += cur.as_ref().body.queued.load(Ordering::Relaxed) as usize;
                     if yielded > 2 || iteration > self.len.get() {
                         cx.waker().wake_by_ref();
+                        println!("Schedular tempy yield");
                         return Poll::Pending;
                     }
                 }

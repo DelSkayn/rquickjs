@@ -437,25 +437,14 @@ impl<'js> Ctx<'js> {
         unsafe { Some(Atom::from_atom_val(self.clone(), atom)) }
     }
 
+    pub fn run_gc(&self) {
+        unsafe { qjs::JS_RunGC(qjs::JS_GetRuntime(self.ctx.as_ptr())) }
+    }
+
     /// Returns the pointer to the C library context.
     pub fn as_raw(&self) -> NonNull<qjs::JSContext> {
         self.ctx
     }
-
-    /*
-    // Frees modules which aren't evaluated.
-    //
-    // When a module is compiled and the compilation results in an error the module can already
-    // have resolved several modules. Originally QuickJS freed all these module when compiling
-    // (but not when a it was dynamically imported), this library patched that behavior out
-    // because it proved to be hard to make safe. This function will free those modules.
-    //
-    // # Safety
-    // Caller must ensure that this method is not called from a module being evaluated.
-    pub unsafe fn free_unevaluated_modules(&self) {
-        qjs::JS_FreeUnevaluatedModules(self.ctx.as_ptr())
-    }
-    */
 }
 
 #[cfg(test)]
