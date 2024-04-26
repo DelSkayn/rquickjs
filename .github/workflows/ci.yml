@@ -2,7 +2,7 @@ name: Rust
 on:
   push:
     branches:
-      - "*"
+      - master
   pull_request:
 
 # Only run on the latest ref
@@ -23,7 +23,7 @@ jobs:
           toolchain: stable
           components: rustfmt
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -44,14 +44,14 @@ jobs:
           toolchain: nightly
           components: rust-docs
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-doc-${{ hashFiles('**/Cargo.lock') }}
@@ -80,14 +80,14 @@ jobs:
           toolchain: nightly
           components: clippy
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
@@ -355,7 +355,7 @@ jobs:
           targets: ${{ matrix.target }}
           components: rustfmt
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -364,7 +364,7 @@ jobs:
       - name: Build cache
         if: |
           runner.os != 'macOS'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-opt_${{ matrix.optimization }}-${{ hashFiles('**/Cargo.lock') }}
