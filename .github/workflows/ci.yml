@@ -116,37 +116,30 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    name: ubuntu / stable / coverage
     steps:
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: clippy
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Build cache
-        uses: actions/cache@v3
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
         with:
-          path: target
-          key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get -y update
-          sudo apt-get -y install protobuf-compiler libprotobuf-dev
-
-      - name: Install cargo-llvm-cov
+          components: llvm-tools-preview
+      - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Run cargo test coverage
-        run: RUST_BACKTRACE=1 cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+      - name: cargo generate-lockfile
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+      - name: cargo llvm-cov
+        run: cargo llvm-cov --locked --no-default-features --features full-async,compile-tests --workspace --lcov --output-path lcov.info
+      - name: Record Rust version
+        run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v4
         with:
-            name: code-coverage-report
-            path: target/llvm-cov/html/
-            retention-days: 5
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: OS,RUST
 
   test:
     needs:
