@@ -85,6 +85,7 @@ See below for a list of supported platforms.
 | i686-pc-windows-mvsc       |           ✅          |      ✅     |      ❌ experimental!     |
 | x86_64-apple-darwin        |           ✅          |      ✅     |             ✅            |
 | aarch64-apple-darwin       |           ✅          |      ❌     |             ✅            |
+| wasm32-wasi                |           ✅          |      ❌     |             ✅            |
 | other                      |           ❌          |      ❌     |          Unknown         |
 
 ## License
