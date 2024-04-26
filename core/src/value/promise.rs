@@ -42,9 +42,7 @@ impl<'js> Promise<'js> {
         let (promise, resolve, reject) = ctx.promise()?;
         let ctx_clone = ctx.clone();
         let future = async move {
-            println!("Awaiting promised future");
             let res = future.await.into_js(&ctx_clone).catch(&ctx_clone);
-            println!("Promised future returned");
 
             let err = match res {
                 Ok(x) => resolve.call::<_, ()>((x,)),
@@ -174,7 +172,6 @@ where
     type Output = Result<T>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
-        println!("PromiseFuture::poll");
         let this = self.get_mut();
 
         if let Some(x) = this.promise.result() {
@@ -182,12 +179,10 @@ where
         }
 
         if this.state.is_none() {
-            println!("PromiseFuture waiting on result");
             let inner = Rc::new(RefCell::new(cx.waker().clone()));
             this.state = Some(inner.clone());
 
             let resolve = Function::new(this.promise.ctx.clone(), move || {
-                println!("PromiseFuture::waking schedular");
                 inner.borrow().wake_by_ref();
             })?;
 

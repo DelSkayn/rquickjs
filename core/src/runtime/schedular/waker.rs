@@ -13,7 +13,6 @@ unsafe fn schedular_clone(ptr: *const ()) -> RawWaker {
 }
 
 unsafe fn schedular_wake(ptr: *const ()) {
-    println!("rquickjs schedular wake");
     let task = NonNull::new_unchecked(ptr as *mut ()).cast::<Task<u8>>();
 
     if task
@@ -47,7 +46,6 @@ unsafe fn schedular_wake_ref(ptr: *const ()) {
 }
 
 unsafe fn schedular_drop(ptr: *const ()) {
-    println!("TEST DROPPED");
     let ptr = ptr.cast::<Task<u8>>();
     ((*ptr).body.vtable.task_drop)(NonNull::new_unchecked(ptr as *mut _))
 }
@@ -60,6 +58,5 @@ static SCHEDULAR_WAKER_V_TABLE: RawWakerVTable = RawWakerVTable::new(
 );
 
 pub unsafe fn get(ptr: NonNull<Task<u8>>) -> Waker {
-    println!("TEST");
     unsafe { Waker::from_raw(RawWaker::new(ptr.as_ptr().cast(), &SCHEDULAR_WAKER_V_TABLE)) }
 }

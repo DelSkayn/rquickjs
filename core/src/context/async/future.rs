@@ -59,7 +59,6 @@ where
 {
     type Output = R;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        println!("WithFuture::poll");
         // Implementation ensures we don't break pin guarantees.
         let this = unsafe { self.get_unchecked_mut() };
 
@@ -101,22 +100,20 @@ where
         };
 
         let res = loop {
-            println!("WithFuture::loop");
             let mut did_drive = false;
             if let Poll::Ready(x) = future.as_mut().poll(cx) {
-                println!("inner ready");
                 break Poll::Ready(x);
             };
 
             let spawner_future = unsafe { lock.runtime.get_opaque_mut() }.spawner().drive();
             let spawner_future = pin!(spawner_future);
 
-            if let Poll::Ready(true) | Poll::Pending = dbg!(spawner_future.poll(cx)) {
+            if let Poll::Ready(true) | Poll::Pending = spawner_future.poll(cx) {
                 did_drive = true;
             }
 
             loop {
-                match dbg!(lock.runtime.execute_pending_job()) {
+                match lock.runtime.execute_pending_job() {
                     Ok(false) => break,
                     Ok(true) => {
                         did_drive = true;
