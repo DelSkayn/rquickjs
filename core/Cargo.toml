@@ -23,7 +23,7 @@ version = "1"
 optional = true
 
 [dependencies.async-lock]
-version = "2"
+version = "3"
 optional = true
 
 [dependencies.chrono]
@@ -39,7 +39,7 @@ version = "0.1"
 optional = true
 
 [dependencies.relative-path]
-version = "1.3"
+version = "1.9"
 optional = true
 
 
