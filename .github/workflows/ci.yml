@@ -229,7 +229,7 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: wasm32-wasi 
-            features: full-async 
+            features:  parallel,allocator,rust-alloc,loader,classes,futures
             optimization: false
           # Test features
           - task: features
