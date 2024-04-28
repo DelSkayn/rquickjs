@@ -18,7 +18,7 @@ impl ModuleDef for NativeModule {
         exports.export("s", "abc")?;
         exports.export(
             "f",
-            Function::new(ctx.clone(), |a: f64, b: f64| (a + b) * 0.5)?.with_name("f"),
+            Function::new(ctx.clone(), |a: f64, b: f64| (a + b) * 0.5)?.with_name("f")?,
         )?;
         Ok(())
     }
