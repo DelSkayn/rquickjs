@@ -3,6 +3,8 @@ use std::{
     result::Result as StdResult,
 };
 
+use rquickjs_sys::size_t;
+
 #[cfg(feature = "allocator")]
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
@@ -191,14 +193,16 @@ impl RawRuntime {
     /// Note that is a Noop when a custom allocator is being used,
     /// as is the case for the "rust-alloc" or "allocator" features.
     pub unsafe fn set_memory_limit(&mut self, limit: usize) {
-        qjs::JS_SetMemoryLimit(self.rt.as_ptr(), limit as _)
+        let limit: size_t = limit.try_into().unwrap_or(size_t::MAX);
+        qjs::JS_SetMemoryLimit(self.rt.as_ptr(), limit)
     }
 
     /// Set a limit on the max size of stack the runtime will use.
     ///
     /// The default values is 256x1024 bytes.
     pub unsafe fn set_max_stack_size(&mut self, limit: usize) {
-        qjs::JS_SetMaxStackSize(self.rt.as_ptr(), limit as _);
+        let limit: size_t = limit.try_into().unwrap_or(size_t::MAX);
+        qjs::JS_SetMaxStackSize(self.rt.as_ptr(), limit);
     }
 
     /// Set a memory threshold for garbage collection.

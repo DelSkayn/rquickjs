@@ -1,8 +1,8 @@
-name: Rust
+name: CI
 on:
   push:
     branches:
-      - "*"
+      - master
   pull_request:
 
 # Only run on the latest ref
@@ -14,7 +14,7 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup Rust
@@ -23,7 +23,7 @@ jobs:
           toolchain: stable
           components: rustfmt
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -35,7 +35,7 @@ jobs:
   doc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup Rust
@@ -44,14 +44,14 @@ jobs:
           toolchain: nightly
           components: rust-docs
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-doc-${{ hashFiles('**/Cargo.lock') }}
@@ -60,7 +60,7 @@ jobs:
           DOCS_RS: 1
         run: cargo doc --no-deps --features full-async,parallel,doc-cfg
       - name: Upload docs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docs
           path: |
@@ -72,7 +72,7 @@ jobs:
     permissions:
       checks: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - uses: dtolnay/rust-toolchain@v1
@@ -80,14 +80,14 @@ jobs:
           toolchain: nightly
           components: clippy
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
           key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
       - name: Build cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
@@ -104,7 +104,7 @@ jobs:
         msrv: [1.65.0] # 1.65.0 introduced GAT stabilization
     name: ubuntu / ${{ matrix.msrv }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Install ${{ matrix.msrv }}
@@ -116,37 +116,30 @@ jobs:
 
   coverage:
     runs-on: ubuntu-latest
+    name: ubuntu / stable / coverage
     steps:
-      - uses: dtolnay/rust-toolchain@v1
-        with:
-          toolchain: nightly
-          components: clippy
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Build cache
-        uses: actions/cache@v3
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@stable
         with:
-          path: target
-          key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get -y update
-          sudo apt-get -y install protobuf-compiler libprotobuf-dev
-
-      - name: Install cargo-llvm-cov
+          components: llvm-tools-preview
+      - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
-
-      - name: Run cargo test coverage
-        run: RUST_BACKTRACE=1 cargo llvm-cov --html --no-default-features --features full-async,compile-tests --workspace
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v3
+      - name: cargo generate-lockfile
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+      - name: cargo llvm-cov
+        run: cargo llvm-cov --locked --no-default-features --features full-async,compile-tests --workspace --lcov --output-path lcov.info
+      - name: Record Rust version
+        run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v4
         with:
-            name: code-coverage-report
-            path: target/llvm-cov/html/
-            retention-days: 5
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: OS,RUST
 
   test:
     needs:
@@ -165,49 +158,42 @@ jobs:
             rust: stable
             target: i686-unknown-linux-gnu
             features: full-async 
-            optimization: false
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: full-async 
-            optimization: false
           - task: bindings
             os: macos-latest
             rust: stable
             target: x86_64-apple-darwin
             features: full-async
-            optimization: false
           - task: bindings
             os: macos-latest
             rust: stable
             target: aarch64-apple-darwin
             features: full-async
-            optimization: false
+            no-test: true
           - task: bindings
             os: windows-latest
             rust: stable
             target: i686-pc-windows-gnu
             features: full-async
-            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-gnu
             features: full-async
-            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
             target: i686-pc-windows-msvc
             features: full-async
-            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-msvc
             features: full-async
-            optimization: false
           - task: bindings
             os: windows-latest
             rust: stable
@@ -219,78 +205,72 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-musl
             features: full-async
-            optimization: false
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-musl
             features: full-async
-            optimization: false
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
             features: full-async
-            optimization: false
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: wasm32-wasi 
+            features: full-async
+            no-build: true
           # Test features
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: rust-alloc
-            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: loader
-            optimization: false
+            features: loader 
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: classes
-            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: properties
-            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: futures
-            optimization: false
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: parallel
-            optimization: false
           # Test channels
           - task: channels
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: full-async
-            optimization: false
           - task: channels
             os: ubuntu-latest
             rust: beta
             target: x86_64-unknown-linux-gnu
             features: full-async
-            optimization: false
           - task: channels
             os: ubuntu-latest
             rust: nightly
             target: x86_64-unknown-linux-gnu
             features: full-async
-            optimization: false
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: true
       - name: Setup cross linux toolchain
@@ -375,7 +355,7 @@ jobs:
           targets: ${{ matrix.target }}
           components: rustfmt
       - name: Cargo cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
@@ -384,7 +364,7 @@ jobs:
       - name: Build cache
         if: |
           runner.os != 'macOS'
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: target
           key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-opt_${{ matrix.optimization }}-${{ hashFiles('**/Cargo.lock') }}
@@ -398,27 +378,41 @@ jobs:
           cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging
       - name: Upload bindings
         if: matrix.task == 'bindings'
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: bindings
+          name: bindings-${{ matrix.target }}
           path: sys/src/bindings/${{ matrix.target }}.rs
+          overwrite: true
       - name: Build
+        if: ${{ !matrix.no-build }}
         run: cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
-        if: |
-          matrix.target != 'aarch64-apple-darwin'
+        if: ${{ !matrix.no-build && !matrix.no-test }}
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
         run: cargo test ${{ matrix.optimization && '--release' || '' }} --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
+  merge:
+    runs-on: ubuntu-latest
+    needs:
+      - test
+    steps:
+      - name: Merge bindings
+        uses: actions/upload-artifact/merge@v4
+        with:
+          name: bindings
+          pattern: bindings-*
+
+
   update-bindings:
     if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
     needs:
       - test
+      - merge
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Download bindings
         uses: actions/download-artifact@v3
         with:

@@ -63,6 +63,31 @@ Note that the QuickJS library does not support windows natively, this library su
 For patching we use the `patch` utility which needs to be installed when building for windows.
 For more information see [#88](https://github.com/delskayn/rquickjs/issues/88).
 
+## Supported platforms 
+
+Rquickjs needs to compile a C-library which has it's own limitation on supported platforms, furthermore it needs to generate bindings for that platform.
+As a result rquickjs might not compile on all platforms which rust supports.
+In general you can allways try to compile rquickjs with the `bindgen` feature, this should work for most platforms.
+Rquickjs ships bindings for a limited set of platforms, for these platforms you don't have to enable the `bindgen` feature.
+See below for a list of supported platforms.
+
+| **platform**               | **shipped bindings** | **tested** | **supported by quickjs** |
+|----------------------------|:--------------------:|:----------:|:------------------------:|
+|                            |                      |            |                          |
+| x86_64-unknown-linux-gnu   |           ✅          |      ✅     |             ✅            |
+| i686-unknown-linux-gnu     |           ✅          |      ✅     |             ✅            |
+| aarch64-unknown-linux-gnu  |           ✅          |      ✅     |             ✅            |
+| x86_64-unknown-linux-musl  |           ✅          |      ✅     |             ✅            |
+| aarch64-unknown-linux-musl |           ✅          |      ✅     |             ✅            |
+| x86_64-pc-windows-gnu      |           ✅          |      ✅     |             ✅            |
+| i686-pc-windows-gnu        |           ✅          |      ✅     |             ✅            |
+| x86_64-pc-windows-mvsc     |           ✅          |      ✅     |      ❌ experimental!     |
+| i686-pc-windows-mvsc       |           ✅          |      ✅     |      ❌ experimental!     |
+| x86_64-apple-darwin        |           ✅          |      ✅     |             ✅            |
+| aarch64-apple-darwin       |           ✅          |      ❌     |             ✅            |
+| wasm32-wasi                |           ✅          |      ❌     |             ✅            |
+| other                      |           ❌          |      ❌     |          Unknown         |
+
 ## License
 
 This library is licensed under the [MIT License](LICENSE)
