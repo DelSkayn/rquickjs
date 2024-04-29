@@ -399,7 +399,7 @@ jobs:
       - test
     steps:
       - name: Merge bindings
-        uses: actions/upload-artifact/merge@4
+        uses: actions/upload-artifact/merge@v4
         with:
           name: bindings
           pattern: bindings-*
