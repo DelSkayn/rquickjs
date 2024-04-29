@@ -92,7 +92,6 @@ pub mod intrinsic {
 
     /// Add all intrinsics
     pub type All = (
-        Base,
         Date,
         Eval,
         StringNormalize,
@@ -151,5 +150,41 @@ impl<I: Intrinsic> ContextBuilder<I> {
     #[cfg(feature = "futures")]
     pub async fn build_async(self, runtime: &AsyncRuntime) -> Result<AsyncContext> {
         AsyncContext::custom::<I>(runtime).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn all_intrinsinces() {
+        let rt = crate::Runtime::new().unwrap();
+        let ctx = Context::builder()
+            .with::<intrinsic::All>()
+            .build(&rt)
+            .unwrap();
+        let result: usize = ctx.with(|ctx| ctx.eval("1+1")).unwrap();
+        assert_eq!(result, 2);
+    }
+
+    #[test]
+    fn custom_intrinsic() {
+        struct MyIntrinsic;
+
+        impl Intrinsic for MyIntrinsic {
+            unsafe fn add_intrinsic(ctx: NonNull<qjs::JSContext>) {
+                let ctx = crate::Ctx::from_raw(ctx);
+                ctx.globals().set("test", 42).unwrap();
+            }
+        }
+
+        let rt = crate::Runtime::new().unwrap();
+        let ctx = Context::builder()
+            .with::<(MyIntrinsic, intrinsic::Eval)>()
+            .build(&rt)
+            .unwrap();
+        let result: usize = ctx.with(|ctx| ctx.eval("test+1")).unwrap();
+        assert_eq!(result, 43);
     }
 }
