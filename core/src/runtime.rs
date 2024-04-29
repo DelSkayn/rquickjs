@@ -19,7 +19,7 @@ pub(crate) use r#async::InnerRuntime;
 #[cfg(feature = "futures")]
 pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
 #[cfg(feature = "futures")]
-mod schedular;
+pub(crate) mod schedular;
 #[cfg(feature = "futures")]
 mod spawner;
 

@@ -3,6 +3,7 @@ use std::{
     ptr::NonNull,
     result::Result as StdResult,
     sync::{Arc, Weak},
+    task::Poll,
 };
 
 #[cfg(feature = "parallel")]
@@ -14,12 +15,19 @@ use async_lock::Mutex;
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
+use crate::{
+    context::AsyncContext, result::AsyncJobException, util::ManualPoll, Ctx, Error, Exception,
+    Result,
+};
 #[cfg(feature = "parallel")]
-use crate::qjs;
-use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Error, Exception, Result};
+use crate::{
+    qjs,
+    util::{AssertSendFuture, AssertSyncFuture},
+};
 
 use super::{
     raw::{Opaque, RawRuntime},
+    schedular::SchedularPoll,
     spawner::DriveFuture,
     InterruptHandler, MemoryUsage,
 };
@@ -263,19 +271,29 @@ impl AsyncRuntime {
         lock.runtime.update_stack_top();
         lock.drop_pending();
 
-        let job_res = lock.runtime.execute_pending_job().map_err(|e| {
-            let ptr =
-                NonNull::new(e).expect("executing pending job returned a null context on error");
-            AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
-        })?;
-        if job_res {
-            return Ok(true);
-        }
+        let f = ManualPoll::new(|cx| {
+            let job_res = lock.runtime.execute_pending_job().map_err(|e| {
+                let ptr = NonNull::new(e)
+                    .expect("executing pending job returned a null context on error");
+                AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
+            })?;
 
-        Ok(unsafe { lock.runtime.get_opaque_mut() }
-            .spawner()
-            .drive()
-            .await)
+            if job_res {
+                return Poll::Ready(Ok(true));
+            }
+
+            match unsafe { lock.runtime.get_opaque_mut() }.spawner().poll(cx) {
+                SchedularPoll::ShouldYield => Poll::Pending,
+                SchedularPoll::Empty => Poll::Ready(Ok(false)),
+                SchedularPoll::Pending => Poll::Ready(Ok(false)),
+                SchedularPoll::PendingProgress => Poll::Ready(Ok(true)),
+            }
+        });
+
+        #[cfg(feature = "parallel")]
+        let f = unsafe { AssertSendFuture::assert(AssertSyncFuture::assert(f)) };
+
+        f.await
     }
 
     /// Run all futures and jobs in the runtime until all are finished.
@@ -285,38 +303,43 @@ impl AsyncRuntime {
         lock.runtime.update_stack_top();
         lock.drop_pending();
 
-        loop {
-            let pending = lock.runtime.execute_pending_job().map_err(|e| {
-                let ptr = NonNull::new(e)
-                    .expect("executing pending job returned a null context on error");
-                AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
-            });
-            match pending {
-                Err(e) => {
-                    // SAFETY: Runtime is already locked so creating a context is safe.
-                    let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx.as_ptr()) };
-                    let err = ctx.catch();
-                    if let Some(x) = err.clone().into_object().and_then(Exception::from_object) {
-                        // TODO do something better with errors.
-                        println!("error executing job: {}", x);
-                    } else {
-                        println!("error executing job: {:?}", err);
+        let f = ManualPoll::new(|cx| {
+            loop {
+                let pending = lock.runtime.execute_pending_job().map_err(|e| {
+                    let ptr = NonNull::new(e)
+                        .expect("executing pending job returned a null context on error");
+                    AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
+                });
+                match pending {
+                    Err(e) => {
+                        // SAFETY: Runtime is already locked so creating a context is safe.
+                        let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx.as_ptr()) };
+                        let err = ctx.catch();
+                        if let Some(x) = err.clone().into_object().and_then(Exception::from_object)
+                        {
+                            // TODO do something better with errors.
+                            println!("error executing job: {}", x);
+                        } else {
+                            println!("error executing job: {:?}", err);
+                        }
                     }
+                    Ok(true) => continue,
+                    Ok(false) => {}
                 }
-                Ok(true) => continue,
-                Ok(false) => {}
-            }
 
-            if unsafe { lock.runtime.get_opaque_mut() }
-                .spawner()
-                .drive()
-                .await
-            {
-                continue;
+                match unsafe { lock.runtime.get_opaque_mut() }.spawner().poll(cx) {
+                    SchedularPoll::ShouldYield => return Poll::Pending,
+                    SchedularPoll::Empty => return Poll::Ready(()),
+                    SchedularPoll::Pending => return Poll::Pending,
+                    SchedularPoll::PendingProgress => {}
+                }
             }
+        });
 
-            break;
-        }
+        #[cfg(feature = "parallel")]
+        let f = unsafe { AssertSendFuture::assert(AssertSyncFuture::assert(f)) };
+
+        f.await
     }
 
     /// Returns a future that completes when the runtime is dropped.
@@ -370,6 +393,8 @@ mod test {
     use std::time::Duration;
 
     use crate::*;
+
+    use self::context::EvalOptions;
 
     async_test_case!(basic => (_rt,ctx){
         async_with!(&ctx => |ctx|{
@@ -490,4 +515,118 @@ mod test {
         }).await;
 
     });
+
+    async_test_case!(recursive_spawn_from_script => (rt,ctx) {
+        use std::sync::atomic::{Ordering, AtomicUsize};
+        use crate::prelude::Func;
+
+        static COUNT: AtomicUsize = AtomicUsize::new(0);
+        static SCRIPT: &str = r#"
+
+        async function main() {
+
+          setTimeout(() => {
+            inc_count()
+            setTimeout(async () => {
+                inc_count()
+            }, 100);
+          }, 100);
+        }
+
+        main().catch(print);
+
+
+        "#;
+
+        fn inc_count(){
+            COUNT.fetch_add(1,Ordering::Relaxed);
+        }
+
+        fn set_timeout_spawn<'js>(ctx: Ctx<'js>, callback: Function<'js>, millis: usize) -> Result<()> {
+            ctx.spawn(async move {
+                tokio::time::sleep(Duration::from_millis(millis as u64)).await;
+                callback.call::<_, ()>(()).unwrap();
+            });
+
+            Ok(())
+        }
+
+
+        async_with!(ctx => |ctx|{
+
+            let res: Result<Promise> = (|| {
+                let globals = ctx.globals();
+
+                globals.set("inc_count", Func::from(inc_count))?;
+
+                globals.set(
+                    "blockUntilComplete",
+                    Func::from(move |ctx, promise| {
+                        struct Args<'js>(Ctx<'js>, Promise<'js>);
+                        let Args(ctx, promise) = Args(ctx, promise);
+
+                        loop {
+                            if let Some(x) = promise.result::<Value>() {
+                                return x;
+                            }
+
+                            if !ctx.execute_pending_job() {
+                                return Undefined.into_js(&ctx);
+                            }
+                        }
+                    }),
+                )?;
+
+                globals.set("setTimeout", Func::from(set_timeout_spawn))?;
+                let options = EvalOptions{
+                    promise: true,
+                    strict: false,
+                    ..EvalOptions::default()
+                };
+
+                ctx.eval_with_options(SCRIPT, options)?
+            })();
+
+            match res.catch(&ctx){
+                Ok(promise) => {
+                    if let Err(err) = promise.into_future::<Value>().await.catch(&ctx){
+                        eprintln!("{}", err)
+                    }
+                },
+                Err(err) => {
+                    eprintln!("{}", err)
+                },
+            };
+
+        })
+        .await;
+
+        rt.idle().await;
+
+        assert_eq!(COUNT.load(Ordering::Relaxed),2);
+    });
+
+    #[cfg(feature = "parallel")]
+    fn assert_is_send<T: Send>(t: T) -> T {
+        t
+    }
+
+    #[cfg(feature = "parallel")]
+    fn assert_is_sync<T: Send>(t: T) -> T {
+        t
+    }
+
+    #[cfg(feature = "parallel")]
+    #[tokio::test]
+    async fn ensure_types_are_send_sync() {
+        let rt = AsyncRuntime::new().unwrap();
+
+        std::mem::drop(assert_is_sync(rt.idle()));
+        std::mem::drop(assert_is_sync(rt.execute_pending_job()));
+        std::mem::drop(assert_is_sync(rt.drive()));
+
+        std::mem::drop(assert_is_send(rt.idle()));
+        std::mem::drop(assert_is_send(rt.execute_pending_job()));
+        std::mem::drop(assert_is_send(rt.drive()));
+    }
 }

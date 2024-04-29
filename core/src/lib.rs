@@ -40,6 +40,7 @@ macro_rules! cstr {
 
 pub mod markers;
 mod result;
+mod util;
 pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 mod safe_ref;
 pub(crate) use safe_ref::*;

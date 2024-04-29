@@ -1,13 +1,17 @@
 use std::{
     future::Future,
     mem::{self, ManuallyDrop},
-    pin::{pin, Pin},
+    pin::Pin,
     task::{ready, Context, Poll},
 };
 
 use async_lock::futures::Lock;
 
-use crate::{markers::ParallelSend, runtime::InnerRuntime, AsyncContext, Ctx};
+use crate::{
+    markers::ParallelSend,
+    runtime::{schedular::SchedularPoll, InnerRuntime},
+    AsyncContext, Ctx,
+};
 
 pub struct WithFuture<'a, F, R> {
     context: &'a AsyncContext,
@@ -100,33 +104,45 @@ where
         };
 
         let res = loop {
-            let mut did_drive = false;
+            let mut made_progress = false;
+
             if let Poll::Ready(x) = future.as_mut().poll(cx) {
                 break Poll::Ready(x);
             };
 
-            let spawner_future = unsafe { lock.runtime.get_opaque_mut() }.spawner().drive();
-            let spawner_future = pin!(spawner_future);
-
-            if let Poll::Ready(true) | Poll::Pending = spawner_future.poll(cx) {
-                did_drive = true;
-            }
+            let spawner = unsafe { lock.runtime.get_opaque_mut() }.spawner();
+            match spawner.poll(cx) {
+                SchedularPoll::Empty | SchedularPoll::ShouldYield => {
+                    // if the schedular is empty that means the future is waiting on an external
+                    // future so we should return the schedular.
+                    this.state = WithFutureState::FutureCreated { future };
+                    return Poll::Pending;
+                }
+                SchedularPoll::Pending => {
+                    // we couldn't drive any futures so we should run some jobs to see we can get
+                    // some progress.
+                }
+                SchedularPoll::PendingProgress => {
+                    // We did make some progress so the root future might not be blocked, but it is
+                    // probably still a good idea to run some jobs as most futures first require a
+                    // single job to run before unblocking.
+                    made_progress = true;
+                }
+            };
 
             loop {
                 match lock.runtime.execute_pending_job() {
                     Ok(false) => break,
-                    Ok(true) => {
-                        did_drive = true;
-                    }
+                    Ok(true) => made_progress = true,
                     Err(_ctx) => {
                         // TODO figure out what to do with a job error.
-                        did_drive = true;
+                        made_progress = true;
                     }
                 }
             }
 
             // If no work could be done we should yield back.
-            if !did_drive {
+            if !made_progress {
                 this.state = WithFutureState::FutureCreated { future };
                 break Poll::Pending;
             }
