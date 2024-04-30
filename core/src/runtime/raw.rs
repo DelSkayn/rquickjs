@@ -3,13 +3,11 @@ use std::{
     result::Result as StdResult,
 };
 
-use rquickjs_sys::size_t;
-
 #[cfg(feature = "allocator")]
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
-use crate::qjs;
+use crate::qjs::{self, size_t};
 
 #[cfg(feature = "futures")]
 use super::spawner::Spawner;

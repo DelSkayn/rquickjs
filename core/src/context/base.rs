@@ -1,8 +1,6 @@
-use std::{mem, ptr::NonNull};
-
-use crate::{class::Class, function::RustFunction, qjs, Ctx, Error, Result, Runtime};
-
 use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
+use crate::{class::Class, function::RustFunction, qjs, Ctx, Error, Result, Runtime};
+use std::{mem, ptr::NonNull};
 
 pub(crate) struct Inner {
     pub(crate) ctx: NonNull<qjs::JSContext>,

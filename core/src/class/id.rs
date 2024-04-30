@@ -1,6 +1,5 @@
-use std::{cell::Cell, sync::Once};
-
 use crate::qjs;
+use std::{cell::Cell, sync::Once};
 
 /// The type of identifier of class
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "classes")))]

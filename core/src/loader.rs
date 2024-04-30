@@ -4,31 +4,28 @@ use std::{ffi::CStr, ptr};
 
 use crate::{module::Declared, qjs, Ctx, Module, Result};
 
-mod builtin_resolver;
-pub use builtin_resolver::BuiltinResolver;
-
-mod file_resolver;
-pub use file_resolver::FileResolver;
-
-mod script_loader;
-pub use script_loader::ScriptLoader;
-
 mod builtin_loader;
-pub use builtin_loader::BuiltinLoader;
-
-mod module_loader;
-pub use module_loader::ModuleLoader;
-
+mod builtin_resolver;
+pub mod bundle;
 mod compile;
-pub use compile::Compile;
+mod file_resolver;
+mod module_loader;
+mod script_loader;
+mod util;
 
 #[cfg(feature = "dyn-load")]
 mod native_loader;
+
+pub use builtin_loader::BuiltinLoader;
+pub use builtin_resolver::BuiltinResolver;
+pub use compile::Compile;
+pub use file_resolver::FileResolver;
+pub use module_loader::ModuleLoader;
+pub use script_loader::ScriptLoader;
+
 #[cfg(feature = "dyn-load")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "dyn-load")))]
 pub use native_loader::NativeLoader;
-
-pub mod bundle;
 
 #[cfg(feature = "phf")]
 /// The type of bundle that the `embed!` macro returns
@@ -37,8 +34,6 @@ pub type Bundle = bundle::Bundle<bundle::PhfBundleData<&'static [u8]>>;
 #[cfg(not(feature = "phf"))]
 /// The type of bundle that the `embed!` macro returns
 pub type Bundle = bundle::Bundle<bundle::ScaBundleData<&'static [u8]>>;
-
-mod util;
 
 /// Module resolver interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]

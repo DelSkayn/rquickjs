@@ -11,6 +11,12 @@ use std::sync::mpsc::{self, Receiver, Sender};
 
 use async_lock::Mutex;
 
+use super::{
+    raw::{Opaque, RawRuntime},
+    schedular::SchedularPoll,
+    spawner::DriveFuture,
+    InterruptHandler, MemoryUsage,
+};
 #[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
@@ -23,13 +29,6 @@ use crate::{
 use crate::{
     qjs,
     util::{AssertSendFuture, AssertSyncFuture},
-};
-
-use super::{
-    raw::{Opaque, RawRuntime},
-    schedular::SchedularPoll,
-    spawner::DriveFuture,
-    InterruptHandler, MemoryUsage,
 };
 
 #[derive(Debug)]

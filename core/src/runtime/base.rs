@@ -1,17 +1,15 @@
 //! QuickJS runtime related types.
 
-#[cfg(feature = "loader")]
-use crate::loader::{Loader, Resolver};
-use crate::{result::JobException, Context, Error, Mut, Ref, Result, Weak};
-use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
-
-#[cfg(feature = "allocator")]
-use crate::allocator::Allocator;
-
 use super::{
     raw::{Opaque, RawRuntime},
     InterruptHandler, MemoryUsage,
 };
+#[cfg(feature = "allocator")]
+use crate::allocator::Allocator;
+#[cfg(feature = "loader")]
+use crate::loader::{Loader, Resolver};
+use crate::{result::JobException, Context, Error, Mut, Ref, Result, Weak};
+use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
 
 /// A weak handle to the runtime.
 ///

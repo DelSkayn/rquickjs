@@ -1,3 +1,5 @@
+#[cfg(feature = "futures")]
+use std::future::Future;
 use std::{
     ffi::{CStr, CString},
     fs,
@@ -5,9 +7,6 @@ use std::{
     path::Path,
     ptr::NonNull,
 };
-
-#[cfg(feature = "futures")]
-use std::future::Future;
 
 #[cfg(feature = "futures")]
 use crate::AsyncContext;

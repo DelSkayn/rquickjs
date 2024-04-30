@@ -7,21 +7,17 @@ use std::{
     task::{Context, Poll},
 };
 
-mod task;
-
-mod queue;
-use queue::Queue;
-
-mod vtable;
-
-mod waker;
-
 mod atomic_waker;
+mod queue;
+mod task;
+mod vtable;
+mod waker;
 
 use crate::{
     runtime::schedular::task::{ErasedTask, Task},
     util::Defer,
 };
+use queue::Queue;
 
 use self::task::ErasedTaskPtr;
 

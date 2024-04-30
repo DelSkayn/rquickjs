@@ -1,4 +1,9 @@
 //! Javascript promises and future integration.
+use crate::{
+    atom::PredefinedAtom, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
+};
+#[cfg(feature = "futures")]
+use crate::{function::This, CatchResultExt, CaughtError};
 #[cfg(feature = "futures")]
 use std::{
     cell::RefCell,
@@ -8,12 +13,6 @@ use std::{
     rc::Rc,
     task::{Context as TaskContext, Poll, Waker},
 };
-
-use crate::{
-    atom::PredefinedAtom, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
-};
-#[cfg(feature = "futures")]
-use crate::{function::This, CatchResultExt, CaughtError};
 
 /// The execution state of a promise.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]

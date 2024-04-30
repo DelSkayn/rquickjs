@@ -11,13 +11,12 @@ use std::{
 
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
+#[cfg(feature = "array-buffer")]
+use crate::value::array_buffer::AsSliceError;
 use crate::{
     atom::PredefinedAtom, qjs, value::exception::ERROR_FORMAT_STR, Context, Ctx, Exception, Object,
     StdResult, StdString, Type, Value,
 };
-
-#[cfg(feature = "array-buffer")]
-use crate::value::array_buffer::AsSliceError;
 
 /// Result type used throughout the library.
 pub type Result<T> = StdResult<T, Error>;

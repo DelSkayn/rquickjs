@@ -1,3 +1,8 @@
+use super::{
+    schedular::{Schedular, SchedularPoll},
+    AsyncWeakRuntime, InnerRuntime,
+};
+use crate::AsyncRuntime;
 use std::{
     future::Future,
     pin::Pin,
@@ -5,13 +10,6 @@ use std::{
 };
 
 use async_lock::futures::LockArc;
-
-use crate::AsyncRuntime;
-
-use super::{
-    schedular::{Schedular, SchedularPoll},
-    AsyncWeakRuntime, InnerRuntime,
-};
 
 /// A structure to hold futures spawned inside the runtime.
 pub struct Spawner {

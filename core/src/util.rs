@@ -1,4 +1,4 @@
-//! Crate with some util types.
+//! Module with some util types.
 
 #[cfg(feature = "futures")]
 pub use self::futures::*;
