@@ -119,7 +119,7 @@ impl<'js> Promise<'js> {
     ///
     /// If blocking on the promise would result in blocking, i.e. when the job queue runs out of
     /// jobs before the promise can be resolved, this function returns [`Error::WouldBlock`]
-    /// indicating that no more work can be done at the momement.
+    /// indicating that no more work can be done at the moment.
     ///
     /// This function only drives the quickjs job queue, futures are not polled.
     pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {

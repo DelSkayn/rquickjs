@@ -61,7 +61,7 @@ indexmap = ["rquickjs-core/indexmap", "indexmap-rs"]
 # Enable support for perfect hash maps
 phf = ["rquickjs-core/phf", "rquickjs-macro/phf"]
 
-# Use bindgen to generate bindings at compile-type
+# Use bindgen to generate bindings at compile-time
 # otherwise bundled bindings will be used
 bindgen = ["rquickjs-core/bindgen", "rquickjs-macro?/bindgen"]
 
