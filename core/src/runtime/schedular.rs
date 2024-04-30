@@ -130,11 +130,14 @@ impl Schedular {
     }
 
     pub unsafe fn poll(&self, cx: &mut Context) -> SchedularPoll {
-        // During polling ownership is upheld by making sure arc counts are properly tranfered.
-        // Both ques, should_poll and all, have ownership of the arc count.
-        // Whenever a task is pushed onto the should_poll queue ownership is transfered.
-        // During task pusing into the schedular ownership of the count was transfered into the all
-        // list.
+        // A task it's ownership is shared among a number of different places.
+        // - The all-task list
+        // - One or multiple wakers
+        // - The should_poll list if scheduled.
+        //
+        // When a task is retrieved from the should_poll list we transfer it's arc count to a
+        // waker. When a waker is cloned it also increments the arc count. If the waker is then
+        // woken up the count is transfered back to the should_poll list.
 
         if self.is_empty() {
             // No tasks, nothing to be done.
@@ -147,7 +150,7 @@ impl Schedular {
         let mut yielded = 0;
 
         loop {
-            // Popped a task, ownership taken from the que
+            // Popped a task, ownership taken from the queue
             let cur = match Pin::new_unchecked(&*self.should_poll).pop() {
                 queue::Pop::Empty => {
                     if iteration > 0 {
@@ -174,8 +177,8 @@ impl Schedular {
             let prev = cur.body().queued.swap(false, Ordering::AcqRel);
             assert!(prev);
 
-            // wakers owns cur until the end of the scope.
-            // So we can use cur_ptr until the end of the scope as both remain valid.
+            // wakers owns the arc count of cur now until the end of the scope.
+            // So we can use cur_ptr until the end of the scope waker is only dropped then.
             let waker = waker::get(cur);
             let mut ctx = Context::from_waker(&waker);
 
@@ -212,12 +215,8 @@ impl Schedular {
     /// Remove all tasks from the list.
     pub fn clear(&self) {
         // Clear all pending futures from the all list
-        let mut cur = self.all_next.get();
-        while let Some(c) = cur {
-            unsafe {
-                cur = c.body().next.get();
-                self.pop_task_all(c)
-            }
+        while let Some(c) = self.all_next.get() {
+            unsafe { self.pop_task_all(c) }
         }
 
         loop {
