@@ -11,8 +11,8 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    atom::PredefinedAtom, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context, Error,
-    FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
+    atom::PredefinedAtom, cstr, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context,
+    Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
 
 /// Eval options.
