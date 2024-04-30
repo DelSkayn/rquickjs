@@ -1,13 +1,11 @@
+use super::{Class, JsClass};
+use crate::{result::BorrowError, Ctx, Error, FromJs, IntoJs, Value};
 use std::{
     cell::{Cell, UnsafeCell},
     marker::PhantomData,
     mem::ManuallyDrop,
     ops::{Deref, DerefMut},
 };
-
-use crate::{result::BorrowError, Ctx, Error, FromJs, IntoJs, Value};
-
-use super::{Class, JsClass};
 
 /// A trait to allow classes to choose there borrowing implementation.
 ///

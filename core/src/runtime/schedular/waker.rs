@@ -1,53 +1,60 @@
 use std::{
     pin::Pin,
     ptr::NonNull,
-    sync::{atomic::Ordering, Arc},
+    sync::atomic::Ordering,
     task::{RawWaker, RawWakerVTable, Waker},
 };
 
-use super::Task;
+use super::{
+    task::{ErasedTask, ErasedTaskPtr},
+    Task,
+};
+
+unsafe fn inner_clone(ptr: *const ()) {
+    let task_ptr = ptr.cast::<Task<()>>();
+    ErasedTaskPtr::from_nonnull(NonNull::new_unchecked(task_ptr as *mut Task<()>)).task_incr();
+}
 
 unsafe fn schedular_clone(ptr: *const ()) -> RawWaker {
-    Arc::increment_strong_count(ptr.cast::<Task<u8>>());
-    RawWaker::new(ptr.cast(), &SCHEDULAR_WAKER_V_TABLE)
+    inner_clone(ptr);
+    RawWaker::new(ptr, &SCHEDULAR_WAKER_V_TABLE)
 }
 
 unsafe fn schedular_wake(ptr: *const ()) {
-    let task = NonNull::new_unchecked(ptr as *mut ()).cast::<Task<u8>>();
+    // We have ownership so take it.
+    let task = NonNull::new_unchecked(ptr as *mut ()).cast::<Task<()>>();
+    let task = ErasedTaskPtr::from_nonnull(task);
+    let task = ErasedTask::from_ptr(task);
 
     if task
-        .as_ref()
-        .body
+        .body()
         .queued
         .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
         .is_err()
     {
-        // Already awoken, skip!
-        schedular_drop(ptr);
         return;
     }
 
     // retrieve the queue, if already dropped, just return as we don't need to awake anything.
-    let Some(queue) = task.as_ref().body.queue.upgrade() else {
-        schedular_drop(ptr);
+    let Some(queue) = task.body().queue.upgrade() else {
         return;
     };
 
     // push to the que
-    Pin::new_unchecked(&*queue).push(task.cast());
+    Pin::new_unchecked(&*queue).push(ErasedTask::into_ptr(task).as_node_ptr());
 
     // wake up the schedular.
     queue.waker().wake()
 }
 
 unsafe fn schedular_wake_ref(ptr: *const ()) {
-    Arc::increment_strong_count(ptr.cast::<Task<u8>>());
+    inner_clone(ptr);
     schedular_wake(ptr)
 }
 
 unsafe fn schedular_drop(ptr: *const ()) {
-    let ptr = ptr.cast::<Task<u8>>();
-    ((*ptr).body.vtable.task_drop)(NonNull::new_unchecked(ptr as *mut _))
+    let task_ptr = (ptr as *mut ()).cast();
+    ErasedTaskPtr::from_nonnull(NonNull::new_unchecked(task_ptr)).task_decr();
 }
 
 static SCHEDULAR_WAKER_V_TABLE: RawWakerVTable = RawWakerVTable::new(
@@ -57,6 +64,7 @@ static SCHEDULAR_WAKER_V_TABLE: RawWakerVTable = RawWakerVTable::new(
     schedular_drop,
 );
 
-pub unsafe fn get(ptr: NonNull<Task<u8>>) -> Waker {
-    unsafe { Waker::from_raw(RawWaker::new(ptr.as_ptr().cast(), &SCHEDULAR_WAKER_V_TABLE)) }
+pub unsafe fn get(ptr: ErasedTask) -> Waker {
+    let ptr = ErasedTask::into_ptr(ptr).as_nonnull().as_ptr();
+    unsafe { Waker::from_raw(RawWaker::new(ptr.cast(), &SCHEDULAR_WAKER_V_TABLE)) }
 }

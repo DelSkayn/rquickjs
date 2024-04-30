@@ -1,11 +1,9 @@
+use super::JsClass;
+use crate::{markers::Invariant, qjs, Class, Ctx, Module, Value};
 use std::marker::PhantomData;
 
 #[cfg(feature = "either")]
 use either::{Either, Left, Right};
-
-use crate::{markers::Invariant, qjs, Class, Ctx, Module, Value};
-
-use super::JsClass;
 
 /// A trait for classes for tracing references to QuickJS objects.
 ///

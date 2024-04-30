@@ -1,12 +1,10 @@
+use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
+use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
 use std::{future::Future, mem, pin::Pin, ptr::NonNull};
 
-use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
-
-use self::future::WithFuture;
-
-use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
-
 mod future;
+
+use future::WithFuture;
 
 /// A macro for safely using an asynchronous context while capturing the environment.
 ///

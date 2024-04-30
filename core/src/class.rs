@@ -1,8 +1,10 @@
 //! JavaScript classes defined from Rust.
 
 use crate::{
-    function::StaticJsFn, qjs, value::Constructor, Ctx, Error, FromJs, IntoJs, Object, Outlive,
-    Result, Value,
+    function::StaticJsFn,
+    qjs::{self, JS_VALUE_GET_TAG},
+    value::Constructor,
+    Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value,
 };
 use std::{
     ffi::CString,
@@ -12,16 +14,15 @@ use std::{
     ptr::{self, NonNull},
 };
 
-mod id;
-pub use id::ClassId;
-
 mod cell;
+mod ffi;
+mod id;
+mod trace;
+
 pub use cell::{
     Borrow, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable, Writable,
 };
-mod ffi;
-mod trace;
-use rquickjs_sys::JS_VALUE_GET_TAG;
+pub use id::ClassId;
 pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;

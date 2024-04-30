@@ -1,8 +1,6 @@
-use std::mem;
-
-use crate::{class::JsCell, qjs};
-
 use super::{JsClass, Mutability, Tracer};
+use crate::{class::JsCell, qjs};
+use std::mem;
 
 /// FFI finalizer, destroying the object once it is delete by the Gc.
 pub(crate) unsafe extern "C" fn finalizer<'js, C: JsClass<'js>>(

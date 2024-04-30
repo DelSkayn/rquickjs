@@ -1,14 +1,15 @@
+use super::{
+    schedular::{Schedular, SchedularPoll},
+    AsyncWeakRuntime, InnerRuntime,
+};
+use crate::AsyncRuntime;
 use std::{
     future::Future,
-    pin::{pin, Pin},
-    task::{ready, Poll, Waker},
+    pin::Pin,
+    task::{ready, Context, Poll, Waker},
 };
 
 use async_lock::futures::LockArc;
-
-use crate::AsyncRuntime;
-
-use super::{schedular::Schedular, AsyncWeakRuntime, InnerRuntime};
 
 /// A structure to hold futures spawned inside the runtime.
 pub struct Spawner {
@@ -36,23 +37,12 @@ impl Spawner {
         self.wakeup.push(wake);
     }
 
-    // Drives the runtime futures forward, returns false if their where no futures
-    pub fn drive<'a>(&'a self) -> SpawnFuture<'a> {
-        SpawnFuture(self)
-    }
-
     pub fn is_empty(&mut self) -> bool {
         self.schedular.is_empty()
     }
-}
 
-pub struct SpawnFuture<'a>(&'a Spawner);
-
-impl<'a> Future for SpawnFuture<'a> {
-    type Output = bool;
-
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        unsafe { self.0.schedular.poll(cx) }
+    pub fn poll(&mut self, cx: &mut Context) -> SchedularPoll {
+        unsafe { self.schedular.poll(cx) }
     }
 }
 
@@ -130,24 +120,13 @@ impl Future for DriveFuture {
                     continue;
                 }
 
-                let drive = pin!(unsafe { lock.runtime.get_opaque_mut() }.spawner().drive());
-
                 // TODO: Handle error.
-                match drive.poll(cx) {
-                    Poll::Pending => {
-                        // Execute pending jobs to ensure we don't dead lock when waiting on
-                        // QuickJS futures.
-                        while let Ok(true) = lock.runtime.execute_pending_job() {}
-                        this.state = DriveFutureState::Initial;
-                        return Poll::Pending;
+                match unsafe { lock.runtime.get_opaque_mut() }.spawner().poll(cx) {
+                    SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
+                        break
                     }
-                    Poll::Ready(false) => {}
-                    Poll::Ready(true) => {
-                        continue;
-                    }
+                    SchedularPoll::PendingProgress => {}
                 }
-
-                break;
             }
 
             this.state = DriveFutureState::Initial;

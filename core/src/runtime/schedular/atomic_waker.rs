@@ -3,14 +3,11 @@
 //!
 //! All copyright of this file belongs to the futures authors.
 
-use core::cell::UnsafeCell;
-use core::fmt;
-use core::task::Waker;
-
-use atomic::AtomicUsize;
-use atomic::Ordering::{AcqRel, Acquire, Release};
-
-use core::sync::atomic;
+use atomic::{
+    AtomicUsize,
+    Ordering::{AcqRel, Acquire, Release},
+};
+use core::{cell::UnsafeCell, fmt, sync::atomic, task::Waker};
 
 /// A synchronization primitive for task wakeup.
 ///

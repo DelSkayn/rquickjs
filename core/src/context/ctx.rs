@@ -1,3 +1,5 @@
+#[cfg(feature = "futures")]
+use std::future::Future;
 use std::{
     ffi::{CStr, CString},
     fs,
@@ -7,13 +9,10 @@ use std::{
 };
 
 #[cfg(feature = "futures")]
-use std::future::Future;
-
-#[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    atom::PredefinedAtom, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context, Error,
-    FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
+    atom::PredefinedAtom, cstr, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context,
+    Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
 
 /// Eval options.

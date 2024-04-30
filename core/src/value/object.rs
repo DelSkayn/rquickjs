@@ -5,6 +5,7 @@ use crate::{
     Value,
 };
 use std::{iter::FusedIterator, marker::PhantomData, mem};
+
 mod property;
 pub use property::{Accessor, AsProperty, Property, PropertyFlags};
 

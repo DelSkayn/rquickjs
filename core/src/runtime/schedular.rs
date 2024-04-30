@@ -1,102 +1,46 @@
 use std::{
-    cell::{Cell, UnsafeCell},
+    cell::Cell,
     future::Future,
-    mem::{offset_of, ManuallyDrop},
+    mem::offset_of,
     pin::Pin,
-    ptr::NonNull,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc, Weak,
-    },
+    sync::{atomic::Ordering, Arc},
     task::{Context, Poll},
 };
 
+mod atomic_waker;
 mod queue;
-use queue::Queue;
-
+mod task;
 mod vtable;
-use vtable::VTable;
-
 mod waker;
 
-mod atomic_waker;
+use crate::{
+    runtime::schedular::task::{ErasedTask, Task},
+    util::Defer,
+};
+use queue::Queue;
 
-use self::queue::NodeHeader;
+use self::task::ErasedTaskPtr;
 
-use std::ops::{Deref, DerefMut};
-
-pub struct Defer<T, F: FnOnce(&mut T)> {
-    value: ManuallyDrop<T>,
-    f: Option<F>,
-}
-
-impl<T, F: FnOnce(&mut T)> Defer<T, F> {
-    pub fn new(value: T, func: F) -> Self {
-        Defer {
-            value: ManuallyDrop::new(value),
-            f: Some(func),
-        }
-    }
-
-    pub fn take(mut self) -> T {
-        self.f = None;
-        unsafe { ManuallyDrop::take(&mut self.value) }
-    }
-}
-
-impl<T, F: FnOnce(&mut T)> Deref for Defer<T, F> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.value
-    }
-}
-
-impl<T, F: FnOnce(&mut T)> DerefMut for Defer<T, F> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.value
-    }
-}
-
-impl<T, F> Drop for Defer<T, F>
-where
-    F: FnOnce(&mut T),
-{
-    fn drop(&mut self) {
-        if let Some(x) = self.f.take() {
-            (x)(&mut *self.value);
-            unsafe { ManuallyDrop::drop(&mut self.value) }
-        }
-    }
-}
-
-#[repr(C)]
-struct Task<F> {
-    head: NodeHeader,
-    body: TaskBody,
-    future: UnsafeCell<F>,
-}
-
-// Seperate struct to not have everything be repr(C)
-struct TaskBody {
-    queue: Weak<Queue>,
-    vtable: &'static VTable,
-    // The double linked list of tasks.
-    next: Cell<Option<NonNull<Task<u8>>>>,
-    prev: Cell<Option<NonNull<Task<u8>>>>,
-    // wether the task is currently in the queue to be re-polled.
-    queued: AtomicBool,
-    done: Cell<bool>,
+pub enum SchedularPoll {
+    /// Returns that the schedular should yield back to the root schedular.
+    ShouldYield,
+    /// There was no work to be done.
+    Empty,
+    /// No work could be done.
+    Pending,
+    /// Work was done, but we didn't finish.
+    PendingProgress,
 }
 
 pub struct Schedular {
     len: Cell<usize>,
     should_poll: Arc<Queue>,
-    all_next: Cell<Option<NonNull<Task<u8>>>>,
-    all_prev: Cell<Option<NonNull<Task<u8>>>>,
+    all_next: Cell<Option<ErasedTaskPtr>>,
+    all_prev: Cell<Option<ErasedTaskPtr>>,
 }
 
 impl Schedular {
+    /// Create a new schedular.
     pub fn new() -> Self {
         let queue = Arc::new(Queue::new());
         unsafe {
@@ -110,6 +54,7 @@ impl Schedular {
         }
     }
 
+    /// Returns if there are no pending tasks.
     pub fn is_empty(&self) -> bool {
         self.all_next.get().is_none()
     }
@@ -123,36 +68,30 @@ impl Schedular {
     {
         let queue = Arc::downgrade(&self.should_poll);
 
-        debug_assert_eq!(offset_of!(Task<F>, future), offset_of!(Task<u8>, future));
+        // These should always be the same as task has a repr(C);
+        assert_eq!(offset_of!(Task<F>, head), offset_of!(Task<u8>, head));
+        assert_eq!(offset_of!(Task<F>, body), offset_of!(Task<u8>, body));
 
-        let task = Arc::new(Task {
-            head: NodeHeader::new(),
-            body: TaskBody {
-                queue,
-                vtable: VTable::get::<F>(),
-                next: Cell::new(None),
-                prev: Cell::new(None),
-                queued: AtomicBool::new(true),
-                done: Cell::new(false),
-            },
-            future: UnsafeCell::new(ManuallyDrop::new(f)),
-        });
+        let task = Arc::new(Task::new(queue, f));
 
         // One count for the all list and one for the should_poll list.
-        let task = NonNull::new_unchecked(Arc::into_raw(task) as *mut Task<F>).cast::<Task<u8>>();
-        Arc::increment_strong_count(task.as_ptr());
+        let task = ErasedTask::new(task);
+        self.push_task_to_all(task.clone());
 
-        self.push_task_to_all(task);
-
-        Pin::new_unchecked(&*self.should_poll).push(task.cast());
+        let task_ptr = ErasedTask::into_ptr(task);
+        Pin::new_unchecked(&*self.should_poll).push(task_ptr.as_node_ptr());
         self.len.set(self.len.get() + 1);
     }
 
-    unsafe fn push_task_to_all(&self, task: NonNull<Task<u8>>) {
-        task.as_ref().body.next.set(self.all_next.get());
+    /// Add a new task to the all task list.
+    /// The all task list owns a reference to the task while it is in the list.
+    unsafe fn push_task_to_all(&self, task: ErasedTask) {
+        let task = ErasedTask::into_ptr(task);
+
+        task.body().next.set(self.all_next.get());
 
         if let Some(x) = self.all_next.get() {
-            x.as_ref().body.prev.set(Some(task));
+            x.body().prev.set(Some(task));
         }
         self.all_next.set(Some(task));
         if self.all_prev.get().is_none() {
@@ -160,117 +99,120 @@ impl Schedular {
         }
     }
 
-    unsafe fn pop_task_all(&self, task: NonNull<Task<u8>>) {
-        task.as_ref().body.queued.store(true, Ordering::Release);
-        task.as_ref().body.done.set(true);
+    /// Removes the task from the all task list.
+    /// Dropping the ownership the list has.
+    unsafe fn pop_task_all(&self, task: ErasedTaskPtr) {
+        task.body().queued.store(true, Ordering::Release);
+        if !task.body().done.replace(true) {
+            task.task_drop();
+        }
 
         // detach the task from the all list
-        if let Some(next) = task.as_ref().body.next.get() {
-            next.as_ref().body.prev.set(task.as_ref().body.prev.get())
+        if let Some(next) = task.body().next.get() {
+            next.body().prev.set(task.body().prev.get())
         } else {
-            self.all_prev.set(task.as_ref().body.prev.get());
+            self.all_prev.set(task.body().prev.get());
         }
-        if let Some(prev) = task.as_ref().body.prev.get() {
-            prev.as_ref().body.next.set(task.as_ref().body.next.get())
+        if let Some(prev) = task.body().prev.get() {
+            prev.body().next.set(task.body().next.get())
         } else {
-            self.all_next.set(task.as_ref().body.next.get());
+            self.all_next.set(task.body().next.get());
         }
 
+        let _ = unsafe { ErasedTask::from_ptr(task) };
         // drop the ownership of the all list,
         // Task is now dropped or only owned by wakers or
-        Self::drop_task(task);
         self.len.set(self.len.get() - 1);
     }
 
-    unsafe fn drop_task(ptr: NonNull<Task<u8>>) {
-        (ptr.as_ref().body.vtable.task_drop)(ptr)
-    }
-
-    unsafe fn drive_task(ptr: NonNull<Task<u8>>, ctx: &mut Context) -> Poll<()> {
-        (ptr.as_ref().body.vtable.task_drive)(ptr, ctx)
-    }
-
-    pub unsafe fn poll(&self, cx: &mut Context) -> Poll<bool> {
-        // During polling ownership is upheld by making sure arc counts are properly tranfered.
-        // Both ques, should_poll and all, have ownership of the arc count.
-        // Whenever a task is pushed onto the should_poll queue ownership is transfered.
-        // During task pusing into the schedular ownership of the count was transfered into the all
-        // list.
+    pub unsafe fn poll(&self, cx: &mut Context) -> SchedularPoll {
+        // A task it's ownership is shared among a number of different places.
+        // - The all-task list
+        // - One or multiple wakers
+        // - The should_poll list if scheduled.
+        //
+        // When a task is retrieved from the should_poll list we transfer it's arc count to a
+        // waker. When a waker is cloned it also increments the arc count. If the waker is then
+        // woken up the count is transfered back to the should_poll list.
 
         if self.is_empty() {
             // No tasks, nothing to be done.
-            return Poll::Ready(false);
+            return SchedularPoll::Empty;
         }
 
         self.should_poll.waker().register(cx.waker());
 
         let mut iteration = 0;
         let mut yielded = 0;
-        let mut pending = false;
 
         loop {
-            // Popped a task, ownership taken from the que
+            // Popped a task, ownership taken from the queue
             let cur = match Pin::new_unchecked(&*self.should_poll).pop() {
                 queue::Pop::Empty => {
-                    if pending {
-                        return Poll::Pending;
+                    if iteration > 0 {
+                        return SchedularPoll::PendingProgress;
                     } else {
-                        return Poll::Ready(iteration > 0);
+                        return SchedularPoll::Pending;
                     }
                 }
                 queue::Pop::Value(x) => x,
                 queue::Pop::Inconsistant => {
                     cx.waker().wake_by_ref();
-                    return Poll::Pending;
+                    return SchedularPoll::ShouldYield;
                 }
             };
 
-            let cur = cur.cast::<Task<u8>>();
+            // Take ownership of the task from the schedular.
+            let cur_ptr = ErasedTaskPtr::from_nonnull(cur.cast());
+            let cur = ErasedTask::from_ptr(cur_ptr);
 
-            if cur.as_ref().body.done.get() {
-                // Task was already done, we con drop the ownership we got from the que.
-                Self::drop_task(cur);
+            if cur.body().done.get() {
                 continue;
             }
 
-            let prev = cur.as_ref().body.queued.swap(false, Ordering::AcqRel);
+            let prev = cur.body().queued.swap(false, Ordering::AcqRel);
             assert!(prev);
 
-            // ownership transfered into the waker, which won't drop until the iteration completes.
+            // wakers owns the arc count of cur now until the end of the scope.
+            // So we can use cur_ptr until the end of the scope waker is only dropped then.
             let waker = waker::get(cur);
+            let mut ctx = Context::from_waker(&waker);
+
             // if drive_task panics we still want to remove the task from the list.
             // So handle it with a drop
-            let remove = Defer::new(self, |this| (*this).pop_task_all(cur));
-            let mut ctx = Context::from_waker(&waker);
+            let remove = Defer::new((), |_| self.pop_task_all(cur_ptr));
 
             iteration += 1;
 
-            match Self::drive_task(cur, &mut ctx) {
+            match cur_ptr.task_drive(&mut ctx) {
                 Poll::Ready(_) => {
                     // Nothing todo the defer will remove the task from the list.
                 }
                 Poll::Pending => {
                     // don't remove task from the list.
                     remove.take();
-                    pending = true;
-                    yielded += cur.as_ref().body.queued.load(Ordering::Relaxed) as usize;
+
+                    // we had a pending and test if a yielded future immediatily queued itself
+                    // again.
+                    yielded += cur_ptr.body().queued.load(Ordering::Relaxed) as usize;
+
+                    // If we polled all the futures atleas once,
+                    // or more then one future immediatily queued itself after being polled,
+                    // yield back to the parent schedular.
                     if yielded > 2 || iteration > self.len.get() {
                         cx.waker().wake_by_ref();
-                        return Poll::Pending;
+                        return SchedularPoll::ShouldYield;
                     }
                 }
             }
         }
     }
 
+    /// Remove all tasks from the list.
     pub fn clear(&self) {
         // Clear all pending futures from the all list
-        let mut cur = self.all_next.get();
-        while let Some(c) = cur {
-            unsafe {
-                cur = c.as_ref().body.next.get();
-                self.pop_task_all(c)
-            }
+        while let Some(c) = self.all_next.get() {
+            unsafe { self.pop_task_all(c) }
         }
 
         loop {
@@ -283,7 +225,7 @@ impl Schedular {
                 }
             };
 
-            unsafe { Self::drop_task(cur.cast()) };
+            unsafe { ErasedTask::from_ptr(ErasedTaskPtr::from_nonnull(cur.cast())) };
         }
     }
 }

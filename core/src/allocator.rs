@@ -4,6 +4,7 @@ use crate::qjs;
 use std::ptr;
 
 mod rust;
+
 pub use rust::RustAllocator;
 
 /// Raw memory pointer
