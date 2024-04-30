@@ -559,24 +559,6 @@ mod test {
 
                 globals.set("inc_count", Func::from(inc_count))?;
 
-                globals.set(
-                    "blockUntilComplete",
-                    Func::from(move |ctx, promise| {
-                        struct Args<'js>(Ctx<'js>, Promise<'js>);
-                        let Args(ctx, promise) = Args(ctx, promise);
-
-                        loop {
-                            if let Some(x) = promise.result::<Value>() {
-                                return x;
-                            }
-
-                            if !ctx.execute_pending_job() {
-                                return Undefined.into_js(&ctx);
-                            }
-                        }
-                    }),
-                )?;
-
                 globals.set("setTimeout", Func::from(set_timeout_spawn))?;
                 let options = EvalOptions{
                     promise: true,
