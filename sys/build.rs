@@ -149,9 +149,17 @@ fn main() {
         "infinity_handling.patch",
     ];
 
+    let version =
+        fs::read_to_string(src_dir.join("VERSION")).expect("failed to read quickjs VERSION file");
+    let version = format!("\"{version}\"");
+
     let mut defines = vec![
         ("_GNU_SOURCE".into(), None),
+<<<<<<< Updated upstream
         ("CONFIG_VERSION".into(), Some("\"2024-02-14\"")),
+=======
+        ("CONFIG_VERSION".into(), Some(version.as_str())),
+>>>>>>> Stashed changes
         ("CONFIG_BIGNUM".into(), None),
     ];
 
