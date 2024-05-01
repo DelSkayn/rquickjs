@@ -151,7 +151,7 @@ fn main() {
 
     let version =
         fs::read_to_string(src_dir.join("VERSION")).expect("failed to read quickjs VERSION file");
-    let version = format!("\"{version}\"");
+    let version = format!("\"{}\"", version.trim());
 
     let mut defines = vec![
         ("_GNU_SOURCE".into(), None),
