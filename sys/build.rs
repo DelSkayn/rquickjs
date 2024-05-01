@@ -151,7 +151,7 @@ fn main() {
 
     let mut defines = vec![
         ("_GNU_SOURCE".into(), None),
-        ("CONFIG_VERSION".into(), Some("\"2020-01-19\"")),
+        ("CONFIG_VERSION".into(), Some("\"2024-02-14\"")),
         ("CONFIG_BIGNUM".into(), None),
     ];
 
