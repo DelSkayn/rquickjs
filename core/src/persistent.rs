@@ -2,8 +2,10 @@ use crate::{
     atom::{self, Atom},
     qjs,
     value::Constructor,
-    Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
+    Array, BigInt, Ctx, Error, Exception, FromJs, Function, IntoJs, Module, Object, Promise,
+    Result, String, Symbol, Value,
 };
+
 use std::{
     fmt,
     mem::{self, ManuallyDrop},
@@ -59,6 +61,8 @@ outlive_impls! {
     BigInt,
     Function,
     Constructor,
+    Promise,
+    Exception,
     Atom,
 }
 
@@ -128,6 +132,10 @@ impl_outlive!(
     std::sync::RwLock<T>,
     atom::PredefinedAtom,
 );
+
+unsafe impl<'js, T> Outlive<'js> for Module<'js, T> {
+    type Target<'to> = Module<'to, T>;
+}
 
 /// The wrapper for JS values to keep it from GC
 ///
