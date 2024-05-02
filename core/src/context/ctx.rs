@@ -9,6 +9,8 @@ use std::{
 };
 
 #[cfg(feature = "futures")]
+use crate::runtime::schedular::SchedularPoll;
+#[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
     atom::PredefinedAtom, cstr, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context,
@@ -384,6 +386,28 @@ impl<'js> Ctx<'js> {
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
         let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
         res != 0
+    }
+
+    #[cfg(feature = "futures")]
+    pub fn poll(&self, cx: &mut std::task::Context) {
+        let spawner = unsafe { (*self.get_opaque()).spawner() };
+        spawner.listen(cx.waker().clone());
+
+        let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
+        let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
+
+        loop {
+            // TODO: Handle error.
+            if unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) } != 0 {
+                continue;
+            }
+
+            // TODO: Handle error.
+            match { spawner.poll(cx) } {
+                SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => break,
+                SchedularPoll::PendingProgress => {}
+            }
+        }
     }
 
     pub(crate) unsafe fn get_opaque(&self) -> *mut Opaque<'js> {
