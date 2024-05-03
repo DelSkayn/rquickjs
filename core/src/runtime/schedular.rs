@@ -21,6 +21,7 @@ use queue::Queue;
 
 use self::task::ErasedTaskPtr;
 
+#[derive(Debug)]
 pub enum SchedularPoll {
     /// Returns that the schedular should yield back to the root schedular.
     ShouldYield,

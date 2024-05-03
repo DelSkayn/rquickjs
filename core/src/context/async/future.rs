@@ -112,9 +112,11 @@ where
 
             let spawner = unsafe { lock.runtime.get_opaque_mut() }.spawner();
             match spawner.poll(cx) {
-                SchedularPoll::Empty | SchedularPoll::ShouldYield => {
-                    // if the schedular is empty that means the future is waiting on an external
-                    // future so we should return the schedular.
+                SchedularPoll::Empty => {
+                    // if the schedular is empty that means the future is waiting on an external or
+                    // on a promise.
+                }
+                SchedularPoll::ShouldYield => {
                     this.state = WithFutureState::FutureCreated { future };
                     return Poll::Pending;
                 }
