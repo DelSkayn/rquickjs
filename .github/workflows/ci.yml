@@ -156,6 +156,12 @@ jobs:
           - task: bindings
             os: ubuntu-latest
             rust: stable
+            target: aarch64-linux-android
+            features: exports
+            optimization: false
+          - task: bindings
+            os: ubuntu-latest
+            rust: stable
             target: i686-unknown-linux-gnu
             features: full-async 
           - task: bindings
@@ -263,12 +269,25 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
-      - name: Setup cross linux toolchain
-        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
+      - name: Setup android toolchain
+        if: contains(matrix.target, 'android')
         run: |
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
           esac
+          SYSTEM_ARCH=aarch64
+          sudo apt-get update -y
+          sudo apt-get install -y
+
+          GCC_TARGET=$(printf "${{ matrix.target }}" | sed 's/-unknown-/-/' | sed 's/arm[^-]*/arm/g')
+          ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+          sudo dpkg --add-architecture ${SYSTEM_ARCH}
+          sudo apt-get install -y  gcc-multilib libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET} libgcc-s1:${SYSTEM_ARCH}
+          echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
+      - name: Setup cross linux toolchain
+        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
+        run: |
+          SYSTEM_ARCH=aarch64
           GCC_TARGET=$(printf "${{ matrix.target }}" | sed 's/-unknown-/-/' | sed 's/arm[^-]*/arm/g')
           ENV_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
           sudo dpkg --add-architecture ${SYSTEM_ARCH}
