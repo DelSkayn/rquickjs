@@ -177,17 +177,7 @@ jobs:
           - task: bindings
             os: windows-latest
             rust: stable
-            target: i686-pc-windows-gnu
-            features: full-async
-          - task: bindings
-            os: windows-latest
-            rust: stable
             target: x86_64-pc-windows-gnu
-            features: full-async
-          - task: bindings
-            os: windows-latest
-            rust: stable
-            target: i686-pc-windows-msvc
             features: full-async
           - task: bindings
             os: windows-latest
