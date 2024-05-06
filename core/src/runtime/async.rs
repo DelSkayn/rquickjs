@@ -587,6 +587,126 @@ mod test {
         assert_eq!(COUNT.load(Ordering::Relaxed),2);
     });
 
+    async_test_case!(ctx_poll => (rt,ctx){
+
+        use std::{
+
+            future::{poll_fn, Future},
+            pin::pin,
+            sync::Arc,
+            task::Poll,
+        };
+
+        use tokio::{runtime::Handle, task};
+
+        use crate::{function::Func, *};
+
+        fn spawn_timeout<'js>(
+            ctx: Ctx<'js>,
+            callback: Function<'js>,
+            timeout: usize,
+        ) -> Result<()> {
+            ctx.spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(timeout as u64)).await;
+                callback.call::<_, ()>(()).unwrap();
+            });
+
+            Ok(())
+        }
+
+        fn blocking_async<'js>(ctx:Ctx<'js>, promise: Promise<'js>) -> Result<Value<'js>>{
+            let mut fut = pin!(promise.into_future::<Value>());
+            task::block_in_place(move || {
+                Handle::current().block_on(async move {
+                    poll_fn(move |cx| {
+                        if let Poll::Ready(x) = fut.as_mut().poll(cx) {
+                            return Poll::Ready(x);
+                        }
+                        ctx.poll(cx);
+                        cx.waker().wake_by_ref();
+                        Poll::Pending
+                    })
+                    .await
+                })
+            })
+        }
+
+
+        let order_vec = Arc::new(std::sync::Mutex::new(Vec::<u8>::new()));
+        let order_vec2 = order_vec.clone();
+
+        ctx.with(|ctx|{
+
+            let res =  || {
+                let globals = ctx.globals();
+                globals.set("setTimeout", Func::from(spawn_timeout))?;
+                globals.set("blockingAsync", Func::from(blocking_async))?;
+                globals.set("done", Func::from(|| {
+
+                }))?;
+                globals.set("storeOrder", Func::from(move |value:u8| {
+                    order_vec2.clone().lock().unwrap().push(value);
+                }))?;
+
+
+                let mut options = EvalOptions::default();
+                options.global = false;
+
+                ctx.eval_with_options(r#"
+            
+                await new Promise((res) => setTimeout(res, 1));
+                
+                storeOrder(1);
+                
+                blockingAsync(
+                  new Promise((res) =>
+                    setTimeout(() => {
+                      storeOrder(2);
+                      res();
+                    }, 1),
+                  ),
+                );
+                
+                storeOrder(3);
+                
+                setTimeout(() => {
+                  setTimeout(async () => {
+                    await new Promise((res) => setTimeout(res, 1));
+                    storeOrder(4);
+                    blockingAsync(
+                      new Promise((res) =>
+                        setTimeout(() => {
+                          storeOrder(5);
+                          res();
+                        }, 1),
+                      ),
+                    );
+                    storeOrder(6);
+                  }, 1);
+                }, 1);
+
+                
+                "#,options)?;
+
+                Ok::<_,Error>(())
+            };
+            res().catch(&ctx).unwrap();
+        }).await;
+
+
+        rt.idle().await;
+
+        //assert that order is correct using a loop
+        let mut order = order_vec.lock().unwrap();
+        let mut i = order.len();
+        while let Some(value) = order.pop(){
+            assert_eq!(value as usize, i);
+            i -= 1;
+        }
+
+
+    });
+
     #[cfg(feature = "parallel")]
     fn assert_is_send<T: Send>(t: T) -> T {
         t
