@@ -368,19 +368,10 @@ index e8fdd8a..828e70f 100644
      return cmp;
  }
 diff --git a/quickjs.h b/quickjs.h
-index 7199936..3437895 100644
+index 7199936..30fdb2f 100644
 --- a/quickjs.h
 +++ b/quickjs.h
-@@ -28,6 +28,8 @@
- #include <stdio.h>
- #include <stdint.h>
- 
-+#define int64_t _Alignas(int64_t) int64_t
-+
- #ifdef __cplusplus
- extern "C" {
- #endif
-@@ -670,7 +672,7 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
+@@ -670,7 +670,7 @@ static inline JSValue JS_DupValue(JSContext *ctx, JSValueConst v)
          JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
          p->ref_count++;
      }
@@ -389,7 +380,7 @@ index 7199936..3437895 100644
  }
  
  static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
-@@ -679,7 +681,7 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
+@@ -679,7 +679,7 @@ static inline JSValue JS_DupValueRT(JSRuntime *rt, JSValueConst v)
          JSRefCountHeader *p = (JSRefCountHeader *)JS_VALUE_GET_PTR(v);
          p->ref_count++;
      }
