@@ -21,15 +21,20 @@ use queue::Queue;
 
 use self::task::ErasedTaskPtr;
 
+/// A value returned by polling the rquickjs schedular informing about the current state of the
+/// schedular and what action it's caller should take to propely drive the pending futures.
 #[derive(Debug)]
 pub enum SchedularPoll {
-    /// Returns that the schedular should yield back to the root schedular.
+    /// The schedular has determined that a future needs to yield back to the root executor.
+    /// If this value is returned by the schedular future calls to poll will likely also return
+    /// ShouldYield until the current task has yield to the root executor.
     ShouldYield,
-    /// There was no work to be done.
+    /// There are no spawned futures so no work could be done.
     Empty,
-    /// No work could be done.
+    /// All futures currently spawned in the schedular are pending and no progress could be made.
     Pending,
-    /// Work was done, but we didn't finish.
+    /// There are still futures which are pending, but some futures were awoken and were polled
+    /// again, possibly finishing or possibly becoming pending again.
     PendingProgress,
 }
 
