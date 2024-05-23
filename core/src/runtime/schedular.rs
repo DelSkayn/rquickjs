@@ -23,7 +23,7 @@ use self::task::ErasedTaskPtr;
 
 /// A value returned by polling the rquickjs schedular informing about the current state of the
 /// schedular and what action it's caller should take to propely drive the pending futures.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq, Clone, Copy, Hash)]
 pub enum SchedularPoll {
     /// The schedular has determined that a future needs to yield back to the root executor.
     /// If this value is returned by the schedular future calls to poll will likely also return
@@ -40,6 +40,7 @@ pub enum SchedularPoll {
 
 pub struct Schedular {
     len: Cell<usize>,
+    reentrant: Cell<usize>,
     should_poll: Arc<Queue>,
     all_next: Cell<Option<ErasedTaskPtr>>,
     all_prev: Cell<Option<ErasedTaskPtr>>,
@@ -54,6 +55,7 @@ impl Schedular {
         }
         Schedular {
             len: Cell::new(0),
+            reentrant: Cell::new(0),
             should_poll: queue,
             all_prev: Cell::new(None),
             all_next: Cell::new(None),
@@ -150,6 +152,7 @@ impl Schedular {
 
         let mut iteration = 0;
         let mut yielded = 0;
+        let mut popped_running = 0;
 
         loop {
             // Popped a task, ownership taken from the queue
@@ -176,6 +179,25 @@ impl Schedular {
                 continue;
             }
 
+            // Check for recursive future polling.
+            if cur.body().running.get() {
+                popped_running += 1;
+                Pin::new_unchecked(&*self.should_poll)
+                    .push(ErasedTask::into_ptr(cur).as_node_ptr());
+
+                // If we popped more running futures than the reentrant counter then we can be
+                // sure that we did a full round of all the popped futures.
+                if popped_running > self.reentrant.get() {
+                    if iteration > 0 {
+                        return SchedularPoll::PendingProgress;
+                    } else {
+                        return SchedularPoll::Pending;
+                    }
+                }
+
+                continue;
+            }
+
             let prev = cur.body().queued.swap(false, Ordering::AcqRel);
             assert!(prev);
 
@@ -190,11 +212,21 @@ impl Schedular {
 
             iteration += 1;
 
-            match cur_ptr.task_drive(&mut ctx) {
+            // Set reentrant counter, if we ever encounter a non-zero reentrant counter then this
+            // function is called recursively.
+            self.reentrant.set(self.reentrant.get() + 1);
+            cur_ptr.body().running.set(true);
+            let res = cur_ptr.task_drive(&mut ctx);
+            cur_ptr.body().running.set(false);
+            self.reentrant.set(self.reentrant.get() - 1);
+
+            match res {
                 Poll::Ready(_) => {
                     // Nothing todo the defer will remove the task from the list.
                 }
                 Poll::Pending => {
+                    cur_ptr.body().running.set(false);
+
                     // don't remove task from the list.
                     remove.take();
 

@@ -389,11 +389,14 @@ macro_rules! async_test_case {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{
+        sync::atomic::{AtomicUsize, Ordering},
+        time::Duration,
+    };
 
     use crate::*;
 
-    use self::context::EvalOptions;
+    use self::{context::EvalOptions, util::ManualPoll};
 
     async_test_case!(basic => (_rt,ctx){
         async_with!(&ctx => |ctx|{
@@ -516,7 +519,6 @@ mod test {
     });
 
     async_test_case!(recursive_spawn_from_script => (rt,ctx) {
-        use std::sync::atomic::{Ordering, AtomicUsize};
         use crate::prelude::Func;
 
         static COUNT: AtomicUsize = AtomicUsize::new(0);
@@ -610,4 +612,46 @@ mod test {
         std::mem::drop(assert_is_send(rt.execute_pending_job()));
         std::mem::drop(assert_is_send(rt.drive()));
     }
+
+    async_test_case!(poll_schedular => (rt,ctx) {
+        use std::{rc::Rc, cell::RefCell, task::{self,Waker, Poll}};
+
+        static COUNT: AtomicUsize = AtomicUsize::new(0);
+
+        async_with!(ctx => |ctx|{
+        let waker: Rc<RefCell<Option<Waker>>> = Rc::new(RefCell::new(None));
+
+        let waker_clone = waker.clone();
+
+        ctx.spawn(async move {
+            ManualPoll::new(move |ctx: &mut task::Context|{
+                let mut r = (*waker_clone).borrow_mut();
+                if r.is_some(){
+                    COUNT.store(2, Ordering::Relaxed);
+                    return Poll::Ready(())
+                }
+
+                *r = Some(ctx.waker().clone());
+                COUNT.store(1, Ordering::Relaxed);
+                Poll::Pending
+            }).await
+        });
+
+        ManualPoll::new(move |task_ctx: &mut task::Context|{
+            assert_eq!(COUNT.load(Ordering::Relaxed),0);
+            assert_eq!(ctx.poll_schedular(task_ctx), SchedularPoll::PendingProgress);
+            assert_eq!(COUNT.load(Ordering::Relaxed),1);
+            assert_eq!(ctx.poll_schedular(task_ctx), SchedularPoll::Pending);
+
+            (*waker).borrow_mut().as_mut().unwrap().wake_by_ref();
+
+            assert_eq!(ctx.poll_schedular(task_ctx), SchedularPoll::PendingProgress);
+            assert_eq!(COUNT.load(Ordering::Relaxed),2);
+            assert_eq!(ctx.poll_schedular(task_ctx), SchedularPoll::Empty);
+
+            Poll::Ready(())
+        }).await
+
+        }).await
+    });
 }
