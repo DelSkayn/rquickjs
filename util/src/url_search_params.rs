@@ -6,6 +6,7 @@ use rquickjs::{
     Array, Coerced, Ctx, Function, Null, Object, Result,
 };
 
+/// The URLSearchParams interface defines utility methods to work with the query string of a URL.
 #[derive(Default, Clone, Trace)]
 #[rquickjs::class]
 pub struct UrlSearchParams {
