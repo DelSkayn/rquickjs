@@ -16,16 +16,24 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 version = "0.4"
 optional = true
 
+[dependencies.either-rs]
+package = "either"
+version = "1"
+optional = true
+
 [dependencies.rquickjs]
 path = ".."
 version = "0.6.2"
 features = ["loader", "macro"]
 
 [features]
-default = ["console"]
+default = ["full"]
 
 # All utilities
-full = ["console"]
+full = ["console", "url-search-params"]
 
-# Enable console
+# Enable Console
 console = ["log"]
+
+# Enable UrlSearchParams
+url-search-params = ["either-rs", "rquickjs/either"]
