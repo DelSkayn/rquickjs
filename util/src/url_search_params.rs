@@ -2,7 +2,7 @@ use either_rs::Either;
 use rquickjs::{
     atom::PredefinedAtom,
     class::Trace,
-    function::{Func, Opt, This},
+    function::{Func, IntoArgs, Opt, This},
     Array, Coerced, Ctx, Function, Null, Object, Result,
 };
 
@@ -49,13 +49,18 @@ impl URLSearchParams {
                 data
             }
             Either::Right(Either::Right(iter_or_record)) => {
-                match iter_or_record.get::<_, Function>("next") {
-                    Ok(next) => {
+                match iter_or_record.get::<_, Function>(PredefinedAtom::SymbolIterator) {
+                    Ok(iter_fn) => {
+                        let iterable =
+                            (This(iter_or_record.clone()), 2).apply::<Object<'_>>(&iter_fn)?;
+                        let next_fn = iterable.get::<_, Function>(PredefinedAtom::Next)?;
                         let mut data = Vec::new();
                         loop {
-                            let next = next.call::<_, Object<'_>>(())?;
-                            if next.get::<_, bool>(PredefinedAtom::Done)? {
-                                break;
+                            let next = (This(iterable.clone()), 2).apply::<Object<'_>>(&next_fn)?;
+                            if let Ok(done) = next.get::<_, bool>(PredefinedAtom::Done) {
+                                if done {
+                                    break;
+                                }
                             }
                             let value = next.get::<_, Array<'_>>("value")?;
                             let name = value.get::<Coerced<String>>(0)?;
