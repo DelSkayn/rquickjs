@@ -1,8 +1,6 @@
 use std::fmt::Write;
 
-use rquickjs::class::Trace;
-use rquickjs::function::Rest;
-use rquickjs::{Error, Result, Value};
+use rquickjs::{class::Trace, function::Rest, Error, Result, Value};
 
 pub use self::formatter::Formatter;
 
