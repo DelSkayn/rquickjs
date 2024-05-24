@@ -1,0 +1,31 @@
+[package]
+name = "rquickjs-util"
+version = "0.1.0"
+authors = ["Emile Fugulin <emile@caido.io>"]
+edition = "2021"
+license = "MIT"
+readme = "README.md"
+description = "Utilities for rquickjs"
+keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
+categories = ["api-bindings"]
+repository = "https://github.com/DelSkayn/rquickjs.git"
+
+[dependencies]
+
+[dependencies.log]
+version = "0.4"
+optional = true
+
+[dependencies.rquickjs]
+path = ".."
+version = "0.6.2"
+features = ["loader", "macro"]
+
+[features]
+default = ["console"]
+
+# All utilities
+full = ["console"]
+
+# Enable console
+console = ["log"]

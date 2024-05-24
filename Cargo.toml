@@ -36,6 +36,7 @@ members = [
     "sys",
     "core",
     "macro",
+    "util",
     "examples/native-module",
     "examples/module-loader",
 ]
