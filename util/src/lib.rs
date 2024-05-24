@@ -1,6 +1,10 @@
 #[cfg(feature = "console")]
-pub mod console;
+pub use console::{Console, Formatter};
+#[cfg(feature = "url-search-params")]
+pub use url_search_params::URLSearchParams;
 
+#[cfg(feature = "console")]
+pub mod console;
 #[cfg(feature = "url-search-params")]
 pub mod url_search_params;
 
