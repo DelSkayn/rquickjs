@@ -9,12 +9,12 @@ use rquickjs::{
 /// The URLSearchParams interface defines utility methods to work with the query string of a URL.
 #[derive(Default, Clone, Trace)]
 #[rquickjs::class]
-pub struct UrlSearchParams {
+pub struct URLSearchParams {
     data: Vec<(String, String)>,
 }
 
 #[rquickjs::methods(rename_all = "camelCase")]
-impl UrlSearchParams {
+impl URLSearchParams {
     /// Returns a URLSearchParams object instance.
     #[qjs(constructor)]
     fn new(input: Opt<Either<String, Either<Array<'_>, Object<'_>>>>) -> Result<Self> {
@@ -304,11 +304,11 @@ mod tests {
     #[test]
     fn test_basic() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -328,11 +328,11 @@ mod tests {
     #[test]
     fn test_iterate() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -352,11 +352,11 @@ mod tests {
     #[test]
     fn test_iterate_entries() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -376,11 +376,11 @@ mod tests {
     #[test]
     fn test_iterate_keys() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -400,11 +400,11 @@ mod tests {
     #[test]
     fn test_iterate_values() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -424,11 +424,11 @@ mod tests {
     #[test]
     fn test_new_string() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams('a=1&b=2&a=3');
+                const params = new URLSearchParams('a=1&b=2&a=3');
                 params.toString()
             "#,
                 )
@@ -441,11 +441,11 @@ mod tests {
     #[test]
     fn test_new_string_url() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams('https://google.com?a=1&b=2&a=3');
+                const params = new URLSearchParams('https://google.com?a=1&b=2&a=3');
                 params.toString()
             "#,
                 )
@@ -458,11 +458,11 @@ mod tests {
     #[test]
     fn test_new_object() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams({'a': 1, 'b': 2});
+                const params = new URLSearchParams({'a': 1, 'b': 2});
                 params.toString()
             "#,
                 )
@@ -475,11 +475,11 @@ mod tests {
     #[test]
     fn test_new_array() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams([['a', 1], ['b', 2], ['a', 3]]);
+                const params = new URLSearchParams([['a', 1], ['b', 2], ['a', 3]]);
                 params.toString()
             "#,
                 )
@@ -492,15 +492,15 @@ mod tests {
     #[test]
     fn test_new_iterator() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
-                const params2 = new UrlSearchParams(params.entries());
+                const params2 = new URLSearchParams(params.entries());
                 params2.toString()
             "#,
                 )
@@ -513,11 +513,11 @@ mod tests {
     #[test]
     fn test_size() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<usize, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -533,11 +533,11 @@ mod tests {
     #[test]
     fn test_set() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -554,11 +554,11 @@ mod tests {
     #[test]
     fn test_get() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -574,11 +574,11 @@ mod tests {
     #[test]
     fn test_get_all() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -594,11 +594,11 @@ mod tests {
     #[test]
     fn test_get_all_missing() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<String, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -614,11 +614,11 @@ mod tests {
     #[test]
     fn test_has() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<bool, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -634,11 +634,11 @@ mod tests {
     #[test]
     fn test_has_value() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<bool, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
@@ -654,11 +654,11 @@ mod tests {
     #[test]
     fn test_has_not() {
         test_with(|ctx| {
-            Class::<UrlSearchParams>::define(&ctx.globals()).unwrap();
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
             let result = ctx
                 .eval::<bool, _>(
                     r#"
-                const params = new UrlSearchParams();
+                const params = new URLSearchParams();
                 params.append('a', '1');
                 params.append('b', '2');
                 params.append('a', '3');
