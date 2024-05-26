@@ -3,7 +3,7 @@ use rquickjs::{
     atom::PredefinedAtom,
     class::Trace,
     function::{Func, IntoArgs, Opt, This},
-    Array, Coerced, Ctx, Function, Null, Object, Result,
+    Array, Coerced, Ctx, Error, FromJs, Function, Null, Object, Result, Value,
 };
 
 /// The URLSearchParams interface defines utility methods to work with the query string of a URL.
@@ -17,13 +17,13 @@ pub struct URLSearchParams {
 impl URLSearchParams {
     /// Returns a URLSearchParams object instance.
     #[qjs(constructor)]
-    fn new(input: Opt<Either<String, Either<Array<'_>, Object<'_>>>>) -> Result<Self> {
+    fn new(input: Opt<URLSearchParamsInput<'_>>) -> Result<Self> {
         let Some(data) = input.0 else {
             return Ok(Self::default());
         };
 
         let data = match data {
-            Either::Left(url) => {
+            URLSearchParamsInput::String(url) => {
                 let query = match url.split_once('?') {
                     Some((_, query)) => query,
                     None => &url,
@@ -38,7 +38,7 @@ impl URLSearchParams {
                     })
                     .collect()
             }
-            Either::Right(Either::Left(array)) => {
+            URLSearchParamsInput::Array(array) => {
                 let mut data = Vec::new();
                 for it in array {
                     let inner = it?.get::<Array<'_>>()?;
@@ -48,7 +48,7 @@ impl URLSearchParams {
                 }
                 data
             }
-            Either::Right(Either::Right(iter_or_record)) => {
+            URLSearchParamsInput::Object(iter_or_record) => {
                 match iter_or_record.get::<_, Function>(PredefinedAtom::SymbolIterator) {
                     Ok(iter_fn) => {
                         let iterable =
@@ -296,6 +296,29 @@ impl URLSearchParams {
             ),
         )?;
         Ok(res)
+    }
+}
+
+enum URLSearchParamsInput<'js> {
+    String(String),
+    Array(Array<'js>),
+    Object(Object<'js>),
+}
+
+impl<'js> FromJs<'js> for URLSearchParamsInput<'js> {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        if let Ok(string) = value.get::<String>() {
+            Ok(Self::String(string))
+        } else if let Ok(array) = value.get::<Array<'js>>() {
+            Ok(Self::Array(array))
+        } else if let Ok(object) = value.get::<Object<'js>>() {
+            Ok(Self::Object(object))
+        } else {
+            Err(Error::new_from_js(
+                value.type_name(),
+                "URLSearchParamsInput",
+            ))
+        }
     }
 }
 
