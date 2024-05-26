@@ -246,7 +246,8 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: rquickjs-util/full
+            features: full
+            package: rquickjs-util
           # Test channels
           - task: channels
             os: ubuntu-latest
@@ -380,13 +381,13 @@ jobs:
           overwrite: true
       - name: Build
         if: ${{ !matrix.no-build }}
-        run: cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+        run: cargo build ${{ matrix.optimization && '--release' || '' }} ${{ matrix.package && format('-p {0}', matrix.package) || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         if: ${{ !matrix.no-build && !matrix.no-test }}
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
-        run: cargo test ${{ matrix.optimization && '--release' || '' }} --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+        run: cargo test ${{ matrix.optimization && '--release' || '' }} ${{ matrix.package && format('-p {0}', matrix.package) || '--all' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
   merge:
     runs-on: ubuntu-latest
