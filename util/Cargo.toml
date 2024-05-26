@@ -35,5 +35,8 @@ full = ["console", "url-search-params"]
 # Enable Console
 console = ["log"]
 
+# Enable compilation tests
+compile-tests = ["full"]
+
 # Enable UrlSearchParams
 url-search-params = ["either-rs", "rquickjs/either"]
