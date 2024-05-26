@@ -9,6 +9,7 @@ pub mod console;
 pub mod url_search_params;
 
 #[cfg(test)]
+#[allow(dead_code)]
 pub(crate) fn test_with<F, R>(func: F)
 where
     F: FnOnce(rquickjs::Ctx) -> R,
