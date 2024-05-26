@@ -246,7 +246,7 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: full
+            features: rquickjs-util/full
           # Test channels
           - task: channels
             os: ubuntu-latest
