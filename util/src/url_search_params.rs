@@ -256,7 +256,7 @@ impl URLSearchParams {
 
     /// Sorts all key/value pairs, if any, by their keys.
     fn sort(&mut self) {
-        self.data.sort();
+        self.data.sort_by(|(a, _), (b, _)| a.cmp(b));
     }
 
     /// Returns a string containing a query string suitable for use in a URL.
@@ -600,6 +600,26 @@ mod tests {
     }
 
     #[test]
+    fn test_get_missing() {
+        test_with(|ctx| {
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
+            let result = ctx
+                .eval::<bool, _>(
+                    r#"
+                const params = new URLSearchParams();
+                params.append('a', '1');
+                params.append('b', '2');
+                params.append('a', '3');
+                params.get('c') === null
+            "#,
+                )
+                .catch(&ctx)
+                .unwrap();
+            assert!(result);
+        })
+    }
+
+    #[test]
     fn test_get_all() {
         test_with(|ctx| {
             Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
@@ -696,6 +716,51 @@ mod tests {
                 .catch(&ctx)
                 .unwrap();
             assert!(!result);
+        })
+    }
+
+    #[test]
+    fn test_sort() {
+        test_with(|ctx| {
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
+            let result = ctx
+                .eval::<String, _>(
+                    r#"
+                const params = new URLSearchParams();
+                params.append('a', '3');
+                params.append('b', '2');
+                params.append('a', '1');
+                params.sort();
+                params.toString()
+            "#,
+                )
+                .catch(&ctx)
+                .unwrap();
+            assert_eq!(result, "a=3&a=1&b=2");
+        })
+    }
+
+    #[test]
+    fn test_for_each() {
+        test_with(|ctx| {
+            Class::<URLSearchParams>::define(&ctx.globals()).unwrap();
+            let result = ctx
+                .eval::<String, _>(
+                    r#"
+                const params = new URLSearchParams();
+                params.append('a', '3');
+                params.append('b', '2');
+                params.append('a', '1');
+                let res = [];
+                params.forEach((name, value) => {
+                    res.push(`${name}=${value}`);
+                });
+                res.join('&')
+            "#,
+                )
+                .catch(&ctx)
+                .unwrap();
+            assert_eq!(result, "a=3&b=2&a=1");
         })
     }
 }
