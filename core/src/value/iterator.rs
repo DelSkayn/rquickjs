@@ -1,4 +1,4 @@
-use std::ops::Deref;
+use std::{iter::Iterator as StdIterator, marker::PhantomData, ops::Deref};
 
 use crate::{
     atom::PredefinedAtom,
@@ -177,6 +177,36 @@ impl<'js> Object<'js> {
     }
 }
 
+/// A rust iterator over the values of a js iterator.
+pub struct IteratorIter<'js, T> {
+    iterator: Iterator<'js>,
+    marker: PhantomData<T>,
+}
+
+impl<'js, T> StdIterator for IteratorIter<'js, T>
+where
+    T: FromJs<'js>,
+{
+    type Item = Result<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.iterator.next().transpose()?.ok()?;
+        Some(T::from_js(self.iterator.ctx(), next))
+    }
+}
+
+impl<'js> IntoIterator for Iterator<'js> {
+    type Item = Result<Value<'js>>;
+    type IntoIter = IteratorIter<'js, Value<'js>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        IteratorIter {
+            iterator: self,
+            marker: PhantomData,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +258,28 @@ mod tests {
                 "c"
             );
             assert!(iterator.next().unwrap().is_none());
+        });
+    }
+
+    #[test]
+    fn js_iterator_from_rust_iter() {
+        test_with(|ctx| {
+            let values = ctx
+                .eval::<Iterator, _>(
+                    r#"
+                const array = ['a', 'b', 'c'];
+                const iterator = array[Symbol.iterator]();
+                iterator
+                "#,
+                )
+                .unwrap()
+                .into_iter()
+                .collect::<Result<Vec<_>>>()
+                .unwrap();
+            assert_eq!(values.len(), 3);
+            assert_eq!(values[0].as_string().unwrap().to_string().unwrap(), "a");
+            assert_eq!(values[1].as_string().unwrap().to_string().unwrap(), "b");
+            assert_eq!(values[2].as_string().unwrap().to_string().unwrap(), "c");
         });
     }
 
