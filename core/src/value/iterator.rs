@@ -281,4 +281,25 @@ mod tests {
             assert!(iterator.next().unwrap().is_none());
         });
     }
+
+    #[test]
+    fn rust_iterator_trait() {
+        test_with(|ctx| {
+            let data = vec![1, 2, 3];
+            let iterator = Iterator::new(ctx.clone(), data.into_iter()).unwrap();
+            ctx.globals().set("myiterator", iterator).unwrap();
+            let res: String = ctx
+                .eval(
+                    r#"
+                    const res = [];
+                    for (let i of myiterator) {
+                        res.push(i);
+                    }
+                    res.join(',')
+                "#,
+                )
+                .unwrap();
+            assert_eq!(res.to_string().unwrap(), "1,2,3");
+        });
+    }
 }
