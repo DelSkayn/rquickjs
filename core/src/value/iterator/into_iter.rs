@@ -3,11 +3,13 @@ use std::iter::Iterator as StdIterator;
 use super::IntoJsIter;
 use crate::{Ctx, IntoJs, Result};
 
-impl<'js, T, I> IntoJsIter<'js, T::Item> for T
+impl<'js, T, I> IntoJsIter<'js> for T
 where
     T: StdIterator<Item = I>,
     I: IntoJs<'js>,
 {
+    type Item = I;
+
     fn next(&mut self, _ctx: Ctx<'_>, _position: usize) -> Result<Option<I>> {
         Ok(self.next())
     }
@@ -28,11 +30,13 @@ impl<F> From<F> for IterFn<F> {
     }
 }
 
-impl<'js, F, I> IntoJsIter<'js, I> for IterFn<F>
+impl<'js, F, I> IntoJsIter<'js> for IterFn<F>
 where
     F: Fn(Ctx<'js>, usize) -> Result<Option<I>>,
     I: IntoJs<'js>,
 {
+    type Item = I;
+
     fn next(&mut self, ctx: Ctx<'js>, position: usize) -> Result<Option<I>> {
         self.0(ctx, position)
     }
@@ -53,11 +57,13 @@ impl<F> From<F> for IterFnMut<F> {
     }
 }
 
-impl<'js, F, I> IntoJsIter<'js, I> for IterFnMut<F>
+impl<'js, F, I> IntoJsIter<'js> for IterFnMut<F>
 where
     F: FnMut(Ctx<'js>, usize) -> Result<Option<I>>,
     I: IntoJs<'js>,
 {
+    type Item = I;
+
     fn next(&mut self, ctx: Ctx<'js>, position: usize) -> Result<Option<I>> {
         self.0(ctx, position)
     }

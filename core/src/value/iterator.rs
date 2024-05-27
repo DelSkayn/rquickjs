@@ -13,11 +13,10 @@ pub use into_iter::{IterFn, IterFnMut};
 pub use iterable::Iterable;
 
 /// A trait for converting a Rust object into a JavaScript iterator.
-pub trait IntoJsIter<'js, I>
-where
-    I: IntoJs<'js>,
-{
-    fn next(&mut self, ctx: Ctx<'js>, position: usize) -> Result<Option<I>>;
+pub trait IntoJsIter<'js> {
+    type Item: IntoJs<'js>;
+
+    fn next(&mut self, ctx: Ctx<'js>, position: usize) -> Result<Option<Self::Item>>;
 }
 
 /// A javascript iterator.
@@ -30,7 +29,7 @@ impl<'js> Iterator<'js> {
     ///
     pub fn new<T, I>(ctx: Ctx<'js>, mut it: T) -> Result<Self>
     where
-        T: IntoJsIter<'js, I> + 'js,
+        T: IntoJsIter<'js, Item = I> + 'js,
         I: IntoJs<'js>,
     {
         let iterator = Object::new(ctx.clone())?;
