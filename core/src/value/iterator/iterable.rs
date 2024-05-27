@@ -125,7 +125,11 @@ impl<'js> Object<'js> {
 
 #[cfg(test)]
 mod test {
-    use crate::*;
+    use crate::{
+        atom::PredefinedAtom,
+        function::{Func, This},
+        *,
+    };
 
     #[test]
     fn from_javascript() {
@@ -149,5 +153,47 @@ mod test {
             assert_eq!(iterator.next().unwrap().unwrap().as_int().unwrap(), 3);
             assert!(iterator.next().unwrap().is_none());
         });
+    }
+
+    #[test]
+    fn from_rust() {
+        fn closure<'js>(ctx: Ctx<'js>) {
+            let myiterable = Object::new(ctx.clone()).unwrap();
+            myiterable.set("position", 0usize).unwrap();
+            myiterable
+                .set(
+                    PredefinedAtom::SymbolIterator,
+                    Func::from(|it: This<Object<'js>>| -> Result<Object<'js>> { Ok(it.0) }),
+                )
+                .unwrap();
+            myiterable
+                .set(
+                    PredefinedAtom::Next,
+                    Func::from(
+                        move |ctx: Ctx<'js>, this: This<Object<'js>>| -> Result<Object<'js>> {
+                            let position = this.get::<_, usize>("position")?;
+                            let res = Object::new(ctx.clone())?;
+                            if position >= 3 {
+                                res.set(PredefinedAtom::Done, true)?;
+                            } else {
+                                res.set("value", position)?;
+                                this.set("position", position + 1)?;
+                            }
+                            Ok(res)
+                        },
+                    ),
+                )
+                .unwrap();
+            let iterator = Iterable::from_object(myiterable)
+                .unwrap()
+                .iterator()
+                .unwrap();
+            assert_eq!(iterator.next().unwrap().unwrap().as_int().unwrap(), 0);
+            assert_eq!(iterator.next().unwrap().unwrap().as_int().unwrap(), 1);
+            assert_eq!(iterator.next().unwrap().unwrap().as_int().unwrap(), 2);
+            assert!(iterator.next().unwrap().is_none());
+        }
+
+        test_with(closure);
     }
 }
