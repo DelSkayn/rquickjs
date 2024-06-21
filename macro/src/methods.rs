@@ -32,7 +32,7 @@ impl ImplConfig {
                 self.prefix = Some(x.value.value());
             }
             ImplOption::Crate(x) => {
-                self.prefix = Some(x.value.value());
+                self.crate_ = Some(x.value.value());
             }
             ImplOption::RenameAll(x) => {
                 self.rename_all = Some(x.value);
