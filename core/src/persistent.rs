@@ -162,8 +162,13 @@ unsafe impl<'js, T> Outlive<'js> for Module<'js, T> {
 /// It is an error (`Error::UnrelatedRuntime`) to restore the `Persistent` in a
 /// context who isn't part of the original `Runtime`.
 ///
-/// NOTE: Be careful and ensure that no persistent links outlives the runtime,
-/// otherwise Runtime will abort the process when dropped.
+/// # Safety
+/// Be careful and ensure that no [`Persistent`] outlives the runtime, otherwise
+/// [`Runtime`](crate::Runtime) or [`AsyncRuntime`](crate::AsyncRuntime) will generally
+/// abort the process when dropped to avoid memory leaks.
+///
+/// Restoring them is not required, but they must be dropped to ensure the values are
+/// freed properly.
 ///
 #[derive(Eq, PartialEq, Hash)]
 pub struct Persistent<T> {
