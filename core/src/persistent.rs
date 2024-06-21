@@ -264,6 +264,13 @@ where
     }
 }
 
+// Since all functions which use runtime are behind a mutex
+// sending the a persistent value to other threads should be fine.
+#[cfg(feature = "parallel")]
+unsafe impl<T> Send for Persistent<T> {}
+#[cfg(feature = "parallel")]
+unsafe impl<T> Sync for Persistent<T> {}
+
 #[cfg(test)]
 mod test {
     use crate::*;
