@@ -162,8 +162,13 @@ unsafe impl<'js, T> Outlive<'js> for Module<'js, T> {
 /// It is an error (`Error::UnrelatedRuntime`) to restore the `Persistent` in a
 /// context who isn't part of the original `Runtime`.
 ///
-/// NOTE: Be careful and ensure that no persistent links outlives the runtime,
-/// otherwise Runtime will abort the process when dropped.
+/// # Safety
+/// Be careful and ensure that no [`Persistent`] outlives the runtime, otherwise
+/// [`Runtime`](crate::Runtime) or [`AsyncRuntime`](crate::AsyncRuntime) will generally
+/// abort the process when dropped to avoid memory leaks.
+///
+/// Restoring them is not required, but they must be dropped to ensure the values are
+/// freed properly.
 ///
 #[derive(Eq, PartialEq, Hash)]
 pub struct Persistent<T> {
@@ -263,6 +268,13 @@ where
         self.restore(ctx)?.into_js(ctx)
     }
 }
+
+// Since all functions which use runtime are behind a mutex
+// sending the a persistent value to other threads should be fine.
+#[cfg(feature = "parallel")]
+unsafe impl<T> Send for Persistent<T> {}
+#[cfg(feature = "parallel")]
+unsafe impl<T> Sync for Persistent<T> {}
 
 #[cfg(test)]
 mod test {
