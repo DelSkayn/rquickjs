@@ -171,6 +171,14 @@ impl<'js, T> TypedArray<'js, T> {
         Some(unsafe { slice::from_raw_parts(ptr.as_ptr(), len) })
     }
 
+    /// Returns the underlying bytes of the buffer as a mutable slice,
+    ///
+    /// Returns `None` if the array is detached.
+    pub fn as_bytes_mut(&self) -> Option<&mut [u8]> {
+        let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
+        Some(unsafe { slice::from_raw_parts_mut(ptr.as_ptr(), len) })
+    }
+
     pub fn as_raw(&self) -> Option<RawArrayBuffer> {
         let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
         Some(RawArrayBuffer { len, ptr })
