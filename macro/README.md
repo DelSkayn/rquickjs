@@ -8,11 +8,3 @@
 This crate is a procedural macros for the high level Rust bindings for the [QuickJS](https://bellard.org/quickjs/) JavaScript engine.
 
 __NOTE:__ Do not use this crate directly in favor of [rquickjs](https://crates.io/crates/rquickjs) crate.
-
-## Supported macros
-
-- `FromJs` (derive)
-- `IntoJs` (defive)
-- `HasRefs` (derive)
-- `bind` (attribute)
-- `embed` (attribute)

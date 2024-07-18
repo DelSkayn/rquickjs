@@ -31,7 +31,6 @@ It optionally supports mathematical extensions such as big decimal floating poin
   - Easy integration with almost any async runtime or executor
 - Flexible data conversion between Rust and JS
   - Many widely used Rust types can be converted to JS and vice versa
-  - `FromJs` and `IntoJs` derive macros can help adapt user defined types too
 - Support for user-defined allocators
   - The `Runtime` can be created using custom allocator
   - Using Rust's global allocator is also fully supported
@@ -46,10 +45,15 @@ It optionally supports mathematical extensions such as big decimal floating poin
   - The properties can be defined with getters and setters
   - Support for constant static properties
   - Support for holding references to JS objects
-    (Data type which holds refs should implement `HasRefs` trait to get garbage collector works properly)
+    (Data type which holds refs should implement `Trace` trait to get garbage collector works properly)
   - Support for extending defined classes by JS
-- Easy bindings using proc macro
-  (The interfacing between JS and Rust became much easy with `bind` macro)
+
+## Community development
+
+This crate doesn't aim to provide system and web APIs. The QuickJS library is close to [V8](https://v8.dev/) in that regard.
+If you need APIs from [WinterGC](https://wintercg.org/) or [Node](https://nodejs.org/api/), then you can take a look at the follow community projects:
+
+- [AWS LLRT Modules](https://github.com/awslabs/llrt/tree/main/llrt_modules): Collection of modules that micmic some of the `Node` APIs in pure Rust
 
 ## Development status
 
