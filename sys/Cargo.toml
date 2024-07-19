@@ -11,7 +11,7 @@ categories = ["external-ffi-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [build-dependencies]
-cc = "1"
+cc = "1.0"
 
 [build-dependencies.bindgen-rs]
 package = "bindgen"
