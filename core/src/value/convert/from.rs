@@ -29,6 +29,25 @@ impl<'js> FromJs<'js> for StdString {
     }
 }
 
+impl<'js> FromJs<'js> for char {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let type_name = value.type_name();
+        let s = String::from_value(value)?.to_string()?;
+
+        let mut chars = s.chars();
+        let (c, more) = (chars.next(), chars.next());
+
+        match (c, more) {
+            (Some(c), None) => Ok(c),
+            _ => Err(Error::FromJs {
+                from: type_name,
+                to: "char",
+                message: Some("The length of the string converted to char must be 1".into()),
+            }),
+        }
+    }
+}
+
 /// Convert from JS as any
 impl<'js> FromJs<'js> for () {
     fn from_js(_: &Ctx<'js>, _: Value<'js>) -> Result<Self> {
