@@ -38,6 +38,7 @@ members = [
     "macro",
     "examples/native-module",
     "examples/module-loader",
+    "examples/rquickjs-cli",
 ]
 
 [features]
