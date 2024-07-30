@@ -413,6 +413,8 @@ pub enum PredefinedAtom {
     URIError = qjs::JS_ATOM_URIError as u32,
     /// "InternalError"
     InternalError = qjs::JS_ATOM_InternalError as u32,
+    /// "Symbol.asyncIterator"
+    SymbolAsyncIterator = qjs::JS_ATOM_Symbol_asyncIterator as u32,
     /// "Symbol.iterator"
     SymbolIterator = qjs::JS_ATOM_Symbol_iterator as u32,
     /// "Symbol.match"
@@ -441,7 +443,8 @@ impl PredefinedAtom {
     pub const fn is_symbol(self) -> bool {
         matches!(
             self,
-            PredefinedAtom::SymbolIterator
+            PredefinedAtom::SymbolAsyncIterator
+                | PredefinedAtom::SymbolIterator
                 | PredefinedAtom::SymbolMatch
                 | PredefinedAtom::SymbolMatchAll
                 | PredefinedAtom::SymbolReplace
@@ -659,6 +662,7 @@ impl PredefinedAtom {
             PredefinedAtom::TypeError => "TypeError",
             PredefinedAtom::URIError => "URIError",
             PredefinedAtom::InternalError => "InternalError",
+            PredefinedAtom::SymbolAsyncIterator => "Symbol.asyncIterator",
             PredefinedAtom::SymbolIterator => "Symbol.iterator",
             PredefinedAtom::SymbolMatch => "Symbol.match",
             PredefinedAtom::SymbolMatchAll => "Symbol.matchAll",
@@ -883,6 +887,7 @@ mod test {
             PredefinedAtom::TypeError,
             PredefinedAtom::URIError,
             PredefinedAtom::InternalError,
+            PredefinedAtom::SymbolAsyncIterator,
             PredefinedAtom::SymbolIterator,
             PredefinedAtom::SymbolMatch,
             PredefinedAtom::SymbolMatchAll,
