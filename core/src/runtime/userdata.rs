@@ -28,12 +28,6 @@ use std::{any::Any, mem::ManuallyDrop};
 /// unsafe impl<'js> UserData<'js> for MyUserData<'js>{
 ///     // The self type with the lifetime changed to static.
 ///     type Static = MyUserData<'static>;
-///
-///     fn create() -> Self{
-///         MyUserData{
-///             function: None
-///         }
-///     }
 /// }
 /// ```
 ///
@@ -51,12 +45,6 @@ use std::{any::Any, mem::ManuallyDrop};
 /// unsafe impl<'js> UserData<'js> for MyUserData<'js>{
 ///     // The self type with the lifetime changed to static.
 ///     type Static = MyUserData<'static>;
-///
-///     fn create() -> Self{
-///         MyUserData{
-///             function: None
-///         }
-///     }
 /// }
 /// ```
 ///
