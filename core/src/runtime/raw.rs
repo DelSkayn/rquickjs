@@ -11,7 +11,7 @@ use crate::qjs::{self, size_t};
 
 #[cfg(feature = "futures")]
 use super::spawner::Spawner;
-use super::InterruptHandler;
+use super::{userdata::UserData, InterruptHandler};
 
 /// Opaque book keeping data for Rust.
 pub(crate) struct Opaque<'js> {
@@ -20,6 +20,8 @@ pub(crate) struct Opaque<'js> {
 
     /// The user provided interrupt handler, if any.
     pub interrupt_handler: Option<InterruptHandler>,
+
+    pub userdata: Box<dyn Any>,
 
     #[cfg(feature = "futures")]
     pub spawner: Option<Spawner>,
@@ -32,6 +34,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: None,
             interrupt_handler: None,
+            userdata: Box::new(()),
             #[cfg(feature = "futures")]
             spawner: None,
             _marker: PhantomData,
@@ -43,6 +46,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: None,
             interrupt_handler: None,
+            userdata: Box::new(()),
             #[cfg(feature = "futures")]
             spawner: Some(Spawner::new()),
             _marker: PhantomData,
@@ -54,6 +58,20 @@ impl<'js> Opaque<'js> {
         self.spawner
             .as_mut()
             .expect("tried to use async function in non async runtime")
+    }
+
+    pub fn set_userdata<U>(&mut self, data: U)
+    where
+        U: UserData<'js>,
+    {
+        let user_static = unsafe { U::to_static(data) };
+        self.userdata = Box::new(user_static);
+    }
+
+    pub fn userdata<U: UserData<'js>>(&self) -> Option<&U> {
+        self.userdata
+            .downcast_ref::<U::Static>()
+            .map(|x| unsafe { U::from_static_ref(x) })
     }
 }
 

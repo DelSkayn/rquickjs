@@ -2,7 +2,7 @@
 
 use super::{
     raw::{Opaque, RawRuntime},
-    InterruptHandler, MemoryUsage,
+    InterruptHandler, MemoryUsage, UserData,
 };
 #[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
@@ -46,6 +46,24 @@ impl Runtime {
         })
     }
 
+    /// Create a new runtime.
+    ///
+    /// Will generally only fail if not enough memory was available.
+    ///
+    /// # Features
+    /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
+    pub fn new_with_userdata<U>() -> Result<Self>
+    where
+        for<'js> U: UserData<'js>,
+    {
+        let mut opaque = Opaque::new();
+        opaque.set_userdata(U::create());
+        let rt = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
+        Ok(Self {
+            inner: Ref::new(Mut::new(rt)),
+        })
+    }
+
     /// Create a new runtime using specified allocator
     ///
     /// Will generally only fail if not enough memory was available.
@@ -63,6 +81,24 @@ impl Runtime {
         })
     }
 
+    /// Create a new runtime using specified allocator
+    ///
+    /// Will generally only fail if not enough memory was available.
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
+    #[cfg(feature = "allocator")]
+    pub fn new_with_alloc_and_userdata<A, U>(allocator: A) -> Result<Self>
+    where
+        A: Allocator + 'static,
+        for<'js> U: UserData<'js>,
+    {
+        let mut opaque = Opaque::new();
+        opaque.set_userdata(U::create());
+        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
+            .ok_or(Error::Allocation)?;
+        Ok(Self {
+            inner: Ref::new(Mut::new(rt)),
+        })
+    }
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
         WeakRuntime(Ref::downgrade(&self.inner))

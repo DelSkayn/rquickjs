@@ -11,8 +11,12 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    atom::PredefinedAtom, cstr, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context,
-    Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
+    atom::PredefinedAtom,
+    cstr,
+    markers::Invariant,
+    qjs,
+    runtime::{raw::Opaque, UserData},
+    Atom, Context, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
 
 /// Eval options.
@@ -438,6 +442,10 @@ impl<'js> Ctx<'js> {
 
     pub fn run_gc(&self) {
         unsafe { qjs::JS_RunGC(qjs::JS_GetRuntime(self.ctx.as_ptr())) }
+    }
+
+    pub fn userdata<U: UserData<'js>>(&self) -> Option<&U> {
+        unsafe { (*self.get_opaque()).userdata() }
     }
 
     /// Returns the pointer to the C library context.
