@@ -1,7 +1,5 @@
 use std::{any::Any, mem::ManuallyDrop};
 
-use crate::Ctx;
-
 /// A trait for userdata which is stored in the runtime.
 ///
 /// # Safety
@@ -12,15 +10,21 @@ use crate::Ctx;
 ///
 /// ## Example
 /// ```
-/// # use rquickjs::{Function, UserData};
+/// # use rquickjs::{Function, runtime::UserData};
 ///
 /// struct MyUserData<'js>{
-///     function: Function<'js>
+///     function: Option<Function<'js>>
 /// }
 ///
-/// unsafe impl<'js> UserData for MyUserData<'js>{
+/// unsafe impl<'js> UserData<'js> for MyUserData<'js>{
 ///     // The self type with the lifetime changed to static.
 ///     type Static = MyUserData<'static>;
+///
+///     fn create() -> Self{
+///         MyUserData{
+///             function: None
+///         }
+///     }
 /// }
 ///
 /// ```
