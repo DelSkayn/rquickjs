@@ -4,11 +4,20 @@ use std::{any::Any, mem::ManuallyDrop};
 ///
 /// # Safety
 /// For safe implementation of this trait none of its default implemented functions must be
-/// overwritten and the type Static must be the same as the type UserData is being implemented for,
-/// with the exception that the `'js` lifetime must be changed to a 'static lifetime. Se below for
-/// an example of a correct implementation.
+/// overwritten and the type Static must be the correct type.
+///
+/// The static type must be the original type with the `'js` lifetime changed to `'static`.
+///
+/// All rquickjs javascript value have a `'js` lifetime, this lifetime is managed by rquickjs to
+/// ensure that rquickjs values are used correctly. You can derive some lifetimes from this
+/// lifetimes but only lifetimes on rquickjs structs can be soundly changed by this trait.
+///
+/// If changing a values type to its `UserData::Static` type would cause any borrow, non-rquickjs
+/// struct with a '`js` struct to no have a different lifetime then the implementation is unsound.
 ///
 /// ## Example
+/// Below is a correctly implemented UserData, the `'js` on `Function` is directly derived from a
+/// `Ctx<'js>`.
 /// ```
 /// # use rquickjs::{Function, runtime::UserData};
 ///
@@ -26,16 +35,34 @@ use std::{any::Any, mem::ManuallyDrop};
 ///         }
 ///     }
 /// }
-///
 /// ```
+///
+/// The example below is __unsound__ as it changes the `&'js` borrow to static.
+///
+/// ```no_run
+/// # use rquickjs::{Function, runtime::UserData};
+///
+/// struct MyUserData<'js>{
+///     // This is unsound!
+///     // The &'js lifetime here is not a lifetime on a rquickjs struct.
+///     function: &'js Function<'js>
+/// }
+///
+/// unsafe impl<'js> UserData<'js> for MyUserData<'js>{
+///     // The self type with the lifetime changed to static.
+///     type Static = MyUserData<'static>;
+///
+///     fn create() -> Self{
+///         MyUserData{
+///             function: None
+///         }
+///     }
+/// }
+/// ```
+///
+///
 pub unsafe trait UserData<'js> {
     type Static: 'static + Any;
-
-    /// Create the type.
-    ///
-    /// To avoid types being smuggled out, or into the runtime closure which are not allowed there
-    /// userdata must be created by the runtime.
-    fn create() -> Self;
 
     unsafe fn to_static(this: Self) -> Self::Static
     where
@@ -65,7 +92,7 @@ pub unsafe trait UserData<'js> {
         )
     }
 
-    unsafe fn from_static(this: Self::Static) -> Self
+    unsafe fn from_static_box(this: Box<Self::Static>) -> Box<Self>
     where
         Self: Sized,
     {

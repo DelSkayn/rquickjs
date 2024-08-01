@@ -1,5 +1,11 @@
 use std::{
-    any::Any, ffi::CString, marker::PhantomData, mem, panic, ptr::NonNull,
+    any::{Any, TypeId},
+    collections::HashMap,
+    ffi::CString,
+    hash::{BuildHasherDefault, Hasher},
+    marker::PhantomData,
+    mem, panic,
+    ptr::NonNull,
     result::Result as StdResult,
 };
 
@@ -13,6 +19,26 @@ use crate::qjs::{self, size_t};
 use super::spawner::Spawner;
 use super::{userdata::UserData, InterruptHandler};
 
+/// Typeid hashmap taken from axum.
+type AnyMap = HashMap<TypeId, Box<dyn Any>, BuildHasherDefault<IdHasher>>;
+
+#[derive(Default)]
+struct IdHasher(u64);
+
+impl Hasher for IdHasher {
+    fn write(&mut self, _: &[u8]) {
+        unreachable!("TypeId calls write_u64");
+    }
+
+    fn write_u64(&mut self, id: u64) {
+        self.0 = id;
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
 /// Opaque book keeping data for Rust.
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
@@ -21,7 +47,7 @@ pub(crate) struct Opaque<'js> {
     /// The user provided interrupt handler, if any.
     pub interrupt_handler: Option<InterruptHandler>,
 
-    pub userdata: Box<dyn Any>,
+    userdata: AnyMap,
 
     #[cfg(feature = "futures")]
     pub spawner: Option<Spawner>,
@@ -34,7 +60,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: None,
             interrupt_handler: None,
-            userdata: Box::new(()),
+            userdata: AnyMap::default(),
             #[cfg(feature = "futures")]
             spawner: None,
             _marker: PhantomData,
@@ -46,7 +72,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: None,
             interrupt_handler: None,
-            userdata: Box::new(()),
+            userdata: AnyMap::default(),
             #[cfg(feature = "futures")]
             spawner: Some(Spawner::new()),
             _marker: PhantomData,
@@ -60,18 +86,42 @@ impl<'js> Opaque<'js> {
             .expect("tried to use async function in non async runtime")
     }
 
-    pub fn set_userdata<U>(&mut self, data: U)
+    pub fn insert_userdata<U>(&mut self, data: U) -> Option<Box<U>>
     where
         U: UserData<'js>,
     {
         let user_static = unsafe { U::to_static(data) };
-        self.userdata = Box::new(user_static);
+        let id = TypeId::of::<U::Static>();
+        self.userdata.insert(id, Box::new(user_static)).map(|x| {
+            let r = x
+                .downcast()
+                .expect("type confusion! userdata not stored under the right type id");
+            unsafe { U::from_static_box(r) }
+        })
+    }
+
+    pub fn remove_userdata<U>(&mut self) -> Option<Box<U>>
+    where
+        U: UserData<'js>,
+    {
+        let id = TypeId::of::<U::Static>();
+        self.userdata.remove(&id).map(|x| {
+            let r = x
+                .downcast()
+                .expect("type confusion! userdata not stored under the right type id");
+            unsafe { U::from_static_box(r) }
+        })
     }
 
     pub fn userdata<U: UserData<'js>>(&self) -> Option<&U> {
-        self.userdata
-            .downcast_ref::<U::Static>()
-            .map(|x| unsafe { U::from_static_ref(x) })
+        let id = TypeId::of::<U::Static>();
+        self.userdata.get(&id).map(|x| {
+            let u = x
+                .downcast_ref()
+                .expect("type confusion! userdata not stored under the right type id");
+
+            unsafe { U::from_static_ref(u) }
+        })
     }
 }
 

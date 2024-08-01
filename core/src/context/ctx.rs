@@ -444,6 +444,14 @@ impl<'js> Ctx<'js> {
         unsafe { qjs::JS_RunGC(qjs::JS_GetRuntime(self.ctx.as_ptr())) }
     }
 
+    pub fn store_userdata<U: UserData<'js>>(&self, data: U) -> Option<Box<U>> {
+        unsafe { (*self.get_opaque()).insert_userdata(data) }
+    }
+
+    pub fn remove_userdata<U: UserData<'js>>(&self) -> Option<Box<U>> {
+        unsafe { (*self.get_opaque()).remove_userdata() }
+    }
+
     pub fn userdata<U: UserData<'js>>(&self) -> Option<&U> {
         unsafe { (*self.get_opaque()).userdata() }
     }
@@ -670,37 +678,23 @@ mod test {
         use std::cell::RefCell;
 
         pub struct MyUserData<'js> {
-            base: RefCell<Option<Function<'js>>>,
+            base: Function<'js>,
         }
 
         unsafe impl<'js> UserData<'js> for MyUserData<'js> {
             type Static = MyUserData<'static>;
-
-            fn create() -> Self {
-                MyUserData {
-                    base: RefCell::new(None),
-                }
-            }
         }
 
-        let rt = Runtime::new_with_userdata::<MyUserData>().unwrap();
+        let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
 
         ctx.with(|ctx| {
             let func = ctx.eval("() => 42").catch(&ctx).unwrap();
-            *ctx.userdata::<MyUserData>().unwrap().base.borrow_mut() = Some(func);
+            ctx.store_userdata(MyUserData { base: func });
         });
 
         ctx.with(|ctx| {
-            let r: usize = ctx
-                .userdata::<MyUserData>()
-                .unwrap()
-                .base
-                .borrow_mut()
-                .as_ref()
-                .unwrap()
-                .call(())
-                .unwrap();
+            let r: usize = ctx.userdata::<MyUserData>().unwrap().base.call(()).unwrap();
             assert_eq!(r, 42)
         });
     }
