@@ -1,14 +1,47 @@
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
-use syn::{Data, DataEnum, DataStruct, DeriveInput};
+use syn::{
+    parse::{Parse, ParseStream},
+    Data, DataEnum, DataStruct, DeriveInput, LitStr, Token,
+};
 
 use crate::{
+    attrs::{OptionList, ValueOption},
     common::{add_js_lifetime, crate_ident},
     fields::Fields,
 };
 
-pub(crate) fn expand(input: DeriveInput) -> TokenStream {
+#[derive(Default)]
+pub(crate) struct ImplConfig {
+    crate_: Option<String>,
+}
+
+impl ImplConfig {
+    pub fn apply(&mut self, option: &ImplOption) {
+        match option {
+            ImplOption::Crate(x) => {
+                self.crate_ = Some(x.value.value());
+            }
+        }
+    }
+}
+
+pub(crate) enum ImplOption {
+    Crate(ValueOption<Token![crate], LitStr>),
+}
+
+impl Parse for ImplOption {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![crate]) {
+            input.parse().map(Self::Crate)
+        } else {
+            Err(syn::Error::new(input.span(), "invalid impl attribute"))
+        }
+    }
+}
+
+pub(crate) fn expand(options: OptionList<ImplOption>, input: DeriveInput) -> TokenStream {
     let DeriveInput {
         ident,
         generics,
@@ -16,8 +49,14 @@ pub(crate) fn expand(input: DeriveInput) -> TokenStream {
         ..
     } = input;
 
+    let mut config = ImplConfig::default();
+    options.0.iter().for_each(|x| config.apply(x));
+
     let lifetime_generics = add_js_lifetime(&generics);
-    let crate_name = format_ident!("{}", crate_ident());
+    let crate_name = config
+        .crate_
+        .map(|x| format_ident!("{x}"))
+        .unwrap_or_else(|| format_ident!("{}", crate_ident()));
 
     match data {
         Data::Struct(struct_) => {

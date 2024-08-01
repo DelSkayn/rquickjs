@@ -32,7 +32,6 @@ It optionally supports mathematical extensions such as big decimal floating poin
   - Easy integration with almost any async runtime or executor
 - Flexible data conversion between Rust and JS
   - Many widely used Rust types can be converted to JS and vice versa
-  - `FromJs` and `IntoJs` derive macros can help adapt user defined types too
 - Support for user-defined allocators
   - The `Runtime` can be created using custom allocator
   - Using Rust's global allocator is also fully supported

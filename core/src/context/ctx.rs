@@ -12,13 +12,14 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    atom::PredefinedAtom,
     cstr,
     markers::Invariant,
     qjs,
     runtime::{opaque::Opaque, UserData, UserDataGuard},
-    Atom, Context, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
+    Atom, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
+
+use super::Context;
 
 /// Eval options.
 #[non_exhaustive]
@@ -439,7 +440,7 @@ impl<'js> Ctx<'js> {
     pub fn script_or_module_name(&self, stack_level: isize) -> Option<Atom<'js>> {
         let stack_level = std::os::raw::c_int::try_from(stack_level).unwrap();
         let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
-        if PredefinedAtom::Null as u32 == atom {
+        if qjs::__JS_ATOM_NULL as u32 == atom {
             unsafe { qjs::JS_FreeAtom(self.as_ptr(), atom) };
             return None;
         }

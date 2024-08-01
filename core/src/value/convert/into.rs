@@ -46,6 +46,12 @@ impl<'js> IntoJs<'js> for &str {
     }
 }
 
+impl<'js> IntoJs<'js> for char {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        String::from_str(ctx.clone(), self.to_string().as_str()).map(|String(value)| value)
+    }
+}
+
 impl<'js, T> IntoJs<'js> for &[T]
 where
     for<'a> &'a T: IntoJs<'js>,
@@ -499,6 +505,30 @@ impl<'js, Tz: chrono::TimeZone> IntoJs<'js> for chrono::DateTime<Tz> {
 
 #[cfg(test)]
 mod test {
+
+    #[test]
+    fn char_to_js() {
+        use crate::{Context, IntoJs, Runtime};
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+
+        let c = 'a';
+
+        ctx.with(|ctx| {
+            let globs = ctx.globals();
+            globs.set("char", c.into_js(&ctx).unwrap()).unwrap();
+            let res: char = ctx.eval("globalThis.char").unwrap();
+            assert_eq!(c, res);
+
+            let rt = ctx.eval::<char, _>("''");
+            assert!(rt.is_err());
+            let rt = ctx.eval::<char, _>("'a'");
+            assert!(rt.is_ok());
+            let rt = ctx.eval::<char, _>("'ab'");
+            assert!(rt.is_err());
+        });
+    }
+
     #[test]
     fn system_time_to_js() {
         use crate::{Context, IntoJs, Runtime};
