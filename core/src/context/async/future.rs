@@ -110,8 +110,8 @@ where
                 break Poll::Ready(x);
             };
 
-            let spawner = unsafe { lock.runtime.get_opaque_mut() }.spawner();
-            match spawner.poll(cx) {
+            let opaque = lock.runtime.get_opaque();
+            match opaque.poll(cx) {
                 SchedularPoll::Empty => {
                     // if the schedular is empty that means the future is waiting on an external or
                     // on a promise.

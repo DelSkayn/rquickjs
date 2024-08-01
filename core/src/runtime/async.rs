@@ -12,9 +12,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use async_lock::Mutex;
 
 use super::{
-    raw::{Opaque, RawRuntime},
-    schedular::SchedularPoll,
-    spawner::DriveFuture,
+    opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
     InterruptHandler, MemoryUsage,
 };
 #[cfg(feature = "allocator")]
@@ -255,10 +253,9 @@ impl AsyncRuntime {
     /// Returns true when at least one job is pending.
     #[inline]
     pub async fn is_job_pending(&self) -> bool {
-        let mut lock = self.inner.lock().await;
+        let lock = self.inner.lock().await;
 
-        lock.runtime.is_job_pending()
-            || !unsafe { lock.runtime.get_opaque_mut().spawner() }.is_empty()
+        lock.runtime.is_job_pending() || !lock.runtime.get_opaque().spawner_is_empty()
     }
 
     /// Execute first pending job
@@ -281,7 +278,7 @@ impl AsyncRuntime {
                 return Poll::Ready(Ok(true));
             }
 
-            match unsafe { lock.runtime.get_opaque_mut() }.spawner().poll(cx) {
+            match lock.runtime.get_opaque().poll(cx) {
                 SchedularPoll::ShouldYield => Poll::Pending,
                 SchedularPoll::Empty => Poll::Ready(Ok(false)),
                 SchedularPoll::Pending => Poll::Ready(Ok(false)),
@@ -326,7 +323,7 @@ impl AsyncRuntime {
                     Ok(false) => {}
                 }
 
-                match unsafe { lock.runtime.get_opaque_mut() }.spawner().poll(cx) {
+                match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield => return Poll::Pending,
                     SchedularPoll::Empty => return Poll::Ready(()),
                     SchedularPoll::Pending => return Poll::Pending,

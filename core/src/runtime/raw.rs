@@ -1,13 +1,4 @@
-use std::{
-    any::{Any, TypeId},
-    collections::HashMap,
-    ffi::CString,
-    hash::{BuildHasherDefault, Hasher},
-    marker::PhantomData,
-    mem, panic,
-    ptr::NonNull,
-    result::Result as StdResult,
-};
+use std::{ffi::CString, mem, panic, ptr::NonNull, result::Result as StdResult};
 
 #[cfg(feature = "allocator")]
 use crate::allocator::{Allocator, AllocatorHolder};
@@ -15,115 +6,7 @@ use crate::allocator::{Allocator, AllocatorHolder};
 use crate::loader::{Loader, LoaderHolder, Resolver};
 use crate::qjs::{self, size_t};
 
-#[cfg(feature = "futures")]
-use super::spawner::Spawner;
-use super::{userdata::UserData, InterruptHandler};
-
-/// Typeid hashmap taken from axum.
-type AnyMap = HashMap<TypeId, Box<dyn Any>, BuildHasherDefault<IdHasher>>;
-
-#[derive(Default)]
-struct IdHasher(u64);
-
-impl Hasher for IdHasher {
-    fn write(&mut self, _: &[u8]) {
-        unreachable!("TypeId calls write_u64");
-    }
-
-    fn write_u64(&mut self, id: u64) {
-        self.0 = id;
-    }
-
-    fn finish(&self) -> u64 {
-        self.0
-    }
-}
-
-/// Opaque book keeping data for Rust.
-pub(crate) struct Opaque<'js> {
-    /// Used to carry a panic if a callback triggered one.
-    pub panic: Option<Box<dyn Any + Send + 'static>>,
-
-    /// The user provided interrupt handler, if any.
-    pub interrupt_handler: Option<InterruptHandler>,
-
-    userdata: AnyMap,
-
-    #[cfg(feature = "futures")]
-    pub spawner: Option<Spawner>,
-
-    _marker: PhantomData<&'js ()>,
-}
-
-impl<'js> Opaque<'js> {
-    pub fn new() -> Self {
-        Opaque {
-            panic: None,
-            interrupt_handler: None,
-            userdata: AnyMap::default(),
-            #[cfg(feature = "futures")]
-            spawner: None,
-            _marker: PhantomData,
-        }
-    }
-
-    #[cfg(feature = "futures")]
-    pub fn with_spawner() -> Self {
-        Opaque {
-            panic: None,
-            interrupt_handler: None,
-            userdata: AnyMap::default(),
-            #[cfg(feature = "futures")]
-            spawner: Some(Spawner::new()),
-            _marker: PhantomData,
-        }
-    }
-
-    #[cfg(feature = "futures")]
-    pub fn spawner(&mut self) -> &mut Spawner {
-        self.spawner
-            .as_mut()
-            .expect("tried to use async function in non async runtime")
-    }
-
-    pub fn insert_userdata<U>(&mut self, data: U) -> Option<Box<U>>
-    where
-        U: UserData<'js>,
-    {
-        let user_static = unsafe { U::to_static(data) };
-        let id = TypeId::of::<U::Static>();
-        self.userdata.insert(id, Box::new(user_static)).map(|x| {
-            let r = x
-                .downcast()
-                .expect("type confusion! userdata not stored under the right type id");
-            unsafe { U::from_static_box(r) }
-        })
-    }
-
-    pub fn remove_userdata<U>(&mut self) -> Option<Box<U>>
-    where
-        U: UserData<'js>,
-    {
-        let id = TypeId::of::<U::Static>();
-        self.userdata.remove(&id).map(|x| {
-            let r = x
-                .downcast()
-                .expect("type confusion! userdata not stored under the right type id");
-            unsafe { U::from_static_box(r) }
-        })
-    }
-
-    pub fn userdata<U: UserData<'js>>(&self) -> Option<&U> {
-        let id = TypeId::of::<U::Static>();
-        self.userdata.get(&id).map(|x| {
-            let u = x
-                .downcast_ref()
-                .expect("type confusion! userdata not stored under the right type id");
-
-            unsafe { U::from_static_ref(u) }
-        })
-    }
-}
+use super::{opaque::Opaque, InterruptHandler};
 
 #[derive(Debug)]
 pub(crate) struct RawRuntime {
@@ -213,8 +96,8 @@ impl RawRuntime {
         }
     }
 
-    pub unsafe fn get_opaque_mut<'js>(&mut self) -> &mut Opaque<'js> {
-        &mut *(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *mut _)
+    pub fn get_opaque<'js>(&self) -> &Opaque<'js> {
+        unsafe { &*(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *mut _) }
     }
 
     pub fn is_job_pending(&self) -> bool {
@@ -302,14 +185,14 @@ impl RawRuntime {
             opaque: *mut ::std::os::raw::c_void,
         ) -> ::std::os::raw::c_int {
             let catch_unwind = panic::catch_unwind(move || {
-                let opaque = &mut *(opaque as *mut Opaque);
-                opaque.interrupt_handler.as_mut().expect("handler is set")()
+                let opaque = &*(opaque as *mut Opaque);
+                opaque.run_interrupt_handler()
             });
             let should_interrupt = match catch_unwind {
                 Ok(should_interrupt) => should_interrupt,
                 Err(panic) => {
                     let opaque = &mut *(opaque as *mut Opaque);
-                    opaque.panic = Some(panic);
+                    opaque.set_panic(panic);
                     // Returning true here will cause the interpreter to raise an un-catchable exception.
                     // The Rust code that is running the interpreter will see that exception and continue
                     // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
@@ -324,6 +207,6 @@ impl RawRuntime {
             handler.as_ref().map(|_| interrupt_handler_trampoline as _),
             qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
         );
-        self.get_opaque_mut().interrupt_handler = handler;
+        self.get_opaque().set_interrupt_handler(handler);
     }
 }

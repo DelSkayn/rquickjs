@@ -1,4 +1,11 @@
-use std::{any::Any, mem::ManuallyDrop};
+use std::{
+    any::{Any, TypeId},
+    cell::{Cell, UnsafeCell},
+    collections::HashMap,
+    hash::{BuildHasherDefault, Hasher},
+    mem::ManuallyDrop,
+    ops::Deref,
+};
 
 /// A trait for userdata which is stored in the runtime.
 ///
@@ -105,5 +112,100 @@ pub unsafe trait UserData<'js> {
         Self: Sized,
     {
         std::mem::transmute(this)
+    }
+}
+
+#[derive(Default)]
+struct IdHasher(u64);
+
+impl Hasher for IdHasher {
+    fn write(&mut self, _: &[u8]) {
+        unreachable!("TypeId calls write_u64");
+    }
+
+    fn write_u64(&mut self, id: u64) {
+        self.0 = id;
+    }
+
+    fn finish(&self) -> u64 {
+        self.0
+    }
+}
+
+/// Typeid hashmap taken from axum.
+#[derive(Default)]
+pub(crate) struct UserDataMap {
+    map: UnsafeCell<HashMap<TypeId, Box<dyn Any>, BuildHasherDefault<IdHasher>>>,
+    count: Cell<usize>,
+}
+
+impl UserDataMap {
+    pub fn insert<'js, U>(&self, data: U) -> Result<Option<Box<U>>, U>
+    where
+        U: UserData<'js>,
+    {
+        if self.count.get() > 0 {
+            return Err(data);
+        }
+        let user_static = unsafe { U::to_static(data) };
+        let id = TypeId::of::<U::Static>();
+        let r = unsafe { (*self.map.get()).insert(id, Box::new(user_static)) }.map(|x| {
+            let r = x
+                .downcast()
+                .expect("type confusion! userdata not stored under the right type id");
+            unsafe { U::from_static_box(r) }
+        });
+        Ok(r)
+    }
+
+    pub fn remove<'js, U>(&self) -> Result<Option<Box<U>>, ()>
+    where
+        U: UserData<'js>,
+    {
+        if self.count.get() > 0 {
+            return Err(());
+        }
+        let id = TypeId::of::<U::Static>();
+        let r = unsafe { (*self.map.get()).remove(&id) }.map(|x| {
+            let r = x
+                .downcast()
+                .expect("type confusion! userdata not stored under the right type id");
+            unsafe { U::from_static_box(r) }
+        });
+        Ok(r)
+    }
+
+    pub fn get<'js, U: UserData<'js>>(&self) -> Option<UserDataGuard<U>> {
+        let id = TypeId::of::<U::Static>();
+        self.count.set(self.count.get() + 1);
+        unsafe { (*self.map.get()).get(&id) }.map(|x| {
+            let u = x
+                .downcast_ref()
+                .expect("type confusion! userdata not stored under the right type id");
+
+            let r = unsafe { U::from_static_ref(u) };
+            UserDataGuard { map: self, r }
+        })
+    }
+}
+
+/// Guard for user data to avoid inserting new userdata while exisiting userdata is being
+/// referenced.
+pub struct UserDataGuard<'a, U> {
+    map: &'a UserDataMap,
+    r: &'a U,
+}
+
+impl<'a, U> Deref for UserDataGuard<'a, U> {
+    type Target = U;
+
+    fn deref(&self) -> &Self::Target {
+        self.r
+    }
+}
+
+impl<'a, U> Drop for UserDataGuard<'a, U> {
+    fn drop(&mut self) {
+        self.map.count.set(self.map.count.get() - 1)
     }
 }

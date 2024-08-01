@@ -1,9 +1,6 @@
 //! QuickJS runtime related types.
 
-use super::{
-    raw::{Opaque, RawRuntime},
-    InterruptHandler, MemoryUsage, UserData,
-};
+use super::{opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage};
 #[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]

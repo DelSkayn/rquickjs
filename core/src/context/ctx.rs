@@ -6,6 +6,7 @@ use std::{
     mem::{self, MaybeUninit},
     path::Path,
     ptr::NonNull,
+    result::Result as StdResult,
 };
 
 #[cfg(feature = "futures")]
@@ -15,7 +16,7 @@ use crate::{
     cstr,
     markers::Invariant,
     qjs,
-    runtime::{raw::Opaque, UserData},
+    runtime::{opaque::Opaque, UserData, UserDataGuard},
     Atom, Context, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
 
@@ -390,9 +391,9 @@ impl<'js> Ctx<'js> {
         res != 0
     }
 
-    pub(crate) unsafe fn get_opaque(&self) -> *mut Opaque<'js> {
+    pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
         let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
-        qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>()
+        &(*qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>())
     }
 
     /// Spawn future using configured async runtime
@@ -402,7 +403,7 @@ impl<'js> Ctx<'js> {
     where
         F: Future<Output = ()> + 'js,
     {
-        unsafe { (*self.get_opaque()).spawner().push(future) }
+        unsafe { self.get_opaque().push(future) }
     }
 
     /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
@@ -430,6 +431,11 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Returns the name of the current module or script that is running.
+    ///
+    /// It called from a javascript callback it will return the current running javascript script
+    /// name.
+    /// Otherwise it will return none.
     pub fn script_or_module_name(&self, stack_level: isize) -> Option<Atom<'js>> {
         let stack_level = std::os::raw::c_int::try_from(stack_level).unwrap();
         let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
@@ -440,20 +446,37 @@ impl<'js> Ctx<'js> {
         unsafe { Some(Atom::from_atom_val(self.clone(), atom)) }
     }
 
+    /// Runs the quickjs garbage collector for a cycle.
+    ///
+    /// Quickjs uses reference counting with a collection cycle for cyclic references.
+    /// This runs the cyclic reference collector cycle, types which are not part of a reference cycle
+    /// will be freed the momement their reference count becomes zero.
     pub fn run_gc(&self) {
         unsafe { qjs::JS_RunGC(qjs::JS_GetRuntime(self.ctx.as_ptr())) }
     }
 
-    pub fn store_userdata<U: UserData<'js>>(&self, data: U) -> Option<Box<U>> {
-        unsafe { (*self.get_opaque()).insert_userdata(data) }
+    /// Store a type in the runtime which can be retrieved later with `Ctx::userdata`.
+    ///
+    /// Returns the value from the argument if the userdata is currently being accessed and
+    /// insertion is not possible.
+    /// Otherwise returns the exising value for this type if it existed.
+    pub fn store_userdata<U: UserData<'js>>(&self, data: U) -> StdResult<Option<Box<U>>, U> {
+        unsafe { self.get_opaque().insert_userdata(data) }
     }
 
-    pub fn remove_userdata<U: UserData<'js>>(&self) -> Option<Box<U>> {
-        unsafe { (*self.get_opaque()).remove_userdata() }
+    /// Remove the userdata of the given type from the userdata storage.
+    ///
+    /// Returns Err(()) if the userdata is currently being accessed and removing isn't possible.
+    /// Returns Ok(None) if userdata of the given type wasn't inserted.
+    pub fn remove_userdata<U: UserData<'js>>(&self) -> StdResult<Option<Box<U>>, ()> {
+        unsafe { self.get_opaque().remove_userdata() }
     }
 
-    pub fn userdata<U: UserData<'js>>(&self) -> Option<&U> {
-        unsafe { (*self.get_opaque()).userdata() }
+    /// Retrieves a borrow to the userdata of the given type from the userdata storage.
+    ///
+    /// Returns None if userdata of the given type wasn't inserted.
+    pub fn userdata<U: UserData<'js>>(&self) -> Option<UserDataGuard<U>> {
+        unsafe { self.get_opaque().get_userdata() }
     }
 
     /// Returns the pointer to the C library context.

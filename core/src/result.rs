@@ -669,7 +669,7 @@ impl<'js> Ctx<'js> {
             match panic::catch_unwind(f) {
                 Ok(x) => x,
                 Err(e) => {
-                    (*self.get_opaque()).panic = Some(e);
+                    self.get_opaque().set_panic(e);
                     qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
                 }
             }
@@ -685,7 +685,7 @@ impl<'js> Ctx<'js> {
         if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
             Ok(js_val)
         } else {
-            if let Some(x) = (*self.get_opaque()).panic.take() {
+            if let Some(x) = self.get_opaque().take_panic() {
                 panic::resume_unwind(x)
             }
             Err(Error::Exception)
@@ -697,7 +697,7 @@ impl<'js> Ctx<'js> {
     pub(crate) fn raise_exception(&self) -> Error {
         // Safety
         unsafe {
-            if let Some(x) = (*self.get_opaque()).panic.take() {
+            if let Some(x) = self.get_opaque().take_panic() {
                 panic::resume_unwind(x)
             }
             Error::Exception
