@@ -54,7 +54,7 @@ impl Runtime {
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new_with_userdata<U>() -> Result<Self>
     where
-        for<'js> U: UserData<'js>,
+        U: UserData<'static>,
     {
         let mut opaque = Opaque::new();
         opaque.set_userdata(U::create());

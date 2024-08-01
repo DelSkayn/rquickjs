@@ -456,6 +456,7 @@ impl<'js> Ctx<'js> {
 
 #[cfg(test)]
 mod test {
+    use crate::CatchResultExt;
 
     #[test]
     fn exports() {
@@ -661,5 +662,46 @@ mod test {
 
             assert_eq!(str, r#"{"a":{"b":1,"c":true},"d":[0,"foo"]}"#);
         })
+    }
+
+    #[test]
+    fn userdata() {
+        use crate::{runtime::UserData, Context, Function, Runtime};
+        use std::cell::RefCell;
+
+        pub struct MyUserData<'js> {
+            base: RefCell<Option<Function<'js>>>,
+        }
+
+        unsafe impl<'js> UserData<'js> for MyUserData<'js> {
+            type Static = MyUserData<'static>;
+
+            fn create() -> Self {
+                MyUserData {
+                    base: RefCell::new(None),
+                }
+            }
+        }
+
+        let rt = Runtime::new_with_userdata::<MyUserData>().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        ctx.with(|ctx| {
+            let func = ctx.eval("() => 42").catch(&ctx).unwrap();
+            *ctx.userdata::<MyUserData>().unwrap().base.borrow_mut() = Some(func);
+        });
+
+        ctx.with(|ctx| {
+            let r: usize = ctx
+                .userdata::<MyUserData>()
+                .unwrap()
+                .base
+                .borrow_mut()
+                .as_ref()
+                .unwrap()
+                .call(())
+                .unwrap();
+            assert_eq!(r, 42)
+        });
     }
 }
