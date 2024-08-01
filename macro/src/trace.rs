@@ -1,23 +1,75 @@
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::{format_ident, quote};
-use syn::{Data, DataEnum, DataStruct, DeriveInput};
+use syn::{
+    parse::{Parse, ParseStream},
+    Data, DataEnum, DataStruct, DeriveInput, LitStr, Token,
+};
 
 use crate::{
-    common::{add_js_lifetime, crate_ident},
+    attrs::{take_attributes, OptionList, ValueOption},
+    common::{add_js_lifetime, crate_ident, AbortResultExt},
     fields::Fields,
 };
+
+#[derive(Default)]
+pub(crate) struct ImplConfig {
+    crate_: Option<String>,
+}
+
+impl ImplConfig {
+    pub fn apply(&mut self, option: &TraceOption) {
+        match option {
+            TraceOption::Crate(x) => {
+                self.crate_ = Some(x.value.value());
+            }
+        }
+    }
+}
+
+pub(crate) enum TraceOption {
+    Crate(ValueOption<Token![crate], LitStr>),
+}
+
+impl Parse for TraceOption {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        if input.peek(Token![crate]) {
+            input.parse().map(Self::Crate)
+        } else {
+            Err(syn::Error::new(input.span(), "invalid impl attribute"))
+        }
+    }
+}
 
 pub(crate) fn expand(input: DeriveInput) -> TokenStream {
     let DeriveInput {
         ident,
         generics,
         data,
+        mut attrs,
         ..
     } = input;
 
+    let mut config = ImplConfig::default();
+
+    take_attributes(&mut attrs, |attr| {
+        if !attr.path().is_ident("qjs") {
+            return Ok(false);
+        }
+
+        let options: OptionList<TraceOption> = attr.parse_args()?;
+        options.0.iter().for_each(|x| config.apply(x));
+        Ok(true)
+    })
+    .unwrap_or_abort();
+
+    //options.0.iter().for_each(|x| config.apply(x));
+
     let lifetime_generics = add_js_lifetime(&generics);
-    let crate_name = format_ident!("{}", crate_ident());
+    let crate_name = config
+        .crate_
+        .map(|x| format_ident!("{x}"))
+        .unwrap_or_else(|| format_ident!("{}", crate_ident()));
 
     match data {
         Data::Struct(struct_) => {
