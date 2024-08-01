@@ -67,6 +67,8 @@ pub unsafe trait UserData<'js> {
             "Invalid implementation of UserData, align_of::<Self>() != align_of::<Self::Static>()"
         );
 
+        // a super unsafe way to cast between types, This is necessary because normal transmute will
+        // complain that Self and Self::Static are not related so might not have the same size.
         union Trans<A, B> {
             from: ManuallyDrop<A>,
             to: ManuallyDrop<B>,
@@ -95,41 +97,13 @@ pub unsafe trait UserData<'js> {
             "Invalid implementation of UserData, align_of::<Self>() != align_of::<Self::Static>()"
         );
 
-        // a super unsafe way to cast between types, This is nessacry because normal transmute will
-        // complain that Self and Self::Static are not related so might not have the same size.
-        //
-        //
-        union Trans<A, B> {
-            from: ManuallyDrop<A>,
-            to: ManuallyDrop<B>,
-        }
-
-        ManuallyDrop::into_inner(
-            (Trans {
-                from: ManuallyDrop::new(this),
-            })
-            .to,
-        )
+        Box::from_raw(Box::into_raw(this) as *mut Self)
     }
 
     unsafe fn from_static_ref<'a>(this: &'a Self::Static) -> &'a Self
     where
         Self: Sized,
     {
-        // a super unsafe way to cast between types, This is nessacry because normal transmute will
-        // complain that Self and Self::Static are not related so might not have the same size.
-        //
-        //
-        union Trans<A, B> {
-            from: ManuallyDrop<A>,
-            to: ManuallyDrop<B>,
-        }
-
-        ManuallyDrop::into_inner(
-            (Trans {
-                from: ManuallyDrop::new(this),
-            })
-            .to,
-        )
+        std::mem::transmute(this)
     }
 }
