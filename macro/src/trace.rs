@@ -7,8 +7,8 @@ use syn::{
 };
 
 use crate::{
-    attrs::{OptionList, ValueOption},
-    common::{add_js_lifetime, crate_ident},
+    attrs::{take_attributes, OptionList, ValueOption},
+    common::{add_js_lifetime, crate_ident, AbortResultExt},
     fields::Fields,
 };
 
@@ -18,20 +18,20 @@ pub(crate) struct ImplConfig {
 }
 
 impl ImplConfig {
-    pub fn apply(&mut self, option: &ImplOption) {
+    pub fn apply(&mut self, option: &TraceOption) {
         match option {
-            ImplOption::Crate(x) => {
+            TraceOption::Crate(x) => {
                 self.crate_ = Some(x.value.value());
             }
         }
     }
 }
 
-pub(crate) enum ImplOption {
+pub(crate) enum TraceOption {
     Crate(ValueOption<Token![crate], LitStr>),
 }
 
-impl Parse for ImplOption {
+impl Parse for TraceOption {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(Token![crate]) {
             input.parse().map(Self::Crate)
@@ -41,16 +41,29 @@ impl Parse for ImplOption {
     }
 }
 
-pub(crate) fn expand(options: OptionList<ImplOption>, input: DeriveInput) -> TokenStream {
+pub(crate) fn expand(input: DeriveInput) -> TokenStream {
     let DeriveInput {
         ident,
         generics,
         data,
+        mut attrs,
         ..
     } = input;
 
     let mut config = ImplConfig::default();
-    options.0.iter().for_each(|x| config.apply(x));
+
+    take_attributes(&mut attrs, |attr| {
+        if !attr.path().is_ident("qjs") {
+            return Ok(false);
+        }
+
+        let options: OptionList<TraceOption> = attr.parse_args()?;
+        options.0.iter().for_each(|x| config.apply(x));
+        Ok(true)
+    })
+    .unwrap_or_abort();
+
+    //options.0.iter().for_each(|x| config.apply(x));
 
     let lifetime_generics = add_js_lifetime(&generics);
     let crate_name = config
