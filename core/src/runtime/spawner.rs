@@ -110,9 +110,7 @@ impl Future for DriveFuture {
 
             lock.runtime.update_stack_top();
 
-            unsafe { lock.runtime.get_opaque_mut() }
-                .spawner()
-                .listen(cx.waker().clone());
+            lock.runtime.get_opaque().listen(cx.waker().clone());
 
             loop {
                 // TODO: Handle error.
@@ -121,7 +119,7 @@ impl Future for DriveFuture {
                 }
 
                 // TODO: Handle error.
-                match unsafe { lock.runtime.get_opaque_mut() }.spawner().poll(cx) {
+                match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
                         break
                     }

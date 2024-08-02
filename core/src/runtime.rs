@@ -1,19 +1,24 @@
 //! QuickJS runtime related types.
 
+mod base;
+pub(crate) mod opaque;
+pub(crate) mod raw;
+mod userdata;
+
 #[cfg(feature = "futures")]
 mod r#async;
-mod base;
-pub(crate) mod raw;
 #[cfg(feature = "futures")]
 pub(crate) mod schedular;
+#[cfg(feature = "futures")]
+mod spawner;
 
 pub use base::{Runtime, WeakRuntime};
+pub use userdata::{UserData, UserDataError, UserDataGuard};
+
 #[cfg(feature = "futures")]
 pub(crate) use r#async::InnerRuntime;
 #[cfg(feature = "futures")]
 pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
-#[cfg(feature = "futures")]
-mod spawner;
 
 /// The type of the interrupt handler.
 #[cfg(not(feature = "parallel"))]

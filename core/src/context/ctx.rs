@@ -6,14 +6,20 @@ use std::{
     mem::{self, MaybeUninit},
     path::Path,
     ptr::NonNull,
+    result::Result as StdResult,
 };
 
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    cstr, markers::Invariant, qjs, runtime::raw::Opaque, Atom, Context, Error, FromJs, Function,
-    IntoJs, Object, Promise, Result, String, Value,
+    cstr,
+    markers::Invariant,
+    qjs,
+    runtime::{opaque::Opaque, UserData, UserDataError, UserDataGuard},
+    Atom, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
+
+use super::Context;
 
 /// Eval options.
 #[non_exhaustive]
@@ -386,9 +392,9 @@ impl<'js> Ctx<'js> {
         res != 0
     }
 
-    pub(crate) unsafe fn get_opaque(&self) -> *mut Opaque<'js> {
+    pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
         let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
-        qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>()
+        &(*qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>())
     }
 
     /// Spawn future using configured async runtime
@@ -398,7 +404,7 @@ impl<'js> Ctx<'js> {
     where
         F: Future<Output = ()> + 'js,
     {
-        unsafe { (*self.get_opaque()).spawner().push(future) }
+        unsafe { self.get_opaque().push(future) }
     }
 
     /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
@@ -426,6 +432,11 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Returns the name of the current module or script that is running.
+    ///
+    /// It called from a javascript callback it will return the current running javascript script
+    /// name.
+    /// Otherwise it will return none.
     pub fn script_or_module_name(&self, stack_level: isize) -> Option<Atom<'js>> {
         let stack_level = std::os::raw::c_int::try_from(stack_level).unwrap();
         let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
@@ -436,8 +447,42 @@ impl<'js> Ctx<'js> {
         unsafe { Some(Atom::from_atom_val(self.clone(), atom)) }
     }
 
+    /// Runs the quickjs garbage collector for a cycle.
+    ///
+    /// Quickjs uses reference counting with a collection cycle for cyclic references.
+    /// This runs the cyclic reference collector cycle, types which are not part of a reference cycle
+    /// will be freed the momement their reference count becomes zero.
     pub fn run_gc(&self) {
         unsafe { qjs::JS_RunGC(qjs::JS_GetRuntime(self.ctx.as_ptr())) }
+    }
+
+    /// Store a type in the runtime which can be retrieved later with `Ctx::userdata`.
+    ///
+    /// Returns the value from the argument if the userdata is currently being accessed and
+    /// insertion is not possible.
+    /// Otherwise returns the exising value for this type if it existed.
+    pub fn store_userdata<U: UserData<'js>>(
+        &self,
+        data: U,
+    ) -> StdResult<Option<Box<U>>, UserDataError<U>> {
+        unsafe { self.get_opaque().insert_userdata(data) }
+    }
+
+    /// Remove the userdata of the given type from the userdata storage.
+    ///
+    /// Returns Err(()) if the userdata is currently being accessed and removing isn't possible.
+    /// Returns Ok(None) if userdata of the given type wasn't inserted.
+    pub fn remove_userdata<U: UserData<'js>>(
+        &self,
+    ) -> StdResult<Option<Box<U>>, UserDataError<()>> {
+        unsafe { self.get_opaque().remove_userdata() }
+    }
+
+    /// Retrieves a borrow to the userdata of the given type from the userdata storage.
+    ///
+    /// Returns None if userdata of the given type wasn't inserted.
+    pub fn userdata<U: UserData<'js>>(&self) -> Option<UserDataGuard<U>> {
+        unsafe { self.get_opaque().get_userdata() }
     }
 
     /// Returns the pointer to the C library context.
@@ -448,6 +493,7 @@ impl<'js> Ctx<'js> {
 
 #[cfg(test)]
 mod test {
+    use crate::CatchResultExt;
 
     #[test]
     fn exports() {
@@ -652,6 +698,40 @@ mod test {
                 .unwrap();
 
             assert_eq!(str, r#"{"a":{"b":1,"c":true},"d":[0,"foo"]}"#);
+        })
+    }
+
+    #[test]
+    fn userdata() {
+        use crate::{runtime::UserData, Context, Function, Runtime};
+
+        pub struct MyUserData<'js> {
+            base: Function<'js>,
+        }
+
+        unsafe impl<'js> UserData<'js> for MyUserData<'js> {
+            type Static = MyUserData<'static>;
+        }
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        ctx.with(|ctx| {
+            let func = ctx.eval("() => 42").catch(&ctx).unwrap();
+            ctx.store_userdata(MyUserData { base: func }).unwrap();
+        });
+
+        ctx.with(|ctx| {
+            let userdata = ctx.userdata::<MyUserData>().unwrap();
+
+            assert!(ctx.remove_userdata::<MyUserData>().is_err());
+
+            let r: usize = userdata.base.call(()).unwrap();
+            assert_eq!(r, 42)
+        });
+
+        ctx.with(|ctx| {
+            ctx.remove_userdata::<MyUserData>().unwrap().unwrap();
         })
     }
 }

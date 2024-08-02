@@ -185,9 +185,11 @@ where
                 inner.borrow().wake_by_ref();
             })?;
 
-            this.promise
-                .then()?
-                .call((This(this.promise.clone()), resolve.clone(), resolve))?;
+            this.promise.then()?.call::<_, ()>((
+                This(this.promise.clone()),
+                resolve.clone(),
+                resolve,
+            ))?;
             return Poll::Pending;
         }
 
