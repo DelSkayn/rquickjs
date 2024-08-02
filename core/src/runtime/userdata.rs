@@ -1,3 +1,4 @@
+use core::fmt;
 use std::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
@@ -115,6 +116,23 @@ pub unsafe trait UserData<'js> {
     }
 }
 
+pub struct UserDataError<T>(pub T);
+
+impl<T> fmt::Display for UserDataError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "tried to mutate the user data store while it was being referenced"
+        )
+    }
+}
+
+impl<T> fmt::Debug for UserDataError<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
 #[derive(Default)]
 struct IdHasher(u64);
 
@@ -140,12 +158,12 @@ pub(crate) struct UserDataMap {
 }
 
 impl UserDataMap {
-    pub fn insert<'js, U>(&self, data: U) -> Result<Option<Box<U>>, U>
+    pub fn insert<'js, U>(&self, data: U) -> Result<Option<Box<U>>, UserDataError<U>>
     where
         U: UserData<'js>,
     {
         if self.count.get() > 0 {
-            return Err(data);
+            return Err(UserDataError(data));
         }
         let user_static = unsafe { U::to_static(data) };
         let id = TypeId::of::<U::Static>();
@@ -158,12 +176,12 @@ impl UserDataMap {
         Ok(r)
     }
 
-    pub fn remove<'js, U>(&self) -> Result<Option<Box<U>>, ()>
+    pub fn remove<'js, U>(&self) -> Result<Option<Box<U>>, UserDataError<()>>
     where
         U: UserData<'js>,
     {
         if self.count.get() > 0 {
-            return Err(());
+            return Err(UserDataError(()));
         }
         let id = TypeId::of::<U::Static>();
         let r = unsafe { (*self.map.get()).remove(&id) }.map(|x| {

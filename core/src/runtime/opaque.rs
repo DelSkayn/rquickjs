@@ -1,6 +1,6 @@
 use super::{
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, UserData,
+    InterruptHandler, UserData, UserDataError,
 };
 use std::{
     any::Any,
@@ -87,14 +87,14 @@ impl<'js> Opaque<'js> {
         unsafe { (*self.spawner().get()).poll(cx) }
     }
 
-    pub fn insert_userdata<U>(&self, data: U) -> Result<Option<Box<U>>, U>
+    pub fn insert_userdata<U>(&self, data: U) -> Result<Option<Box<U>>, UserDataError<U>>
     where
         U: UserData<'js>,
     {
         self.userdata.insert(data)
     }
 
-    pub fn remove_userdata<U>(&self) -> Result<Option<Box<U>>, ()>
+    pub fn remove_userdata<U>(&self) -> Result<Option<Box<U>>, UserDataError<()>>
     where
         U: UserData<'js>,
     {

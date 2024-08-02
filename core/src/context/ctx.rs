@@ -15,7 +15,7 @@ use crate::{
     cstr,
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserData, UserDataGuard},
+    runtime::{opaque::Opaque, UserData, UserDataError, UserDataGuard},
     Atom, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
 
@@ -461,7 +461,10 @@ impl<'js> Ctx<'js> {
     /// Returns the value from the argument if the userdata is currently being accessed and
     /// insertion is not possible.
     /// Otherwise returns the exising value for this type if it existed.
-    pub fn store_userdata<U: UserData<'js>>(&self, data: U) -> StdResult<Option<Box<U>>, U> {
+    pub fn store_userdata<U: UserData<'js>>(
+        &self,
+        data: U,
+    ) -> StdResult<Option<Box<U>>, UserDataError<U>> {
         unsafe { self.get_opaque().insert_userdata(data) }
     }
 
@@ -469,7 +472,9 @@ impl<'js> Ctx<'js> {
     ///
     /// Returns Err(()) if the userdata is currently being accessed and removing isn't possible.
     /// Returns Ok(None) if userdata of the given type wasn't inserted.
-    pub fn remove_userdata<U: UserData<'js>>(&self) -> StdResult<Option<Box<U>>, ()> {
+    pub fn remove_userdata<U: UserData<'js>>(
+        &self,
+    ) -> StdResult<Option<Box<U>>, UserDataError<()>> {
         unsafe { self.get_opaque().remove_userdata() }
     }
 
@@ -699,7 +704,6 @@ mod test {
     #[test]
     fn userdata() {
         use crate::{runtime::UserData, Context, Function, Runtime};
-        use std::cell::RefCell;
 
         pub struct MyUserData<'js> {
             base: Function<'js>,
@@ -714,12 +718,20 @@ mod test {
 
         ctx.with(|ctx| {
             let func = ctx.eval("() => 42").catch(&ctx).unwrap();
-            ctx.store_userdata(MyUserData { base: func });
+            ctx.store_userdata(MyUserData { base: func }).unwrap();
         });
 
         ctx.with(|ctx| {
-            let r: usize = ctx.userdata::<MyUserData>().unwrap().base.call(()).unwrap();
+            let userdata = ctx.userdata::<MyUserData>().unwrap();
+
+            assert!(ctx.remove_userdata::<MyUserData>().is_err());
+
+            let r: usize = userdata.base.call(()).unwrap();
             assert_eq!(r, 42)
         });
+
+        ctx.with(|ctx| {
+            ctx.remove_userdata::<MyUserData>().unwrap().unwrap();
+        })
     }
 }
