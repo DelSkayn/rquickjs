@@ -9,6 +9,11 @@ pub struct String<'js>(pub(crate) Value<'js>);
 impl<'js> String<'js> {
     /// Convert the JavaScript string to a Rust string.
     pub fn to_string(&self) -> Result<StdString> {
+       self.as_str().map(|s|s.into())
+    }
+
+     /// Convert the JavaScript string to a string slice.
+     pub fn as_str(&self) -> Result<&str> {
         let mut len = mem::MaybeUninit::uninit();
         let ptr = unsafe {
             qjs::JS_ToCStringLen(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value())
@@ -20,9 +25,15 @@ impl<'js> String<'js> {
         }
         let len = unsafe { len.assume_init() };
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr as _, len as _) };
-        let result = str::from_utf8(bytes).map(|s| s.into());
+
+        let result = if cfg!(debug_assertions) { 
+            str::from_utf8(bytes)?
+        } else { 
+            unsafe {str::from_utf8_unchecked(bytes)}
+        };
         unsafe { qjs::JS_FreeCString(self.0.ctx.as_ptr(), ptr) };
-        Ok(result?)
+
+       Ok(result)
     }
 
     /// Create a new JavaScript string from an Rust string.
@@ -44,6 +55,7 @@ mod test {
     fn from_javascript() {
         test_with(|ctx| {
             let s: String = ctx.eval(" 'foo bar baz' ").unwrap();
+            assert_eq!(s.as_str().unwrap(), "foo bar baz");
             assert_eq!(s.to_string().unwrap(), "foo bar baz");
         });
     }
