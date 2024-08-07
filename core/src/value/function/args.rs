@@ -1,5 +1,5 @@
 use crate::{
-    function::{Flat, Opt, Rest, This},
+    function::{Flat, Null, Opt, Rest, This},
     qjs, Ctx, FromJs, Function, IntoJs, Result, Value,
 };
 
@@ -293,6 +293,20 @@ impl<'js, T: IntoJs<'js>> IntoArg<'js> for Rest<T> {
 
     fn into_arg(self, args: &mut Args<'js>) -> Result<()> {
         args.push_args(self.0)
+    }
+}
+
+impl<'js, T: IntoJs<'js>> IntoArg<'js> for Null<T> {
+    fn num_args(&self) -> usize {
+        1
+    }
+
+    fn into_arg(self, args: &mut Args<'js>) -> Result<()> {
+        if let Some(x) = self.0 {
+            args.push_arg(x)
+        } else {
+            args.push_arg(Value::new_null(args.ctx().clone()))
+        }
     }
 }
 
