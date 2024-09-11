@@ -15,7 +15,7 @@ use crate::{
     cstr,
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserData, UserDataError, UserDataGuard},
+    runtime::{opaque::Opaque, UserData, UserDataError, UserDataGuard, UserDataMap},
     Atom, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
 };
 
@@ -466,6 +466,13 @@ impl<'js> Ctx<'js> {
         data: U,
     ) -> StdResult<Option<Box<U>>, UserDataError<U>> {
         unsafe { self.get_opaque().insert_userdata(data) }
+    }
+
+    /// Store multiple types in the runtime which can be retrieved later with `Ctx::userdata`.
+    ///
+    /// Returns an error if the userdata is currently being accessed.
+    pub fn extend_userdata(&self, data: UserDataMap) -> StdResult<(), UserDataError<()>> {
+        unsafe { self.get_opaque().extend_userdata(data) }
     }
 
     /// Remove the userdata of the given type from the userdata storage.
