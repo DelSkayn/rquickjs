@@ -26,7 +26,7 @@ pub struct Args<'js> {
 
 impl<'js> Args<'js> {
     /// Returns a new args with space for a give number of arguments
-    pub fn new(ctx: Ctx<'js>, args: usize) -> Args {
+    pub fn new(ctx: Ctx<'js>, args: usize) -> Args<'js> {
         Args {
             ctx,
             this: qjs::JS_UNDEFINED,
@@ -42,7 +42,7 @@ impl<'js> Args<'js> {
     }
 
     /// Returns a new args with space for any number of arguments
-    pub fn new_unsized(ctx: Ctx<'js>) -> Args {
+    pub fn new_unsized(ctx: Ctx<'js>) -> Args<'js> {
         Args {
             ctx,
             this: qjs::JS_UNDEFINED,

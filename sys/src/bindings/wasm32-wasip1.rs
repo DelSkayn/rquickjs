@@ -1227,7 +1227,13 @@ extern "C" {
     pub fn JS_GetException(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
+    pub fn JS_HasException(ctx: *mut JSContext) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn JS_IsError(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_SetUncatchableError(ctx: *mut JSContext, val: JSValue, flag: ::std::os::raw::c_int);
 }
 extern "C" {
     pub fn JS_ResetUncatchableError(ctx: *mut JSContext);
@@ -1278,6 +1284,19 @@ extern "C" {
 }
 extern "C" {
     pub fn __JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
+}
+extern "C" {
+    pub fn JS_StrictEq(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_SameValue(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_SameValueZero(
+        ctx: *mut JSContext,
+        op1: JSValue,
+        op2: JSValue,
+    ) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_ToBool(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
@@ -1659,6 +1678,26 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_GetArrayBuffer(ctx: *mut JSContext, psize: *mut size_t, obj: JSValue) -> *mut u8;
+}
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C: JSTypedArrayEnum = 0;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_INT8: JSTypedArrayEnum = 1;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8: JSTypedArrayEnum = 2;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_INT16: JSTypedArrayEnum = 3;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16: JSTypedArrayEnum = 4;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_INT32: JSTypedArrayEnum = 5;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32: JSTypedArrayEnum = 6;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64: JSTypedArrayEnum = 7;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64: JSTypedArrayEnum = 8;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32: JSTypedArrayEnum = 9;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64: JSTypedArrayEnum = 10;
+pub type JSTypedArrayEnum = ::std::os::raw::c_uint;
+extern "C" {
+    pub fn JS_NewTypedArray(
+        ctx: *mut JSContext,
+        argc: ::std::os::raw::c_int,
+        argv: *mut JSValue,
+        array_type: JSTypedArrayEnum,
+    ) -> JSValue;
 }
 extern "C" {
     pub fn JS_GetTypedArrayBuffer(

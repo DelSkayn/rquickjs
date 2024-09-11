@@ -46,7 +46,7 @@ fn download_wasi_sdk() -> PathBuf {
                 uri.as_ref(),
             ])
             .output()
-            .unwrap();
+            .expect("failed to download the WASI SDK with curl");
         println!("curl output: {}", String::from_utf8_lossy(&output.stdout));
         println!("curl err: {}", String::from_utf8_lossy(&output.stderr));
         if !output.status.success() {

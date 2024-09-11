@@ -321,11 +321,11 @@ impl<'js> Object<'js> {
     ///
     /// # Safety
     /// You should be sure that the object actually is the required type.
-    pub unsafe fn ref_typed_array<'a, T: TypedArrayItem>(&'a self) -> &'a TypedArray<T> {
+    pub unsafe fn ref_typed_array<'a, T: TypedArrayItem>(&'a self) -> &'a TypedArray<'js, T> {
         mem::transmute(self)
     }
 
-    pub fn as_typed_array<T: TypedArrayItem>(&self) -> Option<&TypedArray<T>> {
+    pub fn as_typed_array<'a, T: TypedArrayItem>(&self) -> Option<&TypedArray<'js, T>> {
         self.is_typed_array::<T>()
             .then(|| unsafe { self.ref_typed_array() })
     }
