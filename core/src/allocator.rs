@@ -96,22 +96,19 @@ impl AllocatorHolder {
     where
         A: Allocator,
     {
-      let allocator = &mut *(opaque as *mut DynAllocator);
-      let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
-      let rust_count: usize = count.try_into().expect(qjs::SIZE_T_ERROR);
-       allocator.calloc(rust_count, rust_size) as *mut qjs::c_void
+        let allocator = &mut *(opaque as *mut DynAllocator);
+        let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
+        let rust_count: usize = count.try_into().expect(qjs::SIZE_T_ERROR);
+        allocator.calloc(rust_count, rust_size) as *mut qjs::c_void
     }
 
-    unsafe extern "C" fn malloc<A>(
-        opaque: *mut qjs::c_void,
-        size: qjs::size_t,
-    ) -> *mut qjs::c_void
+    unsafe extern "C" fn malloc<A>(opaque: *mut qjs::c_void, size: qjs::size_t) -> *mut qjs::c_void
     where
         A: Allocator,
     {
-       let allocator = &mut *(opaque as *mut DynAllocator);
-       let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
-       allocator.alloc(rust_size) as *mut qjs::c_void
+        let allocator = &mut *(opaque as *mut DynAllocator);
+        let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
+        allocator.alloc(rust_size) as *mut qjs::c_void
     }
 
     unsafe extern "C" fn free<A>(opaque: *mut qjs::c_void, ptr: *mut qjs::c_void)
@@ -138,7 +135,7 @@ impl AllocatorHolder {
     {
         let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
         let allocator = &mut *(opaque as *mut DynAllocator);
-        allocator.realloc(ptr as _,rust_size) as *mut qjs::c_void
+        allocator.realloc(ptr as _, rust_size) as *mut qjs::c_void
     }
 
     unsafe extern "C" fn malloc_usable_size<A>(ptr: *const qjs::c_void) -> qjs::size_t

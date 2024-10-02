@@ -143,14 +143,9 @@ fn main() {
         "libbf.c",
     ];
 
-    let mut patch_files = vec![
-        "get_function_proto.patch",
-        "check_stack_overflow.patch"
-    ];
+    let mut patch_files = vec!["get_function_proto.patch", "check_stack_overflow.patch"];
 
-    let mut defines = vec![
-        ("_GNU_SOURCE".into(), None)
-    ];
+    let mut defines = vec![("_GNU_SOURCE".into(), None)];
 
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
         && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
