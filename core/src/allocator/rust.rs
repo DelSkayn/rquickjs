@@ -35,6 +35,39 @@ fn round_size(size: usize) -> usize {
 pub struct RustAllocator;
 
 unsafe impl Allocator for RustAllocator {
+
+    fn calloc(&mut self, count: usize, size: usize) -> RawMemPtr {
+        if count == 0 || size == 0 {
+            return null_mut();
+        }
+
+        let total_size = count.checked_mul(size).expect("overflow");
+
+        let total_size = round_size(total_size);
+
+        // Calculate the total allocated size including header
+        let alloc_size = HEADER_SIZE + total_size;
+
+        let layout = if let Ok(layout) = Layout::from_size_align(alloc_size, ALLOC_ALIGN) {
+            layout
+        } else {
+            return null_mut();
+        };
+
+        let ptr = unsafe { alloc(layout) };
+
+        if ptr.is_null() {
+            return null_mut();
+        }
+
+        let header = unsafe { &mut *(ptr as *mut Header) };
+        header.size = total_size;
+
+        let ptr = unsafe { ptr.add(HEADER_SIZE) };
+        unsafe { std::ptr::write_bytes(ptr, 0, total_size) };
+        ptr
+    }
+
     fn alloc(&mut self, size: usize) -> *mut u8 {
         let size = round_size(size);
         let alloc_size = size + HEADER_SIZE;

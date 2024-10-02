@@ -1,7 +1,6 @@
 //! Tools for using different allocators with QuickJS.
 
 use crate::qjs;
-use std::ptr;
 
 mod rust;
 
@@ -23,6 +22,11 @@ pub unsafe trait Allocator {
     ///
     ///
     fn alloc(&mut self, size: usize) -> *mut u8;
+
+    /// Allocates memory for an array of num objects of size and initializes all bytes in the allocated storage to zero.
+    ///
+    ///
+    fn calloc(&mut self, count: usize, size: usize) -> RawMemPtr;
 
     /// De-allocate previously allocated memory
     ///
@@ -65,6 +69,7 @@ impl AllocatorHolder {
         A: Allocator,
     {
         qjs::JSMallocFunctions {
+            js_calloc: Some(Self::calloc::<A>),
             js_malloc: Some(Self::malloc::<A>),
             js_free: Some(Self::free::<A>),
             js_realloc: Some(Self::realloc::<A>),
@@ -83,47 +88,33 @@ impl AllocatorHolder {
         self.0
     }
 
-    fn size_t(size: usize) -> qjs::size_t {
-        size.try_into().expect(qjs::SIZE_T_ERROR)
-    }
-
-    unsafe extern "C" fn malloc<A>(
-        state: *mut qjs::JSMallocState,
+    unsafe extern "C" fn calloc<A>(
+        opaque: *mut qjs::c_void,
+        count: qjs::size_t,
         size: qjs::size_t,
     ) -> *mut qjs::c_void
     where
         A: Allocator,
     {
-        if size == 0 {
-            return ptr::null_mut();
-        }
-
-        let state = &mut *state;
-
-        if state.malloc_size + size > state.malloc_limit {
-            return ptr::null_mut();
-        }
-
-        let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
-        // simulate the default behavior of libc::malloc
-
-        let allocator = &mut *(state.opaque as *mut DynAllocator);
-
-        let res = allocator.alloc(rust_size as _);
-
-        if res.is_null() {
-            return ptr::null_mut();
-        }
-
-        let size = A::usable_size(res);
-
-        state.malloc_count += 1;
-        state.malloc_size += Self::size_t(size);
-
-        res as *mut qjs::c_void
+      let allocator = &mut *(opaque as *mut DynAllocator);
+      let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
+      let rust_count: usize = count.try_into().expect(qjs::SIZE_T_ERROR);
+       allocator.calloc(rust_count, rust_size) as *mut qjs::c_void
     }
 
-    unsafe extern "C" fn free<A>(state: *mut qjs::JSMallocState, ptr: *mut qjs::c_void)
+    unsafe extern "C" fn malloc<A>(
+        opaque: *mut qjs::c_void,
+        size: qjs::size_t,
+    ) -> *mut qjs::c_void
+    where
+        A: Allocator,
+    {
+       let allocator = &mut *(opaque as *mut DynAllocator);
+       let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
+       allocator.alloc(rust_size) as *mut qjs::c_void
+    }
+
+    unsafe extern "C" fn free<A>(opaque: *mut qjs::c_void, ptr: *mut qjs::c_void)
     where
         A: Allocator,
     {
@@ -133,56 +124,21 @@ impl AllocatorHolder {
             return;
         }
 
-        let state = &mut *state;
-        state.malloc_count -= 1;
-
-        let size = A::usable_size(ptr as *mut u8);
-
-        let allocator = &mut *(state.opaque as *mut DynAllocator);
+        let allocator = &mut *(opaque as *mut DynAllocator);
         allocator.dealloc(ptr as _);
-
-        state.malloc_size -= Self::size_t(size);
     }
 
     unsafe extern "C" fn realloc<A>(
-        state: *mut qjs::JSMallocState,
+        opaque: *mut qjs::c_void,
         ptr: *mut qjs::c_void,
         size: qjs::size_t,
     ) -> *mut qjs::c_void
     where
         A: Allocator,
     {
-        let state_ref = &mut *state;
-        let allocator = &mut *(state_ref.opaque as *mut DynAllocator);
-
-        // simulate the default behavior of libc::realloc
-        if ptr.is_null() {
-            return Self::malloc::<A>(state, size);
-        } else if size == 0 {
-            Self::free::<A>(state, ptr);
-            return ptr::null_mut();
-        }
-
-        let old_size = Self::size_t(A::usable_size(ptr as *mut u8));
-
-        let new_malloc_size = state_ref.malloc_size - old_size + size;
-        if new_malloc_size > state_ref.malloc_limit {
-            return ptr::null_mut();
-        }
-
-        let ptr = allocator.realloc(ptr as _, size.try_into().expect(qjs::SIZE_T_ERROR))
-            as *mut qjs::c_void;
-
-        if ptr.is_null() {
-            return ptr::null_mut();
-        }
-
-        let actual_size = Self::size_t(A::usable_size(ptr as *mut u8));
-
-        state_ref.malloc_size -= old_size;
-        state_ref.malloc_size += actual_size;
-
-        ptr
+        let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
+        let allocator = &mut *(opaque as *mut DynAllocator);
+        allocator.realloc(ptr as _,rust_size) as *mut qjs::c_void
     }
 
     unsafe extern "C" fn malloc_usable_size<A>(ptr: *const qjs::c_void) -> qjs::size_t

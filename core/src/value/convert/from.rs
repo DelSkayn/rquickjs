@@ -270,7 +270,7 @@ from_js_impls! {
 from_js_impls! {
     val:
     bool => Bool get_bool,
-    i32 => Int get_int,
+    i32 => Float get_float Int get_int,
     f64 => Float get_float Int get_int,
 }
 

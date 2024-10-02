@@ -84,14 +84,6 @@ impl Context {
         ContextBuilder::default()
     }
 
-    pub fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.0.rt.inner.lock();
-        guard.update_stack_top();
-        unsafe { qjs::JS_EnableBignumExt(self.0.ctx.as_ptr(), i32::from(enable)) }
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard)
-    }
-
     /// Returns the associated runtime
     pub fn runtime(&self) -> &Runtime {
         &self.0.rt
@@ -253,9 +245,10 @@ mod test {
         println!("done");
     }
 
+    // Will be improved by https://github.com/quickjs-ng/quickjs/pull/406
     #[test]
     #[should_panic(
-        expected = "Error:[eval_script]:1:4 invalid first character of private name\n    at eval_script:1:4\n"
+        expected = "Error: invalid first character of private name\n    at eval_script:1:1\n"
     )]
     fn exception() {
         test_with(|ctx| {

@@ -32,17 +32,6 @@ pub unsafe fn JS_IsBigInt(v: JSValue) -> bool {
     tag == JS_TAG_BIG_INT
 }
 
-#[inline]
-pub unsafe fn JS_IsBigFloat(v: JSValue) -> bool {
-    let tag = JS_VALUE_GET_TAG(v);
-    tag == JS_TAG_BIG_FLOAT
-}
-
-#[inline]
-pub unsafe fn JS_IsBigDecimal(v: JSValue) -> bool {
-    let tag = JS_VALUE_GET_TAG(v);
-    tag == JS_TAG_BIG_DECIMAL
-}
 
 #[inline]
 pub unsafe fn JS_IsBool(v: JSValue) -> bool {
@@ -157,21 +146,6 @@ pub unsafe fn JS_ToCStringLen(
     val: JSValue,
 ) -> *const c_char {
     JS_ToCStringLen2(ctx, plen as _, val, 0)
-}
-
-#[inline]
-pub unsafe fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> JSValue {
-    JS_GetPropertyInternal(ctx, this_obj, prop, this_obj, 0)
-}
-
-#[inline]
-pub unsafe fn JS_SetProperty(
-    ctx: *mut JSContext,
-    this_obj: JSValue,
-    prop: JSAtom,
-    val: JSValue,
-) -> i32 {
-    JS_SetPropertyInternal(ctx, this_obj, prop, val, this_obj, JS_PROP_THROW as i32)
 }
 
 #[inline]

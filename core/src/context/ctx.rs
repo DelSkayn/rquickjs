@@ -246,34 +246,17 @@ impl<'js> Ctx<'js> {
     where
         S: Into<Vec<u8>>,
     {
-        self.json_parse_ext(json, false)
-    }
-
-    /// Parse json into a JavaScript value, possibly allowing extended syntax support.
-    ///
-    /// If `allow_extensions` is `true`, this function will allow extended json syntax.
-    /// Extended syntax allows comments, single quoted strings, non string property names, trailing
-    /// comma's and hex, oct and binary numbers.
-    pub fn json_parse_ext<S>(&self, json: S, allow_extensions: bool) -> Result<Value<'js>>
-    where
-        S: Into<Vec<u8>>,
-    {
         let src = json.into();
         let len = src.len();
         let src = CString::new(src)?;
         unsafe {
-            let flag = if allow_extensions {
-                qjs::JS_PARSE_JSON_EXT as i32
-            } else {
-                0i32
-            };
+           
             let name = b"<input>\0";
-            let v = qjs::JS_ParseJSON2(
+            let v = qjs::JS_ParseJSON(
                 self.as_ptr(),
                 src.as_ptr().cast(),
                 len.try_into().expect(qjs::SIZE_T_ERROR),
                 name.as_ptr().cast(),
-                flag,
             );
             self.handle_exception(v)?;
             Ok(Value::from_js_value(self.clone(), v))
@@ -547,7 +530,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "'foo' is not defined")]
+    #[should_panic(expected = "foo is not defined")]
     fn eval_with_sloppy_code() {
         use crate::{CatchResultExt, Context, Runtime};
 
@@ -599,7 +582,7 @@ mod test {
     }
 
     #[test]
-    #[should_panic(expected = "'foo' is not defined")]
+    #[should_panic(expected = "foo is not defined")]
     fn eval_with_options_strict_sloppy_code() {
         use crate::{context::EvalOptions, CatchResultExt, Context, Runtime};
 
@@ -642,29 +625,6 @@ mod test {
             assert!(inner_obj.get::<_, bool>("c").unwrap());
             let inner_array: Array = obj.get("d").unwrap();
             assert_eq!(inner_array.get::<i32>(0).unwrap(), 0);
-            assert_eq!(inner_array.get::<String>(1).unwrap(), "foo".to_string());
-        })
-    }
-
-    #[test]
-    fn json_parse_extension() {
-        use crate::{Array, Context, Object, Runtime};
-
-        let runtime = Runtime::new().unwrap();
-        let ctx = Context::full(&runtime).unwrap();
-        ctx.with(|ctx| {
-            let v = ctx
-                .json_parse_ext(
-                    r#"{ a: { "b": 0xf, "c": 0b11 }, "d": [0o17,'foo'], }"#,
-                    true,
-                )
-                .unwrap();
-            let obj = v.into_object().unwrap();
-            let inner_obj: Object = obj.get("a").unwrap();
-            assert_eq!(inner_obj.get::<_, i32>("b").unwrap(), 0xf);
-            assert_eq!(inner_obj.get::<_, i32>("c").unwrap(), 0b11);
-            let inner_array: Array = obj.get("d").unwrap();
-            assert_eq!(inner_array.get::<i32>(0).unwrap(), 0o17);
             assert_eq!(inner_array.get::<String>(1).unwrap(), "foo".to_string());
         })
     }
