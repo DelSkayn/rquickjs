@@ -103,7 +103,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         }
 
         let val = unsafe {
-            let rt =  qjs::JS_GetRuntime(ctx.as_ptr());
+            let rt = qjs::JS_GetRuntime(ctx.as_ptr());
             ctx.handle_exception(qjs::JS_NewObjectClass(
                 ctx.as_ptr(),
                 C::class_id().get(rt) as i32,
@@ -283,15 +283,10 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// returns a pointer to the class object.
     #[inline]
     pub(crate) fn get_class_ptr(&self) -> NonNull<JsCell<'js, C>> {
-
         let ptr = unsafe {
             let ctx_ptr = self.0.ctx.as_ptr();
-            let rt =  qjs::JS_GetRuntime(ctx_ptr);
-            qjs::JS_GetOpaque2(
-                ctx_ptr,
-                self.0 .0.as_js_value(),
-                C::class_id().get(rt),
-            )
+            let rt = qjs::JS_GetRuntime(ctx_ptr);
+            qjs::JS_GetOpaque2(ctx_ptr, self.0 .0.as_js_value(), C::class_id().get(rt))
         };
         NonNull::new(ptr.cast()).expect("invalid class object, object didn't have opaque value")
     }
@@ -343,12 +338,8 @@ impl<'js> Object<'js> {
 
         let ctx_ptr = self.0.ctx.as_ptr();
         let p = unsafe {
-            let rt =  qjs::JS_GetRuntime(ctx_ptr);
-            qjs::JS_GetOpaque2(
-                ctx_ptr,
-                self.0.as_js_value(),
-                C::class_id().get(rt),
-            )
+            let rt = qjs::JS_GetRuntime(ctx_ptr);
+            qjs::JS_GetOpaque2(ctx_ptr, self.0.as_js_value(), C::class_id().get(rt))
         };
         !p.is_null()
     }

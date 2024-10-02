@@ -25,17 +25,17 @@ impl ClassId {
 
     /// Get the class Id.
     /// Will initialize itself if it has not done so.
-    pub fn get(&self,rt: *mut JSRuntime) -> qjs::JSClassID {
+    pub fn get(&self, rt: *mut JSRuntime) -> qjs::JSClassID {
         self.init(rt);
         self.id.get()
     }
 
     /// Initialize the class ID.
     /// Can be called multiple times but will only be initialized once.
-    fn init(&self,rt: *mut JSRuntime) {
+    fn init(&self, rt: *mut JSRuntime) {
         self.once.call_once(|| {
             let mut id = 0;
-            unsafe { qjs::JS_NewClassID(rt,&mut id) };
+            unsafe { qjs::JS_NewClassID(rt, &mut id) };
             self.id.set(id);
         })
     }

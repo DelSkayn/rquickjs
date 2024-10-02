@@ -251,7 +251,6 @@ impl<'js> Ctx<'js> {
         let len = src.len();
         let src = CString::new(src)?;
         unsafe {
-           
             let name = b"<input>\0";
             let v = qjs::JS_ParseJSON(
                 self.as_ptr(),

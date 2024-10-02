@@ -76,7 +76,6 @@ impl<'js> Exception<'js> {
             .map(|x| x.0)
     }
 
-
     /// Returns the error stack.
     ///
     /// Same as retrieving `error.stack` in JavaScript.
