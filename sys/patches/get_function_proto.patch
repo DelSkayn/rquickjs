@@ -1,9 +1,9 @@
 diff --git a/quickjs.c b/quickjs.c
-index e8fdd8a..fbd48bd 100644
+index 6774f84..8a6f45d 100644
 --- a/quickjs.c
 +++ b/quickjs.c
-@@ -2215,6 +2215,11 @@ JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id)
-     return JS_DupValue(ctx, ctx->class_proto[class_id]);
+@@ -2280,6 +2280,11 @@ JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id)
+     return js_dup(ctx->class_proto[class_id]);
  }
  
 +JSValueConst JS_GetFunctionProto(JSContext *ctx)
@@ -15,14 +15,14 @@ index e8fdd8a..fbd48bd 100644
      JS_FREE_MODULE_ALL,
      JS_FREE_MODULE_NOT_RESOLVED,
 diff --git a/quickjs.h b/quickjs.h
-index 7199936..d9e78ef 100644
+index d449205..48078e6 100644
 --- a/quickjs.h
 +++ b/quickjs.h
-@@ -358,6 +358,7 @@ void JS_SetContextOpaque(JSContext *ctx, void *opaque);
- JSRuntime *JS_GetRuntime(JSContext *ctx);
- void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
- JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
-+JSValueConst JS_GetFunctionProto(JSContext *ctx);
+@@ -323,6 +323,7 @@ JS_EXTERN void JS_SetContextOpaque(JSContext *ctx, void *opaque);
+ JS_EXTERN JSRuntime *JS_GetRuntime(JSContext *ctx);
+ JS_EXTERN void JS_SetClassProto(JSContext *ctx, JSClassID class_id, JSValue obj);
+ JS_EXTERN JSValue JS_GetClassProto(JSContext *ctx, JSClassID class_id);
++JS_EXTERN JSValueConst JS_GetFunctionProto(JSContext *ctx);
  
  /* the following functions are used to select the intrinsic object to
     save memory */

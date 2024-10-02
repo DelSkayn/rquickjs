@@ -202,15 +202,6 @@ impl AsyncContext {
         ContextBuilder::default()
     }
 
-    pub async fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.0.rt.inner.lock().await;
-        guard.runtime.update_stack_top();
-        unsafe { qjs::JS_EnableBignumExt(self.0.ctx.as_ptr(), i32::from(enable)) }
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        guard.drop_pending();
-        mem::drop(guard)
-    }
-
     /// Returns the associated runtime
     pub fn runtime(&self) -> &AsyncRuntime {
         &self.0.rt

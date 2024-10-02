@@ -3,20 +3,8 @@ patch = all #hotfix msvc exports
 $(info patch = $(patch))
 
 ifneq ($(filter hotfix all,$(patch)),)
-PATCHES += error_column_number
 PATCHES += get_function_proto
 PATCHES += check_stack_overflow
-PATCHES += infinity_handling
-PATCHES += atomic_new_class_id
-PATCHES += dynamic_import_sync
-endif
-
-ifneq ($(filter msvc all,$(patch)),)
-PATCHES += basic_msvc_compat
-endif
-
-ifneq ($(filter exports all,$(patch)),)
-PATCHES += read_module_exports
 endif
 
 # apply patches
