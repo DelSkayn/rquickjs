@@ -124,6 +124,14 @@ impl Runtime {
         }
     }
 
+    /// Set debug flags for dumping memory
+    pub fn set_dump_flags(&self, flags: u64) {
+        unsafe {
+            self.inner.lock().set_dump_flags(flags);
+        }
+    }
+
+
     /// Manually run the garbage collection.
     ///
     /// Most of QuickJS values are reference counted and

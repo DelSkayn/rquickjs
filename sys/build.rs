@@ -143,21 +143,10 @@ fn main() {
         "libbf.c",
     ];
 
-    let mut patch_files = vec!["get_function_proto.patch", "check_stack_overflow.patch"];
+    let patch_files = vec!["get_function_proto.patch", "check_stack_overflow.patch"];
 
-    let mut defines = vec![("_GNU_SOURCE".into(), None)];
+    let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
-        && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
-    {
-        patch_files.push("basic_msvc_compat.patch");
-    }
-
-    for feature in &features {
-        if feature.starts_with("dump-") && env::var(feature_to_cargo(feature)).is_ok() {
-            defines.push((feature_to_define(feature), None));
-        }
-    }
 
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
         // pretend we're emscripten - there are already ifdefs that match
