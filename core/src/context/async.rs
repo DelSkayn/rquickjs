@@ -1,5 +1,8 @@
 use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
-use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
+use crate::{
+    context::ctx::RefCountHeader, markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error,
+    Result,
+};
 use std::{future::Future, mem, pin::Pin, ptr::NonNull};
 
 mod future;
@@ -108,7 +111,7 @@ impl Drop for Inner {
             None => {
                 #[cfg(not(feature = "parallel"))]
                 {
-                    let p = unsafe { &mut *(self.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
+                    let p = unsafe { &mut *(self.ctx.as_ptr() as *mut RefCountHeader) };
                     if p.ref_count <= 1 {
                         // Lock was poisoned, this should only happen on a panic.
                         // We should still free the context.
