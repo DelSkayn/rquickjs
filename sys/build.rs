@@ -147,7 +147,6 @@ fn main() {
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
-
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
         // pretend we're emscripten - there are already ifdefs that match
         // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD

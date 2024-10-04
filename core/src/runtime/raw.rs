@@ -18,25 +18,25 @@ use crate::{
 
 use super::{opaque::Opaque, InterruptHandler};
 
-const DUMP_BYTECODE_FINAL: u64   = 0x01;
-const DUMP_BYTECODE_PASS2: u64   = 0x02;
-const DUMP_BYTECODE_PASS1: u64   = 0x04;
-const DUMP_BYTECODE_HEX: u64     = 0x10;
+const DUMP_BYTECODE_FINAL: u64 = 0x01;
+const DUMP_BYTECODE_PASS2: u64 = 0x02;
+const DUMP_BYTECODE_PASS1: u64 = 0x04;
+const DUMP_BYTECODE_HEX: u64 = 0x10;
 const DUMP_BYTECODE_PC2LINE: u64 = 0x20;
-const DUMP_BYTECODE_STACK: u64   = 0x40;
-const DUMP_BYTECODE_STEP: u64    = 0x80;
-const DUMP_READ_OBJECT: u64      = 0x100;
-const DUMP_FREE: u64             = 0x200;
-const DUMP_GC: u64               = 0x400;
-const DUMP_GC_FREE: u64          = 0x800;
-const DUMP_MODULE_RESOLVE: u64   = 0x1000;
-const DUMP_PROMISE: u64          = 0x2000;
-const DUMP_LEAKS: u64            = 0x4000;
-const DUMP_ATOM_LEAKS: u64       = 0x8000;
-const DUMP_MEM: u64              = 0x10000;
-const DUMP_OBJECTS: u64          = 0x20000;
-const DUMP_ATOMS: u64            = 0x40000;
-const DUMP_SHAPES: u64           = 0x80000;
+const DUMP_BYTECODE_STACK: u64 = 0x40;
+const DUMP_BYTECODE_STEP: u64 = 0x80;
+const DUMP_READ_OBJECT: u64 = 0x100;
+const DUMP_FREE: u64 = 0x200;
+const DUMP_GC: u64 = 0x400;
+const DUMP_GC_FREE: u64 = 0x800;
+const DUMP_MODULE_RESOLVE: u64 = 0x1000;
+const DUMP_PROMISE: u64 = 0x2000;
+const DUMP_LEAKS: u64 = 0x4000;
+const DUMP_ATOM_LEAKS: u64 = 0x8000;
+const DUMP_MEM: u64 = 0x10000;
+const DUMP_OBJECTS: u64 = 0x20000;
+const DUMP_ATOMS: u64 = 0x40000;
+const DUMP_SHAPES: u64 = 0x80000;
 
 // Build the flags using `#[cfg]` at compile time
 const fn build_dump_flags() -> u64 {
@@ -45,9 +45,7 @@ const fn build_dump_flags() -> u64 {
 
     #[cfg(feature = "dump-bytecode")]
     {
-        flags |= DUMP_BYTECODE_FINAL
-            | DUMP_BYTECODE_PASS2
-            | DUMP_BYTECODE_PASS1;
+        flags |= DUMP_BYTECODE_FINAL | DUMP_BYTECODE_PASS2 | DUMP_BYTECODE_PASS1;
     }
 
     #[cfg(feature = "dump-gc")]
@@ -107,8 +105,6 @@ const fn build_dump_flags() -> u64 {
 
     flags
 }
-
-
 
 #[derive(Debug)]
 pub(crate) struct RawRuntime {
@@ -328,11 +324,10 @@ impl RawRuntime {
         );
         self.get_opaque().set_interrupt_handler(handler);
     }
-    
+
     fn add_dump_flags(rt: *mut rquickjs_sys::JSRuntime) {
         unsafe {
             qjs::JS_SetDumpFlags(rt, build_dump_flags());
         }
-        
     }
 }

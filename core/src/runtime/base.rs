@@ -131,7 +131,6 @@ impl Runtime {
         }
     }
 
-
     /// Manually run the garbage collection.
     ///
     /// Most of QuickJS values are reference counted and
