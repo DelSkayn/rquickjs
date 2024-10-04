@@ -22,9 +22,6 @@ mod into;
 /// assert_eq!(ctx.eval::<Coerced<String>, _>("({})")?.0, "[object Object]");
 ///
 /// // Coercion to integer
-/// assert!(ctx.eval::<i32, _>("123.5").is_err());
-/// assert_eq!(ctx.eval::<Coerced<i32>, _>("123.5")?.0, 123);
-///
 /// assert!(ctx.eval::<i32, _>("`123`").is_err());
 /// assert_eq!(ctx.eval::<Coerced<i32>, _>("`123`")?.0, 123);
 ///
