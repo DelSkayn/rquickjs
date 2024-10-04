@@ -93,6 +93,11 @@ impl<'js> Drop for Ctx<'js> {
 
 unsafe impl Send for Ctx<'_> {}
 
+#[repr(C)] // Ensure C-compatible memory layout
+pub(crate) struct RefCountHeader {
+    pub ref_count: i32, // `int` in C is usually equivalent to `i32` in Rust
+}
+
 impl<'js> Ctx<'js> {
     pub(crate) fn as_ptr(&self) -> *mut qjs::JSContext {
         self.ctx.as_ptr()

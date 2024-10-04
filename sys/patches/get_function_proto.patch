@@ -8,7 +8,7 @@ index 6774f84..8a6f45d 100644
  
 +JSValueConst JS_GetFunctionProto(JSContext *ctx)
 +{
-+    return ctx->function_proto;
++    return js_dup(ctx->function_proto);
 +}
 +
  typedef enum JSFreeModuleEnum {

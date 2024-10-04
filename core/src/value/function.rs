@@ -151,7 +151,7 @@ impl<'js> Function<'js> {
     /// `Function.prototype`.
     pub fn prototype(ctx: Ctx<'js>) -> Object<'js> {
         let res = unsafe {
-            let v = qjs::JS_DupValue(qjs::JS_GetFunctionProto(ctx.as_ptr()));
+            let v = qjs::JS_GetFunctionProto(ctx.as_ptr());
             Value::from_js_value(ctx, v)
         };
         // as far is I know this should always be an object.

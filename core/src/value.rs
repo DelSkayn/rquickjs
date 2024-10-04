@@ -67,7 +67,7 @@ impl<'js> Hash for Value<'js> {
 impl<'js> Clone for Value<'js> {
     fn clone(&self) -> Self {
         let ctx = self.ctx.clone();
-        let value = unsafe { qjs::JS_DupValue(self.value) };
+        let value = unsafe { qjs::JS_DupValue(ctx.as_ptr(), self.value) };
         Self { ctx, value }
     }
 }
@@ -131,7 +131,7 @@ impl<'js> Value<'js> {
 
     #[inline]
     pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
-        let value = qjs::JS_DupValue(value);
+        let value = qjs::JS_DupValue(ctx.as_ptr(), value);
         Self { ctx, value }
     }
 
@@ -271,7 +271,7 @@ impl<'js> Value<'js> {
     #[allow(unused)]
     #[inline]
     pub(crate) fn new_ptr_const(ctx: Ctx<'js>, tag: qjs::c_int, ptr: *mut qjs::c_void) -> Self {
-        let value = unsafe { qjs::JS_DupValue(qjs::JS_MKPTR(tag, ptr)) };
+        let value = unsafe { qjs::JS_DupValue(ctx.as_ptr(), qjs::JS_MKPTR(tag, ptr)) };
         Self { ctx, value }
     }
 

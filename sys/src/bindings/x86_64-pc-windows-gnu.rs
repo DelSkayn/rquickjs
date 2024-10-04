@@ -62,7 +62,8 @@ pub const JS_DEF_PROP_DOUBLE: u32 = 6;
 pub const JS_DEF_PROP_UNDEFINED: u32 = 7;
 pub const JS_DEF_OBJECT: u32 = 8;
 pub const JS_DEF_ALIAS: u32 = 9;
-pub type size_t = ::std::os::raw::c_ulonglong;
+pub type __darwin_size_t = ::std::os::raw::c_ulonglong;
+pub type size_t = __darwin_size_t;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSRuntime {
@@ -101,36 +102,6 @@ pub const JS_TAG_CATCH_OFFSET: _bindgen_ty_1 = 5;
 pub const JS_TAG_EXCEPTION: _bindgen_ty_1 = 6;
 pub const JS_TAG_FLOAT64: _bindgen_ty_1 = 7;
 pub type _bindgen_ty_1 = ::std::os::raw::c_int;
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct JSRefCountHeader {
-    pub ref_count: ::std::os::raw::c_int,
-}
-#[test]
-fn bindgen_test_layout_JSRefCountHeader() {
-    const UNINIT: ::std::mem::MaybeUninit<JSRefCountHeader> = ::std::mem::MaybeUninit::uninit();
-    let ptr = UNINIT.as_ptr();
-    assert_eq!(
-        ::std::mem::size_of::<JSRefCountHeader>(),
-        4usize,
-        concat!("Size of: ", stringify!(JSRefCountHeader))
-    );
-    assert_eq!(
-        ::std::mem::align_of::<JSRefCountHeader>(),
-        4usize,
-        concat!("Alignment of ", stringify!(JSRefCountHeader))
-    );
-    assert_eq!(
-        unsafe { ::std::ptr::addr_of!((*ptr).ref_count) as usize - ptr as usize },
-        0usize,
-        concat!(
-            "Offset of field: ",
-            stringify!(JSRefCountHeader),
-            "::",
-            stringify!(ref_count)
-        )
-    );
-}
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSValueUnion {
@@ -1347,10 +1318,16 @@ extern "C" {
     pub fn JS_ThrowOutOfMemory(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
-    pub fn __JS_FreeValue(ctx: *mut JSContext, v: JSValue);
+    pub fn JS_FreeValue(ctx: *mut JSContext, v: JSValue);
 }
 extern "C" {
-    pub fn __JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
+    pub fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue);
+}
+extern "C" {
+    pub fn JS_DupValue(ctx: *mut JSContext, v: JSValue) -> JSValue;
+}
+extern "C" {
+    pub fn JS_DupValueRT(rt: *mut JSRuntime, v: JSValue) -> JSValue;
 }
 extern "C" {
     pub fn JS_ToBool(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;

@@ -1,4 +1,4 @@
-use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
+use super::{ctx::RefCountHeader, intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
 use crate::{qjs, Ctx, Error, Result, Runtime};
 use std::{mem, ptr::NonNull};
 
@@ -119,7 +119,7 @@ impl Drop for Context {
         let guard = match self.0.rt.inner.try_lock() {
             Some(x) => x,
             None => {
-                let p = unsafe { &mut *(self.0.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
+                let p = unsafe { &mut *(self.0.ctx.as_ptr() as *mut RefCountHeader) };
                 if p.ref_count <= 1 {
                     // Lock was poisoned, this should only happen on a panic.
                     // We should still free the context.
