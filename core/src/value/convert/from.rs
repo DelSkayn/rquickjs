@@ -1,6 +1,6 @@
 use crate::{
-    convert::List, Array, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type,
-    Value,
+    convert::List, Array, CString, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String,
+    Type, Value,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -45,6 +45,12 @@ impl<'js> FromJs<'js> for char {
                 message: Some("The length of the string converted to char must be 1".into()),
             }),
         }
+    }
+}
+
+impl<'js> FromJs<'js> for CString<'js> {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        String::from_value(value)?.to_cstring()
     }
 }
 

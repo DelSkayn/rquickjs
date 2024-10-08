@@ -1,7 +1,8 @@
 use crate::{
     convert::{IteratorJs, List},
     value::Constructor,
-    Array, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String, Value,
+    Array, CString, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String,
+    Value,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -49,6 +50,18 @@ impl<'js> IntoJs<'js> for &str {
 impl<'js> IntoJs<'js> for char {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         String::from_str(ctx.clone(), self.to_string().as_str()).map(|String(value)| value)
+    }
+}
+
+impl<'js> IntoJs<'js> for CString<'js> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        String::from_str(ctx.clone(), self.as_str()).map(|String(value)| value)
+    }
+}
+
+impl<'js> IntoJs<'js> for &CString<'js> {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        String::from_str(ctx.clone(), self.as_str()).map(|String(value)| value)
     }
 }
 
