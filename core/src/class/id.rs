@@ -32,6 +32,7 @@ impl ClassId {
 
     /// Get the class Id.
     /// Will initialize itself if it has not done so.
+    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn get(&self, rt: *mut JSRuntime) -> qjs::JSClassID {
         let type_id = self.init_type_id();
         let rt_ptr: usize = rt as *const i32 as usize;
@@ -47,7 +48,7 @@ impl ClassId {
 
         read_lock.insert(key, id);
 
-        return id;
+        id
     }
 
     /// Initialize the class ID.
