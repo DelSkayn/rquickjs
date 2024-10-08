@@ -1,6 +1,6 @@
 use crate::{
-    atom, value::Constructor, Array, Atom, BigInt, Exception, Function, Module, Object, Promise,
-    String, Symbol, Value,
+    atom, value::Constructor, Array, Atom, BigInt, CString, Exception, Function, Module, Object,
+    Promise, String, Symbol, Value,
 };
 
 /// The trait which signifies a type using the rquickjs `'js` lifetime trick for maintaining safety around Javascript values.
@@ -97,6 +97,7 @@ outlive_impls! {
     Value,
     Symbol,
     String,
+    CString,
     Object,
     Array,
     BigInt,
