@@ -62,8 +62,7 @@ pub const JS_DEF_PROP_DOUBLE: u32 = 6;
 pub const JS_DEF_PROP_UNDEFINED: u32 = 7;
 pub const JS_DEF_OBJECT: u32 = 8;
 pub const JS_DEF_ALIAS: u32 = 9;
-pub type __darwin_size_t = ::std::os::raw::c_ulonglong;
-pub type size_t = __darwin_size_t;
+pub type size_t = ::std::os::raw::c_ulonglong;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSRuntime {
@@ -1826,7 +1825,7 @@ extern "C" {
 pub const JSPromiseStateEnum_JS_PROMISE_PENDING: JSPromiseStateEnum = 0;
 pub const JSPromiseStateEnum_JS_PROMISE_FULFILLED: JSPromiseStateEnum = 1;
 pub const JSPromiseStateEnum_JS_PROMISE_REJECTED: JSPromiseStateEnum = 2;
-pub type JSPromiseStateEnum = ::std::os::raw::c_uint;
+pub type JSPromiseStateEnum = ::std::os::raw::c_int;
 extern "C" {
     pub fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
 }
@@ -2046,7 +2045,7 @@ pub const JSCFunctionEnum_JS_CFUNC_setter: JSCFunctionEnum = 9;
 pub const JSCFunctionEnum_JS_CFUNC_getter_magic: JSCFunctionEnum = 10;
 pub const JSCFunctionEnum_JS_CFUNC_setter_magic: JSCFunctionEnum = 11;
 pub const JSCFunctionEnum_JS_CFUNC_iterator_next: JSCFunctionEnum = 12;
-pub type JSCFunctionEnum = ::std::os::raw::c_uint;
+pub type JSCFunctionEnum = ::std::os::raw::c_int;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSCFunctionType {
@@ -2925,4 +2924,4 @@ pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 218;
 pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 219;
 pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 220;
 pub const JS_ATOM_END: _bindgen_ty_2 = 221;
-pub type _bindgen_ty_2 = ::std::os::raw::c_uint;
+pub type _bindgen_ty_2 = ::std::os::raw::c_int;
