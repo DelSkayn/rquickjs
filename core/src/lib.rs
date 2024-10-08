@@ -24,7 +24,7 @@ pub use class::Class;
 pub use persistent::{Outlive, Persistent};
 pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 pub use value::{
-    array, atom, convert, function, module, object, promise, Array, Atom, BigInt, Coerced,
+    array, atom, convert, function, module, object, promise, Array, Atom, BigInt, CString, Coerced,
     Exception, Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs,
     Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value,
 };

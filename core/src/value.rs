@@ -22,7 +22,7 @@ pub use function::{Constructor, Function};
 pub use module::Module;
 pub use object::{Filter, Object};
 pub use promise::Promise;
-pub use string::String;
+pub use string::{CString, String};
 pub use symbol::Symbol;
 
 #[cfg(feature = "array-buffer")]
