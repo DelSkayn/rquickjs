@@ -15,11 +15,14 @@ pub struct ClassId {
     type_id: AtomicUsize,
 }
 
-unsafe impl Send for ClassId {}
-unsafe impl Sync for ClassId {}
+#[derive(Eq, Hash, PartialEq)]
+struct ClassIdKey(*mut JSRuntime, usize);
+
+unsafe impl Sync for ClassIdKey {}
+unsafe impl Send for ClassIdKey {}
 
 static CLASS_ID_COUNTER: AtomicUsize = AtomicUsize::new(1);
-static CLASS_ID_MAP: OnceLock<RwLock<HashMap<usize, qjs::JSClassID>>> = OnceLock::new();
+static CLASS_ID_MAP: OnceLock<RwLock<HashMap<ClassIdKey, qjs::JSClassID>>> = OnceLock::new();
 
 impl ClassId {
     /// Create a new class id.
@@ -35,8 +38,7 @@ impl ClassId {
     #[allow(clippy::not_unsafe_ptr_arg_deref)]
     pub fn get(&self, rt: *mut JSRuntime) -> qjs::JSClassID {
         let type_id = self.init_type_id();
-        let rt_ptr: usize = rt as *const i32 as usize;
-        let key = rt_ptr + type_id;
+        let key = ClassIdKey(rt, type_id);
         let class_id_lock = CLASS_ID_MAP.get_or_init(|| RwLock::new(HashMap::new()));
         if let Some(class_id) = class_id_lock.read().unwrap().get(&key) {
             return *class_id;
