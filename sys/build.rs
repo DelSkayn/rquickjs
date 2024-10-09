@@ -302,8 +302,9 @@ where
         .unwrap_or(false)
     {
         println!(
-            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
-            target
+            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}({})`. try the `bindgen` feature instead.",
+            target,
+            env::var("CARGO_BUILD_TARGET").unwrap()
         );
     }
 
