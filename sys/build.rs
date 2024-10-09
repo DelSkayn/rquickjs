@@ -163,7 +163,7 @@ fn main() {
     if target_os == "windows" {
         // && target_env == "msvc" {
         let msvc_build_flags = vec![
-            "/std:c11",
+            "-std=c11",
             // "-Wno-unsafe-buffer-usage",
             // "-Wno-sign-conversion",
             // "-Wno-nonportable-system-include-path",
@@ -172,7 +172,7 @@ fn main() {
             // "-Wno-reserved-macro-identifier",
             // "-Wno-reserved-identifier",
             // "-Wdeprecated-declarations",
-            "/experimental:c11atomics",
+            "-experimental:c11atomics",
             // "-Wno-sign-conversion",
             // "-Wno-implicit-fallthrough",
             // "/wd4100", // -Wno-unused-parameter
