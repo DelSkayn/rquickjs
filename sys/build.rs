@@ -172,7 +172,6 @@ fn main() {
             // "-Wno-reserved-macro-identifier",
             // "-Wno-reserved-identifier",
             // "-Wdeprecated-declarations",
-            "-experimental:c11atomics",
             // "-Wno-sign-conversion",
             // "-Wno-implicit-fallthrough",
             // "/wd4100", // -Wno-unused-parameter
