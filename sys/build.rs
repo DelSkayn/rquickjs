@@ -147,7 +147,44 @@ fn main() {
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
+
+    let mut builder = cc::Build::new();
+    builder
+        .extra_warnings(false)
+        .flag_if_supported("-Wno-implicit-const-int-float-conversion")
+        //.flag("-Wno-array-bounds")
+        //.flag("-Wno-format-truncation")
+        ;
+
+    if target_os == "windows" && target_env == "msvc" {
+        builder.flag_if_supported("-Wno-unsafe-buffer-usage");
+        builder.flag_if_supported("-Wno-sign-conversion");
+        builder.flag_if_supported("-Wno-nonportable-system-include-path");
+        builder.flag_if_supported("-Wno-implicit-int-conversion");
+        builder.flag_if_supported("-Wno-shorten-64-to-32");
+        builder.flag_if_supported("-Wno-reserved-macro-identifier");
+        builder.flag_if_supported("-Wno-reserved-identifier");
+        builder.flag_if_supported("-Wdeprecated-declarations");
+        builder.flag_if_supported("/experimental:c11atomics");
+        builder.flag_if_supported("/wd4018"); // -Wno-sign-conversion
+        builder.flag_if_supported("/wd4061"); // -Wno-implicit-fallthrough
+        builder.flag_if_supported("/wd4100"); // -Wno-unused-parameter
+        builder.flag_if_supported("/wd4200"); // -Wno-zero-length-array
+        builder.flag_if_supported("/wd4242"); // -Wno-shorten-64-to-32
+        builder.flag_if_supported("/wd4244"); // -Wno-shorten-64-to-32
+        builder.flag_if_supported("/wd4245"); // -Wno-sign-compare
+        builder.flag_if_supported("/wd4267"); // -Wno-shorten-64-to-32
+        builder.flag_if_supported("/wd4388"); // -Wno-sign-compare
+        builder.flag_if_supported("/wd4389"); // -Wno-sign-compare
+        builder.flag_if_supported("/wd4710"); // Function not inlined
+        builder.flag_if_supported("/wd4711"); // Function was inlined
+        builder.flag_if_supported("/wd4820"); // Padding added after construct
+        builder.flag_if_supported("/wd5045"); // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+    }
+
+    if target_os == "wasi" {
         // pretend we're emscripten - there are already ifdefs that match
         // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
         defines.push(("EMSCRIPTEN".into(), Some("1")));
@@ -166,8 +203,8 @@ fn main() {
         patch(out_dir, patches_dir.join(file));
     }
 
-    let mut add_cflags = vec![];
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+    let mut bindgen_cflags = vec![];
+    if target_os == "wasi" {
         let wasi_sdk_path = get_wasi_sdk_path();
         if !wasi_sdk_path.try_exists().unwrap() {
             panic!(
@@ -182,7 +219,7 @@ fn main() {
             wasi_sdk_path.join("share/wasi-sysroot").display()
         );
         env::set_var("CFLAGS", &sysroot);
-        add_cflags.push(sysroot);
+        bindgen_cflags.push(sysroot);
     }
 
     // generating bindings
@@ -190,16 +227,8 @@ fn main() {
         out_dir,
         out_dir.join("quickjs.bind.h"),
         &defines,
-        add_cflags,
+        bindgen_cflags,
     );
-
-    let mut builder = cc::Build::new();
-    builder
-        .extra_warnings(false)
-        .flag_if_supported("-Wno-implicit-const-int-float-conversion")
-        //.flag("-Wno-array-bounds")
-        //.flag("-Wno-format-truncation")
-        ;
 
     for (name, value) in &defines {
         builder.define(name, *value);
