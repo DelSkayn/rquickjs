@@ -158,30 +158,40 @@ fn main() {
         //.flag("-Wno-format-truncation")
         ;
 
+    let mut bindgen_cflags = vec![];
+
     if target_os == "windows" && target_env == "msvc" {
-        builder.flag_if_supported("-Wno-unsafe-buffer-usage");
-        builder.flag_if_supported("-Wno-sign-conversion");
-        builder.flag_if_supported("-Wno-nonportable-system-include-path");
-        builder.flag_if_supported("-Wno-implicit-int-conversion");
-        builder.flag_if_supported("-Wno-shorten-64-to-32");
-        builder.flag_if_supported("-Wno-reserved-macro-identifier");
-        builder.flag_if_supported("-Wno-reserved-identifier");
-        builder.flag_if_supported("-Wdeprecated-declarations");
-        builder.flag_if_supported("/experimental:c11atomics");
-        builder.flag_if_supported("/wd4018"); // -Wno-sign-conversion
-        builder.flag_if_supported("/wd4061"); // -Wno-implicit-fallthrough
-        builder.flag_if_supported("/wd4100"); // -Wno-unused-parameter
-        builder.flag_if_supported("/wd4200"); // -Wno-zero-length-array
-        builder.flag_if_supported("/wd4242"); // -Wno-shorten-64-to-32
-        builder.flag_if_supported("/wd4244"); // -Wno-shorten-64-to-32
-        builder.flag_if_supported("/wd4245"); // -Wno-sign-compare
-        builder.flag_if_supported("/wd4267"); // -Wno-shorten-64-to-32
-        builder.flag_if_supported("/wd4388"); // -Wno-sign-compare
-        builder.flag_if_supported("/wd4389"); // -Wno-sign-compare
-        builder.flag_if_supported("/wd4710"); // Function not inlined
-        builder.flag_if_supported("/wd4711"); // Function was inlined
-        builder.flag_if_supported("/wd4820"); // Padding added after construct
-        builder.flag_if_supported("/wd5045"); // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+
+        let msvc_build_flags = vec![
+            "-Wno-unsafe-buffer-usage",
+            "-Wno-sign-conversion",
+            "-Wno-nonportable-system-include-path",
+            "-Wno-implicit-int-conversion",
+            "-Wno-shorten-64-to-32",
+            "-Wno-reserved-macro-identifier",
+            "-Wno-reserved-identifier",
+            "-Wdeprecated-declarations",
+            "/experimental:c11atomics",
+            "/wd4018", // -Wno-sign-conversion
+            "/wd4061", // -Wno-implicit-fallthrough
+            "/wd4100", // -Wno-unused-parameter
+            "/wd4200", // -Wno-zero-length-array
+            "/wd4242", // -Wno-shorten-64-to-32
+            "/wd4244", // -Wno-shorten-64-to-32
+            "/wd4245", // -Wno-sign-compare
+            "/wd4267", // -Wno-shorten-64-to-32
+            "/wd4388", // -Wno-sign-compare
+            "/wd4389", // -Wno-sign-compare
+            "/wd4710", // Function not inlined
+            "/wd4711", // Function was inlined
+            "/wd4820", // Padding added after construct
+            "/wd5045", // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+        ];
+
+        for flag in msvc_build_flags{
+            builder.flag_if_supported(flag);
+            bindgen_cflags.push(flag.into());
+        }
     }
 
     if target_os == "wasi" {
@@ -203,7 +213,7 @@ fn main() {
         patch(out_dir, patches_dir.join(file));
     }
 
-    let mut bindgen_cflags = vec![];
+  
     if target_os == "wasi" {
         let wasi_sdk_path = get_wasi_sdk_path();
         if !wasi_sdk_path.try_exists().unwrap() {
