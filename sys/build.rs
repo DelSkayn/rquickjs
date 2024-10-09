@@ -161,37 +161,43 @@ fn main() {
     let mut bindgen_cflags = vec![];
 
     if target_os == "windows" {
-        // && target_env == "msvc" {
-        let msvc_build_flags = vec![
-            "-std=c11",
-            // "-Wno-unsafe-buffer-usage",
-            // "-Wno-sign-conversion",
-            // "-Wno-nonportable-system-include-path",
-            // "-Wno-implicit-int-conversion",
-            // "-Wno-shorten-64-to-32",
-            // "-Wno-reserved-macro-identifier",
-            // "-Wno-reserved-identifier",
-            // "-Wdeprecated-declarations",
-            // "-Wno-sign-conversion",
-            // "-Wno-implicit-fallthrough",
-            // "/wd4100", // -Wno-unused-parameter
-            // "/wd4200", // -Wno-zero-length-array
-            // "/wd4242", // -Wno-shorten-64-to-32
-            // "/wd4244", // -Wno-shorten-64-to-32
-            // "/wd4245", // -Wno-sign-compare
-            // "/wd4267", // -Wno-shorten-64-to-32
-            // "/wd4388", // -Wno-sign-compare
-            // "/wd4389", // -Wno-sign-compare
-            // "/wd4710", // Function not inlined
-            // "/wd4711", // Function was inlined
-            // "/wd4820", // Padding added after construct
-            // "/wd5045", // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
-        ];
-
-        for flag in msvc_build_flags {
-            builder.flag_if_supported(flag);
-            bindgen_cflags.push(flag.into());
+        if target_env == "msvc" {
+            env::set_var("CFLAGS", "/std:c11 /experimental:c11atomics");
+        } else {
+            env::set_var("CFLAGS", "-std=c11");
         }
+
+        // // && target_env == "msvc" {
+        // let msvc_build_flags = vec![
+        //     "-std=c11",
+        //     // "-Wno-unsafe-buffer-usage",
+        //     // "-Wno-sign-conversion",
+        //     // "-Wno-nonportable-system-include-path",
+        //     // "-Wno-implicit-int-conversion",
+        //     // "-Wno-shorten-64-to-32",
+        //     // "-Wno-reserved-macro-identifier",
+        //     // "-Wno-reserved-identifier",
+        //     // "-Wdeprecated-declarations",
+        //     // "-Wno-sign-conversion",
+        //     // "-Wno-implicit-fallthrough",
+        //     // "/wd4100", // -Wno-unused-parameter
+        //     // "/wd4200", // -Wno-zero-length-array
+        //     // "/wd4242", // -Wno-shorten-64-to-32
+        //     // "/wd4244", // -Wno-shorten-64-to-32
+        //     // "/wd4245", // -Wno-sign-compare
+        //     // "/wd4267", // -Wno-shorten-64-to-32
+        //     // "/wd4388", // -Wno-sign-compare
+        //     // "/wd4389", // -Wno-sign-compare
+        //     // "/wd4710", // Function not inlined
+        //     // "/wd4711", // Function was inlined
+        //     // "/wd4820", // Padding added after construct
+        //     // "/wd5045", // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+        // ];
+
+        // for flag in msvc_build_flags {
+        //     builder.flag_if_supported(flag);
+        //     bindgen_cflags.push(flag.into());
+        // }
     }
 
     if target_os == "wasi" {
@@ -340,6 +346,7 @@ where
         });
     }
 
+    println!("Cflags = {:?}", cflags);
     println!("Bindings for target: {}", target);
 
     let mut builder = bindgen_rs::Builder::default()
