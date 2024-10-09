@@ -47,14 +47,9 @@ impl<'js> Opaque<'js> {
 
     #[cfg(feature = "futures")]
     pub fn with_spawner() -> Self {
-        Opaque {
-            panic: Cell::new(None),
-            interrupt_handler: UnsafeCell::new(None),
-            userdata: UserDataMap::default(),
-            #[cfg(feature = "futures")]
-            spawner: Some(UnsafeCell::new(Spawner::new())),
-            _marker: PhantomData,
-        }
+        let mut this = Opaque::new();
+        this.spawner = Some(UnsafeCell::new(Spawner::new()));
+        this
     }
 
     #[cfg(feature = "futures")]

@@ -41,6 +41,7 @@ unsafe impl Allocator for RustAllocator {
     fn alloc(&mut self, size: usize) -> RawMemPtr {
         let size = round_size(size);
         let alloc_size = size + HEADER_SIZE;
+
         let layout = if let Ok(layout) = Layout::from_size_align(alloc_size, ALLOC_ALIGN) {
             layout
         } else {
@@ -52,56 +53,44 @@ unsafe impl Allocator for RustAllocator {
         if ptr.is_null() {
             return null_mut();
         }
-        {
-            let header = unsafe { &mut *(ptr as *mut Header) };
-            header.size = size;
+
+        unsafe {
+            ptr.cast::<Header>().write(Header { size });
+            ptr.add(HEADER_SIZE)
         }
-
-        unsafe { ptr.add(HEADER_SIZE) }
     }
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     unsafe fn dealloc(&mut self, ptr: RawMemPtr) {
-        let ptr = unsafe { ptr.sub(HEADER_SIZE) };
-        let alloc_size = {
-            let header = unsafe { &*(ptr as *const Header) };
-            header.size + HEADER_SIZE
-        };
-        let layout = unsafe { Layout::from_size_align_unchecked(alloc_size, ALLOC_ALIGN) };
+        let ptr = ptr.sub(HEADER_SIZE);
+        let alloc_size = ptr.cast::<Header>().read().size + HEADER_SIZE;
+        let layout = Layout::from_size_align_unchecked(alloc_size, ALLOC_ALIGN);
 
-        unsafe { dealloc(ptr, layout) };
+        dealloc(ptr, layout);
     }
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     unsafe fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr {
         let new_size = round_size(new_size);
-        let ptr = unsafe { ptr.sub(HEADER_SIZE) };
-        let alloc_size = {
-            let header = unsafe { &*(ptr as *const Header) };
-            header.size + HEADER_SIZE
-        };
-        let layout = unsafe { Layout::from_size_align_unchecked(alloc_size, ALLOC_ALIGN) };
+        let ptr = ptr.sub(HEADER_SIZE);
+        let alloc_size = ptr.cast::<Header>().read().size;
+        let layout = Layout::from_size_align_unchecked(alloc_size, ALLOC_ALIGN);
 
         let new_alloc_size = new_size + HEADER_SIZE;
 
-        let ptr = unsafe { realloc(ptr, layout, new_alloc_size) };
+        let ptr = realloc(ptr, layout, new_alloc_size);
 
         if ptr.is_null() {
             return null_mut();
         }
-        {
-            let header = unsafe { &mut *(ptr as *mut Header) };
-            header.size = new_size;
-        }
 
-        unsafe { ptr.add(HEADER_SIZE) }
+        ptr.cast::<Header>().write(Header {
+            size: new_alloc_size,
+        });
+        ptr.add(HEADER_SIZE)
     }
 
-    #[allow(clippy::not_unsafe_ptr_arg_deref)]
     unsafe fn usable_size(ptr: RawMemPtr) -> usize {
-        let ptr = unsafe { ptr.sub(HEADER_SIZE) };
-        let header = unsafe { &*(ptr as *const Header) };
-        header.size
+        let ptr = ptr.sub(HEADER_SIZE);
+        ptr.cast::<Header>().read().size
     }
 }
 
