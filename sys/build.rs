@@ -161,7 +161,6 @@ fn main() {
     let mut bindgen_cflags = vec![];
 
     if target_os == "windows" && target_env == "msvc" {
-
         let msvc_build_flags = vec![
             "-Wno-unsafe-buffer-usage",
             "-Wno-sign-conversion",
@@ -188,7 +187,7 @@ fn main() {
             "/wd5045", // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
         ];
 
-        for flag in msvc_build_flags{
+        for flag in msvc_build_flags {
             builder.flag_if_supported(flag);
             bindgen_cflags.push(flag.into());
         }
@@ -213,7 +212,6 @@ fn main() {
         patch(out_dir, patches_dir.join(file));
     }
 
-  
     if target_os == "wasi" {
         let wasi_sdk_path = get_wasi_sdk_path();
         if !wasi_sdk_path.try_exists().unwrap() {
