@@ -304,7 +304,7 @@ where
         println!(
             "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}({})`. try the `bindgen` feature instead.",
             target,
-            env::var("CARGO_TARGET_TMPDIR").unwrap_or("n/a".into())
+            env::var("BUILD_TARGET").unwrap_or("n/a".into())
         );
     }
 
