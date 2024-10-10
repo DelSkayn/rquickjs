@@ -80,7 +80,7 @@ impl<'js> Opaque<'js> {
         qjs::JS_NewClassID((&mut self.callable_class_id) as *mut qjs::JSClassID);
 
         let class_def = qjs::JSClassDef {
-            class_name: c"RustClass".as_ptr(),
+            class_name: b"RustClass\0".as_ptr().cast(),
             finalizer: Some(class::ffi::class_finalizer),
             gc_mark: Some(class::ffi::class_trace),
             call: None,
@@ -92,7 +92,7 @@ impl<'js> Opaque<'js> {
         }
 
         let class_def = qjs::JSClassDef {
-            class_name: c"RustFunction".as_ptr(),
+            class_name: b"RustFunction\0".as_ptr().cast(),
             finalizer: Some(class::ffi::callable_finalizer),
             gc_mark: Some(class::ffi::callable_trace),
             call: Some(class::ffi::call),
