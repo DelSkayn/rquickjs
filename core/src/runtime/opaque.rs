@@ -1,4 +1,5 @@
 use rquickjs_sys::JSRuntime;
+use tinyvec::TinyVec;
 
 use crate::qjs;
 
@@ -9,7 +10,6 @@ use super::{
 use std::{
     any::Any,
     cell::{Cell, UnsafeCell},
-    collections::HashMap,
     marker::PhantomData,
 };
 
@@ -22,9 +22,6 @@ use std::{
     task::{Context, Waker},
 };
 
-#[derive(Eq, Hash, PartialEq)]
-pub struct ClassIdKey(pub *mut JSRuntime, pub usize);
-
 /// Opaque book keeping data for Rust.
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
@@ -33,7 +30,7 @@ pub(crate) struct Opaque<'js> {
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
 
-    class_id_map: HashMap<ClassIdKey, qjs::JSClassID>,
+    class_ids: TinyVec<[qjs::JSClassID; 1024]>,
 
     userdata: UserDataMap,
 
@@ -48,7 +45,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
-            class_id_map: HashMap::new(),
+            class_ids: TinyVec::from([0; 1024]),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: None,
@@ -61,7 +58,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
-            class_id_map: HashMap::new(),
+            class_ids: TinyVec::from([0; 1024]),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: Some(UnsafeCell::new(Spawner::new())),
@@ -133,7 +130,24 @@ impl<'js> Opaque<'js> {
         self.panic.take()
     }
 
-    pub(crate) fn get_class_id_map(&mut self) -> &mut HashMap<ClassIdKey, u32> {
-        &mut self.class_id_map
+    pub(crate) fn register_class(&mut self, rt: *mut JSRuntime, type_id: u32) -> qjs::JSClassID {
+        let type_id = type_id as usize;
+        let old_capacity = self.class_ids.capacity();
+        if type_id < old_capacity {
+            let id = self.class_ids.get(type_id).unwrap_or(&0);
+            if id != &0 {
+                return *id;
+            }
+        } else {
+            self.class_ids.reserve(1);
+            let new_capacity = self.class_ids.capacity();
+            for _ in old_capacity..new_capacity {
+                self.class_ids.push(0);
+            }
+        }
+        let mut id = 0;
+        unsafe { qjs::JS_NewClassID(rt, &mut id) };
+        self.class_ids[type_id] = id;
+        id
     }
 }
