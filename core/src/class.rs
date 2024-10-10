@@ -345,14 +345,18 @@ impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    use std::{
+        borrow::Borrow,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
     };
 
     use crate::{
         class::{JsClass, Readable, Trace, Tracer, Writable},
         function::This,
+        prelude::Func,
         test_with,
         value::Constructor,
         CatchResultExt, Class, Context, FromJs, Function, IntoJs, Object, Runtime,
@@ -544,6 +548,85 @@ mod test {
         test_with(|ctx| {
             let proto = Class::<X>::prototype(&ctx).unwrap().unwrap();
             assert_eq!(proto.get::<_, String>("foo").unwrap(), "bar")
+        })
+    }
+
+    #[test]
+    fn generic_types() {
+        pub struct DebugPrinter<D: std::fmt::Debug> {
+            d: D,
+        }
+
+        impl<'js, D: std::fmt::Debug> Trace<'js> for DebugPrinter<D> {
+            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        impl<'js, D: std::fmt::Debug + 'static> JsClass<'js> for DebugPrinter<D> {
+            const NAME: &'static str = "DebugPrinter";
+
+            type Mutable = Readable;
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<Object<'js>>> {
+                let object = Object::new(ctx.clone())?;
+                object.set(
+                    "to_debug_string",
+                    Function::new(
+                        ctx.clone(),
+                        |this: This<Class<DebugPrinter<D>>>| -> crate::Result<String> {
+                            Ok(format!("{:?}", &this.0.borrow().d))
+                        },
+                    ),
+                )?;
+                Ok(Some(object))
+            }
+
+            fn constructor(_ctx: &crate::Ctx<'js>) -> crate::Result<Option<Constructor<'js>>> {
+                Ok(None)
+            }
+        }
+
+        test_with(|ctx| {
+            let a = Class::instance(ctx.clone(), DebugPrinter { d: 42usize });
+            let b = Class::instance(
+                ctx.clone(),
+                DebugPrinter {
+                    d: "foo".to_string(),
+                },
+            );
+
+            ctx.globals().set("a", a).unwrap();
+            ctx.globals().set("b", b).unwrap();
+
+            assert_eq!(
+                ctx.eval::<String, _>(r#" a.to_debug_string() "#).unwrap(),
+                "42"
+            );
+            assert_eq!(
+                ctx.eval::<String, _>(r#" b.to_debug_string() "#).unwrap(),
+                "\"foo\""
+            );
+
+            if ctx
+                .globals()
+                .get::<_, Class<DebugPrinter<String>>>("a")
+                .is_ok()
+            {
+                panic!("Conversion should fail")
+            }
+            if ctx
+                .globals()
+                .get::<_, Class<DebugPrinter<usize>>>("b")
+                .is_ok()
+            {
+                panic!("Conversion should fail")
+            }
+
+            ctx.globals()
+                .get::<_, Class<DebugPrinter<usize>>>("a")
+                .unwrap();
+            ctx.globals()
+                .get::<_, Class<DebugPrinter<String>>>("b")
+                .unwrap();
         })
     }
 }
