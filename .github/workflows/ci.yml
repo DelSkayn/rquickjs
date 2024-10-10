@@ -381,7 +381,9 @@ jobs:
           overwrite: true
       - name: Build
         if: ${{ !matrix.no-build }}
-        run: cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+        run: |
+          cargo clean
+          cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         if: ${{ !matrix.no-build && !matrix.no-test }}
         timeout-minutes: 12
