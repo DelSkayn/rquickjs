@@ -121,8 +121,8 @@ impl Drop for RawRuntime {
         unsafe {
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
             let opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            qjs::JS_FreeRuntime(self.rt.as_ptr());
             mem::drop(opaque);
-            qjs::JS_FreeRuntime(self.rt.as_ptr())
         }
     }
 }

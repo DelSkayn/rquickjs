@@ -1,3 +1,7 @@
+use rquickjs_sys::JSRuntime;
+
+use crate::qjs;
+
 use super::{
     userdata::{UserDataGuard, UserDataMap},
     InterruptHandler, UserData, UserDataError,
@@ -5,6 +9,7 @@ use super::{
 use std::{
     any::Any,
     cell::{Cell, UnsafeCell},
+    collections::HashMap,
     marker::PhantomData,
 };
 
@@ -17,6 +22,9 @@ use std::{
     task::{Context, Waker},
 };
 
+#[derive(Eq, Hash, PartialEq)]
+pub struct ClassIdKey(pub *mut JSRuntime, pub usize);
+
 /// Opaque book keeping data for Rust.
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
@@ -24,6 +32,8 @@ pub(crate) struct Opaque<'js> {
 
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
+
+    class_id_map: UnsafeCell<HashMap<ClassIdKey, qjs::JSClassID>>,
 
     userdata: UserDataMap,
 
@@ -38,6 +48,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
+            class_id_map: UnsafeCell::new(HashMap::new()),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: None,
@@ -50,6 +61,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
+            class_id_map: UnsafeCell::new(HashMap::new()),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: Some(UnsafeCell::new(Spawner::new())),
@@ -119,5 +131,9 @@ impl<'js> Opaque<'js> {
 
     pub fn take_panic(&self) -> Option<Box<dyn Any + Send + 'static>> {
         self.panic.take()
+    }
+
+    pub(crate) fn get_class_id_map(&self) -> &mut HashMap<ClassIdKey, u32> {
+        unsafe { &mut *self.class_id_map.get() }
     }
 }
