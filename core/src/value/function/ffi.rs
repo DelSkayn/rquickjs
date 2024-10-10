@@ -1,12 +1,11 @@
 use std::panic::AssertUnwindSafe;
 
 use crate::{
-    class::{Class, ClassId, JsClass, Readable, Trace, Tracer},
+    class::{JsCell, JsClass, Readable, Trace, Tracer},
     qjs,
     value::function::{Params, StaticJsFunction},
-    Ctx, FromJs, Function, Object, Outlive, Result, Value,
+    Ctx, Function, Object, Outlive, Result, Value,
 };
-pub use mac::static_fn;
 
 use super::Constructor;
 
@@ -82,14 +81,6 @@ where
 /// this class.
 pub struct RustFunction<'js>(pub Box<dyn RustFunc<'js> + 'js>);
 
-/// The static function which is called when JavaScript calls an instance of [`RustFunction`].
-fn call_rust_func_class<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>> {
-    let this = Class::<RustFunction>::from_js(params.ctx(), params.function())?;
-    // RustFunction isn't readable this always succeeds.
-    let borrow = this.borrow();
-    (*borrow).0.call(params)
-}
-
 unsafe impl<'js> Outlive<'js> for RustFunction<'js> {
     type Target<'to> = RustFunction<'to>;
 }
@@ -103,10 +94,7 @@ impl<'js> JsClass<'js> for RustFunction<'js> {
 
     type Mutable = Readable;
 
-    fn class_id() -> &'static crate::class::ClassId {
-        static ID: ClassId = ClassId::new();
-        &ID
-    }
+    const CALLABLE: bool = true;
 
     fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
         Ok(Some(Function::prototype(ctx.clone())))
@@ -116,26 +104,7 @@ impl<'js> JsClass<'js> for RustFunction<'js> {
         Ok(None)
     }
 
-    fn function() -> Option<StaticJsFn> {
-        Some(static_fn!(call_rust_func_class))
+    fn call<'a>(this: &JsCell<'js, Self>, params: Params<'a, 'js>) -> Result<Value<'js>> {
+        this.borrow().0.call(params)
     }
-}
-
-mod mac {
-    /// A macro for implementing [`StaticJsFunction`](crate::function::StaticJsFunction) for generic functions.
-    #[macro_export]
-    macro_rules! static_fn {
-        ($f:ident) => {{
-            pub struct CarryFunction;
-            impl $crate::function::StaticJsFunction for CarryFunction {
-                fn call<'a, 'js>(
-                    params: $crate::function::Params<'a, 'js>,
-                ) -> $crate::Result<$crate::Value<'js>> {
-                    $f(params)
-                }
-            }
-            StaticJsFn::new::<CarryFunction>()
-        }};
-    }
-    pub use static_fn;
 }

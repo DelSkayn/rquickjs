@@ -1,10 +1,19 @@
-use std::{ffi::CString, mem, panic, ptr::NonNull, result::Result as StdResult};
+use std::{
+    ffi::CString,
+    mem,
+    panic::{self, AssertUnwindSafe},
+    ptr::NonNull,
+    result::Result as StdResult,
+};
 
 #[cfg(feature = "allocator")]
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
-use crate::qjs::{self, size_t};
+use crate::{
+    qjs::{self, size_t},
+    Error, Result,
+};
 
 use super::{opaque::Opaque, InterruptHandler};
 
@@ -31,15 +40,16 @@ impl Drop for RawRuntime {
     fn drop(&mut self) {
         unsafe {
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
-            let opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            let mut opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            opaque.clear();
+            qjs::JS_FreeRuntime(self.rt.as_ptr());
             mem::drop(opaque);
-            qjs::JS_FreeRuntime(self.rt.as_ptr())
         }
     }
 }
 
 impl RawRuntime {
-    pub unsafe fn new(opaque: Opaque<'static>) -> Option<Self> {
+    pub unsafe fn new(opaque: Opaque<'static>) -> Result<Self> {
         #[cfg(not(feature = "rust-alloc"))]
         return Self::new_base(opaque);
 
@@ -48,14 +58,16 @@ impl RawRuntime {
     }
 
     #[allow(dead_code)]
-    pub unsafe fn new_base(opaque: Opaque<'static>) -> Option<Self> {
+    pub unsafe fn new_base(mut opaque: Opaque<'static>) -> Result<Self> {
         let rt = qjs::JS_NewRuntime();
-        let rt = NonNull::new(rt)?;
+        let rt = NonNull::new(rt).ok_or(Error::Allocation)?;
+
+        opaque.initialize(rt.as_ptr())?;
 
         let opaque = Box::into_raw(Box::new(opaque));
         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
 
-        Some(RawRuntime {
+        Ok(RawRuntime {
             rt,
             info: None,
             #[cfg(feature = "allocator")]
@@ -66,7 +78,7 @@ impl RawRuntime {
     }
 
     #[cfg(feature = "allocator")]
-    pub unsafe fn new_with_allocator<A>(opaque: Opaque<'static>, allocator: A) -> Option<Self>
+    pub unsafe fn new_with_allocator<A>(mut opaque: Opaque<'static>, allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
     {
@@ -75,12 +87,14 @@ impl RawRuntime {
         let opaque_ptr = allocator.opaque_ptr();
 
         let rt = qjs::JS_NewRuntime2(&functions, opaque_ptr as _);
-        let rt = NonNull::new(rt)?;
+        let rt = NonNull::new(rt).ok_or(Error::Allocation)?;
+
+        opaque.initialize(rt.as_ptr())?;
 
         let opaque = Box::into_raw(Box::new(opaque));
         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
 
-        Some(RawRuntime {
+        Ok(RawRuntime {
             rt,
             info: None,
             allocator: Some(allocator),
@@ -184,15 +198,16 @@ impl RawRuntime {
             _rt: *mut qjs::JSRuntime,
             opaque: *mut ::std::os::raw::c_void,
         ) -> ::std::os::raw::c_int {
-            let catch_unwind = panic::catch_unwind(move || {
-                let opaque = &*(opaque as *mut Opaque);
-                opaque.run_interrupt_handler()
-            });
+            // This should be safe as the value is set below to a non-null pointer.
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+                opaque.as_ref().run_interrupt_handler()
+            }));
             let should_interrupt = match catch_unwind {
                 Ok(should_interrupt) => should_interrupt,
                 Err(panic) => {
-                    let opaque = &mut *(opaque as *mut Opaque);
-                    opaque.set_panic(panic);
+                    opaque.as_ref().set_panic(panic);
                     // Returning true here will cause the interpreter to raise an un-catchable exception.
                     // The Rust code that is running the interpreter will see that exception and continue
                     // the panic handling. See crate::result::{handle_exception, handle_panic} for details.

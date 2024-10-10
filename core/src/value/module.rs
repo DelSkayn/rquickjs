@@ -9,8 +9,8 @@ use std::{
 };
 
 use crate::{
-    atom::PredefinedAtom, qjs, Atom, Context, Ctx, Error, FromAtom, FromJs, IntoAtom, IntoJs,
-    Object, Promise, Result, Value,
+    atom::PredefinedAtom, qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoAtom, IntoJs, Object,
+    Promise, Result, Value,
 };
 
 /// Helper macro to provide module init function.
@@ -328,7 +328,6 @@ impl<'js> Module<'js, Declared> {
     where
         D: ModuleDef,
     {
-        Context::init_raw(ctx);
         let ctx = Ctx::from_ptr(ctx);
         let name = CStr::from_ptr(name).to_bytes();
         match Self::declare_def::<D, _>(ctx.clone(), name) {
