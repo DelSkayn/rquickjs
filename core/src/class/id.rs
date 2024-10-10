@@ -30,7 +30,7 @@ impl ClassId {
         let type_id = self.init_type_id();
         let key = ClassIdKey(rt, type_id);
 
-        let opaque = unsafe { &(*qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>()) };
+        let opaque = unsafe { &mut (*qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>()) };
 
         let id = opaque.get_class_id_map().entry(key).or_insert_with(|| {
             let mut id = 0;

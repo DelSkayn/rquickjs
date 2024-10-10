@@ -33,7 +33,7 @@ pub(crate) struct Opaque<'js> {
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
 
-    class_id_map: UnsafeCell<HashMap<ClassIdKey, qjs::JSClassID>>,
+    class_id_map: HashMap<ClassIdKey, qjs::JSClassID>,
 
     userdata: UserDataMap,
 
@@ -48,7 +48,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
-            class_id_map: UnsafeCell::new(HashMap::new()),
+            class_id_map: HashMap::new(),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: None,
@@ -61,7 +61,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
-            class_id_map: UnsafeCell::new(HashMap::new()),
+            class_id_map: HashMap::new(),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: Some(UnsafeCell::new(Spawner::new())),
@@ -133,7 +133,7 @@ impl<'js> Opaque<'js> {
         self.panic.take()
     }
 
-    pub(crate) fn get_class_id_map(&self) -> &mut HashMap<ClassIdKey, u32> {
-        unsafe { &mut *self.class_id_map.get() }
+    pub(crate) fn get_class_id_map(&mut self) -> &mut HashMap<ClassIdKey, u32> {
+        &mut self.class_id_map
     }
 }
