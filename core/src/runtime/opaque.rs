@@ -1,3 +1,8 @@
+use rquickjs_sys::JSRuntime;
+use tinyvec::TinyVec;
+
+use crate::qjs;
+
 use super::{
     userdata::{UserDataGuard, UserDataMap},
     InterruptHandler, UserData, UserDataError,
@@ -25,6 +30,8 @@ pub(crate) struct Opaque<'js> {
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
 
+    class_ids: TinyVec<[qjs::JSClassID; 1024]>,
+
     userdata: UserDataMap,
 
     #[cfg(feature = "futures")]
@@ -38,6 +45,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
+            class_ids: TinyVec::from([0; 1024]),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: None,
@@ -50,6 +58,7 @@ impl<'js> Opaque<'js> {
         Opaque {
             panic: Cell::new(None),
             interrupt_handler: UnsafeCell::new(None),
+            class_ids: TinyVec::from([0; 1024]),
             userdata: UserDataMap::default(),
             #[cfg(feature = "futures")]
             spawner: Some(UnsafeCell::new(Spawner::new())),
@@ -119,5 +128,26 @@ impl<'js> Opaque<'js> {
 
     pub fn take_panic(&self) -> Option<Box<dyn Any + Send + 'static>> {
         self.panic.take()
+    }
+
+    pub(crate) fn register_class(&mut self, rt: *mut JSRuntime, type_id: u32) -> qjs::JSClassID {
+        let type_id = type_id as usize;
+        let old_capacity = self.class_ids.capacity();
+        if type_id < old_capacity {
+            let id = self.class_ids.get(type_id).unwrap_or(&0);
+            if id != &0 {
+                return *id;
+            }
+        } else {
+            self.class_ids.reserve(1);
+            let new_capacity = self.class_ids.capacity();
+            for _ in old_capacity..new_capacity {
+                self.class_ids.push(0);
+            }
+        }
+        let mut id = 0;
+        unsafe { qjs::JS_NewClassID(rt, &mut id) };
+        self.class_ids[type_id] = id;
+        id
     }
 }

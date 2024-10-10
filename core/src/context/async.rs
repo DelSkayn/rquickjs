@@ -1,5 +1,8 @@
 use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
-use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
+use crate::{
+    context::ctx::RefCountHeader, markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error,
+    Result,
+};
 use std::{future::Future, mem, pin::Pin, ptr::NonNull};
 
 mod future;
@@ -108,7 +111,7 @@ impl Drop for Inner {
             None => {
                 #[cfg(not(feature = "parallel"))]
                 {
-                    let p = unsafe { &mut *(self.ctx.as_ptr() as *mut qjs::JSRefCountHeader) };
+                    let p = unsafe { &mut *(self.ctx.as_ptr() as *mut RefCountHeader) };
                     if p.ref_count <= 1 {
                         // Lock was poisoned, this should only happen on a panic.
                         // We should still free the context.
@@ -200,15 +203,6 @@ impl AsyncContext {
     /// Create a context builder for creating a context with a specific set of intrinsics
     pub fn builder() -> ContextBuilder<()> {
         ContextBuilder::default()
-    }
-
-    pub async fn enable_big_num_ext(&self, enable: bool) {
-        let guard = self.0.rt.inner.lock().await;
-        guard.runtime.update_stack_top();
-        unsafe { qjs::JS_EnableBignumExt(self.0.ctx.as_ptr(), i32::from(enable)) }
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        guard.drop_pending();
-        mem::drop(guard)
     }
 
     /// Returns the associated runtime

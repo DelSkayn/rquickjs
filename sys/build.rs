@@ -130,6 +130,7 @@ fn main() {
         "list.h",
         "quickjs-atom.h",
         "quickjs-opcode.h",
+        "quickjs-c-atomics.h",
         "quickjs.h",
         "cutils.h",
     ];
@@ -142,36 +143,64 @@ fn main() {
         "libbf.c",
     ];
 
-    let mut patch_files = vec![
-        "error_column_number.patch",
-        "get_function_proto.patch",
-        "check_stack_overflow.patch",
-        "infinity_handling.patch",
-    ];
+    let patch_files = vec!["get_function_proto.patch", "check_stack_overflow.patch"];
 
-    let version =
-        fs::read_to_string(src_dir.join("VERSION")).expect("failed to read quickjs VERSION file");
-    let version = format!("\"{}\"", version.trim());
+    let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
-    let mut defines = vec![
-        ("_GNU_SOURCE".into(), None),
-        ("CONFIG_VERSION".into(), Some(version.as_str())),
-        ("CONFIG_BIGNUM".into(), None),
-    ];
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
-        && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
-    {
-        patch_files.push("basic_msvc_compat.patch");
-    }
+    let mut builder = cc::Build::new();
+    builder
+        .extra_warnings(false)
+        .flag_if_supported("-Wno-implicit-const-int-float-conversion")
+        //.flag("-Wno-array-bounds")
+        //.flag("-Wno-format-truncation")
+        ;
 
-    for feature in &features {
-        if feature.starts_with("dump-") && env::var(feature_to_cargo(feature)).is_ok() {
-            defines.push((feature_to_define(feature), None));
+    let mut bindgen_cflags = vec![];
+
+    if target_os == "windows" {
+        if target_env == "msvc" {
+            env::set_var("CFLAGS", "/std:c11 /experimental:c11atomics");
+        } else {
+            env::set_var("CFLAGS", "-std=c11");
         }
+
+        // // && target_env == "msvc" {
+        // let msvc_build_flags = vec![
+        //     "-std=c11",
+        //     // "-Wno-unsafe-buffer-usage",
+        //     // "-Wno-sign-conversion",
+        //     // "-Wno-nonportable-system-include-path",
+        //     // "-Wno-implicit-int-conversion",
+        //     // "-Wno-shorten-64-to-32",
+        //     // "-Wno-reserved-macro-identifier",
+        //     // "-Wno-reserved-identifier",
+        //     // "-Wdeprecated-declarations",
+        //     // "-Wno-sign-conversion",
+        //     // "-Wno-implicit-fallthrough",
+        //     // "/wd4100", // -Wno-unused-parameter
+        //     // "/wd4200", // -Wno-zero-length-array
+        //     // "/wd4242", // -Wno-shorten-64-to-32
+        //     // "/wd4244", // -Wno-shorten-64-to-32
+        //     // "/wd4245", // -Wno-sign-compare
+        //     // "/wd4267", // -Wno-shorten-64-to-32
+        //     // "/wd4388", // -Wno-sign-compare
+        //     // "/wd4389", // -Wno-sign-compare
+        //     // "/wd4710", // Function not inlined
+        //     // "/wd4711", // Function was inlined
+        //     // "/wd4820", // Padding added after construct
+        //     // "/wd5045", // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
+        // ];
+
+        // for flag in msvc_build_flags {
+        //     builder.flag_if_supported(flag);
+        //     bindgen_cflags.push(flag.into());
+        // }
     }
 
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+    if target_os == "wasi" {
         // pretend we're emscripten - there are already ifdefs that match
         // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
         defines.push(("EMSCRIPTEN".into(), Some("1")));
@@ -190,8 +219,7 @@ fn main() {
         patch(out_dir, patches_dir.join(file));
     }
 
-    let mut add_cflags = vec![];
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+    if target_os == "wasi" {
         let wasi_sdk_path = get_wasi_sdk_path();
         if !wasi_sdk_path.try_exists().unwrap() {
             panic!(
@@ -206,7 +234,7 @@ fn main() {
             wasi_sdk_path.join("share/wasi-sysroot").display()
         );
         env::set_var("CFLAGS", &sysroot);
-        add_cflags.push(sysroot);
+        bindgen_cflags.push(sysroot);
     }
 
     // generating bindings
@@ -214,16 +242,8 @@ fn main() {
         out_dir,
         out_dir.join("quickjs.bind.h"),
         &defines,
-        add_cflags,
+        bindgen_cflags,
     );
-
-    let mut builder = cc::Build::new();
-    builder
-        .extra_warnings(false)
-        .flag_if_supported("-Wno-implicit-const-int-float-conversion")
-        //.flag("-Wno-array-bounds")
-        //.flag("-Wno-format-truncation")
-        ;
 
     for (name, value) in &defines {
         builder.define(name, *value);
@@ -282,8 +302,9 @@ where
         .unwrap_or(false)
     {
         println!(
-            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
-            target
+            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}({})`. try the `bindgen` feature instead.",
+            target,
+            env::var("BUILD_TARGET").unwrap_or("n/a".into())
         );
     }
 
@@ -326,6 +347,7 @@ where
         });
     }
 
+    println!("Cflags = {:?}", cflags);
     println!("Bindings for target: {}", target);
 
     let mut builder = bindgen_rs::Builder::default()
