@@ -23,7 +23,7 @@ pub struct Tracer<'a, 'js> {
     /// This trace should not be able to be used with different runtimes
     _inv: Invariant<'js>,
     /// Marker for acting like a reference so that the tracer can't be stored in an object.
-    _marker: PhantomData<&'a ()>,
+    _marker: PhantomData<&'a qjs::JSRuntime>,
 }
 
 impl<'a, 'js> Tracer<'a, 'js> {
@@ -36,6 +36,15 @@ impl<'a, 'js> Tracer<'a, 'js> {
         Self {
             rt,
             mark_func,
+            _inv: Invariant::new(),
+            _marker: PhantomData,
+        }
+    }
+
+    pub(crate) unsafe fn cast_js_lifetime<'js2>(self) -> Tracer<'a, 'js2> {
+        Tracer {
+            rt: self.rt,
+            mark_func: self.mark_func,
             _inv: Invariant::new(),
             _marker: PhantomData,
         }

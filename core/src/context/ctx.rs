@@ -393,8 +393,7 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
-        let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
-        &(*qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>())
+        Opaque::from_runtime_ptr(qjs::JS_GetRuntime(self.ctx.as_ptr()))
     }
 
     /// Spawn future using configured async runtime

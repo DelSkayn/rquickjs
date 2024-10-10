@@ -333,11 +333,6 @@ impl Class {
 
                     type Mutable = #crate_name::class::#mutability;
 
-                    fn class_id() -> &'static #crate_name::class::ClassId{
-                        static ID: #crate_name::class::ClassId =  #crate_name::class::ClassId::new();
-                        &ID
-                    }
-
                     fn prototype(ctx: &#crate_name::Ctx<'js>) -> #crate_name::Result<Option<#crate_name::Object<'js>>>{
                         use #crate_name::class::impl_::MethodImplementor;
 
