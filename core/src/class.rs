@@ -7,6 +7,7 @@ use crate::{
     Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value,
 };
 use std::{
+    any::TypeId,
     hash::Hash,
     marker::PhantomData,
     mem,
@@ -22,13 +23,13 @@ pub(crate) mod ffi;
 pub use cell::{
     Borrow, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable, Writable,
 };
-use ffi::{ClassCell, VTable};
+use ffi::ClassCell;
 pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
 
 /// The trait which allows Rust types to be used from JavaScript.
-pub trait JsClass<'js>: Trace<'js> + Sized {
+pub trait JsClass<'js>: Trace<'js> + Outlive<'js> + Sized {
     /// The name the constructor has in JavaScript
     const NAME: &'static str;
 
@@ -300,15 +301,11 @@ impl<'js> Object<'js> {
         };
 
         // This checks for type equality.
-        // Every class has a unique VTable so if the v table is the the same then the class is the
-        // same.
         unsafe {
-            dbg!(x.cast::<ClassCell<()>>().as_ref().v_table as *const _);
-            dbg!(VTable::get::<C>() as *const _);
-            ptr::eq(
-                x.cast::<ClassCell<()>>().as_ref().v_table,
-                VTable::get::<C>(),
-            )
+            x.cast::<ClassCell<()>>()
+                .as_ref()
+                .v_table
+                .is_of_class::<C>()
         }
     }
 
@@ -347,13 +344,16 @@ impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
 
 #[cfg(test)]
 mod test {
-    use std::sync::{
-        atomic::{AtomicBool, Ordering},
-        Arc,
+    use std::{
+        any::TypeId,
+        sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        },
     };
 
     use crate::{
-        class::{JsClass, Readable, Trace, Tracer, Writable},
+        class::{ClassId, JsClass, JsLtCast, Readable, Trace, Tracer, Writable},
         function::This,
         test_with,
         value::Constructor,
@@ -378,6 +378,13 @@ mod test {
             fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
                 self.inner.iter().for_each(|x| x.trace(tracer))
             }
+        }
+
+        unsafe impl<'js> JsLtCast for Container<'js> {
+            type Cast<'new_js>
+            where
+                Self::Cast<'static>: 'static,
+            = Container<'new_js>;
         }
 
         impl<'js> JsClass<'js> for Container<'js> {
@@ -470,6 +477,12 @@ mod test {
         }
     }
 
+    unsafe impl<'js> ClassId for Vec3 {
+        fn id() -> std::any::TypeId {
+            TypeId::of::<Vec3>()
+        }
+    }
+
     impl<'js> JsClass<'js> for Vec3 {
         const NAME: &'static str = "Vec3";
 
@@ -557,6 +570,12 @@ mod test {
             fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
         }
 
+        unsafe impl ClassId for X {
+            fn id() -> TypeId {
+                TypeId::of::<X>()
+            }
+        }
+
         impl<'js> JsClass<'js> for X {
             const NAME: &'static str = "X";
 
@@ -587,6 +606,12 @@ mod test {
 
         impl<'js, D: std::fmt::Debug> Trace<'js> for DebugPrinter<D> {
             fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        unsafe impl<D: std::fmt::Debug + 'static> ClassId for DebugPrinter<D> {
+            fn id() -> TypeId {
+                TypeId::of::<DebugPrinter<D>>()
+            }
         }
 
         impl<'js, D: std::fmt::Debug + 'static> JsClass<'js> for DebugPrinter<D> {

@@ -39,7 +39,7 @@ use std::{
 ///
 pub unsafe trait Outlive<'js> {
     /// The target which has the same type as a `Self` but with another lifetime `'t`
-    type Target<'to>;
+    type Target<'to>: 'to;
 }
 
 macro_rules! outlive_impls {
@@ -47,6 +47,7 @@ macro_rules! outlive_impls {
         $(
             unsafe impl<'js> Outlive<'js> for $type<'js> {
                 type Target<'to> = $type<'to>;
+                //type Static = $type<'static>;
             }
         )*
     };
@@ -74,6 +75,7 @@ macro_rules! impl_outlive{
                   $($($g: Outlive<'js>,)*)*
             {
                 type Target<'to> = $($ty)::*$(<$($g::Target<'to>,)*>)*;
+                //type Static = $($ty)::*$(<$($g::Static,)*>)*;
             }
         )*
     };
@@ -133,8 +135,8 @@ impl_outlive!(
     atom::PredefinedAtom,
 );
 
-unsafe impl<'js, T> Outlive<'js> for Module<'js, T> {
-    type Target<'to> = Module<'to, T>;
+unsafe impl<'js, T: Outlive<'js>> Outlive<'js> for Module<'js, T> {
+    type Target<'to> = Module<'to, T::Target<'to>>;
 }
 
 /// The wrapper for JS values to keep it from GC

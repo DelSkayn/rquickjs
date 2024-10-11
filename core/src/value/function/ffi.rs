@@ -1,4 +1,4 @@
-use std::panic::AssertUnwindSafe;
+use std::{any::TypeId, panic::AssertUnwindSafe};
 
 use crate::{
     class::{JsCell, JsClass, Readable, Trace, Tracer},
