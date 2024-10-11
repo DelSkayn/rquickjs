@@ -2,8 +2,8 @@ use crate::{
     atom::{self, Atom},
     qjs,
     value::Constructor,
-    Array, BigInt, Ctx, Error, Exception, FromJs, Function, IntoJs, Module, Object, Promise,
-    Result, String, Symbol, Value,
+    Array, BigInt, CString, Ctx, Error, Exception, FromJs, Function, IntoJs, Module, Object,
+    Promise, Result, String, Symbol, Value,
 };
 
 use std::{
@@ -56,6 +56,7 @@ outlive_impls! {
     Value,
     Symbol,
     String,
+    CString,
     Object,
     Array,
     BigInt,
