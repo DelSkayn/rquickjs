@@ -303,6 +303,8 @@ impl<'js> Object<'js> {
         // Every class has a unique VTable so if the v table is the the same then the class is the
         // same.
         unsafe {
+            dbg!(x.cast::<ClassCell<()>>().as_ref().v_table as *const _);
+            dbg!(VTable::get::<C>() as *const _);
             ptr::eq(
                 x.cast::<ClassCell<()>>().as_ref().v_table,
                 VTable::get::<C>(),
@@ -408,6 +410,9 @@ mod test {
                 },
             )
             .unwrap();
+
+            assert!(cls.instance_of::<Container>());
+
             let cls_clone = cls.clone();
             cls.borrow_mut().inner.push(cls_clone);
         });
@@ -621,11 +626,15 @@ mod test {
             ctx.globals().set("b", b).unwrap();
 
             assert_eq!(
-                ctx.eval::<String, _>(r#" a.to_debug_string() "#).unwrap(),
+                ctx.eval::<String, _>(r#" a.to_debug_string() "#)
+                    .catch(&ctx)
+                    .unwrap(),
                 "42"
             );
             assert_eq!(
-                ctx.eval::<String, _>(r#" b.to_debug_string() "#).unwrap(),
+                ctx.eval::<String, _>(r#" b.to_debug_string() "#)
+                    .catch(&ctx)
+                    .unwrap(),
                 "\"foo\""
             );
 
