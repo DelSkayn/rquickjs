@@ -1,6 +1,6 @@
-use std::io::{stdout, Write};
+use std::io::Write;
 
-use rquickjs::{Context, Function, Object, Result, Runtime, Value};
+use rquickjs::{CatchResultExt, Context, Function, Object, Result, Runtime, Value};
 
 fn print(s: String) {
     println!("{s}");
@@ -13,14 +13,14 @@ fn main() -> Result<()> {
     ctx.with(|ctx| -> Result<()> {
         let global = ctx.globals();
         global.set(
-            "print",
-            Function::new(ctx.clone(), print)?.with_name("print")?,
+            "__print",
+            Function::new(ctx.clone(), print)?.with_name("__print")?,
         )?;
         ctx.eval::<(), _>(
             r#"
 globalThis.console = {
-  log(v){
-    globalThis.print(`${v}`);
+  log(...v) {
+    globalThis.__print(`${v.join(" ")}`)
   }
 }
 "#,
@@ -30,11 +30,17 @@ globalThis.console = {
         let js_log: Function = console.get("log")?;
         loop {
             let mut input = String::new();
-            let _ = stdout().write(b"> ")?;
-            stdout().flush()?;
+            print!("> ");
+            std::io::stdout().flush()?;
             std::io::stdin().read_line(&mut input)?;
-            let ret = ctx.eval::<Value, _>(input.as_bytes())?;
-            js_log.call::<(Value<'_>,), ()>((ret,))?;
+            match ctx.eval::<Value, _>(input.as_bytes()).catch(&ctx) {
+                Ok(ret) => {
+                    js_log.call::<(Value<'_>,), ()>((ret,))?;
+                }
+                Err(err) => {
+                    println!("{err}");
+                }
+            }
         }
     })?;
 
