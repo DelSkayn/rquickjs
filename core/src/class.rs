@@ -344,20 +344,17 @@ impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        any::TypeId,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
     };
 
     use crate::{
-        class::{ClassId, JsClass, JsLtCast, Readable, Trace, Tracer, Writable},
+        class::{JsClass, Readable, Trace, Tracer, Writable},
         function::This,
         test_with,
         value::Constructor,
-        CatchResultExt, Class, Context, FromJs, Function, IntoJs, Object, Runtime,
+        CatchResultExt, Class, Context, FromJs, Function, IntoJs, Object, Outlive, Runtime,
     };
 
     /// Test circular references.
@@ -380,11 +377,8 @@ mod test {
             }
         }
 
-        unsafe impl<'js> JsLtCast for Container<'js> {
-            type Cast<'new_js>
-            where
-                Self::Cast<'static>: 'static,
-            = Container<'new_js>;
+        unsafe impl<'js> Outlive<'js> for Container<'js> {
+            type Target<'to> = Container<'to>;
         }
 
         impl<'js> JsClass<'js> for Container<'js> {
@@ -477,10 +471,8 @@ mod test {
         }
     }
 
-    unsafe impl<'js> ClassId for Vec3 {
-        fn id() -> std::any::TypeId {
-            TypeId::of::<Vec3>()
-        }
+    unsafe impl<'js> Outlive<'js> for Vec3 {
+        type Target<'to> = Vec3;
     }
 
     impl<'js> JsClass<'js> for Vec3 {
@@ -570,10 +562,8 @@ mod test {
             fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
         }
 
-        unsafe impl ClassId for X {
-            fn id() -> TypeId {
-                TypeId::of::<X>()
-            }
+        unsafe impl<'js> Outlive<'js> for X {
+            type Target<'to> = X;
         }
 
         impl<'js> JsClass<'js> for X {
@@ -608,10 +598,8 @@ mod test {
             fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
         }
 
-        unsafe impl<D: std::fmt::Debug + 'static> ClassId for DebugPrinter<D> {
-            fn id() -> TypeId {
-                TypeId::of::<DebugPrinter<D>>()
-            }
+        unsafe impl<'js, D: std::fmt::Debug + 'static> Outlive<'js> for DebugPrinter<D> {
+            type Target<'to> = DebugPrinter<D>;
         }
 
         impl<'js, D: std::fmt::Debug + 'static> JsClass<'js> for DebugPrinter<D> {

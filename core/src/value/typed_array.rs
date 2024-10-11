@@ -60,8 +60,8 @@ typedarray_items! {
 #[repr(transparent)]
 pub struct TypedArray<'js, T>(pub(crate) Object<'js>, PhantomData<T>);
 
-unsafe impl<'js, T> Outlive<'js> for TypedArray<'js, T> {
-    type Target<'to> = TypedArray<'to, T>;
+unsafe impl<'js, T: Outlive<'js>> Outlive<'js> for TypedArray<'js, T> {
+    type Target<'to> = TypedArray<'to, T::Target<'to>>;
 }
 
 impl<'js, T> fmt::Debug for TypedArray<'js, T> {
