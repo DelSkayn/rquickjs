@@ -34,9 +34,12 @@ globalThis.console = {
             std::io::stdout().flush()?;
             std::io::stdin().read_line(&mut input)?;
             match ctx.eval::<Value, _>(input.as_bytes()).catch(&ctx) {
-                Ok(ret) => {
-                    js_log.call::<(Value<'_>,), ()>((ret,))?;
-                }
+                Ok(ret) => match js_log.call::<(Value<'_>,), ()>((ret,)) {
+                    Err(err) => {
+                        println!("{err}")
+                    }
+                    Ok(_) => {}
+                },
                 Err(err) => {
                     println!("{err}");
                 }
