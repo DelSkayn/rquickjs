@@ -345,18 +345,14 @@ impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
 
 #[cfg(test)]
 mod test {
-    use std::{
-        borrow::Borrow,
-        sync::{
-            atomic::{AtomicBool, Ordering},
-            Arc,
-        },
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
     };
 
     use crate::{
         class::{JsClass, Readable, Trace, Tracer, Writable},
         function::This,
-        prelude::Func,
         test_with,
         value::Constructor,
         CatchResultExt, Class, Context, FromJs, Function, IntoJs, Object, Runtime,
@@ -432,72 +428,71 @@ mod test {
         });
     }
 
+    #[derive(Clone, Copy)]
+    pub struct Vec3 {
+        x: f32,
+        y: f32,
+        z: f32,
+    }
+
+    impl Vec3 {
+        pub fn new(x: f32, y: f32, z: f32) -> Self {
+            Vec3 { x, y, z }
+        }
+
+        pub fn add(self, v: Vec3) -> Self {
+            Vec3 {
+                x: self.x + v.x,
+                y: self.y + v.y,
+                z: self.z + v.z,
+            }
+        }
+    }
+
+    impl<'js> Trace<'js> for Vec3 {
+        fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+    }
+
+    impl<'js> FromJs<'js> for Vec3 {
+        fn from_js(ctx: &crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
+            Ok(*Class::<Vec3>::from_js(ctx, value)?.try_borrow()?)
+        }
+    }
+
+    impl<'js> IntoJs<'js> for Vec3 {
+        fn into_js(self, ctx: &crate::Ctx<'js>) -> crate::Result<crate::Value<'js>> {
+            Class::instance(ctx.clone(), self).into_js(ctx)
+        }
+    }
+
+    impl<'js> JsClass<'js> for Vec3 {
+        const NAME: &'static str = "Vec3";
+
+        type Mutable = Writable;
+
+        fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
+            let proto = Object::new(ctx.clone())?;
+            let func = Function::new(ctx.clone(), |this: This<Vec3>, other: Vec3| this.add(other))?
+                .with_name("add")?;
+
+            proto.set("add", func)?;
+            Ok(Some(proto))
+        }
+
+        fn constructor(
+            ctx: &crate::Ctx<'js>,
+        ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
+            let constr =
+                Constructor::new_class::<Vec3, _, _>(ctx.clone(), |x: f32, y: f32, z: f32| {
+                    Vec3::new(x, y, z)
+                })?;
+
+            Ok(Some(constr))
+        }
+    }
+
     #[test]
     fn constructor() {
-        #[derive(Clone, Copy)]
-        pub struct Vec3 {
-            x: f32,
-            y: f32,
-            z: f32,
-        }
-
-        impl Vec3 {
-            pub fn new(x: f32, y: f32, z: f32) -> Self {
-                Vec3 { x, y, z }
-            }
-
-            pub fn add(self, v: Vec3) -> Self {
-                Vec3 {
-                    x: self.x + v.x,
-                    y: self.y + v.y,
-                    z: self.z + v.z,
-                }
-            }
-        }
-
-        impl<'js> Trace<'js> for Vec3 {
-            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
-        }
-
-        impl<'js> FromJs<'js> for Vec3 {
-            fn from_js(ctx: &crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
-                Ok(*Class::<Vec3>::from_js(ctx, value)?.try_borrow()?)
-            }
-        }
-
-        impl<'js> IntoJs<'js> for Vec3 {
-            fn into_js(self, ctx: &crate::Ctx<'js>) -> crate::Result<crate::Value<'js>> {
-                Class::instance(ctx.clone(), self).into_js(ctx)
-            }
-        }
-
-        impl<'js> JsClass<'js> for Vec3 {
-            const NAME: &'static str = "Vec3";
-
-            type Mutable = Writable;
-
-            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
-                let proto = Object::new(ctx.clone())?;
-                let func =
-                    Function::new(ctx.clone(), |this: This<Vec3>, other: Vec3| this.add(other))?
-                        .with_name("add")?;
-
-                proto.set("add", func)?;
-                Ok(Some(proto))
-            }
-
-            fn constructor(
-                ctx: &crate::Ctx<'js>,
-            ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
-                let constr =
-                    Constructor::new_class::<Vec3, _, _>(ctx.clone(), |x: f32, y: f32, z: f32| {
-                        Vec3::new(x, y, z)
-                    })?;
-
-                Ok(Some(constr))
-            }
-        }
-
         test_with(|ctx| {
             Class::<Vec3>::define(&ctx.globals()).unwrap();
 
@@ -518,6 +513,34 @@ mod test {
 
             let name: String = ctx.eval("new Vec3(1,2,3).constructor.name").unwrap();
             assert_eq!(name, Vec3::NAME);
+        })
+    }
+
+    #[test]
+    fn extend_class() {
+        test_with(|ctx| {
+            Class::<Vec3>::define(&ctx.globals()).unwrap();
+
+            let v = ctx
+                .eval::<Vec3, _>(
+                    r"
+                    class Vec4 extends Vec3 {
+                        w = 0;
+                        constructor(x,y,z,w){
+                            super(x,y,z);
+                            this.w
+                        }
+                    }
+
+                    new Vec4(1,2,3,4);
+                ",
+                )
+                .catch(&ctx)
+                .unwrap();
+
+            approx::assert_abs_diff_eq!(v.x, 1.0);
+            approx::assert_abs_diff_eq!(v.y, 2.0);
+            approx::assert_abs_diff_eq!(v.z, 3.0);
         })
     }
 

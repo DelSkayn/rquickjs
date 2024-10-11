@@ -7,7 +7,7 @@ use super::{Allocator, RawMemPtr};
 
 /// The largest value QuickJS will allocate is a u64;
 /// So all allocated memory must have the same alignment is this largest size.
-const ALLOC_ALIGN: usize = 8;
+const ALLOC_ALIGN: usize = mem::align_of::<u64>();
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
