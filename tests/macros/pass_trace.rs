@@ -32,7 +32,7 @@ impl<'js> Trace<'js> for C {
     }
 }
 
-#[derive(Trace)]
+#[derive(Trace, JsLifetime)]
 pub struct TraceStruct {
     a: A,
     #[qjs(skip_trace)]
@@ -56,7 +56,7 @@ impl<'js> JsClass<'js> for TraceStruct {
     }
 }
 
-#[derive(Trace)]
+#[derive(Trace, JsLifetime)]
 pub enum TraceEnum {
     A(A),
     B(#[qjs(skip_trace)] B),
