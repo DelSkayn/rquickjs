@@ -1,8 +1,7 @@
 use std::{
     env, fs,
-    io::Write,
     path::{Path, PathBuf},
-    process::{self, Command, Stdio},
+    process::{self},
 };
 
 // WASI logic lifted from https://github.com/bytecodealliance/javy/blob/61616e1507d2bf896f46dc8d72687273438b58b2/crates/quickjs-wasm-sys/build.rs#L18
@@ -116,7 +115,6 @@ fn main() {
     }
 
     let src_dir = Path::new("quickjs");
-    let patches_dir = Path::new("patches");
 
     let out_dir = env::var("OUT_DIR").expect("No OUT_DIR env var is set by cargo");
     let out_dir = Path::new(&out_dir);
@@ -143,8 +141,6 @@ fn main() {
         "libbf.c",
     ];
 
-    let patch_files = vec!["get_function_proto.patch", "check_stack_overflow.patch"];
-
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
@@ -166,38 +162,6 @@ fn main() {
         } else {
             env::set_var("CFLAGS", "-std=c11");
         }
-
-        // // && target_env == "msvc" {
-        // let msvc_build_flags = vec![
-        //     "-std=c11",
-        //     // "-Wno-unsafe-buffer-usage",
-        //     // "-Wno-sign-conversion",
-        //     // "-Wno-nonportable-system-include-path",
-        //     // "-Wno-implicit-int-conversion",
-        //     // "-Wno-shorten-64-to-32",
-        //     // "-Wno-reserved-macro-identifier",
-        //     // "-Wno-reserved-identifier",
-        //     // "-Wdeprecated-declarations",
-        //     // "-Wno-sign-conversion",
-        //     // "-Wno-implicit-fallthrough",
-        //     // "/wd4100", // -Wno-unused-parameter
-        //     // "/wd4200", // -Wno-zero-length-array
-        //     // "/wd4242", // -Wno-shorten-64-to-32
-        //     // "/wd4244", // -Wno-shorten-64-to-32
-        //     // "/wd4245", // -Wno-sign-compare
-        //     // "/wd4267", // -Wno-shorten-64-to-32
-        //     // "/wd4388", // -Wno-sign-compare
-        //     // "/wd4389", // -Wno-sign-compare
-        //     // "/wd4710", // Function not inlined
-        //     // "/wd4711", // Function was inlined
-        //     // "/wd4820", // Padding added after construct
-        //     // "/wd5045", // Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
-        // ];
-
-        // for flag in msvc_build_flags {
-        //     builder.flag_if_supported(flag);
-        //     bindgen_cflags.push(flag.into());
-        // }
     }
 
     if target_os == "wasi" {
@@ -214,10 +178,6 @@ fn main() {
     }
     fs::copy("quickjs.bind.h", out_dir.join("quickjs.bind.h")).expect("Unable to copy source");
 
-    // applying patches
-    for file in &patch_files {
-        patch(out_dir, patches_dir.join(file));
-    }
 
     if target_os == "wasi" {
         let wasi_sdk_path = get_wasi_sdk_path();
@@ -262,24 +222,6 @@ fn feature_to_cargo(name: impl AsRef<str>) -> String {
 
 fn feature_to_define(name: impl AsRef<str>) -> String {
     name.as_ref().to_uppercase().replace('-', "_")
-}
-
-fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
-    let mut child = Command::new("patch")
-        .args(["-p1", "-f"])
-        .stdin(Stdio::piped())
-        .current_dir(out_dir)
-        .spawn()
-        .expect("Unable to execute patch, you may need to install it: {}");
-    println!("Applying patch {}", patch.as_ref().display());
-    {
-        let patch = fs::read(patch).expect("Unable to read patch");
-
-        let stdin = child.stdin.as_mut().unwrap();
-        stdin.write_all(&patch).expect("Unable to apply patch");
-    }
-
-    child.wait_with_output().expect("Unable to apply patch");
 }
 
 #[cfg(not(feature = "bindgen"))]
@@ -346,9 +288,6 @@ where
             format!("-D{}", name.as_ref())
         });
     }
-
-    println!("Cflags = {:?}", cflags);
-    println!("Bindings for target: {}", target);
 
     let mut builder = bindgen_rs::Builder::default()
         .detect_include_paths(true)
