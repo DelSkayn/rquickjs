@@ -56,7 +56,7 @@ pub const JS_NAN: JSValue =
 #[cfg(test)]
 #[test]
 fn test_JS_NAN() {
-    assert_eq!(JS_NAN, 0xfffffff400000000);
+    assert_eq!(JS_NAN, 0xfffffff600000000);
 }
 
 #[inline]
