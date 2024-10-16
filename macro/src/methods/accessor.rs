@@ -1,6 +1,6 @@
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::emit_warning;
 use quote::quote;
+use syn::{Error, Result};
 
 use crate::common::{Case, GET_PREFIX, SET_PREFIX};
 
@@ -19,26 +19,33 @@ impl JsAccessor {
         }
     }
 
-    pub(crate) fn define_get(&mut self, method: Method, rename: Option<Case>) {
+    pub(crate) fn define_get(&mut self, method: Method, rename: Option<Case>) -> Result<()> {
         if let Some(first_getter) = self.get.as_ref() {
             let first_span = first_getter.attr_span;
-            emit_warning!(
-                method.attr_span, "Redefined a getter for `{:?}`.", method.name(rename);
-                hint = first_span => "Getter first defined here."
+
+            let mut error = Error::new(
+                method.attr_span,
+                format_args!("Redefined a getter for `{:?}`.", method.name(rename)),
             );
+            error.combine(Error::new(first_span, "Getter first defined here."));
+            return Err(error);
         }
         self.get = Some(method);
+        Ok(())
     }
 
-    pub(crate) fn define_set(&mut self, method: Method, rename: Option<Case>) {
+    pub(crate) fn define_set(&mut self, method: Method, rename: Option<Case>) -> Result<()> {
         if let Some(first_setter) = self.set.as_ref() {
             let first_span = first_setter.attr_span;
-            emit_warning!(
-                method.attr_span, "Redefined a setter for `{:?}`.", method.name(rename);
-                hint = first_span => "Setter first defined here."
+            let mut error = Error::new(
+                method.attr_span,
+                format_args!("Redefined a setter for `{:?}`.", method.name(rename)),
             );
+            error.combine(Error::new(first_span, "Setter first defined here."));
+            return Err(error);
         }
         self.set = Some(method);
+        Ok(())
     }
 
     pub fn expand_impl(&self) -> TokenStream {

@@ -3,12 +3,10 @@ use std::collections::{hash_map::Entry, HashMap};
 use crate::{
     attrs::{take_attributes, OptionList},
     class::Class,
-    common::AbortResultExt,
 };
 use proc_macro2::{Ident, Span, TokenStream};
-use proc_macro_error::{abort, abort_call_site, emit_warning};
 use quote::quote;
-use syn::{spanned::Spanned, Attribute, ItemFn, ItemMod, UseTree};
+use syn::{spanned::Spanned, Attribute, Error, ItemFn, ItemMod, Result, UseTree};
 
 mod config;
 mod declare;
@@ -34,12 +32,14 @@ impl JsModule {
     pub fn export(&mut self, name: String, span: Span, tokens: TokenStream) {
         match self.declaration.entry(name) {
             Entry::Occupied(mut x) => {
+                /*
                 let first_span = x.get().0;
                 emit_warning!(
                     span,"Module export with name `{}` already exists.", x.key();
                     note = first_span => "First declared here.";
                     info = "Exporting two values with the same name will cause the second value to overwrite the first"
                 );
+                */
                 *x.get_mut() = (span, tokens);
             }
             Entry::Vacant(x) => {
@@ -64,7 +64,7 @@ impl JsModule {
     }
 }
 
-fn parse_item_attrs(attrs: &mut Vec<Attribute>) -> ModuleItemConfig {
+fn parse_item_attrs(attrs: &mut Vec<Attribute>) -> Result<ModuleItemConfig> {
     let mut config = ModuleItemConfig::default();
 
     take_attributes(attrs, |attr| {
@@ -78,13 +78,12 @@ fn parse_item_attrs(attrs: &mut Vec<Attribute>) -> ModuleItemConfig {
         }
 
         Ok(true)
-    })
-    .unwrap_or_abort();
+    })?;
 
-    config
+    Ok(config)
 }
 
-fn parse_type_attrs(attrs: &mut Vec<Attribute>) -> ModuleTypeConfig {
+fn parse_type_attrs(attrs: &mut Vec<Attribute>) -> Result<ModuleTypeConfig> {
     let mut config = ModuleTypeConfig::default();
 
     take_attributes(attrs, |attr| {
@@ -112,21 +111,20 @@ fn parse_type_attrs(attrs: &mut Vec<Attribute>) -> ModuleTypeConfig {
         }
 
         Ok(false)
-    })
-    .unwrap_or_abort();
+    })?;
 
-    config
+    Ok(config)
 }
 
-fn export_use(use_: &UseTree, module: &mut JsModule, config: &ModuleItemConfig) {
+fn export_use(use_: &UseTree, module: &mut JsModule, config: &ModuleItemConfig) -> Result<()> {
     match use_ {
         UseTree::Path(x) => {
-            export_use(&x.tree, module, config);
+            export_use(&x.tree, module, config)?;
         }
         UseTree::Name(x) => {
             let ident = &x.ident;
             let js_name = config.js_name(ident, module.config.rename_types);
-            let crate_name = Ident::new(&module.config.crate_name(), ident.span());
+            let crate_name = Ident::new(&module.config.crate_name()?, ident.span());
             let mod_name = module.name.clone();
             module.export(
                 js_name.clone(),
@@ -144,7 +142,7 @@ fn export_use(use_: &UseTree, module: &mut JsModule, config: &ModuleItemConfig) 
         UseTree::Rename(x) => {
             let ident = &x.rename;
             let js_name = config.js_name(ident, module.config.rename_types);
-            let crate_name = Ident::new(&module.config.crate_name(), ident.span());
+            let crate_name = Ident::new(&module.config.crate_name()?, ident.span());
             let mod_name = module.name.clone();
             module.export(
                 js_name.clone(),
@@ -157,20 +155,19 @@ fn export_use(use_: &UseTree, module: &mut JsModule, config: &ModuleItemConfig) 
                 )
         }
         UseTree::Glob(x) => {
-            emit_warning!(
-                x.star_token,"Using a glob export does not export the items to JavaScript";
-                note = "Please specify each item to be exported individially."
-            )
+            return Err(Error::new(x.star_token.span(),"Using a glob export does not export the items to JavaScript.Please specify each item to be exported individially."))
         }
         UseTree::Group(x) => {
             for i in x.items.iter() {
-                export_use(i, module, config);
+                export_use(i, module, config)?;
             }
         }
     }
+
+    Ok(())
 }
 
-pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> TokenStream {
+pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> Result<TokenStream> {
     let mut config = ModuleConfig::default();
     for option in options.0.iter() {
         config.apply(option)
@@ -189,8 +186,8 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
         }
 
         Ok(true)
-    })
-    .unwrap_or_abort();
+    })?;
+
     let mut module = JsModule::new(config, &item);
 
     let ItemMod {
@@ -200,13 +197,17 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
     } = item;
 
     if let Some(unsafe_) = unsafety {
-        abort!(unsafe_, "unsafe modules are not supported");
+        return Err(Error::new(
+            unsafe_.span(),
+            "unsafe modules are not supported",
+        ));
     }
 
     let Some((_, ref mut items)) = content else {
-        abort_call_site!(
-            "The `module` macro can only be applied to modules with a definition in the same file."
-        )
+        return Err(Error::new(
+            Span::call_site(),
+            "The `module` macro can only be applied to modules with a definition in the same file.",
+        ));
     };
 
     let mut _consts = Vec::new();
@@ -222,7 +223,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
     for item in items.iter_mut() {
         match item {
             syn::Item::Use(i) => {
-                let config = parse_item_attrs(&mut i.attrs);
+                let config = parse_item_attrs(&mut i.attrs)?;
                 if config.skip {
                     continue;
                 }
@@ -232,7 +233,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
                 }
             }
             syn::Item::Const(i) => {
-                let config = parse_item_attrs(&mut i.attrs);
+                let config = parse_item_attrs(&mut i.attrs)?;
                 if config.skip {
                     continue;
                 }
@@ -241,7 +242,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
                 }
             }
             syn::Item::Static(i) => {
-                let config = parse_item_attrs(&mut i.attrs);
+                let config = parse_item_attrs(&mut i.attrs)?;
                 if config.skip {
                     continue;
                 }
@@ -250,7 +251,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
                 }
             }
             syn::Item::Enum(i) => {
-                let config = parse_type_attrs(&mut i.attrs);
+                let config = parse_type_attrs(&mut i.attrs)?;
                 if config.skip {
                     continue;
                 }
@@ -280,28 +281,31 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
                     }
 
                     Ok(true)
-                })
-                .unwrap_or_abort();
+                })?;
 
-                config.validate(span.unwrap_or_else(Span::call_site));
+                config.validate(span.unwrap_or_else(Span::call_site))?;
 
                 if config.skip {
                     continue;
                 } else if config.declare {
                     let span = span.unwrap();
                     if let Some((_, prev_span, _)) = declare {
-                        abort!(span,"Found a second declaration function in module."; 
-                            note = prev_span => "First declaration function here.");
+                        let mut error =
+                            Error::new(span, "Found a second declaration function in module.");
+                        error.combine(Error::new(prev_span, "First declaration function here."));
+                        return Err(error);
                     }
-                    declare::validate(i);
+                    declare::validate(i)?;
                     declare = Some((i, span, config));
                 } else if config.evaluate {
                     let span = span.unwrap();
                     if let Some((_, prev_span, _)) = evaluate {
-                        abort!(span,"Found a second evaluation function in module."; 
-                            note = prev_span => "First evaluation function here.");
+                        let mut error =
+                            Error::new(span, "Found a second declaration function in module.");
+                        error.combine(Error::new(prev_span, "First declaration function here."));
+                        return Err(error);
                     }
-                    evaluate::validate(i);
+                    evaluate::validate(i)?;
                     evaluate = Some((i, span, config));
                 } else {
                     if let Some(reexport) = config.reexpand() {
@@ -314,7 +318,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
                 }
             }
             syn::Item::Struct(i) => {
-                let config = parse_type_attrs(&mut i.attrs);
+                let config = parse_type_attrs(&mut i.attrs)?;
                 if config.skip {
                     continue;
                 }
@@ -342,7 +346,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
     }
 
     let mod_name = &item.ident;
-    let crate_name = Ident::new(&module.config.crate_name(), Span::call_site());
+    let crate_name = Ident::new(&module.config.crate_name()?, Span::call_site());
     let name = module.config.carry_name(&item.ident);
     let vis = item.vis.clone();
 
@@ -393,7 +397,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
 
     for (s, config) in _structs {
         let ident = &s.ident;
-        let name = Class::from_struct(config.class.clone(), s.clone()).javascript_name();
+        let name = Class::from_struct(config.class.clone(), s.clone())?.javascript_name();
 
         module.export(
             name.clone(),
@@ -411,7 +415,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
     for (e, config) in _enums {
         let ident = &e.ident;
 
-        let name = Class::from_enum(config.class.clone(), e.clone()).javascript_name();
+        let name = Class::from_enum(config.class.clone(), e.clone())?.javascript_name();
 
         module.export(
             name.clone(),
@@ -428,12 +432,12 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
     }
 
     for (u, config) in _uses {
-        export_use(&u.tree, &mut module, &config)
+        export_use(&u.tree, &mut module, &config)?;
     }
 
     let declarations = module.expand_declarations();
     let exports = module.expand_exports();
-    quote! {
+    let res = quote! {
         #[allow(non_camel_case_types)]
         #vis struct #name;
 
@@ -451,5 +455,6 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> To
         }
 
         #item
-    }
+    };
+    Ok(res)
 }

@@ -1,24 +1,34 @@
 use proc_macro2::TokenStream;
-use proc_macro_error::abort;
 use quote::quote;
-use syn::{Ident, ItemFn, ReturnType};
+use syn::{spanned::Spanned, Error, Ident, ItemFn, Result, ReturnType};
 
 /// make sure the declare function has the right type.
-pub fn validate(func: &ItemFn) {
+pub fn validate(func: &ItemFn) -> Result<()> {
     let sig = &func.sig;
     if let Some(x) = sig.asyncness.as_ref() {
-        abort!(x, "A module evaluation function can't be async.");
+        return Err(Error::new(
+            x.span(),
+            "A module evaluation function can't be async.",
+        ));
     }
     if let Some(x) = sig.unsafety.as_ref() {
-        abort!(x, "A module evaluation function can't be unsafe.");
+        return Err(Error::new(
+            x.span(),
+            "A module evaluation function can't be unsafe.",
+        ));
     }
     if let Some(x) = sig.abi.as_ref() {
-        abort!(x, "A module evaluation function can't have an abi.");
+        return Err(Error::new(
+            x.span(),
+            "A module evaluation function can't have an abi.",
+        ));
     }
     if sig.inputs.len() != 2 || sig.output == ReturnType::Default {
-        abort!(func, "Invalid module evaluation function.";
-            note = "Function should implement `fn(rquickjs::Ctx,&mut rquickjs::module::Exports) -> rquickjs::result<()>`.");
+        return Err(Error::new(
+            func.span(), "Invalid module evaluation function. Function should implement `fn(rquickjs::Ctx,&mut rquickjs::module::Exports) -> rquickjs::result<()>`."));
     }
+
+    Ok(())
 }
 
 pub(crate) fn expand_use(module_name: &Ident, func: &ItemFn) -> TokenStream {

@@ -1,16 +1,16 @@
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use syn::{
     fold::Fold,
     parse::{Parse, ParseStream},
-    punctuated::Pair,
-    ItemEnum, ItemStruct, LitStr, Token,
+    punctuated::{Pair, Punctuated},
+    spanned::Spanned,
+    Error, ItemEnum, ItemStruct, LitStr, Result, Token,
 };
 
 use crate::{
     attrs::{take_attributes, FlagOption, OptionList, ValueOption},
-    common::{add_js_lifetime, crate_ident, kw, AbortResultExt, Case},
+    common::{add_js_lifetime, crate_ident, kw, Case},
     fields::Fields,
 };
 
@@ -63,8 +63,11 @@ impl ClassConfig {
         }
     }
 
-    pub fn crate_name(&self) -> String {
-        self.crate_.clone().unwrap_or_else(crate_ident)
+    pub fn crate_name(&self) -> Result<String> {
+        if let Some(c) = self.crate_.clone() {
+            return Ok(c);
+        }
+        crate_ident()
     }
 }
 
@@ -90,26 +93,36 @@ pub(crate) enum Class {
     },
 }
 
-struct ErrorAttribute;
+struct ErrorAttribute(Result<()>);
 
 impl Fold for ErrorAttribute {
     fn fold_attribute(&mut self, i: syn::Attribute) -> syn::Attribute {
+        if self.0.is_err() {
+            return i;
+        }
+
         if i.path().is_ident("qjs") {
-            abort!(i, "qjs attributes not supported here")
+            self.0 = Err(Error::new(i.span(), "qjs attributes not supported here"))
         }
         i
     }
 }
 
 impl Class {
-    pub fn from_proc_macro_input(options: OptionList<ClassOption>, item: syn::Item) -> Self {
+    pub fn from_proc_macro_input(
+        options: OptionList<ClassOption>,
+        item: syn::Item,
+    ) -> Result<Self> {
         let mut config = ClassConfig::default();
         options.0.iter().for_each(|x| config.apply(x));
 
         match item {
             syn::Item::Enum(enum_) => Self::from_enum(config, enum_),
             syn::Item::Struct(struct_) => Self::from_struct(config, struct_),
-            x => abort!(x, "class macro can only be applied to enum's and structs"),
+            x => Err(Error::new(
+                x.span(),
+                "class macro can only be applied to enum's and struct",
+            )),
         }
     }
 
@@ -127,7 +140,7 @@ impl Class {
         }
     }
 
-    pub fn from_enum(mut config: ClassConfig, enum_: ItemEnum) -> Self {
+    pub fn from_enum(mut config: ClassConfig, enum_: ItemEnum) -> Result<Self> {
         let ItemEnum {
             mut attrs,
             vis,
@@ -138,13 +151,27 @@ impl Class {
             ..
         } = enum_;
 
-        let variants = variants
-            .into_pairs()
-            .map(|x| match x {
-                Pair::Punctuated(v, c) => Pair::Punctuated(ErrorAttribute.fold_variant(v), c),
-                Pair::End(v) => Pair::End(ErrorAttribute.fold_variant(v)),
-            })
-            .collect();
+        let mut new_variants = Punctuated::new();
+        for variant in variants.into_pairs() {
+            match variant {
+                Pair::Punctuated(v, c) => {
+                    let mut ensure_valid = ErrorAttribute(Ok(()));
+                    let v = ensure_valid.fold_variant(v);
+                    ensure_valid.0?;
+
+                    new_variants.push(v);
+                    new_variants.push_punct(c);
+                }
+                Pair::End(v) => {
+                    let mut ensure_valid = ErrorAttribute(Ok(()));
+                    let v = ensure_valid.fold_variant(v);
+                    ensure_valid.0?;
+
+                    new_variants.push(v);
+                }
+            }
+        }
+        let variants = new_variants;
 
         take_attributes(&mut attrs, |attr| {
             if !attr.path().is_ident("qjs") {
@@ -156,10 +183,9 @@ impl Class {
                 config.apply(x);
             });
             Ok(true)
-        })
-        .unwrap_or_abort();
+        })?;
 
-        Class::Enum {
+        Ok(Class::Enum {
             config,
             attrs,
             vis,
@@ -167,10 +193,10 @@ impl Class {
             ident,
             generics,
             variants,
-        }
+        })
     }
 
-    pub fn from_struct(mut config: ClassConfig, struct_: ItemStruct) -> Self {
+    pub fn from_struct(mut config: ClassConfig, struct_: ItemStruct) -> Result<Self> {
         let ItemStruct {
             mut attrs,
             vis,
@@ -191,12 +217,11 @@ impl Class {
                 config.apply(x);
             });
             Ok(true)
-        })
-        .unwrap_or_abort();
+        })?;
 
-        let fields = Fields::from_fields(fields);
+        let fields = Fields::from_fields(fields)?;
 
-        Class::Struct {
+        Ok(Class::Struct {
             config,
             attrs,
             vis,
@@ -204,7 +229,7 @@ impl Class {
             ident,
             generics,
             fields,
-        }
+        })
     }
 
     pub fn generics(&self) -> &syn::Generics {
@@ -308,8 +333,8 @@ impl Class {
         }
     }
 
-    pub fn expand(self) -> TokenStream {
-        let crate_name = format_ident!("{}", self.config().crate_name());
+    pub fn expand(self) -> Result<TokenStream> {
+        let crate_name = format_ident!("{}", self.config().crate_name()?);
         let class_name = self.ident().clone();
         let javascript_name = self.javascript_name();
         let module_name = format_ident!("__impl_class_{}_", self.ident());
@@ -321,7 +346,7 @@ impl Class {
         let props = self.expand_props(&crate_name);
         let reexpand = self.reexpand();
 
-        quote! {
+        let res = quote! {
             #reexpand
 
             #[allow(non_snake_case)]
@@ -371,10 +396,12 @@ impl Class {
                     }
                 }
             }
-        }
+        };
+
+        Ok(res)
     }
 }
 
-pub(crate) fn expand(options: OptionList<ClassOption>, item: syn::Item) -> TokenStream {
-    Class::from_proc_macro_input(options, item).expand()
+pub(crate) fn expand(options: OptionList<ClassOption>, item: syn::Item) -> Result<TokenStream> {
+    Class::from_proc_macro_input(options, item)?.expand()
 }

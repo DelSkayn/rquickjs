@@ -21,7 +21,7 @@ pub mod context;
 pub use context::{Context, Ctx};
 pub mod class;
 pub use class::Class;
-pub use persistent::{Outlive, Persistent};
+pub use persistent::{JsLifetime, Persistent};
 pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 pub use value::{
     array, atom, convert, function, module, object, promise, Array, Atom, BigInt, Coerced,

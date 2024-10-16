@@ -1,10 +1,6 @@
 use super::{JsClass, Tracer};
 use crate::{class::JsCell, function::Params, qjs, runtime::opaque::Opaque, Value};
-use std::{
-    any::TypeId,
-    panic::AssertUnwindSafe,
-    ptr::{self, NonNull},
-};
+use std::{any::TypeId, panic::AssertUnwindSafe, ptr::NonNull};
 
 /// FFI finalizer, destroying the object once it is delete by the Gc.
 pub(crate) unsafe extern "C" fn class_finalizer(rt: *mut qjs::JSRuntime, val: qjs::JSValue) {
@@ -129,7 +125,7 @@ impl VTable {
 
         impl<'js, C: JsClass<'js>> HasVTable for C {
             const VTABLE: VTable = VTable {
-                id: TypeId::of::<C::Target<'static>>,
+                id: TypeId::of::<C::Changed<'static>>,
                 finalizer: VTable::finalizer_impl::<'js, C>,
                 trace: VTable::trace_impl::<C>,
                 call: VTable::call_impl::<C>,
@@ -139,8 +135,7 @@ impl VTable {
     }
 
     pub fn is_of_class<'js, C: JsClass<'js>>(&self) -> bool {
-        let tgt_vtable = Self::get::<C>();
-        (self.id)() == (tgt_vtable.id)()
+        (self.id)() == TypeId::of::<C::Changed<'static>>()
     }
 }
 

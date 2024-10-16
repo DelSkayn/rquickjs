@@ -37,16 +37,16 @@ use std::{
 /// `Outlive::Target` must be the same type with all 'js lifetimes changed from 'js to 'to, no
 /// other lifetimes may be changed and the type must be otherwise the exact same type.
 ///
-pub unsafe trait Outlive<'js> {
+pub unsafe trait JsLifetime<'js> {
     /// The target which has the same type as a `Self` but with another lifetime `'t`
-    type Target<'to>: 'to;
+    type Changed<'to>: 'to;
 }
 
 macro_rules! outlive_impls {
     ($($type:ident,)*) => {
         $(
-            unsafe impl<'js> Outlive<'js> for $type<'js> {
-                type Target<'to> = $type<'to>;
+            unsafe impl<'js> JsLifetime<'js> for $type<'js> {
+                type Changed<'to> = $type<'to>;
                 //type Static = $type<'static>;
             }
         )*
@@ -70,11 +70,11 @@ outlive_impls! {
 macro_rules! impl_outlive{
     ($($($ty:ident)::+$(<$($g:ident),+>)*),*$(,)?) => {
         $(
-            unsafe impl<'js,$($($g,)*)*> Outlive<'js> for $($ty)::*$(<$($g,)*>)*
+            unsafe impl<'js,$($($g,)*)*> JsLifetime<'js> for $($ty)::*$(<$($g,)*>)*
             where
-                  $($($g: Outlive<'js>,)*)*
+                  $($($g: JsLifetime<'js>,)*)*
             {
-                type Target<'to> = $($ty)::*$(<$($g::Target<'to>,)*>)*;
+                type Changed<'to> = $($ty)::*$(<$($g::Changed<'to>,)*>)*;
                 //type Static = $($ty)::*$(<$($g::Static,)*>)*;
             }
         )*
@@ -135,8 +135,8 @@ impl_outlive!(
     atom::PredefinedAtom,
 );
 
-unsafe impl<'js, T: Outlive<'js>> Outlive<'js> for Module<'js, T> {
-    type Target<'to> = Module<'to, T::Target<'to>>;
+unsafe impl<'js, T: JsLifetime<'js>> JsLifetime<'js> for Module<'js, T> {
+    type Changed<'to> = Module<'to, T::Changed<'to>>;
 }
 
 /// The wrapper for JS values to keep it from GC
@@ -195,16 +195,16 @@ where
 }
 
 impl<T> Persistent<T> {
-    unsafe fn outlive_transmute<'from, 'to, U>(t: U) -> U::Target<'to>
+    unsafe fn outlive_transmute<'from, 'to, U>(t: U) -> U::Changed<'to>
     where
-        U: Outlive<'from>,
+        U: JsLifetime<'from>,
     {
         // extremely unsafe code which should be safe if outlive is implemented correctly.
 
         // assertion to check if T and T::Target are the same size, they should be.
         // should compile away if they are the same size.
-        assert_eq!(mem::size_of::<U>(), mem::size_of::<U::Target<'static>>());
-        assert_eq!(mem::align_of::<U>(), mem::align_of::<U::Target<'static>>());
+        assert_eq!(mem::size_of::<U>(), mem::size_of::<U::Changed<'static>>());
+        assert_eq!(mem::align_of::<U>(), mem::align_of::<U::Changed<'static>>());
 
         // union to transmute between two unrelated types
         // Can't use transmute since it is unable to determine the size of both values.
@@ -212,18 +212,18 @@ impl<T> Persistent<T> {
             a: ManuallyDrop<A>,
             b: ManuallyDrop<B>,
         }
-        let data = Transmute::<U, U::Target<'to>> {
+        let data = Transmute::<U, U::Changed<'to>> {
             a: ManuallyDrop::new(t),
         };
         unsafe { ManuallyDrop::into_inner(data.b) }
     }
 
     /// Save the value of an arbitrary type
-    pub fn save<'js>(ctx: &Ctx<'js>, val: T) -> Persistent<T::Target<'static>>
+    pub fn save<'js>(ctx: &Ctx<'js>, val: T) -> Persistent<T::Changed<'static>>
     where
-        T: Outlive<'js>,
+        T: JsLifetime<'js>,
     {
-        let outlived: T::Target<'static> =
+        let outlived: T::Changed<'static> =
             unsafe { Self::outlive_transmute::<'js, 'static, T>(val) };
         let ptr = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         Persistent {
@@ -233,9 +233,9 @@ impl<T> Persistent<T> {
     }
 
     /// Restore the value of an arbitrary type
-    pub fn restore<'js>(self, ctx: &Ctx<'js>) -> Result<T::Target<'js>>
+    pub fn restore<'js>(self, ctx: &Ctx<'js>) -> Result<T::Changed<'js>>
     where
-        T: Outlive<'static>,
+        T: JsLifetime<'static>,
     {
         let ctx_runtime_ptr = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         if self.rt != ctx_runtime_ptr {
@@ -247,8 +247,8 @@ impl<T> Persistent<T> {
 
 impl<'js, T, R> FromJs<'js> for Persistent<R>
 where
-    R: Outlive<'static, Target<'js> = T>,
-    T: Outlive<'js, Target<'static> = R> + FromJs<'js>,
+    R: JsLifetime<'static, Changed<'js> = T>,
+    T: JsLifetime<'js, Changed<'static> = R> + FromJs<'js>,
 {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Persistent<R>> {
         let value = T::from_js(ctx, value)?;
@@ -258,8 +258,8 @@ where
 
 impl<'js, T> IntoJs<'js> for Persistent<T>
 where
-    T: Outlive<'static>,
-    T::Target<'js>: IntoJs<'js>,
+    T: JsLifetime<'static>,
+    T::Changed<'js>: IntoJs<'js>,
 {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         self.restore(ctx)?.into_js(ctx)

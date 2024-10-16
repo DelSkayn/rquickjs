@@ -4,16 +4,9 @@ use crate::{
     function::Params,
     qjs::{self},
     value::Constructor,
-    Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value,
+    Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
-use std::{
-    any::TypeId,
-    hash::Hash,
-    marker::PhantomData,
-    mem,
-    ops::Deref,
-    ptr::{self, NonNull},
-};
+use std::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
 mod cell;
 mod trace;
@@ -29,7 +22,7 @@ pub use trace::{Trace, Tracer};
 pub mod impl_;
 
 /// The trait which allows Rust types to be used from JavaScript.
-pub trait JsClass<'js>: Trace<'js> + Outlive<'js> + Sized {
+pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// The name the constructor has in JavaScript
     const NAME: &'static str;
 
@@ -81,12 +74,12 @@ impl<'js, C: JsClass<'js>> Hash for Class<'js, C> {
     }
 }
 
-unsafe impl<'js, C> Outlive<'js> for Class<'js, C>
+unsafe impl<'js, C> JsLifetime<'js> for Class<'js, C>
 where
-    C: JsClass<'js> + Outlive<'js>,
-    for<'to> C::Target<'to>: JsClass<'to>,
+    C: JsClass<'js> + JsLifetime<'js>,
+    for<'to> C::Changed<'to>: JsClass<'to>,
 {
-    type Target<'to> = Class<'to, C::Target<'to>>;
+    type Changed<'to> = Class<'to, C::Changed<'to>>;
 }
 
 impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
@@ -354,7 +347,7 @@ mod test {
         function::This,
         test_with,
         value::Constructor,
-        CatchResultExt, Class, Context, FromJs, Function, IntoJs, Object, Outlive, Runtime,
+        CatchResultExt, Class, Context, FromJs, Function, IntoJs, JsLifetime, Object, Runtime,
     };
 
     /// Test circular references.
@@ -377,8 +370,8 @@ mod test {
             }
         }
 
-        unsafe impl<'js> Outlive<'js> for Container<'js> {
-            type Target<'to> = Container<'to>;
+        unsafe impl<'js> JsLifetime<'js> for Container<'js> {
+            type Changed<'to> = Container<'to>;
         }
 
         impl<'js> JsClass<'js> for Container<'js> {
@@ -471,8 +464,8 @@ mod test {
         }
     }
 
-    unsafe impl<'js> Outlive<'js> for Vec3 {
-        type Target<'to> = Vec3;
+    unsafe impl<'js> JsLifetime<'js> for Vec3 {
+        type Changed<'to> = Vec3;
     }
 
     impl<'js> JsClass<'js> for Vec3 {
@@ -562,8 +555,8 @@ mod test {
             fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
         }
 
-        unsafe impl<'js> Outlive<'js> for X {
-            type Target<'to> = X;
+        unsafe impl<'js> JsLifetime<'js> for X {
+            type Changed<'to> = X;
         }
 
         impl<'js> JsClass<'js> for X {
@@ -598,8 +591,8 @@ mod test {
             fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
         }
 
-        unsafe impl<'js, D: std::fmt::Debug + 'static> Outlive<'js> for DebugPrinter<D> {
-            type Target<'to> = DebugPrinter<D>;
+        unsafe impl<'js, D: std::fmt::Debug + 'static> JsLifetime<'js> for DebugPrinter<D> {
+            type Changed<'to> = DebugPrinter<D>;
         }
 
         impl<'js, D: std::fmt::Debug + 'static> JsClass<'js> for DebugPrinter<D> {

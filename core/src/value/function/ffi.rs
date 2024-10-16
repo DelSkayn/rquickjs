@@ -1,10 +1,10 @@
-use std::{any::TypeId, panic::AssertUnwindSafe};
+use std::panic::AssertUnwindSafe;
 
 use crate::{
     class::{JsCell, JsClass, Readable, Trace, Tracer},
     qjs,
     value::function::{Params, StaticJsFunction},
-    Ctx, Function, Object, Outlive, Result, Value,
+    Ctx, Function, JsLifetime, Object, Result, Value,
 };
 
 use super::Constructor;
@@ -81,8 +81,8 @@ where
 /// this class.
 pub struct RustFunction<'js>(pub Box<dyn RustFunc<'js> + 'js>);
 
-unsafe impl<'js> Outlive<'js> for RustFunction<'js> {
-    type Target<'to> = RustFunction<'to>;
+unsafe impl<'js> JsLifetime<'js> for RustFunction<'js> {
+    type Changed<'to> = RustFunction<'to>;
 }
 
 impl<'js> Trace<'js> for RustFunction<'js> {
