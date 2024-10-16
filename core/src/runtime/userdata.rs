@@ -152,7 +152,7 @@ impl Hasher for IdHasher {
 
 /// Typeid hashmap taken from axum.
 #[derive(Default)]
-pub(crate) struct UserDataMap {
+pub struct UserDataMap {
     map: UnsafeCell<HashMap<TypeId, Box<dyn Any>, BuildHasherDefault<IdHasher>>>,
     count: Cell<usize>,
 }
@@ -174,6 +174,14 @@ impl UserDataMap {
             unsafe { U::from_static_box(r) }
         });
         Ok(r)
+    }
+
+    pub fn extend(&self, other: Self) -> Result<(), UserDataError<()>> {
+        if self.count.get() > 0 || other.count.get() > 0 {
+            return Err(UserDataError(()));
+        }
+        unsafe { (*self.map.get()).extend((*other.map.get()).drain()) }
+        Ok(())
     }
 
     pub fn remove<'js, U>(&self) -> Result<Option<Box<U>>, UserDataError<()>>

@@ -94,6 +94,10 @@ impl<'js> Opaque<'js> {
         self.userdata.insert(data)
     }
 
+    pub fn extend_userdata(&self, data: UserDataMap) -> Result<(), UserDataError<()>> {
+        self.userdata.extend(data)
+    }
+
     pub fn remove_userdata<U>(&self) -> Result<Option<Box<U>>, UserDataError<()>>
     where
         U: UserData<'js>,
