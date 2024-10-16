@@ -20,8 +20,7 @@ use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
 use crate::{
-    context::AsyncContext, result::AsyncJobException, util::ManualPoll, Ctx, Error, Exception,
-    Result,
+    context::AsyncContext, result::AsyncJobException, util::ManualPoll, Ctx, Exception, Result,
 };
 #[cfg(feature = "parallel")]
 use crate::{
@@ -111,7 +110,7 @@ impl AsyncRuntime {
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Result<Self> {
         let opaque = Opaque::with_spawner();
-        let runtime = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
+        let runtime = unsafe { RawRuntime::new(opaque) }?;
 
         #[cfg(feature = "parallel")]
         let (drop_send, drop_recv) = mpsc::channel();
@@ -139,8 +138,7 @@ impl AsyncRuntime {
         A: Allocator + 'static,
     {
         let opaque = Opaque::with_spawner();
-        let runtime = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
-            .ok_or(Error::Allocation)?;
+        let runtime = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }?;
 
         #[cfg(feature = "parallel")]
         let (drop_send, drop_recv) = mpsc::channel();

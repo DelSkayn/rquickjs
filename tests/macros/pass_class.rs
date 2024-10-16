@@ -1,6 +1,6 @@
-use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime};
+use rquickjs::{class::Trace, CatchResultExt, Class, Context, JsLifetime, Object, Runtime};
 
-#[derive(Trace)]
+#[derive(Trace, JsLifetime)]
 #[rquickjs::class(rename_all = "camelCase")]
 pub struct TestClass<'js> {
     #[qjs(get, set)]

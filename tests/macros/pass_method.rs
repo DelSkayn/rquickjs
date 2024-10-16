@@ -3,7 +3,7 @@ use rquickjs::{
     Result, Runtime,
 };
 
-#[derive(Trace)]
+#[derive(Trace, JsLifetime)]
 #[rquickjs::class]
 pub struct TestClass {
     value: u32,

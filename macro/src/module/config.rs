@@ -1,10 +1,9 @@
 use convert_case::Casing;
 use proc_macro2::Span;
-use proc_macro_error::abort;
 use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
-    parse_quote, Attribute, Ident, LitStr, Path, Token,
+    parse_quote, Attribute, Error, Ident, LitStr, Path, Result, Token,
 };
 
 use crate::{
@@ -44,8 +43,8 @@ impl ModuleConfig {
         }
     }
 
-    pub fn crate_name(&self) -> String {
-        self.crate_.clone().unwrap_or_else(crate_ident)
+    pub fn crate_name(&self) -> Result<String> {
+        self.crate_.clone().map(Ok).unwrap_or_else(crate_ident)
     }
 
     pub fn carry_name(&self, name: &Ident) -> Ident {
@@ -128,19 +127,20 @@ impl ModuleFunctionConfig {
         }
     }
 
-    pub fn validate(&self, span: Span) {
+    pub fn validate(&self, span: Span) -> Result<()> {
         if self.skip && self.evaluate {
-            abort!(span, "Can't skip the module evaluate function");
+            return Err(Error::new(span, "Can't skip the module evaluate function"));
         }
         if self.skip && self.declare {
-            abort!(span, "Can't skip the module declare function");
+            return Err(Error::new(span, "Can't skip the module declare function"));
         }
         if self.declare && self.evaluate {
-            abort!(
+            return Err(Error::new(
                 span,
-                "A function can be either declare or evaluate but not both."
-            );
+                "A function can be either declare or evaluate but not both.",
+            ));
         }
+        Ok(())
     }
 }
 

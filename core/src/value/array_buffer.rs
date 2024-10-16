@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value};
+use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value};
 use core::fmt;
 use std::{
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
@@ -40,8 +40,8 @@ impl fmt::Display for AsSliceError {
 #[repr(transparent)]
 pub struct ArrayBuffer<'js>(pub(crate) Object<'js>);
 
-unsafe impl<'js> Outlive<'js> for ArrayBuffer<'js> {
-    type Target<'to> = ArrayBuffer<'to>;
+unsafe impl<'js> JsLifetime<'js> for ArrayBuffer<'js> {
+    type Changed<'to> = ArrayBuffer<'to>;
 }
 
 impl<'js> ArrayBuffer<'js> {
