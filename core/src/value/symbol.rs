@@ -65,8 +65,6 @@ impl_symbols! {
     unscopables => JS_ATOM_Symbol_unscopables
     /// returns the symbol for `asyncIterator`
     async_iterator => JS_ATOM_Symbol_asyncIterator
-    /// returns the symbol for `operatorSet`
-    operator_set => JS_ATOM_Symbol_operatorSet
 }
 
 #[cfg(test)]

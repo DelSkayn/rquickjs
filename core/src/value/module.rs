@@ -301,7 +301,7 @@ impl<'js> Module<'js, Declared> {
         let ret = unsafe {
             // JS_EvalFunction `free's` the module so we should dup first
             let v = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.ptr.as_ptr().cast());
-            qjs::JS_DupValue(v);
+            qjs::JS_DupValue(self.ctx.as_ptr(), v);
             qjs::JS_EvalFunction(self.ctx.as_ptr(), v)
         };
         let ret = unsafe { self.ctx.handle_exception(ret)? };

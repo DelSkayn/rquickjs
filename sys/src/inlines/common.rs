@@ -32,17 +32,6 @@ pub unsafe fn JS_IsBigInt(v: JSValue) -> bool {
     tag == JS_TAG_BIG_INT
 }
 
-#[inline]
-pub unsafe fn JS_IsBigFloat(v: JSValue) -> bool {
-    let tag = JS_VALUE_GET_TAG(v);
-    tag == JS_TAG_BIG_FLOAT
-}
-
-#[inline]
-pub unsafe fn JS_IsBigDecimal(v: JSValue) -> bool {
-    let tag = JS_VALUE_GET_TAG(v);
-    tag == JS_TAG_BIG_DECIMAL
-}
 
 #[inline]
 pub unsafe fn JS_IsBool(v: JSValue) -> bool {
@@ -93,60 +82,6 @@ pub unsafe fn JS_IsObject(v: JSValue) -> bool {
 }
 
 #[inline]
-pub unsafe fn JS_ValueRefCount(v: JSValue) -> c_int {
-    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
-    p.ref_count
-}
-
-#[inline]
-unsafe fn JS_FreeValueRef(ctx: *mut JSContext, v: JSValue) {
-    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
-    p.ref_count -= 1;
-    if p.ref_count <= 0 {
-        __JS_FreeValue(ctx, v)
-    }
-}
-
-#[inline]
-pub unsafe fn JS_FreeValue(ctx: *mut JSContext, v: JSValue) {
-    if JS_VALUE_HAS_REF_COUNT(v) {
-        JS_FreeValueRef(ctx, v);
-    }
-}
-
-#[inline]
-unsafe fn JS_FreeValueRefRT(rt: *mut JSRuntime, v: JSValue) {
-    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
-    p.ref_count -= 1;
-    if p.ref_count <= 0 {
-        __JS_FreeValueRT(rt, v)
-    }
-}
-
-#[inline]
-pub unsafe fn JS_FreeValueRT(rt: *mut JSRuntime, v: JSValue) {
-    if JS_VALUE_HAS_REF_COUNT(v) {
-        JS_FreeValueRefRT(rt, v);
-    }
-}
-
-#[inline]
-unsafe fn JS_DupValueRef(v: JSValueConst) -> JSValue {
-    let p = &mut *(JS_VALUE_GET_PTR(v) as *mut JSRefCountHeader);
-    p.ref_count += 1;
-    v
-}
-
-#[inline]
-pub unsafe fn JS_DupValue(v: JSValue) -> JSValue {
-    if JS_VALUE_HAS_REF_COUNT(v) {
-        JS_DupValueRef(v)
-    } else {
-        v
-    }
-}
-
-#[inline]
 pub unsafe fn JS_ToCString(ctx: *mut JSContext, val: JSValue) -> *const c_char {
     JS_ToCStringLen2(ctx, ptr::null_mut(), val, 0)
 }
@@ -157,21 +92,6 @@ pub unsafe fn JS_ToCStringLen(
     val: JSValue,
 ) -> *const c_char {
     JS_ToCStringLen2(ctx, plen as _, val, 0)
-}
-
-#[inline]
-pub unsafe fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> JSValue {
-    JS_GetPropertyInternal(ctx, this_obj, prop, this_obj, 0)
-}
-
-#[inline]
-pub unsafe fn JS_SetProperty(
-    ctx: *mut JSContext,
-    this_obj: JSValue,
-    prop: JSAtom,
-    val: JSValue,
-) -> i32 {
-    JS_SetPropertyInternal(ctx, this_obj, prop, val, this_obj, JS_PROP_THROW as i32)
 }
 
 #[inline]

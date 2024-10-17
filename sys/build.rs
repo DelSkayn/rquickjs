@@ -1,8 +1,7 @@
 use std::{
     env, fs,
-    io::Write,
     path::{Path, PathBuf},
-    process::{self, Command, Stdio},
+    process::{self},
 };
 
 // WASI logic lifted from https://github.com/bytecodealliance/javy/blob/61616e1507d2bf896f46dc8d72687273438b58b2/crates/quickjs-wasm-sys/build.rs#L18
@@ -116,7 +115,6 @@ fn main() {
     }
 
     let src_dir = Path::new("quickjs");
-    let patches_dir = Path::new("patches");
 
     let out_dir = env::var("OUT_DIR").expect("No OUT_DIR env var is set by cargo");
     let out_dir = Path::new(&out_dir);
@@ -130,6 +128,7 @@ fn main() {
         "list.h",
         "quickjs-atom.h",
         "quickjs-opcode.h",
+        "quickjs-c-atomics.h",
         "quickjs.h",
         "cutils.h",
     ];
@@ -142,36 +141,30 @@ fn main() {
         "libbf.c",
     ];
 
-    let mut patch_files = vec![
-        "error_column_number.patch",
-        "get_function_proto.patch",
-        "check_stack_overflow.patch",
-        "infinity_handling.patch",
-    ];
+    let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
-    let version =
-        fs::read_to_string(src_dir.join("VERSION")).expect("failed to read quickjs VERSION file");
-    let version = format!("\"{}\"", version.trim());
+    let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
+    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
-    let mut defines = vec![
-        ("_GNU_SOURCE".into(), None),
-        ("CONFIG_VERSION".into(), Some(version.as_str())),
-        ("CONFIG_BIGNUM".into(), None),
-    ];
+    let mut builder = cc::Build::new();
+    builder
+        .extra_warnings(false)
+        .flag_if_supported("-Wno-implicit-const-int-float-conversion")
+        //.flag("-Wno-array-bounds")
+        //.flag("-Wno-format-truncation")
+        ;
 
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "windows"
-        && env::var("CARGO_CFG_TARGET_ENV").unwrap() == "msvc"
-    {
-        patch_files.push("basic_msvc_compat.patch");
-    }
+    let mut bindgen_cflags = vec![];
 
-    for feature in &features {
-        if feature.starts_with("dump-") && env::var(feature_to_cargo(feature)).is_ok() {
-            defines.push((feature_to_define(feature), None));
+    if target_os == "windows" {
+        if target_env == "msvc" {
+            env::set_var("CFLAGS", "/std:c11 /experimental:c11atomics");
+        } else {
+            env::set_var("CFLAGS", "-std=c11");
         }
     }
 
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+    if target_os == "wasi" {
         // pretend we're emscripten - there are already ifdefs that match
         // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
         defines.push(("EMSCRIPTEN".into(), Some("1")));
@@ -185,13 +178,7 @@ fn main() {
     }
     fs::copy("quickjs.bind.h", out_dir.join("quickjs.bind.h")).expect("Unable to copy source");
 
-    // applying patches
-    for file in &patch_files {
-        patch(out_dir, patches_dir.join(file));
-    }
-
-    let mut add_cflags = vec![];
-    if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
+    if target_os == "wasi" {
         let wasi_sdk_path = get_wasi_sdk_path();
         if !wasi_sdk_path.try_exists().unwrap() {
             panic!(
@@ -206,7 +193,7 @@ fn main() {
             wasi_sdk_path.join("share/wasi-sysroot").display()
         );
         env::set_var("CFLAGS", &sysroot);
-        add_cflags.push(sysroot);
+        bindgen_cflags.push(sysroot);
     }
 
     // generating bindings
@@ -214,16 +201,8 @@ fn main() {
         out_dir,
         out_dir.join("quickjs.bind.h"),
         &defines,
-        add_cflags,
+        bindgen_cflags,
     );
-
-    let mut builder = cc::Build::new();
-    builder
-        .extra_warnings(false)
-        .flag_if_supported("-Wno-implicit-const-int-float-conversion")
-        //.flag("-Wno-array-bounds")
-        //.flag("-Wno-format-truncation")
-        ;
 
     for (name, value) in &defines {
         builder.define(name, *value);
@@ -242,24 +221,6 @@ fn feature_to_cargo(name: impl AsRef<str>) -> String {
 
 fn feature_to_define(name: impl AsRef<str>) -> String {
     name.as_ref().to_uppercase().replace('-', "_")
-}
-
-fn patch<D: AsRef<Path>, P: AsRef<Path>>(out_dir: D, patch: P) {
-    let mut child = Command::new("patch")
-        .args(["-p1", "-f"])
-        .stdin(Stdio::piped())
-        .current_dir(out_dir)
-        .spawn()
-        .expect("Unable to execute patch, you may need to install it: {}");
-    println!("Applying patch {}", patch.as_ref().display());
-    {
-        let patch = fs::read(patch).expect("Unable to read patch");
-
-        let stdin = child.stdin.as_mut().unwrap();
-        stdin.write_all(&patch).expect("Unable to apply patch");
-    }
-
-    child.wait_with_output().expect("Unable to apply patch");
 }
 
 #[cfg(not(feature = "bindgen"))]
@@ -282,8 +243,9 @@ where
         .unwrap_or(false)
     {
         println!(
-            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}`. try the `bindgen` feature instead.",
-            target
+            "cargo:warning=rquickjs probably doesn't ship bindings for platform `{}({})`. try the `bindgen` feature instead.",
+            target,
+            env::var("BUILD_TARGET").unwrap_or("n/a".into())
         );
     }
 
@@ -325,8 +287,6 @@ where
             format!("-D{}", name.as_ref())
         });
     }
-
-    println!("Bindings for target: {}", target);
 
     let mut builder = bindgen_rs::Builder::default()
         .detect_include_paths(true)

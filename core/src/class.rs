@@ -103,9 +103,10 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         }
 
         let val = unsafe {
+            let rt = qjs::JS_GetRuntime(ctx.as_ptr());
             ctx.handle_exception(qjs::JS_NewObjectClass(
                 ctx.as_ptr(),
-                C::class_id().get() as i32,
+                C::class_id().get(rt) as i32,
             ))?
         };
         let ptr: *mut JsCell<'js, C> = Box::into_raw(Box::new(JsCell::new(value)));
@@ -118,14 +119,16 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Create a class from a Rust object with a given prototype.
     pub fn instance_proto(value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
-        if !Self::is_registered(proto.ctx()) {
-            Self::register(proto.ctx())?;
+        let ctx = &proto.ctx;
+        if !Self::is_registered(ctx) {
+            Self::register(ctx)?;
         }
         let val = unsafe {
-            proto.ctx.handle_exception(qjs::JS_NewObjectProtoClass(
-                proto.ctx().as_ptr(),
+            let rt = qjs::JS_GetRuntime(ctx.as_ptr());
+            ctx.handle_exception(qjs::JS_NewObjectProtoClass(
+                ctx.as_ptr(),
                 proto.0.as_js_value(),
-                C::class_id().get(),
+                C::class_id().get(rt),
             ))?
         };
         let ptr: *mut JsCell<'js, C> = Box::into_raw(Box::new(JsCell::new(value)));
@@ -144,7 +147,8 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
             return None;
         }
         let proto = unsafe {
-            let proto = qjs::JS_GetClassProto(ctx.as_ptr(), C::class_id().get());
+            let rt = qjs::JS_GetRuntime(ctx.as_ptr());
+            let proto = qjs::JS_GetClassProto(ctx.as_ptr(), C::class_id().get(rt));
             Value::from_js_value(ctx, proto)
         };
         if proto.is_null() {
@@ -175,7 +179,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     #[inline]
     pub fn is_registered(ctx: &Ctx<'js>) -> bool {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
-        let class_id = C::class_id().get();
+        let class_id = C::class_id().get(rt);
         0 != unsafe { qjs::JS_IsRegisteredClass(rt, class_id) }
     }
 
@@ -188,7 +192,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// its prototype will only be registered once.
     pub fn register(ctx: &Ctx<'js>) -> Result<()> {
         let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
-        let class_id = C::class_id().get();
+        let class_id = C::class_id().get(rt);
         if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, class_id) } {
             let class_name = CString::new(C::NAME).expect("class name has an internal null byte");
             let finalizer = if std::mem::needs_drop::<JsCell<C>>() {
@@ -280,11 +284,9 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     #[inline]
     pub(crate) fn get_class_ptr(&self) -> NonNull<JsCell<'js, C>> {
         let ptr = unsafe {
-            qjs::JS_GetOpaque2(
-                self.0.ctx.as_ptr(),
-                self.0 .0.as_js_value(),
-                C::class_id().get(),
-            )
+            let ctx_ptr = self.0.ctx.as_ptr();
+            let rt = qjs::JS_GetRuntime(ctx_ptr);
+            qjs::JS_GetOpaque2(ctx_ptr, self.0 .0.as_js_value(), C::class_id().get(rt))
         };
         NonNull::new(ptr.cast()).expect("invalid class object, object didn't have opaque value")
     }
@@ -334,12 +336,10 @@ impl<'js> Object<'js> {
             return false;
         }
 
+        let ctx_ptr = self.0.ctx.as_ptr();
         let p = unsafe {
-            qjs::JS_GetOpaque2(
-                self.0.ctx.as_ptr(),
-                self.0.as_js_value(),
-                C::class_id().get(),
-            )
+            let rt = qjs::JS_GetRuntime(ctx_ptr);
+            qjs::JS_GetOpaque2(ctx_ptr, self.0.as_js_value(), C::class_id().get(rt))
         };
         !p.is_null()
     }

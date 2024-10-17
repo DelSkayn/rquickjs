@@ -105,12 +105,6 @@ pub enum PredefinedAtom {
     Empty = qjs::JS_ATOM_empty_string as u32,
     /// "length"
     Length = qjs::JS_ATOM_length as u32,
-    /// "fileName"
-    FileName = qjs::JS_ATOM_fileName as u32,
-    /// "lineNumber"
-    LineNumber = qjs::JS_ATOM_lineNumber as u32,
-    /// "columnNumber
-    ColumnNumber = qjs::JS_ATOM_columnNumber as u32,
     /// "message"
     Message = qjs::JS_ATOM_message as u32,
     /// "errors"
@@ -279,16 +273,6 @@ pub enum PredefinedAtom {
     GlobalThis = qjs::JS_ATOM_globalThis as u32,
     /// "bigint"
     Bigint = qjs::JS_ATOM_bigint as u32,
-    /// "bigfloat"
-    Bigfloat = qjs::JS_ATOM_bigfloat as u32,
-    /// "bigdecimal"
-    Bigdecimal = qjs::JS_ATOM_bigdecimal as u32,
-    /// "roundingMode"
-    RoundingMode = qjs::JS_ATOM_roundingMode as u32,
-    /// "maximumSignificantDigits"
-    MaximumSignificantDigits = qjs::JS_ATOM_maximumSignificantDigits as u32,
-    /// "maximumFractionDigits"
-    MaximumFractionDigits = qjs::JS_ATOM_maximumFractionDigits as u32,
     /// "toJSON"
     ToJSON = qjs::JS_ATOM_toJSON as u32,
     /// "Object"
@@ -351,16 +335,6 @@ pub enum PredefinedAtom {
     DataView = qjs::JS_ATOM_DataView as u32,
     /// "BigInt"
     BigInt = qjs::JS_ATOM_BigInt as u32,
-    /// "BigFloat"
-    BigFloat = qjs::JS_ATOM_BigFloat as u32,
-    /// "BigFloatEnv"
-    BigFloatEnv = qjs::JS_ATOM_BigFloatEnv as u32,
-    /// "BigDecimal"
-    BigDecimal = qjs::JS_ATOM_BigDecimal as u32,
-    /// "OperatorSet"
-    OperatorSet = qjs::JS_ATOM_OperatorSet as u32,
-    /// "Operators"
-    Operators = qjs::JS_ATOM_Operators as u32,
     /// "Map"
     Map = qjs::JS_ATOM_Map as u32,
     /// "Set"
@@ -508,9 +482,6 @@ impl PredefinedAtom {
             PredefinedAtom::Await => "await",
             PredefinedAtom::Empty => "",
             PredefinedAtom::Length => "length",
-            PredefinedAtom::FileName => "fileName",
-            PredefinedAtom::LineNumber => "lineNumber",
-            PredefinedAtom::ColumnNumber => "columnNumber",
             PredefinedAtom::Message => "message",
             PredefinedAtom::Errors => "errors",
             PredefinedAtom::Stack => "stack",
@@ -595,11 +566,6 @@ impl PredefinedAtom {
             PredefinedAtom::Reason => "reason",
             PredefinedAtom::GlobalThis => "globalThis",
             PredefinedAtom::Bigint => "bigint",
-            PredefinedAtom::Bigfloat => "bigfloat",
-            PredefinedAtom::Bigdecimal => "bigdecimal",
-            PredefinedAtom::RoundingMode => "roundingMode",
-            PredefinedAtom::MaximumSignificantDigits => "maximumSignificantDigits",
-            PredefinedAtom::MaximumFractionDigits => "maximumFractionDigits",
             PredefinedAtom::ToJSON => "toJSON",
             PredefinedAtom::Object => "Object",
             PredefinedAtom::Array => "Array",
@@ -631,11 +597,6 @@ impl PredefinedAtom {
             PredefinedAtom::Float64Array => "Float64Array",
             PredefinedAtom::DataView => "DataView",
             PredefinedAtom::BigInt => "BigInt",
-            PredefinedAtom::BigFloat => "BigFloat",
-            PredefinedAtom::BigFloatEnv => "BigFloatEnv",
-            PredefinedAtom::BigDecimal => "BigDecimal",
-            PredefinedAtom::OperatorSet => "OperatorSet",
-            PredefinedAtom::Operators => "Operators",
             PredefinedAtom::Map => "Map",
             PredefinedAtom::Set => "Set",
             PredefinedAtom::WeakMap => "WeakMap",
@@ -734,8 +695,6 @@ mod test {
             PredefinedAtom::Await,
             PredefinedAtom::Empty,
             PredefinedAtom::Length,
-            PredefinedAtom::FileName,
-            PredefinedAtom::LineNumber,
             PredefinedAtom::Message,
             PredefinedAtom::Errors,
             PredefinedAtom::Stack,
@@ -820,11 +779,6 @@ mod test {
             PredefinedAtom::Reason,
             PredefinedAtom::GlobalThis,
             PredefinedAtom::Bigint,
-            PredefinedAtom::Bigfloat,
-            PredefinedAtom::Bigdecimal,
-            PredefinedAtom::RoundingMode,
-            PredefinedAtom::MaximumSignificantDigits,
-            PredefinedAtom::MaximumFractionDigits,
             PredefinedAtom::ToJSON,
             PredefinedAtom::Object,
             PredefinedAtom::Array,
@@ -856,11 +810,6 @@ mod test {
             PredefinedAtom::Float64Array,
             PredefinedAtom::DataView,
             PredefinedAtom::BigInt,
-            PredefinedAtom::BigFloat,
-            PredefinedAtom::BigFloatEnv,
-            PredefinedAtom::BigDecimal,
-            PredefinedAtom::OperatorSet,
-            PredefinedAtom::Operators,
             PredefinedAtom::Map,
             PredefinedAtom::Set,
             PredefinedAtom::WeakMap,
