@@ -1,18 +1,18 @@
 use convert_case::Casing;
 use proc_macro2::{Ident, TokenStream};
-use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use syn::{
     fold::Fold,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
+    spanned::Spanned,
     token::Comma,
-    FnArg, LitStr, Signature, Token, Type, Visibility,
+    Error, FnArg, LitStr, Result, Signature, Token, Type, Visibility,
 };
 
 use crate::{
     attrs::{take_attributes, OptionList, ValueOption},
-    common::{crate_ident, kw, AbortResultExt, Case, SelfReplacer, BASE_PREFIX},
+    common::{crate_ident, kw, Case, SelfReplacer, BASE_PREFIX},
 };
 
 #[derive(Debug, Default)]
@@ -58,8 +58,11 @@ impl FunctionConfig {
     }
 
     /// Returns a name under which we can access the rquickjs crate.
-    pub fn crate_name(&self) -> String {
-        self.crate_.clone().unwrap_or_else(crate_ident)
+    pub fn crate_name(&self) -> Result<String> {
+        if let Some(c) = self.crate_.clone() {
+            return Ok(c);
+        }
+        crate_ident()
     }
 
     /// Returns the name of the carry type for which JsFunction will be implemented
@@ -83,7 +86,10 @@ impl FunctionConfig {
     }
 }
 
-pub(crate) fn expand(options: OptionList<FunctionOption>, mut item: syn::ItemFn) -> TokenStream {
+pub(crate) fn expand(
+    options: OptionList<FunctionOption>,
+    mut item: syn::ItemFn,
+) -> Result<TokenStream> {
     let mut config = FunctionConfig::default();
     for option in options.0.iter() {
         config.apply(option)
@@ -100,20 +106,19 @@ pub(crate) fn expand(options: OptionList<FunctionOption>, mut item: syn::ItemFn)
         }
 
         Ok(true)
-    })
-    .unwrap_or_abort();
+    })?;
 
-    let crate_name = format_ident!("{}", config.crate_name());
+    let crate_name = format_ident!("{}", config.crate_name()?);
     let prefix = config.prefix.as_deref().unwrap_or(BASE_PREFIX);
 
-    let func = JsFunction::new(item.vis.clone(), &item.sig, None);
+    let func = JsFunction::new(item.vis.clone(), &item.sig, None)?;
 
     let carry_type = func.expand_carry_type(prefix);
     let impl_ = func.expand_to_js_function_impl(prefix, &crate_name);
     let into_js = func.expand_into_js_impl(prefix, &crate_name);
     let _js_name = config.js_name(&item.sig.ident, None);
 
-    quote! {
+    Ok(quote! {
         #item
 
         #carry_type
@@ -121,7 +126,7 @@ pub(crate) fn expand(options: OptionList<FunctionOption>, mut item: syn::ItemFn)
         #impl_
 
         #into_js
-    }
+    })
 }
 
 #[derive(Clone)]
@@ -134,7 +139,7 @@ pub(crate) struct JsFunction {
 }
 
 impl JsFunction {
-    pub fn new(vis: Visibility, sig: &Signature, self_type: Option<&Type>) -> Self {
+    pub fn new(vis: Visibility, sig: &Signature, self_type: Option<&Type>) -> Result<Self> {
         let Signature {
             ref asyncness,
             ref unsafety,
@@ -146,23 +151,23 @@ impl JsFunction {
         } = sig;
 
         if let Some(unsafe_) = unsafety {
-            abort!(
-                unsafe_,
-                "implementing JavaScript callbacks for unsafe functions is not allowed."
-            )
+            return Err(Error::new(
+                unsafe_.span(),
+                "implementing JavaScript callbacks for unsafe functions is not allowed.",
+            ));
         }
         if let Some(abi) = abi {
-            abort!(
-                abi,
+            return Err(Error::new(
+                abi.span(),
                 "implementing JavaScript callbacks functions with an non Rust abi is not supported."
-            )
+            ));
         }
         if let Some(variadic) = variadic {
-            abort!(variadic,"implementing JavaScript callbacks for functions with variadic params is not supported.")
+            return Err(Error::new(variadic.span(),"implementing JavaScript callbacks for functions with variadic params is not supported."));
         }
         let is_async = asyncness.is_some();
 
-        let params = JsParams::from_input(inputs, self_type);
+        let params = JsParams::from_input(inputs, self_type)?;
 
         let rust_function = if let Some(self_type) = self_type {
             quote! {  <#self_type >::#ident }
@@ -170,13 +175,13 @@ impl JsFunction {
             quote!( #ident )
         };
 
-        JsFunction {
+        Ok(JsFunction {
             vis,
             name: ident.clone(),
             is_async,
             rust_function,
             params,
-        }
+        })
     }
 
     pub fn expand_carry_type_name(&self, prefix: &str) -> Ident {
@@ -348,7 +353,7 @@ impl JsParam {
 }
 
 impl JsParams {
-    pub fn from_input(inputs: &Punctuated<FnArg, Comma>, self_type: Option<&Type>) -> Self {
+    pub fn from_input(inputs: &Punctuated<FnArg, Comma>, self_type: Option<&Type>) -> Result<Self> {
         let mut types = Vec::<JsParam>::new();
 
         let mut self_replacer = self_type.map(SelfReplacer::with);
@@ -416,14 +421,14 @@ impl JsParams {
                             is_this: true,
                         })
                     } else {
-                        abort!(
-                            recv.self_token,
-                            "self arguments not supported in this context"
-                        );
+                        return Err(Error::new(
+                            recv.self_token.span(),
+                            "self arguments not supported in this context",
+                        ));
                     }
                 }
             }
         }
-        JsParams { params: types }
+        Ok(JsParams { params: types })
     }
 }

@@ -1,16 +1,15 @@
 use convert_case::Casing;
 use proc_macro2::{Ident, Span, TokenStream};
-use proc_macro_error::{abort, emit_warning};
 use quote::quote;
 use syn::{
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Attribute, Block, Expr, ImplItemFn, LitStr, Signature, Token, Type, Visibility,
+    Attribute, Block, Error, Expr, ImplItemFn, LitStr, Result, Signature, Token, Type, Visibility,
 };
 
 use crate::{
     attrs::{take_attributes, FlagOption, OptionList, ValueOption},
-    common::{kw, AbortResultExt, Case},
+    common::{kw, Case},
     function::JsFunction,
 };
 
@@ -95,42 +94,46 @@ impl Parse for MethodOption {
 impl MethodConfig {
     /// Make sure attrs aren't applied in ways they shouldn't be.
     /// Span: The span the error should be attached to.
-    pub fn validate(&self, span: Span) {
+    pub fn validate(&self, span: Span) -> Result<()> {
         if self.get && self.set {
-            abort!(
+            return Err(Error::new(
                 span,
-                "a function can't both be a setter and a getter at the same time."
-            )
+                "a function can't both be a setter and a getter at the same time.",
+            ));
         }
 
         if self.constructor && self.rename.is_some() {
-            emit_warning!(span, "renaming a constructor has no effect")
+            return Err(Error::new(span, "Can't rename a constructor"));
         }
 
         if self.constructor && self.get {
-            abort!(
+            return Err(Error::new(
                 span,
-                "a function can't both be a getter and a constructor at the same time."
-            )
+                "a function can't both be a getter and a constructor at the same time.",
+            ));
         }
 
         if self.constructor && self.set {
-            abort!(
+            return Err(Error::new(
                 span,
-                "a function can't both be a setter and a constructor at the same time."
-            )
+                "a function can't both be a setter and a constructor at the same time.",
+            ));
         }
 
         if self.configurable && !(self.get || self.set) {
-            abort!(
+            return Err(Error::new(
                 span,
-                "configurable can only be set for getters and setters."
-            )
+                "configurable can only be set for getters and setters.",
+            ));
         }
 
         if self.enumerable && !(self.get || self.set) {
-            abort!(span, "enumerable can only be set for getters and setters.")
+            return Err(Error::new(
+                span,
+                "enumerable can only be set for getters and setters.",
+            ));
         }
+        Ok(())
     }
 }
 
@@ -146,7 +149,7 @@ pub(crate) struct Method {
 }
 
 impl Method {
-    pub fn parse_impl_fn(func: ImplItemFn, self_ty: &Type) -> Self {
+    pub fn parse_impl_fn(func: ImplItemFn, self_ty: &Type) -> Result<Self> {
         let span = func.span();
         let ImplItemFn {
             mut attrs,
@@ -170,10 +173,9 @@ impl Method {
                 config.apply(option);
             }
             Ok(true)
-        })
-        .unwrap_or_abort();
+        })?;
 
-        config.validate(attr_span);
+        config.validate(attr_span)?;
 
         let attr_span = attrs
             .is_empty()
@@ -181,14 +183,14 @@ impl Method {
             .unwrap_or_else(|| attrs[0].span());
 
         if let Some(d) = defaultness {
-            abort!(d, "specialized fn's are not supported.")
+            return Err(Error::new(d.span(), "specialized fn's are not supported."));
         }
 
         attrs.retain(|x| !x.path().is_ident("qjs"));
 
-        let function = JsFunction::new(vis.clone(), &sig, Some(self_ty));
+        let function = JsFunction::new(vis.clone(), &sig, Some(self_ty))?;
 
-        Method {
+        Ok(Method {
             config,
             attr_span,
             function,
@@ -196,7 +198,7 @@ impl Method {
             vis,
             sig,
             block,
-        }
+        })
     }
 
     /// The name on of this method on the JavaScript side.

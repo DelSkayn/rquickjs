@@ -1,6 +1,6 @@
 use rquickjs::{CatchResultExt, Context, Module, Runtime};
 
-#[derive(rquickjs::class::Trace)]
+#[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
 #[rquickjs::class]
 pub struct Test {
     foo: u32,
@@ -31,7 +31,7 @@ mod test_mod {
     /// So this won't work for functions.
     pub use super::Test;
 
-    #[derive(rquickjs::class::Trace)]
+    #[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
     #[rquickjs::class(rename = "FooBar")]
     pub struct Test2 {
         bar: u32,

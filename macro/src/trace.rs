@@ -1,20 +1,20 @@
 use proc_macro2::TokenStream;
-use proc_macro_error::abort;
 use quote::{format_ident, quote};
 use syn::{
     parse::{Parse, ParseStream},
-    Data, DataEnum, DataStruct, DeriveInput, LitStr, Token,
+    spanned::Spanned,
+    Data, DataEnum, DataStruct, DeriveInput, Error, LitStr, Result, Token,
 };
 
 use crate::{
     attrs::{take_attributes, OptionList, ValueOption},
-    common::{add_js_lifetime, crate_ident, AbortResultExt},
+    common::{add_js_lifetime, crate_ident},
     fields::Fields,
 };
 
 #[derive(Default)]
 pub(crate) struct ImplConfig {
-    crate_: Option<String>,
+    pub(crate) crate_: Option<String>,
 }
 
 impl ImplConfig {
@@ -41,7 +41,7 @@ impl Parse for TraceOption {
     }
 }
 
-pub(crate) fn expand(input: DeriveInput) -> TokenStream {
+pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
     let DeriveInput {
         ident,
         generics,
@@ -60,22 +60,22 @@ pub(crate) fn expand(input: DeriveInput) -> TokenStream {
         let options: OptionList<TraceOption> = attr.parse_args()?;
         options.0.iter().for_each(|x| config.apply(x));
         Ok(true)
-    })
-    .unwrap_or_abort();
+    })?;
 
     //options.0.iter().for_each(|x| config.apply(x));
 
     let lifetime_generics = add_js_lifetime(&generics);
-    let crate_name = config
-        .crate_
-        .map(|x| format_ident!("{x}"))
-        .unwrap_or_else(|| format_ident!("{}", crate_ident()));
+    let crate_name = if let Some(x) = config.crate_ {
+        format_ident!("{x}")
+    } else {
+        format_ident!("{}", crate_ident()?)
+    };
 
     match data {
         Data::Struct(struct_) => {
             let DataStruct { fields, .. } = struct_;
 
-            let trace_body = match Fields::from_fields(fields) {
+            let trace_body = match Fields::from_fields(fields)? {
                 Fields::Named(mut f) => {
                     let fields = f.iter_mut().map(|x| x.expand_trace_body_named(&crate_name));
                     quote!(
@@ -93,18 +93,20 @@ pub(crate) fn expand(input: DeriveInput) -> TokenStream {
                 Fields::Unit => TokenStream::new(),
             };
 
-            quote! {
+            Ok(quote! {
                 impl #lifetime_generics #crate_name::class::Trace<'js> for #ident #generics{
                     fn trace<'a>(&self, _tracer: #crate_name::class::Tracer<'a,'js>){
                         #trace_body
                     }
                 }
-            }
+            })
         }
         Data::Enum(DataEnum { variants, .. }) => {
-            let body = variants.into_iter().map(|x| {
+            let mut body = TokenStream::new();
+
+            for x in variants.into_iter() {
                 let ident = &x.ident;
-                let fields = Fields::from_fields(x.fields);
+                let fields = Fields::from_fields(x.fields)?;
                 match fields {
                     Fields::Named(f) => {
                         let has_skip = f.iter().any(|x| x.config.skip_trace);
@@ -119,15 +121,15 @@ pub(crate) fn expand(input: DeriveInput) -> TokenStream {
                             Self::#ident{ #(ref #field_names,)* #remainder }
                         };
 
-                        let body = quote! {
+                        let block = quote! {
                             {
                                 #(#crate_name::class::Trace::trace(#field_names, _tracer);)*
                             }
                         };
 
-                        quote! {
-                            #pattern => #body
-                        }
+                        body.extend(quote! {
+                            #pattern => #block,
+                        });
                     }
                     Fields::Unnamed(f) => {
                         let patterns = f.iter().enumerate().map(|(idx, f)| {
@@ -148,36 +150,36 @@ pub(crate) fn expand(input: DeriveInput) -> TokenStream {
                                 let ident = format_ident!("tmp_{idx}");
                                 Some(ident)
                             });
-                        let body = quote! {
+
+                        let block = quote! {
                             {
                                 #(#crate_name::class::Trace::trace(#names,_tracer);)*
                             }
                         };
 
-                        quote! {
-                            #pattern => #body
-                        }
+                        body.extend(quote! {
+                            #pattern => #block,
+                        });
                     }
-                    Fields::Unit => {
-                        quote! {
-                            Self::#ident => {}
-                        }
-                    }
+                    Fields::Unit => body.extend(quote! {
+                        Self::#ident => {},
+                    }),
                 }
-            });
+            }
 
-            quote! {
+            Ok(quote! {
                 impl #lifetime_generics #crate_name::class::Trace<'js> for #ident #generics {
                     fn trace<'a>(&self, _tracer: #crate_name::class::Tracer<'a,'js>){
                         match *self{
-                            #(#body,)*
+                            #body
                         }
                     }
                 }
-            }
+            })
         }
-        Data::Union(u) => {
-            abort!(u.union_token, "deriving trace for unions is not supported");
-        }
+        Data::Union(u) => Err(Error::new(
+            u.union_token.span(),
+            "deriving trace for unions is not supported",
+        )),
     }
 }

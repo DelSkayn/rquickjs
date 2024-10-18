@@ -12,7 +12,6 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
-    cstr,
     markers::Invariant,
     qjs,
     runtime::{opaque::Opaque, UserData, UserDataError, UserDataGuard},
@@ -169,7 +168,7 @@ impl<'js> Ctx<'js> {
         source: S,
         options: EvalOptions,
     ) -> Result<V> {
-        let file_name = cstr!("eval_script");
+        let file_name = CStr::from_bytes_with_nul(b"eval_script\0").unwrap();
 
         V::from_js(self, unsafe {
             let val = self.eval_raw(source, file_name, options.to_flag())?;
@@ -393,8 +392,7 @@ impl<'js> Ctx<'js> {
     }
 
     pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
-        let rt = qjs::JS_GetRuntime(self.ctx.as_ptr());
-        &(*qjs::JS_GetRuntimeOpaque(rt).cast::<Opaque>())
+        Opaque::from_runtime_ptr(qjs::JS_GetRuntime(self.ctx.as_ptr()))
     }
 
     /// Spawn future using configured async runtime

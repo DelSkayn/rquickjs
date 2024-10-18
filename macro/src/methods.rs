@@ -1,16 +1,16 @@
 use std::collections::HashMap;
 
 use proc_macro2::{Span, TokenStream};
-use proc_macro_error::{abort, emit_warning};
 use quote::{format_ident, quote};
 use syn::{
     parse::{Parse, ParseStream},
-    ItemImpl, LitStr, Token, Type,
+    spanned::Spanned,
+    Error, ItemImpl, LitStr, Result, Token, Type,
 };
 
 use crate::{
     attrs::{take_attributes, OptionList, ValueOption},
-    common::{add_js_lifetime, crate_ident, kw, AbortResultExt, Case, BASE_PREFIX, IMPL_PREFIX},
+    common::{add_js_lifetime, crate_ident, kw, Case, BASE_PREFIX, IMPL_PREFIX},
 };
 
 mod accessor;
@@ -20,9 +20,9 @@ use method::Method;
 
 #[derive(Default)]
 pub(crate) struct ImplConfig {
-    prefix: Option<String>,
-    crate_: Option<String>,
-    rename_all: Option<Case>,
+    pub(crate) prefix: Option<String>,
+    pub(crate) crate_: Option<String>,
+    pub(crate) rename_all: Option<Case>,
 }
 
 impl ImplConfig {
@@ -80,7 +80,7 @@ pub fn get_class_name(ty: &Type) -> String {
     }
 }
 
-pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenStream {
+pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<TokenStream> {
     let mut config = ImplConfig::default();
     for option in options.0.iter() {
         config.apply(option)
@@ -109,25 +109,27 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
         }
 
         Ok(true)
-    })
-    .unwrap_or_abort();
+    })?;
 
     if let Some(trait_) = trait_.as_ref() {
-        abort!(
-            trait_.2,
-            "#[method] can't be applied to a trait implementation"
-        );
+        return Err(Error::new(
+            trait_.2.span(),
+            "#[method] can't be applied to a trait implementation",
+        ));
     }
 
     if let Some(d) = defaultness {
-        abort!(d, "specialized impl's are not supported.")
+        return Err(Error::new(
+            d.span(),
+            "specialized impl's are not supported.",
+        ));
     }
     if let Some(u) = unsafety {
-        abort!(u, "unsafe impl's are not supported.")
+        return Err(Error::new(u.span(), "unsafe impl's are not supported."));
     }
 
     let prefix = config.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
-    let crate_name = format_ident!("{}", config.crate_.unwrap_or_else(crate_ident));
+    let crate_name = format_ident!("{}", config.crate_.map(Ok).unwrap_or_else(crate_ident)?);
 
     let mut accessors = HashMap::new();
     let mut functions = Vec::new();
@@ -139,25 +141,24 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
         match item {
             syn::ImplItem::Const(_item) => {}
             syn::ImplItem::Fn(item) => {
-                let function = Method::parse_impl_fn(item, &self_ty);
+                let function = Method::parse_impl_fn(item, &self_ty)?;
                 let span = function.attr_span;
                 if function.config.get || function.config.set {
                     let access = accessors
                         .entry(function.name(config.rename_all))
                         .or_insert_with(JsAccessor::new);
                     if function.config.get {
-                        access.define_get(function, config.rename_all);
+                        access.define_get(function, config.rename_all)?;
                     } else {
-                        access.define_set(function, config.rename_all);
+                        access.define_set(function, config.rename_all)?;
                     }
                 } else if function.config.constructor {
                     if let Some(first) = constructor.replace(function) {
                         let first_span = first.attr_span;
-                        abort!(
-                            span,
-                            "A class can only have a single constructor";
-                            hint = first_span => "First constructor defined here"
-                        );
+                        let mut error =
+                            Error::new(span, "A class can only have a single constructor");
+                        error.extend(Error::new(first_span, "First constructor defined here"));
+                        return Err(error);
                     }
                 } else {
                     if static_span.is_none() && function.config.r#static {
@@ -171,7 +172,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
     }
 
     // Warn about unused static definitions if no constructor was created.
-    if constructor.is_none() {
+    /* if constructor.is_none() {
         if let Some(span) = static_span {
             emit_warning!(
                 span,
@@ -179,7 +180,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
                 hint = "Static methods are defined on the class constructor."
             );
         }
-    }
+    }*/
 
     let function_impls = functions.iter().map(|func| func.expand_impl());
     let accessor_impls = accessors.values().map(|access| access.expand_impl());
@@ -246,7 +247,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
     let class_name = get_class_name(&self_ty);
     let impl_mod_name = format_ident!("__impl_methods_{class_name}__");
 
-    quote! {
+    let res = quote! {
         #(#attrs)*
         #impl_token #generics #self_ty {
             #(#function_impls)*
@@ -276,5 +277,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> TokenSt
 
             #constructor_create
         }
-    }
+    };
+
+    Ok(res)
 }
