@@ -7,26 +7,26 @@ use crate::{
 ///
 /// # Safety
 ///
-/// `Outlive<'js>` must be implemented for types the same, specific, lifetime 'js.
+/// `JsLifetime<'js>` must be implemented for types the same, specific, lifetime 'js.
 /// For example the following is unsound:
 /// ```no_run
-/// # use rquickjs::Outlive;
+/// # use rquickjs::JsLifetime;
 /// struct Container<'js>(rquickjs::Object<'js>);
 ///
-/// unsafe impl<'a,'js> Outlive<'js> for Container<'a>{
-///     type Target<'to> = Container<'to>;
+/// unsafe impl<'a,'js> JsLifetime<'js> for Container<'a>{
+///     type Changed<'to> = Container<'to>;
 /// }
 /// ```
 /// Instead it must be implemented as following
 /// ```
-/// # use rquickjs::Outlive;
+/// # use rquickjs::JsLifetime;
 /// struct Container<'js>(rquickjs::Object<'js>);
 ///
-/// unsafe impl<'js> Outlive<'js> for Container<'js>{
-///     type Target<'to> = Container<'to>;
+/// unsafe impl<'js> JsLifetime<'js> for Container<'js>{
+///     type Changed<'to> = Container<'to>;
 /// }
 /// ```
-/// `Outlive::Target` must be the same type with all 'js lifetimes changed from 'js to 'to, no
+/// `JsLifetime::Changed` must be the same type with all 'js lifetimes changed from 'js to 'to, no
 /// other lifetimes may be changed and the type must be otherwise the exact same type.
 ///
 pub unsafe trait JsLifetime<'js> {

@@ -61,13 +61,13 @@ mod trace;
 ///
 /// # Example
 /// ```
-/// use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime};
+/// use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime, JsLifetime};
 ///
 /// /// Implement JsClass for TestClass.
 /// /// This allows passing any instance of TestClass straight to JavaScript.
 /// /// It is command to also add #[derive(Trace)] as all types which implement JsClass need to
 /// /// also implement trace.
-/// #[derive(Trace)]
+/// #[derive(Trace, JsLifetime)]
 /// #[rquickjs::class(rename_all = "camelCase")]
 /// pub struct TestClass<'js> {
 ///     /// These attribute make the accessible from JavaScript with getters and setters.
@@ -192,10 +192,10 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// ```
 /// use rquickjs::{
 ///     atom::PredefinedAtom, class::Trace, prelude::Func, CatchResultExt, Class, Context, Ctx,
-///     Object, Result, Runtime,
+///     Object, Result, Runtime, JsLifetime
 /// };
 ///
-/// #[derive(Trace)]
+/// #[derive(Trace, JsLifetime)]
 /// #[rquickjs::class]
 /// pub struct TestClass {
 ///     value: u32,
@@ -358,7 +358,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// use rquickjs::{CatchResultExt, Context, Module, Runtime};
 ///
 /// /// A class which will be exported from the module.
-/// #[derive(rquickjs::class::Trace)]
+/// #[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
 /// #[rquickjs::class]
 /// pub struct Test {
 ///     foo: u32,
@@ -393,7 +393,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     pub use super::Test as RenamedTest;
 ///
 ///     /// A class which will be exported from the module under the name `FooBar`.
-///     #[derive(rquickjs::class::Trace)]
+///     #[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
 ///     #[rquickjs::class(rename = "FooBar")]
 ///     pub struct Test2 {
 ///         bar: u32,

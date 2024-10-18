@@ -171,7 +171,7 @@ pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
                 impl #lifetime_generics #crate_name::class::Trace<'js> for #ident #generics {
                     fn trace<'a>(&self, _tracer: #crate_name::class::Tracer<'a,'js>){
                         match *self{
-                            body
+                            #body
                         }
                     }
                 }

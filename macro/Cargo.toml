@@ -24,7 +24,7 @@ convert_case = "0.6"
 
 [dependencies.syn]
 version = "2"
-features = ["full","fold","extra-traits"]
+features = ["full","fold","extra-traits","visit"]
 
 [dependencies.phf_shared]
 version = "0.11"

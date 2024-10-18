@@ -2,7 +2,7 @@
 
 use rquickjs::{
     class::{JsClass, Readable, Trace, Tracer},
-    Class, Context, Null, Runtime,
+    Class, Context, JsLifetime, Null, Runtime,
 };
 use std::sync::Mutex;
 
