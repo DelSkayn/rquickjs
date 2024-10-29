@@ -7,7 +7,7 @@ use std::{
 
 // WASI logic lifted from https://github.com/bytecodealliance/javy/blob/61616e1507d2bf896f46dc8d72687273438b58b2/crates/quickjs-wasm-sys/build.rs#L18
 
-const WASI_SDK_VERSION_MAJOR: usize = 20;
+const WASI_SDK_VERSION_MAJOR: usize = 24;
 const WASI_SDK_VERSION_MINOR: usize = 0;
 
 fn download_wasi_sdk() -> PathBuf {
@@ -27,10 +27,10 @@ fn download_wasi_sdk() -> PathBuf {
     // Download archive if necessary
     if !archive_path.try_exists().unwrap() {
         let file_suffix = match (env::consts::OS, env::consts::ARCH) {
-            ("linux", "x86") | ("linux", "x86_64") => "linux",
-            ("macos", "x86") | ("macos", "x86_64") | ("macos", "aarch64") => "macos",
-            ("windows", "x86") => "mingw-x86",
-            ("windows", "x86_64") => "mingw",
+            ("linux", "x86") | ("linux", "x86_64") => "x86_64-linux",
+            ("macos", "x86") | ("macos", "x86_64") => "x86_64-macos",
+            ("macos", "aarch64") => "arm64-macos",
+            ("windows", "x86") | ("windows", "x86_64") => "x86_64-windows",
             other => panic!("Unsupported platform tuple {:?}", other),
         };
 
