@@ -7,10 +7,6 @@ mod rust;
 
 pub use rust::RustAllocator;
 
-/// Raw memory pointer
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
-pub type RawMemPtr = *mut u8;
-
 /// The allocator interface
 ///
 /// # Safety
@@ -26,28 +22,28 @@ pub unsafe trait Allocator {
     /// Allocate new memory
     ///
     ///
-    fn alloc(&mut self, size: usize) -> RawMemPtr;
+    fn alloc(&mut self, size: usize) -> *mut u8;
 
     /// De-allocate previously allocated memory
     ///
     /// # Safety
     /// Caller must ensure that the pointer that is being deallocated was allocated by the same
     /// Allocator instance.
-    unsafe fn dealloc(&mut self, ptr: RawMemPtr);
+    unsafe fn dealloc(&mut self, ptr: *mut u8);
 
     /// Re-allocate previously allocated memory
     ///
     /// # Safety
     /// Caller must ensure that the pointer points to an allocation that was allocated by the same
     /// Allocator instance.
-    unsafe fn realloc(&mut self, ptr: RawMemPtr, new_size: usize) -> RawMemPtr;
+    unsafe fn realloc(&mut self, ptr: *mut u8, new_size: usize) -> *mut u8;
 
     /// Get usable size of allocated memory region
     ///
     /// # Safety
     /// Caller must ensure that the pointer handed to this function points to an allocation
     /// allocated by the same allocator instance.
-    unsafe fn usable_size(ptr: RawMemPtr) -> usize
+    unsafe fn usable_size(ptr: *mut u8) -> usize
     where
         Self: Sized;
 }
@@ -140,7 +136,7 @@ impl AllocatorHolder {
         let state = &mut *state;
         state.malloc_count -= 1;
 
-        let size = A::usable_size(ptr as RawMemPtr);
+        let size = A::usable_size(ptr as *mut u8);
 
         let allocator = &mut *(state.opaque as *mut DynAllocator);
         allocator.dealloc(ptr as _);
@@ -167,7 +163,7 @@ impl AllocatorHolder {
             return ptr::null_mut();
         }
 
-        let old_size = Self::size_t(A::usable_size(ptr as RawMemPtr));
+        let old_size = Self::size_t(A::usable_size(ptr as *mut u8));
 
         let new_malloc_size = state_ref.malloc_size - old_size + size;
         if new_malloc_size > state_ref.malloc_limit {
@@ -181,7 +177,7 @@ impl AllocatorHolder {
             return ptr::null_mut();
         }
 
-        let actual_size = Self::size_t(A::usable_size(ptr as RawMemPtr));
+        let actual_size = Self::size_t(A::usable_size(ptr as *mut u8));
 
         state_ref.malloc_size -= old_size;
         state_ref.malloc_size += actual_size;

@@ -3,7 +3,7 @@ use crate::{
     String, Symbol, Value,
 };
 
-/// The trait which signifies a type using the rquickjs `'js' lifetime trick for maintaining safety around Javascript values.
+/// The trait which signifies a type using the rquickjs `'js'` lifetime trick for maintaining safety around Javascript values.
 ///
 /// # Safety
 ///
@@ -45,7 +45,7 @@ use crate::{
 ///     type Changed<'to> = Container<'to>;
 /// }
 /// ```
-/// `Container` here is defined as having a `'a` lifetime where it should be `'a`.
+/// `Container` here is defined as having a `'a` lifetime where it should be `'js`.
 ///
 /// The following is also incorrect
 ///
@@ -59,7 +59,7 @@ use crate::{
 ///     type Changed<'to> = Container<'to,'to>;
 /// }
 /// ```
-/// The lifetime marked must be from an rquickjs type with a define <'js> lifetime, it cannot be a
+/// The lifetime marked must be from an rquickjs type with a defined `<'js>` lifetime, it cannot be a
 /// the lifetime of reference!
 ///
 pub unsafe trait JsLifetime<'js> {

@@ -14,7 +14,7 @@ mod params;
 mod types;
 
 pub use args::{Args, IntoArg, IntoArgs};
-pub use ffi::{RustFunction, StaticJsFn};
+pub use ffi::RustFunction;
 pub use params::{FromParam, FromParams, ParamRequirement, Params, ParamsAccessor};
 #[cfg(feature = "futures")]
 pub use types::Async;

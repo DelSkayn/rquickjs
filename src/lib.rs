@@ -22,7 +22,7 @@
 //! This library has multiple traits for converting to and from JavaScript. The [`IntoJs`] trait is
 //! used for taking Rust values and turning them into JavaScript values. The [`FromJs`] is for
 //! converting JavaScript values to Rust. Note that this trait does not perform automatic
-//! coercion but [`Coerced`](convert::Coerced) can be used to convert the values with coercion.
+//! coercion but [`Coerced`] can be used to convert the values with coercion.
 //!
 //! For values which represent the name of variables or indices, the trait [`IntoAtom`] is
 //! available to convert values to the representation QuickJS requires.
