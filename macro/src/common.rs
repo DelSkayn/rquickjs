@@ -1,12 +1,11 @@
 use convert_case::Case as ConvertCase;
 use proc_macro2::Span;
 use proc_macro_crate::FoundCrate;
-use proc_macro_error::{abort, abort_call_site};
 use quote::{ToTokens, TokenStreamExt};
 use syn::{
     fold::Fold,
     parse::{Parse, ParseStream},
-    Generics, Lifetime, LifetimeParam, LitStr, Type,
+    Error, Generics, Lifetime, LifetimeParam, LitStr, Result, Type,
 };
 
 /// prefix for getter implementations
@@ -60,24 +59,6 @@ impl ToTokens for Case {
     }
 }
 
-pub(crate) trait AbortResultExt {
-    type Ouput;
-    fn unwrap_or_abort(self) -> Self::Ouput;
-}
-
-impl<T> AbortResultExt for syn::Result<T> {
-    type Ouput = T;
-
-    fn unwrap_or_abort(self) -> Self::Ouput {
-        match self {
-            Ok(x) => x,
-            Err(e) => {
-                abort!(e.span(), "{}", e)
-            }
-        }
-    }
-}
-
 impl Case {
     pub fn to_convert_case(self) -> ConvertCase {
         match self {
@@ -91,13 +72,16 @@ impl Case {
     }
 }
 
-pub(crate) fn crate_ident() -> String {
+pub(crate) fn crate_ident() -> Result<String> {
     match proc_macro_crate::crate_name("rquickjs") {
         Err(e) => {
-            abort_call_site!("could not find rquickjs package"; note = e);
+            return Err(Error::new(
+                Span::call_site(),
+                format_args!("could not find rquickjs package: {e}"),
+            ))
         }
-        Ok(FoundCrate::Itself) => "rquickjs".to_owned(),
-        Ok(FoundCrate::Name(x)) => x.to_string(),
+        Ok(FoundCrate::Itself) => Ok("rquickjs".to_owned()),
+        Ok(FoundCrate::Name(x)) => Ok(x.to_string()),
     }
 }
 

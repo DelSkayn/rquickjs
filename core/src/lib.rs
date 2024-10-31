@@ -8,6 +8,7 @@
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
+mod js_lifetime;
 pub mod markers;
 mod persistent;
 mod result;
@@ -21,7 +22,8 @@ pub mod context;
 pub use context::{Context, Ctx};
 pub mod class;
 pub use class::Class;
-pub use persistent::{Outlive, Persistent};
+pub use js_lifetime::JsLifetime;
+pub use persistent::Persistent;
 pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 pub use value::{
     array, atom, convert, function, module, object, promise, Array, Atom, BigInt, Coerced,
@@ -60,26 +62,6 @@ pub mod phf {
     pub use phf::*;
 }
 
-/// Short macro to define a cstring literal.
-///
-/// Make sure the string does not contain any internal null characters or it will panic.
-#[macro_export]
-macro_rules! cstr {
-    ($str:tt) => {{
-        const fn no_null(s: &[u8]) {
-            let mut i = 0;
-            while i < s.len() {
-                if s[i] == 0 {
-                    panic!("C-str string contained null character")
-                }
-                i += 1;
-            }
-        }
-        no_null($str.as_bytes());
-        unsafe { std::ffi::CStr::from_bytes_with_nul_unchecked(concat!($str, "\0").as_bytes()) }
-    }};
-}
-
 pub mod prelude {
     //! A group of often used types.
     #[cfg(feature = "multi-ctx")]
@@ -91,6 +73,7 @@ pub mod prelude {
             Exhaustive, Flat, Func, FuncArg, IntoArg, IntoArgs, MutFn, OnceFn, Opt, Rest, This,
         },
         result::{CatchResultExt, ThrowResultExt},
+        JsLifetime,
     };
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]

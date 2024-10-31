@@ -205,6 +205,10 @@ impl UserDataMap {
             UserDataGuard { map: self, r }
         })
     }
+
+    pub fn clear(&mut self) {
+        self.map.get_mut().clear()
+    }
 }
 
 /// Guard for user data to avoid inserting new userdata while exisiting userdata is being

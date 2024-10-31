@@ -1,57 +1,52 @@
 //! JavaScript classes defined from Rust.
 
 use crate::{
-    function::StaticJsFn,
-    qjs::{self, JS_VALUE_GET_TAG},
+    function::Params,
+    qjs::{self},
     value::Constructor,
-    Ctx, Error, FromJs, IntoJs, Object, Outlive, Result, Value,
+    Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
-use std::{
-    ffi::CString,
-    hash::Hash,
-    marker::PhantomData,
-    ops::Deref,
-    ptr::{self, NonNull},
-};
+use std::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
 mod cell;
-mod ffi;
-mod id;
 mod trace;
+
+pub(crate) mod ffi;
 
 pub use cell::{
     Borrow, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable, Writable,
 };
-pub use id::ClassId;
+use ffi::{ClassCell, VTable};
 pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
 
 /// The trait which allows Rust types to be used from JavaScript.
-pub trait JsClass<'js>: Trace<'js> {
+pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// The name the constructor has in JavaScript
     const NAME: &'static str;
+
+    /// Is this class a function.
+    const CALLABLE: bool = false;
 
     /// Can the type be mutated while a JavaScript value.
     ///
     /// This should either be [`Readable`] or [`Writable`].
     type Mutable: Mutability;
 
-    /// A unique id for the class.
-    fn class_id() -> &'static ClassId;
-
     /// Returns the class prototype,
-    fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>>;
+    fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
+        Object::new(ctx.clone()).map(Some)
+    }
 
     /// Returns a predefined constructor for this specific class type if there is one.
     fn constructor(ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>>;
 
-    /// A possible call function.
-    ///
-    /// Returning a function from this method makes any objects with this class callable as if it
-    /// is a function object..
-    fn function() -> Option<StaticJsFn> {
-        None
+    /// The function which will be called if [`Self::CALLABLE`] is true and an an object with this
+    /// class is called as if it is a function.
+    fn call<'a>(this: &JsCell<'js, Self>, params: Params<'a, 'js>) -> Result<Value<'js>> {
+        let _ = this;
+        Ok(Value::new_undefined(params.ctx().clone()))
     }
 }
 
@@ -79,12 +74,12 @@ impl<'js, C: JsClass<'js>> Hash for Class<'js, C> {
     }
 }
 
-unsafe impl<'js, C> Outlive<'js> for Class<'js, C>
+unsafe impl<'js, C> JsLifetime<'js> for Class<'js, C>
 where
-    C: JsClass<'js> + Outlive<'js>,
-    for<'to> C::Target<'to>: JsClass<'to>,
+    C: JsClass<'js> + JsLifetime<'js>,
+    for<'to> C::Changed<'to>: JsClass<'to>,
 {
-    type Target<'to> = Class<'to, C::Target<'to>>;
+    type Changed<'to> = Class<'to, C::Changed<'to>>;
 }
 
 impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
@@ -98,17 +93,22 @@ impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
 impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Create a class from a Rust object.
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
-        if !Self::is_registered(&ctx) {
-            Self::register(&ctx)?;
-        }
-
-        let val = unsafe {
-            ctx.handle_exception(qjs::JS_NewObjectClass(
-                ctx.as_ptr(),
-                C::class_id().get() as i32,
-            ))?
+        let id = unsafe {
+            if C::CALLABLE {
+                ctx.get_opaque().get_callable_id()
+            } else {
+                ctx.get_opaque().get_class_id()
+            }
         };
-        let ptr: *mut JsCell<'js, C> = Box::into_raw(Box::new(JsCell::new(value)));
+
+        let prototype = Self::prototype(&ctx)?;
+
+        let prototype = prototype.map(|x| x.as_js_value()).unwrap_or(qjs::JS_NULL);
+        let val = unsafe {
+            ctx.handle_exception(qjs::JS_NewObjectProtoClass(ctx.as_ptr(), prototype, id))?
+        };
+
+        let ptr = Box::into_raw(Box::new(ClassCell::new(value)));
         unsafe { qjs::JS_SetOpaque(val, ptr.cast()) };
         Ok(Self(
             unsafe { Object::from_js_value(ctx, val) },
@@ -118,17 +118,22 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Create a class from a Rust object with a given prototype.
     pub fn instance_proto(value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
-        if !Self::is_registered(proto.ctx()) {
-            Self::register(proto.ctx())?;
-        }
+        let id = unsafe {
+            if C::CALLABLE {
+                proto.ctx().get_opaque().get_callable_id()
+            } else {
+                proto.ctx().get_opaque().get_class_id()
+            }
+        };
+
         let val = unsafe {
             proto.ctx.handle_exception(qjs::JS_NewObjectProtoClass(
                 proto.ctx().as_ptr(),
                 proto.0.as_js_value(),
-                C::class_id().get(),
+                id,
             ))?
         };
-        let ptr: *mut JsCell<'js, C> = Box::into_raw(Box::new(JsCell::new(value)));
+        let ptr = Box::into_raw(Box::new(ClassCell::new(value)));
         unsafe { qjs::JS_SetOpaque(val, ptr.cast()) };
         Ok(Self(
             unsafe { Object::from_js_value(proto.ctx.clone(), val) },
@@ -139,27 +144,12 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Returns the prototype for the class.
     ///
     /// Returns `None` if the class is not yet registered or if the class doesn't have a prototype.
-    pub fn prototype(ctx: Ctx<'js>) -> Option<Object<'js>> {
-        if !Self::is_registered(&ctx) {
-            return None;
-        }
-        let proto = unsafe {
-            let proto = qjs::JS_GetClassProto(ctx.as_ptr(), C::class_id().get());
-            Value::from_js_value(ctx, proto)
-        };
-        if proto.is_null() {
-            return None;
-        }
-        Some(
-            proto
-                .into_object()
-                .expect("class prototype wasn't an object"),
-        )
+    pub fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
+        unsafe { ctx.get_opaque().get_or_insert_prototype::<C>(&ctx) }
     }
 
     /// Create a constructor for the current class using its definition.
     pub fn create_constructor(ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>> {
-        Self::register(ctx)?;
         C::constructor(ctx)
     }
 
@@ -171,61 +161,16 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         Ok(())
     }
 
-    /// Returns if the class is registered in the runtime.
+    /// Returns a reference to the underlying object contained in a cell.
     #[inline]
-    pub fn is_registered(ctx: &Ctx<'js>) -> bool {
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
-        let class_id = C::class_id().get();
-        0 != unsafe { qjs::JS_IsRegisteredClass(rt, class_id) }
-    }
-
-    /// Registers the class `C` into the runtime.
-    ///
-    /// It is required to call this function on every context in which the class is used before using the class.
-    /// Otherwise the class.
-    ///
-    /// It is fine to call this function multiple times, even on the same context. The class and
-    /// its prototype will only be registered once.
-    pub fn register(ctx: &Ctx<'js>) -> Result<()> {
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
-        let class_id = C::class_id().get();
-        if 0 == unsafe { qjs::JS_IsRegisteredClass(rt, class_id) } {
-            let class_name = CString::new(C::NAME).expect("class name has an internal null byte");
-            let finalizer = if std::mem::needs_drop::<JsCell<C>>() {
-                Some(ffi::finalizer::<C> as unsafe extern "C" fn(*mut qjs::JSRuntime, qjs::JSValue))
-            } else {
-                None
-            };
-            let call = C::function().map(|x| x.0);
-            let class_def = qjs::JSClassDef {
-                class_name: class_name.as_ptr(),
-                finalizer,
-                gc_mark: Some(ffi::trace::<C>),
-                call,
-                exotic: ptr::null_mut(),
-            };
-            if 0 != unsafe { qjs::JS_NewClass(rt, class_id, &class_def) } {
-                return Err(Error::Unknown);
-            }
-        }
-
-        let proto_val = unsafe { qjs::JS_GetClassProto(ctx.as_ptr(), class_id) };
-        if unsafe { JS_VALUE_GET_TAG(proto_val) == qjs::JS_TAG_NULL } {
-            if let Some(proto) = C::prototype(ctx)? {
-                let val = proto.into_value().into_js_value();
-                unsafe { qjs::JS_SetClassProto(ctx.as_ptr(), class_id, val) }
-            }
-        } else {
-            unsafe { qjs::JS_FreeValue(ctx.as_ptr(), proto_val) }
-        }
-
-        Ok(())
+    pub(crate) fn get_class_cell<'a>(&self) -> &'a ClassCell<JsCell<'js, C>> {
+        unsafe { self.get_class_ptr().as_ref() }
     }
 
     /// Returns a reference to the underlying object contained in a cell.
     #[inline]
     pub fn get_cell<'a>(&self) -> &'a JsCell<'js, C> {
-        unsafe { self.get_class_ptr().as_ref() }
+        &self.get_class_cell().data
     }
 
     /// Borrow the Rust class type.
@@ -278,14 +223,17 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// returns a pointer to the class object.
     #[inline]
-    pub(crate) fn get_class_ptr(&self) -> NonNull<JsCell<'js, C>> {
-        let ptr = unsafe {
-            qjs::JS_GetOpaque2(
-                self.0.ctx.as_ptr(),
-                self.0 .0.as_js_value(),
-                C::class_id().get(),
-            )
+    pub(crate) fn get_class_ptr(&self) -> NonNull<ClassCell<JsCell<'js, C>>> {
+        let id = unsafe {
+            if C::CALLABLE {
+                self.ctx.get_opaque().get_callable_id()
+            } else {
+                self.ctx.get_opaque().get_class_id()
+            }
         };
+
+        let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0 .0.as_js_value(), id) };
+
         NonNull::new(ptr.cast()).expect("invalid class object, object didn't have opaque value")
     }
 
@@ -330,18 +278,34 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 impl<'js> Object<'js> {
     /// Returns if the object is of a certain Rust class.
     pub fn instance_of<C: JsClass<'js>>(&self) -> bool {
-        if !Class::<C>::is_registered(&self.ctx) {
+        let id = unsafe {
+            if C::CALLABLE {
+                self.ctx.get_opaque().get_callable_id()
+            } else {
+                self.ctx.get_opaque().get_class_id()
+            }
+        };
+
+        // This checks if the class is of the right class id.
+        let Some(x) = NonNull::new(unsafe {
+            qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0.as_js_value(), id)
+        }) else {
             return false;
+        };
+
+        let v_table = unsafe { x.cast::<ClassCell<()>>().as_ref().v_table };
+
+        // If the pointer is equal it must be of the right type, as the inclusion of a call to
+        // generate a TypeId means that each type must have a unique v table.
+        // however if it is not equal then it can still be the right type if the v_table is
+        // duplicated, which is possible when compilation with multiple code-gen units.
+        //
+        // Doing check avoids a lookup and an dynamic function call in some cases.
+        if std::ptr::eq(v_table, VTable::get::<C>()) {
+            return true;
         }
 
-        let p = unsafe {
-            qjs::JS_GetOpaque2(
-                self.0.ctx.as_ptr(),
-                self.0.as_js_value(),
-                C::class_id().get(),
-            )
-        };
-        !p.is_null()
+        v_table.is_of_class::<C>()
     }
 
     /// Turn the object into the class if it is an instance of that class.
@@ -358,7 +322,7 @@ impl<'js> Object<'js> {
         if self.instance_of::<C>() {
             // SAFETY:
             // Safe because class is a transparent wrapper
-            unsafe { Some(std::mem::transmute::<&Object<'js>, &Class<'js, C>>(self)) }
+            unsafe { Some(mem::transmute::<&Object<'js>, &Class<'js, C>>(self)) }
         } else {
             None
         }
@@ -385,11 +349,11 @@ mod test {
     };
 
     use crate::{
-        class::{ClassId, JsClass, Readable, Trace, Tracer, Writable},
+        class::{JsClass, Readable, Trace, Tracer, Writable},
         function::This,
         test_with,
         value::Constructor,
-        Class, Context, FromJs, Function, IntoJs, Object, Runtime,
+        CatchResultExt, Class, Context, FromJs, Function, IntoJs, JsLifetime, Object, Runtime,
     };
 
     /// Test circular references.
@@ -412,15 +376,14 @@ mod test {
             }
         }
 
+        unsafe impl<'js> JsLifetime<'js> for Container<'js> {
+            type Changed<'to> = Container<'to>;
+        }
+
         impl<'js> JsClass<'js> for Container<'js> {
             const NAME: &'static str = "Container";
 
             type Mutable = Writable;
-
-            fn class_id() -> &'static crate::class::ClassId {
-                static ID: ClassId = ClassId::new();
-                &ID
-            }
 
             fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
                 Ok(Some(Object::new(ctx.clone())?))
@@ -447,6 +410,9 @@ mod test {
                 },
             )
             .unwrap();
+
+            assert!(cls.instance_of::<Container>());
+
             let cls_clone = cls.clone();
             cls.borrow_mut().inner.push(cls_clone);
         });
@@ -467,77 +433,75 @@ mod test {
         });
     }
 
+    #[derive(Clone, Copy)]
+    pub struct Vec3 {
+        x: f32,
+        y: f32,
+        z: f32,
+    }
+
+    impl Vec3 {
+        pub fn new(x: f32, y: f32, z: f32) -> Self {
+            Vec3 { x, y, z }
+        }
+
+        pub fn add(self, v: Vec3) -> Self {
+            Vec3 {
+                x: self.x + v.x,
+                y: self.y + v.y,
+                z: self.z + v.z,
+            }
+        }
+    }
+
+    impl<'js> Trace<'js> for Vec3 {
+        fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+    }
+
+    impl<'js> FromJs<'js> for Vec3 {
+        fn from_js(ctx: &crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
+            Ok(*Class::<Vec3>::from_js(ctx, value)?.try_borrow()?)
+        }
+    }
+
+    impl<'js> IntoJs<'js> for Vec3 {
+        fn into_js(self, ctx: &crate::Ctx<'js>) -> crate::Result<crate::Value<'js>> {
+            Class::instance(ctx.clone(), self).into_js(ctx)
+        }
+    }
+
+    unsafe impl<'js> JsLifetime<'js> for Vec3 {
+        type Changed<'to> = Vec3;
+    }
+
+    impl<'js> JsClass<'js> for Vec3 {
+        const NAME: &'static str = "Vec3";
+
+        type Mutable = Writable;
+
+        fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
+            let proto = Object::new(ctx.clone())?;
+            let func = Function::new(ctx.clone(), |this: This<Vec3>, other: Vec3| this.add(other))?
+                .with_name("add")?;
+
+            proto.set("add", func)?;
+            Ok(Some(proto))
+        }
+
+        fn constructor(
+            ctx: &crate::Ctx<'js>,
+        ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
+            let constr =
+                Constructor::new_class::<Vec3, _, _>(ctx.clone(), |x: f32, y: f32, z: f32| {
+                    Vec3::new(x, y, z)
+                })?;
+
+            Ok(Some(constr))
+        }
+    }
+
     #[test]
     fn constructor() {
-        #[derive(Clone, Copy)]
-        pub struct Vec3 {
-            x: f32,
-            y: f32,
-            z: f32,
-        }
-
-        impl Vec3 {
-            pub fn new(x: f32, y: f32, z: f32) -> Self {
-                Vec3 { x, y, z }
-            }
-
-            pub fn add(self, v: Vec3) -> Self {
-                Vec3 {
-                    x: self.x + v.x,
-                    y: self.y + v.y,
-                    z: self.z + v.z,
-                }
-            }
-        }
-
-        impl<'js> Trace<'js> for Vec3 {
-            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
-        }
-
-        impl<'js> FromJs<'js> for Vec3 {
-            fn from_js(ctx: &crate::Ctx<'js>, value: crate::Value<'js>) -> crate::Result<Self> {
-                Ok(*Class::<Vec3>::from_js(ctx, value)?.try_borrow()?)
-            }
-        }
-
-        impl<'js> IntoJs<'js> for Vec3 {
-            fn into_js(self, ctx: &crate::Ctx<'js>) -> crate::Result<crate::Value<'js>> {
-                Class::instance(ctx.clone(), self).into_js(ctx)
-            }
-        }
-
-        impl<'js> JsClass<'js> for Vec3 {
-            const NAME: &'static str = "Vec3";
-
-            type Mutable = Writable;
-
-            fn class_id() -> &'static crate::class::ClassId {
-                static ID: ClassId = ClassId::new();
-                &ID
-            }
-
-            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
-                let proto = Object::new(ctx.clone())?;
-                let func =
-                    Function::new(ctx.clone(), |this: This<Vec3>, other: Vec3| this.add(other))?
-                        .with_name("add")?;
-
-                proto.set("add", func)?;
-                Ok(Some(proto))
-            }
-
-            fn constructor(
-                ctx: &crate::Ctx<'js>,
-            ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
-                let constr =
-                    Constructor::new_class::<Vec3, _, _>(ctx.clone(), |x: f32, y: f32, z: f32| {
-                        Vec3::new(x, y, z)
-                    })?;
-
-                Ok(Some(constr))
-            }
-        }
-
         test_with(|ctx| {
             Class::<Vec3>::define(&ctx.globals()).unwrap();
 
@@ -549,6 +513,7 @@ mod test {
                 a.add(b)
             ",
                 )
+                .catch(&ctx)
                 .unwrap();
 
             approx::assert_abs_diff_eq!(v.x, 5.0);
@@ -561,11 +526,43 @@ mod test {
     }
 
     #[test]
-    fn register_twice() {
+    fn extend_class() {
+        test_with(|ctx| {
+            Class::<Vec3>::define(&ctx.globals()).unwrap();
+
+            let v = ctx
+                .eval::<Vec3, _>(
+                    r"
+                    class Vec4 extends Vec3 {
+                        w = 0;
+                        constructor(x,y,z,w){
+                            super(x,y,z);
+                            this.w
+                        }
+                    }
+
+                    new Vec4(1,2,3,4);
+                ",
+                )
+                .catch(&ctx)
+                .unwrap();
+
+            approx::assert_abs_diff_eq!(v.x, 1.0);
+            approx::assert_abs_diff_eq!(v.y, 2.0);
+            approx::assert_abs_diff_eq!(v.z, 3.0);
+        })
+    }
+
+    #[test]
+    fn get_prototype() {
         pub struct X;
 
         impl<'js> Trace<'js> for X {
             fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        unsafe impl<'js> JsLifetime<'js> for X {
+            type Changed<'to> = X;
         }
 
         impl<'js> JsClass<'js> for X {
@@ -573,13 +570,10 @@ mod test {
 
             type Mutable = Readable;
 
-            fn class_id() -> &'static ClassId {
-                static ID: ClassId = ClassId::new();
-                &ID
-            }
-
             fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<Object<'js>>> {
-                Object::new(ctx.clone()).map(Some)
+                let object = Object::new(ctx.clone())?;
+                object.set("foo", "bar")?;
+                Ok(Some(object))
             }
 
             fn constructor(_ctx: &crate::Ctx<'js>) -> crate::Result<Option<Constructor<'js>>> {
@@ -588,8 +582,95 @@ mod test {
         }
 
         test_with(|ctx| {
-            Class::<X>::register(&ctx).unwrap();
-            Class::<X>::register(&ctx).unwrap();
+            let proto = Class::<X>::prototype(&ctx).unwrap().unwrap();
+            assert_eq!(proto.get::<_, String>("foo").unwrap(), "bar")
+        })
+    }
+
+    #[test]
+    fn generic_types() {
+        pub struct DebugPrinter<D: std::fmt::Debug> {
+            d: D,
+        }
+
+        impl<'js, D: std::fmt::Debug> Trace<'js> for DebugPrinter<D> {
+            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        unsafe impl<'js, D: std::fmt::Debug + 'static> JsLifetime<'js> for DebugPrinter<D> {
+            type Changed<'to> = DebugPrinter<D>;
+        }
+
+        impl<'js, D: std::fmt::Debug + 'static> JsClass<'js> for DebugPrinter<D> {
+            const NAME: &'static str = "DebugPrinter";
+
+            type Mutable = Readable;
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<Object<'js>>> {
+                let object = Object::new(ctx.clone())?;
+                object.set(
+                    "to_debug_string",
+                    Function::new(
+                        ctx.clone(),
+                        |this: This<Class<DebugPrinter<D>>>| -> crate::Result<String> {
+                            Ok(format!("{:?}", &this.0.borrow().d))
+                        },
+                    ),
+                )?;
+                Ok(Some(object))
+            }
+
+            fn constructor(_ctx: &crate::Ctx<'js>) -> crate::Result<Option<Constructor<'js>>> {
+                Ok(None)
+            }
+        }
+
+        test_with(|ctx| {
+            let a = Class::instance(ctx.clone(), DebugPrinter { d: 42usize });
+            let b = Class::instance(
+                ctx.clone(),
+                DebugPrinter {
+                    d: "foo".to_string(),
+                },
+            );
+
+            ctx.globals().set("a", a).unwrap();
+            ctx.globals().set("b", b).unwrap();
+
+            assert_eq!(
+                ctx.eval::<String, _>(r#" a.to_debug_string() "#)
+                    .catch(&ctx)
+                    .unwrap(),
+                "42"
+            );
+            assert_eq!(
+                ctx.eval::<String, _>(r#" b.to_debug_string() "#)
+                    .catch(&ctx)
+                    .unwrap(),
+                "\"foo\""
+            );
+
+            if ctx
+                .globals()
+                .get::<_, Class<DebugPrinter<String>>>("a")
+                .is_ok()
+            {
+                panic!("Conversion should fail")
+            }
+            if ctx
+                .globals()
+                .get::<_, Class<DebugPrinter<usize>>>("b")
+                .is_ok()
+            {
+                panic!("Conversion should fail")
+            }
+
+            ctx.globals()
+                .get::<_, Class<DebugPrinter<usize>>>("a")
+                .unwrap();
+            ctx.globals()
+                .get::<_, Class<DebugPrinter<String>>>("b")
+                .unwrap();
         })
     }
 }

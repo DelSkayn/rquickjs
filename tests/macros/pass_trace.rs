@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use rquickjs::{
-    class::{ClassId, JsClass, Readable, Trace, Tracer},
-    Class, Context, Null, Runtime,
+    class::{JsClass, Readable, Trace, Tracer},
+    Class, Context, JsLifetime, Null, Runtime,
 };
 use std::sync::Mutex;
 
@@ -32,7 +32,7 @@ impl<'js> Trace<'js> for C {
     }
 }
 
-#[derive(Trace)]
+#[derive(Trace, JsLifetime)]
 pub struct TraceStruct {
     a: A,
     #[qjs(skip_trace)]
@@ -45,11 +45,6 @@ impl<'js> JsClass<'js> for TraceStruct {
 
     type Mutable = Readable;
 
-    fn class_id() -> &'static rquickjs::class::ClassId {
-        static ID: ClassId = ClassId::new();
-        &ID
-    }
-
     fn prototype(_ctx: &rquickjs::Ctx<'js>) -> rquickjs::Result<Option<rquickjs::Object<'js>>> {
         Ok(None)
     }
@@ -61,7 +56,7 @@ impl<'js> JsClass<'js> for TraceStruct {
     }
 }
 
-#[derive(Trace)]
+#[derive(Trace, JsLifetime)]
 pub enum TraceEnum {
     A(A),
     B(#[qjs(skip_trace)] B),
@@ -72,11 +67,6 @@ impl<'js> JsClass<'js> for TraceEnum {
     const NAME: &'static str = "TraceEnum";
 
     type Mutable = Readable;
-
-    fn class_id() -> &'static rquickjs::class::ClassId {
-        static ID: ClassId = ClassId::new();
-        &ID
-    }
 
     fn prototype(_ctx: &rquickjs::Ctx<'js>) -> rquickjs::Result<Option<rquickjs::Object<'js>>> {
         Ok(None)

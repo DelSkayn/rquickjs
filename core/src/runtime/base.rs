@@ -5,7 +5,7 @@ use super::{opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage};
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{result::JobException, Context, Error, Mut, Ref, Result, Weak};
+use crate::{result::JobException, Context, Mut, Ref, Result, Weak};
 use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
 
 /// A weak handle to the runtime.
@@ -37,7 +37,7 @@ impl Runtime {
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new() -> Result<Self> {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
+        let rt = unsafe { RawRuntime::new(opaque)? };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
         })
@@ -53,8 +53,7 @@ impl Runtime {
         A: Allocator + 'static,
     {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
-            .ok_or(Error::Allocation)?;
+        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator)? };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
         })

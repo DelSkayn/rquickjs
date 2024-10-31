@@ -1,5 +1,5 @@
 use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
-use crate::{class::Class, function::RustFunction, qjs, Ctx, Error, Result, Runtime};
+use crate::{qjs, Ctx, Error, Result, Runtime};
 use std::{mem, ptr::NonNull};
 
 pub(crate) struct Inner {
@@ -53,7 +53,6 @@ impl Context {
         // rquickjs assumes the base objects exist, so we allways need to add this.
         unsafe { intrinsic::Base::add_intrinsic(ctx) };
         unsafe { I::add_intrinsic(ctx) };
-        unsafe { Self::init_raw(ctx.as_ptr()) }
         let res = Inner {
             ctx,
             rt: runtime.clone(),
@@ -70,7 +69,6 @@ impl Context {
         let guard = runtime.inner.lock();
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
-        unsafe { Self::init_raw(ctx.as_ptr()) }
         let res = Inner {
             ctx,
             rt: runtime.clone(),
@@ -120,11 +118,6 @@ impl Context {
         guard.update_stack_top();
         let ctx = unsafe { Ctx::new(self) };
         f(ctx)
-    }
-
-    pub(crate) unsafe fn init_raw(ctx: *mut qjs::JSContext) {
-        Class::<RustFunction>::register(&Ctx::from_ptr(ctx))
-            .expect("failed to initialized callback class");
     }
 }
 

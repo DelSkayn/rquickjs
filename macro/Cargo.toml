@@ -16,7 +16,6 @@ proc-macro = true
 [dependencies]
 proc-macro2 = "1"
 proc-macro-crate = "1"
-proc-macro-error = "1"
 quote = "1"
 ident_case = "1"
 fnv = "1"
@@ -25,7 +24,7 @@ convert_case = "0.6"
 
 [dependencies.syn]
 version = "2"
-features = ["full","fold","extra-traits"]
+features = ["full","fold","extra-traits","visit"]
 
 [dependencies.phf_shared]
 version = "0.11"

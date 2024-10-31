@@ -1,6 +1,6 @@
 use crate::{
-    atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, Object, Outlive,
-    Result, Value,
+    atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, JsLifetime,
+    Object, Result, Value,
 };
 use std::{
     fmt,
@@ -60,8 +60,8 @@ typedarray_items! {
 #[repr(transparent)]
 pub struct TypedArray<'js, T>(pub(crate) Object<'js>, PhantomData<T>);
 
-unsafe impl<'js, T> Outlive<'js> for TypedArray<'js, T> {
-    type Target<'to> = TypedArray<'to, T>;
+unsafe impl<'js, T: JsLifetime<'js>> JsLifetime<'js> for TypedArray<'js, T> {
+    type Changed<'to> = TypedArray<'to, T::Changed<'to>>;
 }
 
 impl<'js, T> fmt::Debug for TypedArray<'js, T> {

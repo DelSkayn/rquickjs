@@ -4,8 +4,7 @@ use function::FunctionOption;
 use methods::ImplOption;
 use module::ModuleOption;
 use proc_macro::TokenStream as TokenStream1;
-use proc_macro_error::{abort, proc_macro_error};
-use syn::{parse_macro_input, DeriveInput, Item};
+use syn::{parse_macro_input, spanned::Spanned, DeriveInput, Error, Item};
 
 #[cfg(test)]
 macro_rules! assert_eq_tokens {
@@ -22,6 +21,7 @@ mod common;
 mod embed;
 mod fields;
 mod function;
+mod js_lifetime;
 mod methods;
 mod module;
 mod trace;
@@ -61,13 +61,13 @@ mod trace;
 ///
 /// # Example
 /// ```
-/// use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime};
+/// use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime, JsLifetime};
 ///
 /// /// Implement JsClass for TestClass.
 /// /// This allows passing any instance of TestClass straight to JavaScript.
 /// /// It is command to also add #[derive(Trace)] as all types which implement JsClass need to
 /// /// also implement trace.
-/// #[derive(Trace)]
+/// #[derive(Trace, JsLifetime)]
 /// #[rquickjs::class(rename_all = "camelCase")]
 /// pub struct TestClass<'js> {
 ///     /// These attribute make the accessible from JavaScript with getters and setters.
@@ -113,11 +113,13 @@ mod trace;
 /// ```
 
 #[proc_macro_attribute]
-#[proc_macro_error]
 pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let options = parse_macro_input!(attr as OptionList<ClassOption>);
     let item = parse_macro_input!(item as Item);
-    TokenStream1::from(class::expand(options, item))
+    match class::expand(options, item) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
 }
 
 /// A attribute for implementing `IntoJsFunc` for a certain function.
@@ -127,14 +129,21 @@ pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// implemented..
 ///
 #[proc_macro_attribute]
-#[proc_macro_error]
 pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let options = parse_macro_input!(attr as OptionList<FunctionOption>);
     let item = parse_macro_input!(item as Item);
     match item {
-        Item::Fn(func) => function::expand(options, func).into(),
+        Item::Fn(func) => match function::expand(options, func) {
+            Ok(x) => x.into(),
+            Err(e) => e.into_compile_error().into(),
+        },
         item => {
-            abort!(item, "#[function] macro can only be used on functions")
+            return Error::new(
+                item.span(),
+                "#[function] macro can only be used on functions",
+            )
+            .into_compile_error()
+            .into()
         }
     }
 }
@@ -183,10 +192,10 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// ```
 /// use rquickjs::{
 ///     atom::PredefinedAtom, class::Trace, prelude::Func, CatchResultExt, Class, Context, Ctx,
-///     Object, Result, Runtime,
+///     Object, Result, Runtime, JsLifetime
 /// };
 ///
-/// #[derive(Trace)]
+/// #[derive(Trace, JsLifetime)]
 /// #[rquickjs::class]
 /// pub struct TestClass {
 ///     value: u32,
@@ -281,14 +290,21 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// }
 /// ```
 #[proc_macro_attribute]
-#[proc_macro_error]
 pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let options = parse_macro_input!(attr as OptionList<ImplOption>);
     let item = parse_macro_input!(item as Item);
     match item {
-        Item::Impl(item) => methods::expand(options, item).into(),
+        Item::Impl(item) => match methods::expand(options, item) {
+            Ok(x) => x.into(),
+            Err(e) => e.into_compile_error().into(),
+        },
         item => {
-            abort!(item, "#[methods] macro can only be used on impl blocks")
+            return Error::new(
+                item.span(),
+                "#[methods] macro can only be used on impl blocks",
+            )
+            .into_compile_error()
+            .into()
         }
     }
 }
@@ -342,7 +358,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// use rquickjs::{CatchResultExt, Context, Module, Runtime};
 ///
 /// /// A class which will be exported from the module.
-/// #[derive(rquickjs::class::Trace)]
+/// #[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
 /// #[rquickjs::class]
 /// pub struct Test {
 ///     foo: u32,
@@ -377,7 +393,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     pub use super::Test as RenamedTest;
 ///
 ///     /// A class which will be exported from the module under the name `FooBar`.
-///     #[derive(rquickjs::class::Trace)]
+///     #[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
 ///     #[rquickjs::class(rename = "FooBar")]
 ///     pub struct Test2 {
 ///         bar: u32,
@@ -459,24 +475,30 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// }
 /// ```
 #[proc_macro_attribute]
-#[proc_macro_error]
 pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let options = parse_macro_input!(attr as OptionList<ModuleOption>);
     let item = parse_macro_input!(item as Item);
     match item {
-        Item::Mod(item) => module::expand(options, item).into(),
+        Item::Mod(item) => match module::expand(options, item) {
+            Ok(x) => x.into(),
+            Err(e) => e.into_compile_error().into(),
+        },
         item => {
-            abort!(item, "#[module] macro can only be used on modules")
+            return Error::new(item.span(), "#[module] macro can only be used on modules")
+                .into_compile_error()
+                .into()
         }
     }
 }
 
 /// A macro for auto deriving the trace trait.
 #[proc_macro_derive(Trace, attributes(qjs))]
-#[proc_macro_error]
 pub fn trace(stream: TokenStream1) -> TokenStream1 {
     let derive_input = parse_macro_input!(stream as DeriveInput);
-    trace::expand(derive_input).into()
+    match trace::expand(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
 }
 
 /// A macro for embedding JavaScript code into a binary.
@@ -519,9 +541,21 @@ pub fn trace(stream: TokenStream1) -> TokenStream1 {
 ///     })
 /// }
 /// ```
-#[proc_macro_error]
 #[proc_macro]
 pub fn embed(item: TokenStream1) -> TokenStream1 {
     let embed_modules: embed::EmbedModules = parse_macro_input!(item);
-    embed::embed(embed_modules).into()
+    match embed::embed(embed_modules) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
+}
+
+/// A Macro for auto deriving the JsLifetime trait.
+#[proc_macro_derive(JsLifetime, attributes(qjs))]
+pub fn js_lifetime(stream: TokenStream1) -> TokenStream1 {
+    let derive_input = parse_macro_input!(stream as DeriveInput);
+    match js_lifetime::expand(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
 }

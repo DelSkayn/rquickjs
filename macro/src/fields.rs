@@ -3,12 +3,12 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
     parse::{Parse, ParseStream},
-    Attribute, Ident, LitStr, Type, Visibility,
+    Attribute, Ident, LitStr, Result, Type, Visibility,
 };
 
 use crate::{
     attrs::{take_attributes, FlagOption, OptionList, ValueOption},
-    common::{kw, AbortResultExt, Case},
+    common::{kw, Case},
 };
 
 #[derive(Default, Debug)]
@@ -55,7 +55,7 @@ impl Parse for FieldOption {
 }
 
 impl FieldConfig {
-    pub(crate) fn from_attributes(attrs: &mut Vec<syn::Attribute>) -> Self {
+    pub(crate) fn from_attributes(attrs: &mut Vec<syn::Attribute>) -> Result<Self> {
         let mut config = Self::default();
 
         take_attributes(attrs, |attr| {
@@ -66,10 +66,9 @@ impl FieldConfig {
             let separated_options: OptionList<FieldOption> = attr.parse_args()?;
             separated_options.0.iter().for_each(|x| config.apply(x));
             Ok(true)
-        })
-        .unwrap_or_abort();
+        })?;
 
-        config
+        Ok(config)
     }
 
     pub(crate) fn apply(&mut self, option: &FieldOption) {
@@ -104,15 +103,23 @@ pub(crate) enum Fields {
 }
 
 impl Fields {
-    pub fn from_fields(input: syn::Fields) -> Self {
+    pub fn from_fields(input: syn::Fields) -> Result<Self> {
         match input {
             syn::Fields::Named(x) => {
-                Fields::Named(x.named.into_iter().map(Field::from_field).collect())
+                let mut res = Vec::new();
+                for x in x.named.into_iter() {
+                    res.push(Field::from_field(x)?);
+                }
+                Ok(Fields::Named(res))
             }
             syn::Fields::Unnamed(x) => {
-                Fields::Unnamed(x.unnamed.into_iter().map(Field::from_field).collect())
+                let mut res = Vec::new();
+                for x in x.unnamed.into_iter() {
+                    res.push(Field::from_field(x)?);
+                }
+                Ok(Fields::Unnamed(res))
             }
-            syn::Fields::Unit => Self::Unit,
+            syn::Fields::Unit => Ok(Self::Unit),
         }
     }
 }
@@ -135,15 +142,15 @@ impl Field {
             ty,
             ..
         }: syn::Field,
-    ) -> Self {
-        let config = FieldConfig::from_attributes(&mut attrs);
-        Field {
+    ) -> Result<Self> {
+        let config = FieldConfig::from_attributes(&mut attrs)?;
+        Ok(Field {
             config,
             attrs,
             vis,
             ident,
             ty,
-        }
+        })
     }
 }
 
