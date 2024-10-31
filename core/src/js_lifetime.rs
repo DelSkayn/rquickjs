@@ -3,21 +3,28 @@ use crate::{
     String, Symbol, Value,
 };
 
-/// The trait to help break lifetime rules when JS objects leaves current context via [`Persistent`] wrapper.
+/// The trait which signifies a type using the rquickjs `'js' lifetime trick for maintaining safety around Javascript values.
 ///
 /// # Safety
 ///
-/// `JsLifetime<'js>` must be implemented for types the same, specific, lifetime 'js.
-/// For example the following is unsound:
-/// ```no_run
-/// # use rquickjs::JsLifetime;
-/// struct Container<'js>(rquickjs::Object<'js>);
+/// `JsLifetime<'js>` must be implemented for types which derive a `'js` lifetime from a Javascript
+/// value, directly or indirectly.
 ///
-/// unsafe impl<'a,'js> JsLifetime<'js> for Container<'a>{
-///     type Changed<'to> = Container<'to>;
-/// }
-/// ```
-/// Instead it must be implemented as following
+/// All of the base Javascript types used in rquickjs like [`Value`] have a `'js` lifetime. If a
+/// type wants to contains one of those types it must define a lifetime generic. This trait is for
+/// indicating that that lifetime is one derived from a Javascript value. Rquickjs needs to know
+/// about this lifetime so that it is able to ensure safe use of types.
+///
+/// This trait can be derived with `#[derive(JsLifetime)]` in most cases, however sometimes a manual
+/// implementation is required.
+///
+/// This trait must be implemented correctly, failing to do so will make it possible to create
+/// unsound behavior. Correct implementions have the `'js` lifetime in `JsLifetime<'js>` be the
+/// same as the lifetime on the container, furthermore the associated type `Changed<'to>` is
+/// defined as the exact same type with the only difference being that the `'js` lifetime is now
+/// `'to'.
+///
+/// The following is a correct implementation of the [`JsLifetime`] trait.
 /// ```
 /// # use rquickjs::JsLifetime;
 /// struct Container<'js>(rquickjs::Object<'js>);
@@ -26,8 +33,34 @@ use crate::{
 ///     type Changed<'to> = Container<'to>;
 /// }
 /// ```
-/// `JsLifetime::Changed` must be the same type with all 'js lifetimes changed from 'js to 'to, no
-/// other lifetimes may be changed and the type must be otherwise the exact same type.
+///
+/// ## Incorrect examples
+///
+/// For example the following is unsound:
+/// ```no_run
+/// # use rquickjs::JsLifetime;
+/// struct Container<'js>(rquickjs::Object<'js>);
+///
+/// unsafe impl<'a,'js> JsLifetime<'js> for Container<'a>{ // WRONG LIFETIME!
+///     type Changed<'to> = Container<'to>;
+/// }
+/// ```
+/// `Container` here is defined as having a `'a` lifetime where it should be `'a`.
+///
+/// The following is also incorrect
+///
+/// ```no_run
+/// # use rquickjs::JsLifetime;
+/// // Her 'a is not derived from an Javascript value type, but instead the lifetime of a reference.
+/// struct Container<'a,'js>(&'a rquickjs::Object<'js>);
+///
+/// // Non 'js lifetime marked as a 'js lifetime. Unsound!
+/// unsafe impl<'js> JsLifetime<'js> for Container<'js, 'js>{
+///     type Changed<'to> = Container<'to,'to>;
+/// }
+/// ```
+/// The lifetime marked must be from an rquickjs type with a define <'js> lifetime, it cannot be a
+/// the lifetime of reference!
 ///
 pub unsafe trait JsLifetime<'js> {
     /// The target which has the same type as a `Self` but with another lifetime `'t`
