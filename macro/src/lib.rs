@@ -137,14 +137,12 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
             Ok(x) => x.into(),
             Err(e) => e.into_compile_error().into(),
         },
-        item => {
-            return Error::new(
-                item.span(),
-                "#[function] macro can only be used on functions",
-            )
-            .into_compile_error()
-            .into()
-        }
+        item => Error::new(
+            item.span(),
+            "#[function] macro can only be used on functions",
+        )
+        .into_compile_error()
+        .into(),
     }
 }
 
@@ -298,14 +296,12 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
             Ok(x) => x.into(),
             Err(e) => e.into_compile_error().into(),
         },
-        item => {
-            return Error::new(
-                item.span(),
-                "#[methods] macro can only be used on impl blocks",
-            )
-            .into_compile_error()
-            .into()
-        }
+        item => Error::new(
+            item.span(),
+            "#[methods] macro can only be used on impl blocks",
+        )
+        .into_compile_error()
+        .into(),
     }
 }
 
@@ -483,11 +479,9 @@ pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
             Ok(x) => x.into(),
             Err(e) => e.into_compile_error().into(),
         },
-        item => {
-            return Error::new(item.span(), "#[module] macro can only be used on modules")
-                .into_compile_error()
-                .into()
-        }
+        item => Error::new(item.span(), "#[module] macro can only be used on modules")
+            .into_compile_error()
+            .into(),
     }
 }
 

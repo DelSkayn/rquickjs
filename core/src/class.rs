@@ -145,7 +145,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     ///
     /// Returns `None` if the class is not yet registered or if the class doesn't have a prototype.
     pub fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
-        unsafe { ctx.get_opaque().get_or_insert_prototype::<C>(&ctx) }
+        unsafe { ctx.get_opaque().get_or_insert_prototype::<C>(ctx) }
     }
 
     /// Create a constructor for the current class using its definition.

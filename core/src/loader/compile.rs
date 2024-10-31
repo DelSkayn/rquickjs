@@ -173,10 +173,9 @@ where
     R: Resolver,
 {
     fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
-        self.inner.resolve(ctx, base, name).map(|path| {
+        self.inner.resolve(ctx, base, name).inspect(|path| {
             let name = resolve_simple(base, name);
             self.data.lock().modules.insert(path.clone(), name);
-            path
         })
     }
 }
