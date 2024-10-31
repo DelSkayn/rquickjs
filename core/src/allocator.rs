@@ -26,7 +26,7 @@ pub unsafe trait Allocator {
     /// Allocates memory for an array of num objects of size and initializes all bytes in the allocated storage to zero.
     ///
     ///
-    fn calloc(&mut self, count: usize, size: usize) -> RawMemPtr;
+    fn calloc(&mut self, count: usize, size: usize) -> *mut u8;
 
     /// De-allocate previously allocated memory
     ///

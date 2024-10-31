@@ -76,8 +76,8 @@ impl<'js> Opaque<'js> {
     }
 
     pub unsafe fn initialize(&mut self, rt: *mut qjs::JSRuntime) -> Result<(), Error> {
-        qjs::JS_NewClassID((&mut self.class_id) as *mut qjs::JSClassID);
-        qjs::JS_NewClassID((&mut self.callable_class_id) as *mut qjs::JSClassID);
+        qjs::JS_NewClassID(rt, (&mut self.class_id) as *mut qjs::JSClassID);
+        qjs::JS_NewClassID(rt, (&mut self.callable_class_id) as *mut qjs::JSClassID);
 
         let class_def = qjs::JSClassDef {
             class_name: b"RustClass\0".as_ptr().cast(),

@@ -35,10 +35,9 @@ fn round_size(size: usize) -> usize {
 pub struct RustAllocator;
 
 unsafe impl Allocator for RustAllocator {
-
-    fn calloc(&mut self, count: usize, size: usize) -> RawMemPtr {
+    fn calloc(&mut self, count: usize, size: usize) -> *mut u8 {
         if count == 0 || size == 0 {
-            return null_mut();
+            return ptr::null_mut();
         }
 
         let total_size = count.checked_mul(size).expect("overflow");
@@ -51,13 +50,13 @@ unsafe impl Allocator for RustAllocator {
         let layout = if let Ok(layout) = Layout::from_size_align(alloc_size, ALLOC_ALIGN) {
             layout
         } else {
-            return null_mut();
+            return ptr::null_mut();
         };
 
-        let ptr = unsafe { alloc(layout) };
+        let ptr = unsafe { alloc::alloc(layout) };
 
         if ptr.is_null() {
-            return null_mut();
+            return ptr::null_mut();
         }
 
         let header = unsafe { &mut *(ptr as *mut Header) };
@@ -138,6 +137,14 @@ mod test {
         fn alloc(&mut self, size: usize) -> *mut u8 {
             unsafe {
                 let res = RustAllocator.alloc(size);
+                ALLOC_SIZE.fetch_add(RustAllocator::usable_size(res), Ordering::AcqRel);
+                res
+            }
+        }
+
+        fn calloc(&mut self, count: usize, size: usize) -> *mut u8 {
+            unsafe {
+                let res = RustAllocator.calloc(count, size);
                 ALLOC_SIZE.fetch_add(RustAllocator::usable_size(res), Ordering::AcqRel);
                 res
             }
