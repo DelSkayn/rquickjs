@@ -16,7 +16,7 @@ pub(crate) mod ffi;
 pub use cell::{
     Borrow, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable, Writable,
 };
-use ffi::ClassCell;
+use ffi::{ClassCell, VTable};
 pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
@@ -293,13 +293,19 @@ impl<'js> Object<'js> {
             return false;
         };
 
-        // This checks for type equality.
-        unsafe {
-            x.cast::<ClassCell<()>>()
-                .as_ref()
-                .v_table
-                .is_of_class::<C>()
+        let v_table = unsafe { x.cast::<ClassCell<()>>().as_ref().v_table };
+
+        // If the pointer is equal it must be of the right type, as the inclusion of a call to
+        // generate a TypeId means that each type must have a unique v table.
+        // however if it is not equal then it can still be the right type if the v_table is
+        // duplicated, which is possible when compilation with multiple code-gen units.
+        //
+        // Doing check avoids a lookup and an dynamic function call in some cases.
+        if std::ptr::eq(v_table, VTable::get::<C>()) {
+            return true;
         }
+
+        v_table.is_of_class::<C>()
     }
 
     /// Turn the object into the class if it is an instance of that class.
