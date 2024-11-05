@@ -14,14 +14,11 @@ use crate::{
 pub fn retrieve_lifetime(generics: &Generics) -> Result<Option<&Lifetime>> {
     let mut lifetime: Option<&Lifetime> = None;
     for p in generics.params.iter() {
-        match p {
-            GenericParam::Lifetime(x) => {
-                if let Some(x) = lifetime.as_ref() {
-                    return Err(Error::new(x.span(),"Type has multiple lifetimes, this is not supported by the JsLifetime derive macro"));
-                }
-                lifetime = Some(&x.lifetime);
+        if let GenericParam::Lifetime(x) = p {
+            if let Some(x) = lifetime.as_ref() {
+                return Err(Error::new(x.span(),"Type has multiple lifetimes, this is not supported by the JsLifetime derive macro"));
             }
-            _ => {}
+            lifetime = Some(&x.lifetime);
         }
     }
 
@@ -34,7 +31,7 @@ pub fn extract_types_need_checking(lt: &Lifetime, data: &Data) -> Result<Vec<Typ
     match data {
         Data::Struct(s) => {
             for f in s.fields.iter() {
-                extract_types_need_checking_fields(lt, &f, &mut res)?;
+                extract_types_need_checking_fields(lt, f, &mut res)?;
             }
         }
         Data::Enum(e) => {
@@ -46,7 +43,7 @@ pub fn extract_types_need_checking(lt: &Lifetime, data: &Data) -> Result<Vec<Typ
                 };
 
                 for f in fields {
-                    extract_types_need_checking_fields(lt, &f, &mut res)?;
+                    extract_types_need_checking_fields(lt, f, &mut res)?;
                 }
             }
         }
@@ -69,18 +66,15 @@ impl<'ast> Visit<'ast> for LtTypeVisitor<'ast> {
             return;
         }
 
-        match i {
-            GenericArgument::Lifetime(lt) => {
-                if lt.ident == "static" || lt == self.1 {
-                    self.0 = Ok(true)
-                } else {
-                    self.0 = Err(Error::new(
-                        lt.span(),
-                        "Type contained lifetime which was not static or the 'js lifetime",
-                    ));
-                }
+        if let GenericArgument::Lifetime(lt) = i {
+            if lt.ident == "static" || lt == self.1 {
+                self.0 = Ok(true)
+            } else {
+                self.0 = Err(Error::new(
+                    lt.span(),
+                    "Type contained lifetime which was not static or the 'js lifetime",
+                ));
             }
-            _ => {}
         }
 
         syn::visit::visit_generic_argument(self, i);
@@ -160,7 +154,7 @@ pub(crate) fn expand(mut input: DeriveInput) -> Result<TokenStream> {
         return Ok(res);
     };
 
-    let types = extract_types_need_checking(&lt, &input.data)?;
+    let types = extract_types_need_checking(lt, &input.data)?;
 
     let const_name = format_ident!("__{}__LT_TYPE_CHECK", name.to_string().to_uppercase());
 

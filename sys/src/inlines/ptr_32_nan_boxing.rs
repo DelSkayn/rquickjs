@@ -34,7 +34,7 @@ const JS_FLOAT64_TAG_ADDEND: i32 = 0x7ff80000 - JS_TAG_FIRST + 1;
 #[cfg(test)]
 #[test]
 fn test_JS_FLOAT64_TAG_ADDEND() {
-    assert_eq!(JS_FLOAT64_TAG_ADDEND, 0x7ff8000c);
+    assert_eq!(JS_FLOAT64_TAG_ADDEND, 0x7ff8000a);
 }
 
 #[inline]
@@ -56,7 +56,7 @@ pub const JS_NAN: JSValue =
 #[cfg(test)]
 #[test]
 fn test_JS_NAN() {
-    assert_eq!(JS_NAN, 0xfffffff400000000);
+    assert_eq!(JS_NAN, 0xfffffff600000000);
 }
 
 #[inline]

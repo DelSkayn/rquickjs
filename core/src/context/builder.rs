@@ -56,8 +56,6 @@ pub mod intrinsic {
         Date JS_AddIntrinsicDate,
         /// Add evaluation support
         Eval JS_AddIntrinsicEval,
-        /// Add string normalization
-        StringNormalize JS_AddIntrinsicStringNormalize,
         /// Add RegExp compiler
         RegExpCompiler JS_AddIntrinsicRegExpCompiler,
         /// Add RegExp object support
@@ -74,14 +72,10 @@ pub mod intrinsic {
         Promise JS_AddIntrinsicPromise,
         /// Add BigInt support
         BigInt JS_AddIntrinsicBigInt,
-        /// Add BigFloat support
-        BigFloat JS_AddIntrinsicBigFloat,
-        /// Add BigDecimal support
-        BigDecimal JS_AddIntrinsicBigDecimal,
-        /// Add operator overloading support
-        Operators JS_AddIntrinsicOperators,
-        /// Enable bignum extension
-        BignumExt JS_EnableBignumExt (1),
+        /// Add Performance support
+        Performance JS_AddPerformance,
+        /// Add WeakRef support
+        WeakRef JS_AddIntrinsicWeakRef,
     }
 
     /// An alias for [`BaseObjects`]
@@ -94,7 +88,6 @@ pub mod intrinsic {
     pub type All = (
         Date,
         Eval,
-        StringNormalize,
         RegExpCompiler,
         RegExp,
         Json,
@@ -103,10 +96,8 @@ pub mod intrinsic {
         TypedArrays,
         Promise,
         BigInt,
-        BigFloat,
-        BigDecimal,
-        Operators,
-        BignumExt,
+        Performance,
+        WeakRef,
     );
 }
 
