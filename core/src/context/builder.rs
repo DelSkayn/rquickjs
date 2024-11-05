@@ -72,6 +72,10 @@ pub mod intrinsic {
         Promise JS_AddIntrinsicPromise,
         /// Add BigInt support
         BigInt JS_AddIntrinsicBigInt,
+        /// Add Performance support
+        Performance JS_AddPerformance,
+        /// Add WeakRef support
+        WeakRef JS_AddIntrinsicWeakRef,
     }
 
     /// An alias for [`BaseObjects`]
@@ -92,6 +96,8 @@ pub mod intrinsic {
         TypedArrays,
         Promise,
         BigInt,
+        Performance,
+        WeakRef,
     );
 }
 
