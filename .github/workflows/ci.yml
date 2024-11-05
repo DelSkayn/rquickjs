@@ -400,7 +400,7 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v4
       - name: Download bindings
         uses: actions/download-artifact@v4
         with:
@@ -408,7 +408,7 @@ jobs:
           path: sys/src/bindings
           merge-multiple: true
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v4
+        uses: peter-evans/create-pull-request@v7
         with:
           base: ${{ github.head_ref }}
           commit-message: Updated bindings
