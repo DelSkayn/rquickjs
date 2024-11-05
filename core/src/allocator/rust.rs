@@ -53,7 +53,7 @@ unsafe impl Allocator for RustAllocator {
             return ptr::null_mut();
         };
 
-        let ptr = unsafe { alloc::alloc(layout) };
+        let ptr = unsafe { alloc::alloc_zeroed(layout) };
 
         if ptr.is_null() {
             return ptr::null_mut();
@@ -63,7 +63,6 @@ unsafe impl Allocator for RustAllocator {
         header.size = total_size;
 
         let ptr = unsafe { ptr.add(HEADER_SIZE) };
-        unsafe { std::ptr::write_bytes(ptr, 0, total_size) };
         ptr
     }
 
