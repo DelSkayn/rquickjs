@@ -195,8 +195,8 @@ impl UserDataMap {
 
     pub fn get<'js, U: UserData<'js>>(&self) -> Option<UserDataGuard<U>> {
         let id = TypeId::of::<U::Static>();
-        self.count.set(self.count.get() + 1);
         unsafe { (*self.map.get()).get(&id) }.map(|x| {
+            self.count.set(self.count.get() + 1);
             let u = x
                 .downcast_ref()
                 .expect("type confusion! userdata not stored under the right type id");
