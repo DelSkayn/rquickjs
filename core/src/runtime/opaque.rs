@@ -8,7 +8,7 @@ use super::{
     InterruptHandler, UserData, UserDataError,
 };
 use std::{
-    any::Any,
+    any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
     collections::{hash_map::Entry, HashMap},
     marker::PhantomData,
@@ -37,7 +37,7 @@ pub(crate) struct Opaque<'js> {
     /// The class id for rust classes which can be called.
     callable_class_id: qjs::JSClassID,
 
-    prototypes: UnsafeCell<HashMap<*const VTable, Option<Object<'js>>>>,
+    prototypes: UnsafeCell<HashMap<TypeId, Option<Object<'js>>>>,
 
     userdata: UserDataMap,
 
@@ -188,7 +188,8 @@ impl<'js> Opaque<'js> {
     ) -> Result<Option<Object<'js>>, Error> {
         unsafe {
             let vtable = VTable::get::<C>();
-            match (*self.prototypes.get()).entry(vtable) {
+            let id = vtable.id();
+            match (*self.prototypes.get()).entry(id) {
                 Entry::Occupied(x) => Ok(x.get().clone()),
                 Entry::Vacant(x) => {
                     let proto = C::prototype(ctx)?;
