@@ -62,8 +62,7 @@ unsafe impl Allocator for RustAllocator {
         let header = unsafe { &mut *(ptr as *mut Header) };
         header.size = total_size;
 
-        let ptr = unsafe { ptr.add(HEADER_SIZE) };
-        ptr
+        unsafe { ptr.add(HEADER_SIZE) }
     }
 
     fn alloc(&mut self, size: usize) -> *mut u8 {
