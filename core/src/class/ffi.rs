@@ -76,7 +76,7 @@ pub(crate) type CallFunc = for<'a> unsafe fn(
 pub(crate) type TypeIdFn = fn() -> TypeId;
 
 pub(crate) struct VTable {
-    id: TypeIdFn,
+    id_fn: TypeIdFn,
     finalizer: FinalizerFunc,
     trace: TraceFunc,
     call: CallFunc,
@@ -125,7 +125,7 @@ impl VTable {
 
         impl<'js, C: JsClass<'js>> HasVTable for C {
             const VTABLE: VTable = VTable {
-                id: TypeId::of::<C::Changed<'static>>,
+                id_fn: TypeId::of::<C::Changed<'static>>,
                 finalizer: VTable::finalizer_impl::<'js, C>,
                 trace: VTable::trace_impl::<C>,
                 call: VTable::call_impl::<C>,
@@ -134,8 +134,12 @@ impl VTable {
         &<C as HasVTable>::VTABLE
     }
 
+    pub fn id(&self) -> TypeId {
+        (self.id_fn)()
+    }
+
     pub fn is_of_class<'js, C: JsClass<'js>>(&self) -> bool {
-        (self.id)() == TypeId::of::<C::Changed<'static>>()
+        (self.id_fn)() == TypeId::of::<C::Changed<'static>>()
     }
 }
 
