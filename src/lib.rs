@@ -93,6 +93,8 @@
 //!   - `i686-unknown-linux-gnu`
 //!   - `x86_64-unknown-linux-gnu`
 //!   - `x86_64-unknown-linux-musl`
+//!   - `loongarch64-unknown-linux-gnu`
+//!   - `loongarch64-unknown-linux-musl`
 //! - macOS:
 //!   - `aarch64-apple-darwin`
 //!   - `x86_64-apple-darwin`
