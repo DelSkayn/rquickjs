@@ -1,5 +1,8 @@
 //! Module with some util types.
 
+/// A trait for preventing implementing traits which should not be implemented outside of rquickjs.
+pub(crate) trait Sealed {}
+
 #[cfg(feature = "futures")]
 pub use self::futures::*;
 

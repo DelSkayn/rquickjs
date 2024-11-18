@@ -2,10 +2,11 @@ use std::{marker::PhantomData, ptr::NonNull};
 
 #[cfg(feature = "futures")]
 use crate::{context::AsyncContext, runtime::AsyncRuntime};
-use crate::{qjs, Context, Result, Runtime};
+use crate::{qjs, util::Sealed, Context, Result, Runtime};
 
 /// The internal trait to add JS builtins
-pub trait Intrinsic {
+#[allow(private_bounds)]
+pub trait Intrinsic: Sealed {
     /// # Safety
     /// Do not need implement it yourself instead you may use predefined intrinsics from [`intrinsic`] module.
     unsafe fn add_intrinsic(ctx: NonNull<qjs::JSContext>);
@@ -19,6 +20,7 @@ macro_rules! intrinsic_impls {
         $(
             $(#[$meta])*
             pub struct $name;
+            impl crate::util::Sealed for $name { }
 
             impl Intrinsic for $name {
                 unsafe fn add_intrinsic(ctx: NonNull<qjs::JSContext>) {
@@ -30,6 +32,8 @@ macro_rules! intrinsic_impls {
 
     (@tuple: $($($name:ident)*,)*) => {
         $(
+            impl<$($name,)*> crate::util::Sealed for ($($name,)*) { }
+
             impl<$($name,)*> Intrinsic for ($($name,)*)
             where
                 $($name: Intrinsic,)*
