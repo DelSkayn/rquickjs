@@ -275,6 +275,8 @@ pub enum PredefinedAtom {
     Bigint = qjs::JS_ATOM_bigint as u32,
     /// "toJSON"
     ToJSON = qjs::JS_ATOM_toJSON as u32,
+    /// "toJSON"
+    MaxByteLength = qjs::JS_ATOM_maxByteLength as u32,
     /// "Object"
     Object = qjs::JS_ATOM_Object as u32,
     /// "Array"
@@ -567,6 +569,7 @@ impl PredefinedAtom {
             PredefinedAtom::GlobalThis => "globalThis",
             PredefinedAtom::Bigint => "bigint",
             PredefinedAtom::ToJSON => "toJSON",
+            PredefinedAtom::MaxByteLength => "maxByteLength",
             PredefinedAtom::Object => "Object",
             PredefinedAtom::Array => "Array",
             PredefinedAtom::Error => "Error",

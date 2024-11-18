@@ -570,14 +570,14 @@ macro_rules! sub_types {
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value_const(ctx: Ctx<'js>, value: qjs::JSValueConst) -> Self {
                     let v = Value::from_js_value_const(ctx, value);
-                    debug_assert!(v.$as().is_some(),"tried to cource js value {:?} to the wrong type, this is a rquickjs bug",v);
+                    debug_assert!(v.$as().is_some(),"tried to cource js value {:?} to the wrong type `{}`, this is a rquickjs bug",v, stringify!($head));
                     sub_types!(@wrap $head$(->$sub_type)*  v)
                 }
 
                 #[allow(unused)]
                 pub(crate) unsafe fn from_js_value(ctx: Ctx<'js>, value: qjs::JSValue) -> Self {
                     let v = Value::from_js_value(ctx, value);
-                    debug_assert!(v.$as().is_some(),"tried to cource js value {:?} to the wrong type, this is a rquickjs bug",v);
+                    debug_assert!(v.$as().is_some(),"tried to cource js value {:?} to the wrong type `{}`, this is a rquickjs bug",v, stringify!($head));
                     sub_types!(@wrap $head$(->$sub_type)*  v)
                 }
 
