@@ -3,11 +3,11 @@ use crate::{
     String, Symbol, Value,
 };
 
-/// The trait which signifies a type using the rquickjs `'js'` lifetime trick for maintaining safety around Javascript values.
+/// The trait which signifies a type using the rquickjs `'js` lifetime trick for maintaining safety around Javascript values.
 ///
 /// # Safety
 ///
-/// `JsLifetime<'js>` must be implemented for types which derive a `'js` lifetime from a Javascript
+/// This trait can only be implemented for types which derive a `'js` lifetime from a Javascript
 /// value, directly or indirectly.
 ///
 /// All of the base Javascript types used in rquickjs like [`Value`] have a `'js` lifetime. If a
@@ -22,7 +22,7 @@ use crate::{
 /// unsound behavior. Correct implementions have the `'js` lifetime in `JsLifetime<'js>` be the
 /// same as the lifetime on the container, furthermore the associated type `Changed<'to>` is
 /// defined as the exact same type with the only difference being that the `'js` lifetime is now
-/// `'to'.
+/// `'to`.
 ///
 /// The following is a correct implementation of the [`JsLifetime`] trait.
 /// ```
@@ -34,9 +34,24 @@ use crate::{
 /// }
 /// ```
 ///
+/// If a type does not have any lifetimes associated with it or all the lifetimes are `'static`
+/// then if is always save to implement `JsLifetime`.
+///
+/// See correct example for a static type below.
+/// ```
+/// # use rquickjs::JsLifetime;
+/// struct Bytes(Vec<u8>);
+///
+/// unsafe impl<'js> JsLifetime<'js> for Bytes{
+///     type Changed<'to> = Bytes;
+/// }
+///
+/// ```
+///
+///
 /// ## Incorrect examples
 ///
-/// For example the following is unsound:
+/// For example the following is unsound!
 /// ```no_run
 /// # use rquickjs::JsLifetime;
 /// struct Container<'js>(rquickjs::Object<'js>);
