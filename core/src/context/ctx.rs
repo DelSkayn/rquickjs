@@ -1,6 +1,7 @@
 #[cfg(feature = "futures")]
 use std::future::Future;
 use std::{
+    any::Any,
     ffi::{CStr, CString},
     fs,
     mem::{self, MaybeUninit},
@@ -14,8 +15,8 @@ use crate::AsyncContext;
 use crate::{
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserData, UserDataError, UserDataGuard},
-    Atom, Error, FromJs, Function, IntoJs, Object, Promise, Result, String, Value,
+    runtime::{opaque::Opaque, UserDataError, UserDataGuard},
+    Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
 };
 
 use super::Context;
@@ -446,10 +447,11 @@ impl<'js> Ctx<'js> {
     /// Returns the value from the argument if the userdata is currently being accessed and
     /// insertion is not possible.
     /// Otherwise returns the exising value for this type if it existed.
-    pub fn store_userdata<U: UserData<'js>>(
-        &self,
-        data: U,
-    ) -> StdResult<Option<Box<U>>, UserDataError<U>> {
+    pub fn store_userdata<U>(&self, data: U) -> StdResult<Option<Box<U>>, UserDataError<U>>
+    where
+        U: JsLifetime<'js>,
+        U::Changed<'static>: Any,
+    {
         unsafe { self.get_opaque().insert_userdata(data) }
     }
 
@@ -457,16 +459,22 @@ impl<'js> Ctx<'js> {
     ///
     /// Returns Err(()) if the userdata is currently being accessed and removing isn't possible.
     /// Returns Ok(None) if userdata of the given type wasn't inserted.
-    pub fn remove_userdata<U: UserData<'js>>(
-        &self,
-    ) -> StdResult<Option<Box<U>>, UserDataError<()>> {
+    pub fn remove_userdata<U>(&self) -> StdResult<Option<Box<U>>, UserDataError<()>>
+    where
+        U: JsLifetime<'js>,
+        U::Changed<'static>: Any,
+    {
         unsafe { self.get_opaque().remove_userdata() }
     }
 
     /// Retrieves a borrow to the userdata of the given type from the userdata storage.
     ///
     /// Returns None if userdata of the given type wasn't inserted.
-    pub fn userdata<U: UserData<'js>>(&self) -> Option<UserDataGuard<U>> {
+    pub fn userdata<U>(&self) -> Option<UserDataGuard<U>>
+    where
+        U: JsLifetime<'js>,
+        U::Changed<'static>: Any,
+    {
         unsafe { self.get_opaque().get_userdata() }
     }
 
@@ -478,7 +486,7 @@ impl<'js> Ctx<'js> {
 
 #[cfg(test)]
 mod test {
-    use crate::CatchResultExt;
+    use crate::{CatchResultExt, JsLifetime};
 
     #[test]
     fn exports() {
@@ -665,14 +673,14 @@ mod test {
 
     #[test]
     fn userdata() {
-        use crate::{runtime::UserData, Context, Function, Runtime};
+        use crate::{Context, Function, Runtime};
 
         pub struct MyUserData<'js> {
             base: Function<'js>,
         }
 
-        unsafe impl<'js> UserData<'js> for MyUserData<'js> {
-            type Static = MyUserData<'static>;
+        unsafe impl<'js> JsLifetime<'js> for MyUserData<'js> {
+            type Changed<'to> = MyUserData<'to>;
         }
 
         let rt = Runtime::new().unwrap();

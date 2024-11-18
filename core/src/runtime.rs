@@ -13,7 +13,7 @@ pub(crate) mod schedular;
 mod spawner;
 
 pub use base::{Runtime, WeakRuntime};
-pub use userdata::{UserData, UserDataError, UserDataGuard};
+pub use userdata::{UserDataError, UserDataGuard};
 
 #[cfg(feature = "futures")]
 pub(crate) use r#async::InnerRuntime;

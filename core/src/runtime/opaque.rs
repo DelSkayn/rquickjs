@@ -1,11 +1,11 @@
 use crate::{
     class::{self, ffi::VTable, JsClass},
-    qjs, Ctx, Error, Object,
+    qjs, Ctx, Error, JsLifetime, Object,
 };
 
 use super::{
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, UserData, UserDataError,
+    InterruptHandler, UserDataError,
 };
 use std::{
     any::{Any, TypeId},
@@ -142,19 +142,25 @@ impl<'js> Opaque<'js> {
 
     pub fn insert_userdata<U>(&self, data: U) -> Result<Option<Box<U>>, UserDataError<U>>
     where
-        U: UserData<'js>,
+        U: JsLifetime<'js>,
+        U::Changed<'static>: Any,
     {
         self.userdata.insert(data)
     }
 
     pub fn remove_userdata<U>(&self) -> Result<Option<Box<U>>, UserDataError<()>>
     where
-        U: UserData<'js>,
+        U: JsLifetime<'js>,
+        U::Changed<'static>: Any,
     {
         self.userdata.remove()
     }
 
-    pub fn get_userdata<U: UserData<'js>>(&self) -> Option<UserDataGuard<U>> {
+    pub fn get_userdata<U>(&self) -> Option<UserDataGuard<U>>
+    where
+        U: JsLifetime<'js>,
+        U::Changed<'static>: Any,
+    {
         self.userdata.get()
     }
 
