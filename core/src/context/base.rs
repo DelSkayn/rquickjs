@@ -40,7 +40,7 @@ impl Context {
     /// If additional functions are required use [`Context::custom`],
     /// [`Context::builder`] or [`Context::full`].
     pub fn base(runtime: &Runtime) -> Result<Self> {
-        Self::custom::<intrinsic::Base>(runtime)
+        Self::custom::<intrinsic::None>(runtime)
     }
 
     /// Creates a context with only the required intrinsics registered.
@@ -51,7 +51,7 @@ impl Context {
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
         // rquickjs assumes the base objects exist, so we allways need to add this.
-        unsafe { intrinsic::Base::add_intrinsic(ctx) };
+        unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
         let res = Inner {
             ctx,
@@ -154,7 +154,7 @@ mod test {
     use crate::*;
 
     #[test]
-    fn base() {
+    fn basic() {
         test_with(|ctx| {
             let val: Value = ctx.eval(r#"1+1"#).unwrap();
 
@@ -177,6 +177,12 @@ mod test {
             assert_eq!(val, 2);
             println!("{:?}", ctx.globals());
         });
+    }
+
+    #[test]
+    fn base() {
+        let rt = Runtime::new().unwrap();
+        let _ = Context::base(&rt).unwrap();
     }
 
     #[test]

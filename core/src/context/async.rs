@@ -160,7 +160,7 @@ impl AsyncContext {
     /// If additional functions are required use [`AsyncContext::custom`],
     /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn base(runtime: &AsyncRuntime) -> Result<Self> {
-        Self::custom::<intrinsic::Base>(runtime).await
+        Self::custom::<intrinsic::None>(runtime).await
     }
 
     /// Creates a context with only the required intrinsics registered.

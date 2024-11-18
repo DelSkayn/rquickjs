@@ -53,8 +53,6 @@ pub mod intrinsic {
 
     intrinsic_impls! {
         @builtin:
-        /// Add base objects support
-        BaseObjects JS_AddIntrinsicBaseObjects,
         /// Add Date object support
         Date JS_AddIntrinsicDate,
         /// Add evaluation support
@@ -80,9 +78,6 @@ pub mod intrinsic {
         /// Add WeakRef support
         WeakRef JS_AddIntrinsicWeakRef,
     }
-
-    /// An alias for [`BaseObjects`]
-    pub type Base = BaseObjects;
 
     /// Add none intrinsics
     pub type None = ();
