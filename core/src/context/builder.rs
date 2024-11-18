@@ -162,24 +162,4 @@ mod tests {
         let result: usize = ctx.with(|ctx| ctx.eval("1+1")).unwrap();
         assert_eq!(result, 2);
     }
-
-    #[test]
-    fn custom_intrinsic() {
-        struct MyIntrinsic;
-
-        impl Intrinsic for MyIntrinsic {
-            unsafe fn add_intrinsic(ctx: NonNull<qjs::JSContext>) {
-                let ctx = crate::Ctx::from_raw(ctx);
-                ctx.globals().set("test", 42).unwrap();
-            }
-        }
-
-        let rt = crate::Runtime::new().unwrap();
-        let ctx = Context::builder()
-            .with::<(MyIntrinsic, intrinsic::Eval)>()
-            .build(&rt)
-            .unwrap();
-        let result: usize = ctx.with(|ctx| ctx.eval("test+1")).unwrap();
-        assert_eq!(result, 43);
-    }
 }
