@@ -5,7 +5,6 @@ use crate::{context::AsyncContext, runtime::AsyncRuntime};
 use crate::{qjs, util::Sealed, Context, Result, Runtime};
 
 /// The internal trait to add JS builtins
-#[allow(private_bounds)]
 pub trait Intrinsic: Sealed {
     /// # Safety
     /// Do not need implement it yourself instead you may use predefined intrinsics from [`intrinsic`] module.
