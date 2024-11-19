@@ -17,8 +17,8 @@ jobs:
         with:
           toolchain: stable
       - name: Publish crates
-        uses: katyo/publish-crates@v1
+        uses: katyo/publish-crates@v2
         with:
           registry-token: ${{ secrets.CRATES_TOKEN }}
           no-verify: true
-          #dry-run: true
+          dry-run: true
