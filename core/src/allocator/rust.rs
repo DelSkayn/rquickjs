@@ -41,10 +41,8 @@ unsafe impl Allocator for RustAllocator {
         }
 
         let total_size = count.checked_mul(size).expect("overflow");
-
         let total_size = round_size(total_size);
 
-        // Calculate the total allocated size including header
         let alloc_size = HEADER_SIZE + total_size;
 
         let layout = if let Ok(layout) = Layout::from_size_align(alloc_size, ALLOC_ALIGN) {
@@ -59,10 +57,10 @@ unsafe impl Allocator for RustAllocator {
             return ptr::null_mut();
         }
 
-        let header = unsafe { &mut *(ptr as *mut Header) };
-        header.size = total_size;
-
-        unsafe { ptr.add(HEADER_SIZE) }
+        unsafe {
+            ptr.cast::<Header>().write(Header { size: total_size });
+            ptr.add(HEADER_SIZE)
+        }
     }
 
     fn alloc(&mut self, size: usize) -> *mut u8 {
@@ -99,7 +97,7 @@ unsafe impl Allocator for RustAllocator {
         let new_size = round_size(new_size);
 
         let ptr = ptr.sub(HEADER_SIZE);
-        let alloc_size = ptr.cast::<Header>().read().size;
+        let alloc_size = ptr.cast::<Header>().read().size + HEADER_SIZE;
 
         let layout = Layout::from_size_align_unchecked(alloc_size, ALLOC_ALIGN);
 
