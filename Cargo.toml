@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 rust-version = "1.65"
@@ -10,25 +10,6 @@ description = "High level bindings to the QuickJS JavaScript engine"
 keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
 categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
-
-[dependencies.rquickjs-core]
-version = "0.8.0"
-path = "core"
-
-[dependencies.rquickjs-macro]
-version = "0.8.0"
-path = "macro"
-optional = true
-
-[dependencies.indexmap-rs]
-package = "indexmap"
-version = "2"
-optional = true
-
-[dependencies.either-rs]
-package = "either"
-version = "1"
-optional = true
 
 
 [workspace]
@@ -40,6 +21,20 @@ members = [
     "examples/module-loader",
     "examples/rquickjs-cli",
 ]
+
+[workspace.dependencies]
+rquickjs-core = { version = "0.8.1", path = "core" }
+rquickjs-macro = { version = "0.8.1", path = "macro" }
+rquickjs-sys= { version = "0.8.1", path = "sys" }
+rquickjs = { version = "0.8.1", path = "./" }
+
+[dependencies]
+indexmap-rs = { package = "indexmap", version = "2", optional = true }
+either-rs = { package = "either", version = "1", optional = true }
+rquickjs-core = { workspace = true }
+rquickjs-macro = { workspace = true, optional = true }
+
+
 
 [features]
 default = ["classes", "properties"]

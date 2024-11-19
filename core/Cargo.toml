@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-core"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 license = "MIT"
@@ -10,38 +10,26 @@ keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
 categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
-[dependencies.rquickjs-sys]
-version = "0.8.0"
-path = "../sys"
+[package.metadata.docs.rs]
+features = ["full-async", "doc-cfg"]
 
-[dependencies.phf]
-version = "0.11"
-optional = true
+[dependencies]
+rquickjs-sys = { workspace = true }
+phf = { version = "0.11", optional = true }
+indexmap = { version = "2", optional = true }
+either = { version = "1", optional = true }
+async-lock = { version = "3", optional = true }
+chrono = { version = "0.4", optional = true }
+dlopen = { version = "0.1", optional = true }
+relative-path = { version = "1.9", optional = true }
 
-[dependencies.indexmap]
-version = "2"
-optional = true
 
-[dependencies.either]
-version = "1"
-optional = true
-
-[dependencies.async-lock]
-version = "3"
-optional = true
-
-[dependencies.chrono]
-version = "0.4"
-optional = true
-
-[dependencies.dlopen]
-version = "0.1"
-optional = true
-
-[dependencies.relative-path]
-version = "1.9"
-optional = true
-
+[dev-dependencies]
+futures-rs = { package = "futures", version = "0.3"}
+tokio = { version = "1.0", default-features = false, features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
+rquickjs = { workspace = true }
+approx = "0.5"
+trybuild = "1.0.23"
 
 [features]
 default = []
@@ -108,22 +96,5 @@ compile-tests = []
 # Enable unstable doc-cfg feature (for docs.rs)
 doc-cfg = []
 
-[dev-dependencies.futures-rs]
-package = "futures"
-version = "0.3"
 
-[dev-dependencies.tokio]
-version = "1.0"
-default-features = false
-features = ["rt", "rt-multi-thread", "time", "macros", "sync"]
-
-[dev-dependencies.rquickjs]
-path = ".."
-
-[dev-dependencies]
-approx = "0.5"
-trybuild = "1.0.23"
-
-[package.metadata.docs.rs]
-features = ["full-async", "doc-cfg"]
 
