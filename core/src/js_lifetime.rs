@@ -178,3 +178,7 @@ impl_outlive!(
 unsafe impl<'js, T: JsLifetime<'js>> JsLifetime<'js> for Module<'js, T> {
     type Changed<'to> = Module<'to, T::Changed<'to>>;
 }
+
+unsafe impl<'js> JsLifetime<'js> for () {
+    type Changed<'to> = ();
+}
