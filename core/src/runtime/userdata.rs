@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     hash::{BuildHasherDefault, Hasher},
     mem::ManuallyDrop,
-    ops::Deref,
+    ops::{Deref, DerefMut},
 };
 
 use crate::JsLifetime;
@@ -58,7 +58,7 @@ where
     Box::from_raw(Box::into_raw(this) as *mut T)
 }
 
-unsafe fn from_static_ref<'a, 'js, T: JsLifetime<'js>>(this: &'a T::Changed<'static>) -> &'a T
+unsafe fn from_static_ref<'a, 'js, T: JsLifetime<'js>>(this: &'a T::Changed<'static>) -> &'a mut T
 where
     T: Sized,
 {
@@ -170,13 +170,19 @@ impl UserDataMap {
 /// referenced.
 pub struct UserDataGuard<'a, U> {
     map: &'a UserDataMap,
-    r: &'a U,
+    r: &'a mut U,
 }
 
 impl<'a, U> Deref for UserDataGuard<'a, U> {
     type Target = U;
 
     fn deref(&self) -> &Self::Target {
+        self.r
+    }
+}
+
+impl<'a, U> DerefMut for UserDataGuard<'a, U> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
         self.r
     }
 }
