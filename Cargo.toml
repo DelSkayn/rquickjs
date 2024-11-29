@@ -25,7 +25,7 @@ members = [
 [workspace.dependencies]
 rquickjs-core = { version = "0.8.1", path = "core" }
 rquickjs-macro = { version = "0.8.1", path = "macro" }
-rquickjs-sys= { version = "0.8.1", path = "sys" }
+rquickjs-sys = { version = "0.8.1", path = "sys" }
 rquickjs = { version = "0.8.1", path = "./" }
 
 [dependencies]
@@ -35,12 +35,23 @@ rquickjs-core = { workspace = true }
 rquickjs-macro = { workspace = true, optional = true }
 
 
-
 [features]
 default = ["classes", "properties"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "loader", "allocator", "dyn-load", "either", "indexmap", "classes", "properties", "array-buffer", "macro", "phf"]
+full = [
+    "chrono",
+    "loader",
+    "allocator",
+    "dyn-load",
+    "either",
+    "indexmap",
+    "classes",
+    "properties",
+    "array-buffer",
+    "macro",
+    "phf",
+]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
@@ -93,6 +104,8 @@ macro = ["rquickjs-macro"]
 # Disabled for now as it can be used to create unsound code.
 # multi-ctx = ["rquickjs-core/multi-ctx"]
 
+promise_poll_spawner = ["rquickjs-core/promise_poll_spawner"]
+
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]
 
@@ -122,4 +135,3 @@ trybuild = "1.0.82"
 
 [package.metadata.docs.rs]
 features = ["full-async", "parallel", "doc-cfg"]
-
