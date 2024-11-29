@@ -104,6 +104,7 @@ macro = ["rquickjs-macro"]
 # Disabled for now as it can be used to create unsound code.
 # multi-ctx = ["rquickjs-core/multi-ctx"]
 
+# Enable promises to advance tasks spawned in the scheduler via ctx.spawn
 promise_poll_spawner = ["rquickjs-core/promise_poll_spawner"]
 
 # Enable interop between Rust futures and JS Promises
