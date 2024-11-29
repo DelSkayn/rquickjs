@@ -1,5 +1,3 @@
-#[cfg(feature = "futures")]
-use std::future::Future;
 use std::{
     any::Any,
     ffi::{CStr, CString},
@@ -9,15 +7,17 @@ use std::{
     ptr::NonNull,
     result::Result as StdResult,
 };
-
 #[cfg(feature = "futures")]
-use crate::AsyncContext;
+use std::{future::Future, task::Waker};
+
 use crate::{
     markers::Invariant,
     qjs,
     runtime::{opaque::Opaque, UserDataError, UserDataGuard},
     Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
 };
+#[cfg(feature = "futures")]
+use crate::{runtime::schedular::SchedularPoll, AsyncContext};
 
 use super::Context;
 
@@ -391,6 +391,24 @@ impl<'js> Ctx<'js> {
         F: Future<Output = ()> + 'js,
     {
         unsafe { self.get_opaque().push(future) }
+    }
+
+    /// Poll futures currently spawned within the rquickjs runtime executor.
+    ///
+    /// Polling will not always be able to make progress, even when a future is technically ready
+    /// to be polled again.
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    #[must_use]
+    pub fn poll_schedular(&self, ctx: &mut std::task::Context<'_>) -> SchedularPoll {
+        unsafe { &mut (*self.get_opaque()) }.spawner().poll(ctx)
+    }
+
+    /// Register a waker to be awoken once a new future is spawned.
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub async fn listen_spawn(self, waker: Waker) {
+        unsafe { (*self.get_opaque()).spawner().listen(waker) }
     }
 
     /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.

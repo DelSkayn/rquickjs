@@ -34,6 +34,7 @@ impl<F: Future<Output = ()>> Task<F> {
                 prev: Cell::new(None),
                 queued: AtomicBool::new(true),
                 done: Cell::new(false),
+                running: Cell::new(false),
             },
             future: UnsafeCell::new(ManuallyDrop::new(f)),
         }
@@ -50,6 +51,7 @@ pub struct TaskBody {
     // wether the task is currently in the queue to be re-polled.
     pub(crate) queued: AtomicBool,
     pub(crate) done: Cell<bool>,
+    pub(crate) running: Cell<bool>,
 }
 
 /// A raw pointer to a task with it's type erased.

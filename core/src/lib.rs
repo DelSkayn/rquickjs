@@ -45,7 +45,7 @@ pub use context::AsyncContext;
 pub use context::MultiWith;
 #[cfg(feature = "futures")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-pub use runtime::AsyncRuntime;
+pub use runtime::{schedular::SchedularPoll, AsyncRuntime};
 #[cfg(feature = "array-buffer")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub use value::{ArrayBuffer, TypedArray};
