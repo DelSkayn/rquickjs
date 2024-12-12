@@ -1276,6 +1276,9 @@ extern "C" {
     pub fn JS_IsError(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn JS_IsUncatchableError(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn JS_ResetUncatchableError(ctx: *mut JSContext);
 }
 extern "C" {
