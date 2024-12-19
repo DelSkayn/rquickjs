@@ -177,6 +177,15 @@ where
             return Poll::Ready(x);
         }
 
+        #[cfg(feature = "promise_poll_spawner")]
+        {
+            let opaque: &mut crate::runtime::opaque::Opaque = unsafe {
+                let rt = qjs::JS_GetRuntime(this.promise.ctx.as_ptr());
+                &mut *(qjs::JS_GetRuntimeOpaque(rt) as *mut _)
+            };
+            opaque.poll(cx);
+        }
+
         if this.state.is_none() {
             let inner = Rc::new(RefCell::new(cx.waker().clone()));
             this.state = Some(inner.clone());
