@@ -1,6 +1,6 @@
 use crate::{
-    atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, Function, IntoJs, JsLifetime,
-    Object, Result, Value,
+    atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result,
+    Value,
 };
 use std::{
     fmt,
@@ -11,34 +11,38 @@ use std::{
     slice,
 };
 
-use super::{array_buffer::RawArrayBuffer, Constructor};
+use super::array_buffer::RawArrayBuffer;
 
 /// The trait which implements types which capable to be TypedArray items
 ///
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub trait TypedArrayItem: Copy {
     const CLASS_NAME: PredefinedAtom;
+    const ARRAY_TYPE: qjs::JSTypedArrayEnum;
 }
 
 macro_rules! typedarray_items {
-    ($($name:ident: $type:ty,)*) => {
+    ($($name:ident: $type:ty, $array_type:expr,)*) => {
         $(impl TypedArrayItem for $type {
             const CLASS_NAME: PredefinedAtom = PredefinedAtom::$name;
+            const ARRAY_TYPE: qjs::JSTypedArrayEnum = $array_type;
         })*
     };
 }
 
 typedarray_items! {
-    Int8Array: i8,
-    Uint8Array: u8,
-    Int16Array: i16,
-    Uint16Array: u16,
-    Int32Array: i32,
-    Uint32Array: u32,
-    Float32Array: f32,
-    Float64Array: f64,
-    BigInt64Array: i64,
-    BigUint64Array: u64,
+    Int8Array: i8, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8,
+    Uint8Array: u8, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8,
+    Int16Array: i16, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16,
+    Uint16Array: u16, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16,
+    Int32Array: i32, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT32,
+    Uint32Array: u32, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32,
+// XXX introduce when f16 is
+// Float16Array: f16, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16,
+    Float32Array: f32, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32,
+    Float64Array: f64, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64,
+    BigInt64Array: i64, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64,
+    BigUint64Array: u64, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64,
 }
 
 /// Rust representation of a JavaScript objects of TypedArray classes.
@@ -155,12 +159,10 @@ impl<'js, T> TypedArray<'js, T> {
     where
         T: TypedArrayItem,
     {
-        let class: Function = object.ctx.globals().get(T::CLASS_NAME)?;
-        if object.is_instance_of(class) {
-            Ok(Self(object, PhantomData))
-        } else {
-            Err(Error::new_from_js("object", T::CLASS_NAME.to_str()))
+        if object.is_typed_array::<T>() {
+            return Ok(Self(object, PhantomData));
         }
+        Err(Error::new_from_js("object", T::CLASS_NAME.to_str()))
     }
 
     /// Returns the underlying bytes of the buffer,
@@ -195,8 +197,20 @@ impl<'js, T> TypedArray<'js, T> {
         T: TypedArrayItem,
     {
         let ctx = &arraybuffer.0.ctx;
-        let ctor: Constructor = ctx.globals().get(T::CLASS_NAME)?;
-        ctor.construct((arraybuffer,))
+
+        let val = unsafe {
+            let mut argv: [qjs::JSValue; 3] =
+                [arraybuffer.0.as_raw(), qjs::JS_UNDEFINED, qjs::JS_UNDEFINED];
+            let val = qjs::JS_NewTypedArray(
+                ctx.as_ptr(),
+                argv.len() as i32,
+                argv.as_mut_ptr(),
+                T::ARRAY_TYPE,
+            );
+            ctx.handle_exception(val)?;
+            Value::from_js_value(ctx.clone(), val)
+        };
+        Ok(Self(Object(val), PhantomData))
     }
 
     pub(crate) fn get_raw_bytes(val: &Value<'js>) -> Option<(usize, usize, NonNull<u8>)> {
@@ -309,12 +323,8 @@ impl<'js, T> IntoJs<'js> for TypedArray<'js, T> {
 
 impl<'js> Object<'js> {
     pub fn is_typed_array<T: TypedArrayItem>(&self) -> bool {
-        // This should not error unless the global ArrayBuffer object suddenly isn't a Function
-        // anymore.
-        let Ok(class) = self.ctx.globals().get::<_, Function>(T::CLASS_NAME) else {
-            return false;
-        };
-        self.is_instance_of(class)
+        let array_type = unsafe { qjs::JS_GetTypedArrayType(self.value) };
+        T::ARRAY_TYPE == array_type as u32
     }
 
     /// Interpret as [`TypedArray`]
@@ -358,6 +368,7 @@ mod test {
             let res: i8 = ctx
                 .eval(
                     r#"
+                    v.length
                         v.length != 4 ? 1 :
                         v[0] != -1 ? 2 :
                         v[1] != 0 ? 3 :
