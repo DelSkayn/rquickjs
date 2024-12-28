@@ -335,7 +335,7 @@ impl<'js> Object<'js> {
         mem::transmute(self)
     }
 
-    pub fn as_typed_array<'a, T: TypedArrayItem>(&self) -> Option<&TypedArray<'js, T>> {
+    pub fn as_typed_array<T: TypedArrayItem>(&self) -> Option<&TypedArray<'js, T>> {
         self.is_typed_array::<T>()
             .then(|| unsafe { self.ref_typed_array() })
     }
