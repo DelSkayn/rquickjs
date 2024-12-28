@@ -324,7 +324,7 @@ impl<'js, T> IntoJs<'js> for TypedArray<'js, T> {
 impl<'js> Object<'js> {
     pub fn is_typed_array<T: TypedArrayItem>(&self) -> bool {
         let array_type = unsafe { qjs::JS_GetTypedArrayType(self.value) };
-        T::ARRAY_TYPE == array_type
+        T::ARRAY_TYPE == array_type.try_into().unwrap()
     }
 
     /// Interpret as [`TypedArray`]
