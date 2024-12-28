@@ -58,7 +58,7 @@ jobs:
       - name: Documentation
         env:
           DOCS_RS: 1
-        run: cargo doc --no-deps --features full-async,parallel,doc-cfg
+        run: cargo doc --no-deps --features full-async,parallel,doc-cfg,bindgen
       - name: Upload docs
         uses: actions/upload-artifact@v4
         with:
@@ -131,7 +131,7 @@ jobs:
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
       - name: cargo llvm-cov
-        run: cargo llvm-cov --locked --no-default-features --features full-async,compile-tests --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --locked --no-default-features --features full-async,compile-tests,bindgen --workspace --lcov --output-path lcov.info
       - name: Record Rust version
         run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
       - name: Upload to codecov.io
@@ -157,12 +157,12 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: i686-unknown-linux-gnu
-            features: full-async 
+            features: full-async
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: full-async 
+            features: full-async
           - task: bindings
             os: macos-latest
             rust: stable
@@ -184,7 +184,7 @@ jobs:
             rust: stable
             target: x86_64-pc-windows-msvc
             features: full-async
-          - task: test 
+          - task: test
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-msvc
@@ -223,7 +223,7 @@ jobs:
             no-build: true
           - task: bindings
             os: ubuntu-latest
-            rust: nightly 
+            rust: nightly
             target: wasm32-wasip2
             features: full-async
             no-build: true
@@ -237,7 +237,7 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: loader 
+            features: loader
           - task: features
             os: ubuntu-latest
             rust: stable
@@ -436,7 +436,6 @@ jobs:
         env:
           RUST_BACKTRACE: full
         run: cargo test ${{ matrix.optimization && '--release' || '' }} --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
-
 
   update-bindings:
     if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
