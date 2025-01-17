@@ -69,10 +69,9 @@ impl<'js> ArrayBuffer<'js> {
                 capacity as _,
                 0,
             );
-            ctx.handle_exception(val).map_err(|error| {
+            ctx.handle_exception(val).inspect_err(|_| {
                 // don't forget to free data when error occurred
                 Vec::from_raw_parts(ptr, capacity, capacity);
-                error
             })?;
             Value::from_js_value(ctx, val)
         })))
