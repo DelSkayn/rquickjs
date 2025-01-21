@@ -1280,6 +1280,12 @@ extern "C" {
     pub fn JS_IsUncatchableError(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn JS_SetUncatchableError(ctx: *mut JSContext, val: JSValue);
+}
+extern "C" {
+    pub fn JS_ClearUncatchableError(ctx: *mut JSContext, val: JSValue);
+}
+extern "C" {
     pub fn JS_ResetUncatchableError(ctx: *mut JSContext);
 }
 extern "C" {
@@ -1344,6 +1350,9 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_ToBool(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_ToNumber(ctx: *mut JSContext, val: JSValue) -> JSValue;
 }
 extern "C" {
     pub fn JS_ToInt32(ctx: *mut JSContext, pres: *mut i32, val: JSValue) -> ::std::os::raw::c_int;
@@ -1423,6 +1432,9 @@ extern "C" {
     pub fn JS_NewObject(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
+    pub fn JS_ToObject(ctx: *mut JSContext, val: JSValue) -> JSValue;
+}
+extern "C" {
     pub fn JS_IsFunction(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -1436,6 +1448,12 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn JS_IsRegExp(val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_IsMap(val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn JS_NewArray(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
@@ -1443,6 +1461,9 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_NewDate(ctx: *mut JSContext, epoch_ms: f64) -> JSValue;
+}
+extern "C" {
+    pub fn JS_IsDate(v: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> JSValue;
@@ -1529,6 +1550,12 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_SetLength(ctx: *mut JSContext, obj: JSValue, len: i64) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_SealObject(ctx: *mut JSContext, obj: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_FreezeObject(ctx: *mut JSContext, obj: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_GetOwnPropertyNames(
@@ -1870,6 +1897,9 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_PromiseResult(ctx: *mut JSContext, promise: JSValue) -> JSValue;
+}
+extern "C" {
+    pub fn JS_IsPromise(val: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_NewSymbol(

@@ -24,7 +24,7 @@ pub const JS_PROP_NO_ADD: u32 = 65536;
 pub const JS_PROP_NO_EXOTIC: u32 = 131072;
 pub const JS_PROP_DEFINE_PROPERTY: u32 = 262144;
 pub const JS_PROP_REFLECT_DEFINE_PROPERTY: u32 = 524288;
-pub const JS_DEFAULT_STACK_SIZE: u32 = 0;
+pub const JS_DEFAULT_STACK_SIZE: u32 = 1048576;
 pub const JS_EVAL_TYPE_GLOBAL: u32 = 0;
 pub const JS_EVAL_TYPE_MODULE: u32 = 1;
 pub const JS_EVAL_TYPE_DIRECT: u32 = 2;
@@ -1188,6 +1188,12 @@ extern "C" {
     pub fn JS_IsUncatchableError(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn JS_SetUncatchableError(ctx: *mut JSContext, val: JSValue);
+}
+extern "C" {
+    pub fn JS_ClearUncatchableError(ctx: *mut JSContext, val: JSValue);
+}
+extern "C" {
     pub fn JS_ResetUncatchableError(ctx: *mut JSContext);
 }
 extern "C" {
@@ -1252,6 +1258,9 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_ToBool(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_ToNumber(ctx: *mut JSContext, val: JSValue) -> JSValue;
 }
 extern "C" {
     pub fn JS_ToInt32(ctx: *mut JSContext, pres: *mut i32, val: JSValue) -> ::std::os::raw::c_int;
@@ -1331,6 +1340,9 @@ extern "C" {
     pub fn JS_NewObject(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
+    pub fn JS_ToObject(ctx: *mut JSContext, val: JSValue) -> JSValue;
+}
+extern "C" {
     pub fn JS_IsFunction(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
@@ -1344,6 +1356,12 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
+    pub fn JS_IsRegExp(val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_IsMap(val: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
     pub fn JS_NewArray(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
@@ -1351,6 +1369,9 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_NewDate(ctx: *mut JSContext, epoch_ms: f64) -> JSValue;
+}
+extern "C" {
+    pub fn JS_IsDate(v: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> JSValue;
@@ -1437,6 +1458,12 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_SetLength(ctx: *mut JSContext, obj: JSValue, len: i64) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_SealObject(ctx: *mut JSContext, obj: JSValue) -> ::std::os::raw::c_int;
+}
+extern "C" {
+    pub fn JS_FreezeObject(ctx: *mut JSContext, obj: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_GetOwnPropertyNames(
@@ -1641,6 +1668,27 @@ extern "C" {
 extern "C" {
     pub fn JS_GetUint8Array(ctx: *mut JSContext, psize: *mut size_t, obj: JSValue) -> *mut u8;
 }
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C: JSTypedArrayEnum = 0;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_INT8: JSTypedArrayEnum = 1;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8: JSTypedArrayEnum = 2;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_INT16: JSTypedArrayEnum = 3;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16: JSTypedArrayEnum = 4;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_INT32: JSTypedArrayEnum = 5;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32: JSTypedArrayEnum = 6;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64: JSTypedArrayEnum = 7;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64: JSTypedArrayEnum = 8;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16: JSTypedArrayEnum = 9;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32: JSTypedArrayEnum = 10;
+pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64: JSTypedArrayEnum = 11;
+pub type JSTypedArrayEnum = ::std::os::raw::c_uint;
+extern "C" {
+    pub fn JS_NewTypedArray(
+        ctx: *mut JSContext,
+        argc: ::std::os::raw::c_int,
+        argv: *mut JSValue,
+        array_type: JSTypedArrayEnum,
+    ) -> JSValue;
+}
 extern "C" {
     pub fn JS_GetTypedArrayBuffer(
         ctx: *mut JSContext,
@@ -1661,7 +1709,7 @@ extern "C" {
     ) -> JSValue;
 }
 extern "C" {
-    pub fn JS_IsUint8Array(obj: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_GetTypedArrayType(obj: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_NewUint8ArrayCopy(ctx: *mut JSContext, buf: *const u8, len: size_t) -> JSValue;
@@ -1757,6 +1805,9 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_PromiseResult(ctx: *mut JSContext, promise: JSValue) -> JSValue;
+}
+extern "C" {
+    pub fn JS_IsPromise(val: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
     pub fn JS_NewSymbol(
