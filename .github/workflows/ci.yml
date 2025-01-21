@@ -101,7 +101,7 @@ jobs:
     # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
     strategy:
       matrix:
-        msrv: [1.66.0] # required by relative-path
+        msrv: [1.61.0] # required by relative-path
     name: ubuntu / ${{ matrix.msrv }}
     steps:
       - uses: actions/checkout@v4
