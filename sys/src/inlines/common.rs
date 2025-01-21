@@ -32,7 +32,6 @@ pub unsafe fn JS_IsBigInt(v: JSValue) -> bool {
     tag == JS_TAG_BIG_INT
 }
 
-
 #[inline]
 pub unsafe fn JS_IsBool(v: JSValue) -> bool {
     let tag = JS_VALUE_GET_TAG(v);
@@ -83,7 +82,7 @@ pub unsafe fn JS_IsObject(v: JSValue) -> bool {
 
 #[inline]
 pub unsafe fn JS_ToCString(ctx: *mut JSContext, val: JSValue) -> *const c_char {
-    JS_ToCStringLen2(ctx, ptr::null_mut(), val, 0)
+    JS_ToCStringLen2(ctx, ptr::null_mut(), val, false)
 }
 #[inline]
 pub unsafe fn JS_ToCStringLen(
@@ -91,7 +90,7 @@ pub unsafe fn JS_ToCStringLen(
     plen: *mut usize,
     val: JSValue,
 ) -> *const c_char {
-    JS_ToCStringLen2(ctx, plen as _, val, 0)
+    JS_ToCStringLen2(ctx, plen as _, val, false)
 }
 
 #[inline]
