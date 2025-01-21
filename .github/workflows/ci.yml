@@ -112,7 +112,7 @@ jobs:
         with:
           toolchain: ${{ matrix.msrv }}
       - name: cargo +${{ matrix.msrv }} check
-        run: cargo check
+        run: cargo check --features full-async,bindgen
 
   coverage:
     runs-on: ubuntu-latest
