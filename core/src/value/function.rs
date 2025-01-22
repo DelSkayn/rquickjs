@@ -161,13 +161,17 @@ impl<'js> Function<'js> {
 
     /// Returns whether this function is an constructor.
     pub fn is_constructor(&self) -> bool {
-        unsafe { qjs::JS_IsConstructor(self.ctx().as_ptr(), self.0.as_js_value()) }
+        (unsafe { qjs::JS_IsConstructor(self.ctx().as_ptr(), self.0.as_js_value()) }).into()
     }
 
     /// Set whether this function is a constructor or not.
     pub fn set_constructor(&self, is_constructor: bool) {
         unsafe {
-            qjs::JS_SetConstructorBit(self.ctx().as_ptr(), self.0.as_js_value(), is_constructor)
+            qjs::JS_SetConstructorBit(
+                self.ctx().as_ptr(),
+                self.0.as_js_value(),
+                is_constructor.into(),
+            )
         };
     }
 
