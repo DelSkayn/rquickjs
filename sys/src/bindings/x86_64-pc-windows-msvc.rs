@@ -34,6 +34,25 @@ pub const JS_EVAL_FLAG_UNUSED: u32 = 16;
 pub const JS_EVAL_FLAG_COMPILE_ONLY: u32 = 32;
 pub const JS_EVAL_FLAG_BACKTRACE_BARRIER: u32 = 64;
 pub const JS_EVAL_FLAG_ASYNC: u32 = 128;
+pub const JS_DUMP_BYTECODE_FINAL: u32 = 1;
+pub const JS_DUMP_BYTECODE_PASS2: u32 = 2;
+pub const JS_DUMP_BYTECODE_PASS1: u32 = 4;
+pub const JS_DUMP_BYTECODE_HEX: u32 = 16;
+pub const JS_DUMP_BYTECODE_PC2LINE: u32 = 32;
+pub const JS_DUMP_BYTECODE_STACK: u32 = 64;
+pub const JS_DUMP_BYTECODE_STEP: u32 = 128;
+pub const JS_DUMP_READ_OBJECT: u32 = 256;
+pub const JS_DUMP_FREE: u32 = 512;
+pub const JS_DUMP_GC: u32 = 1024;
+pub const JS_DUMP_GC_FREE: u32 = 2048;
+pub const JS_DUMP_MODULE_RESOLVE: u32 = 4096;
+pub const JS_DUMP_PROMISE: u32 = 8192;
+pub const JS_DUMP_LEAKS: u32 = 16384;
+pub const JS_DUMP_ATOM_LEAKS: u32 = 32768;
+pub const JS_DUMP_MEM: u32 = 65536;
+pub const JS_DUMP_OBJECTS: u32 = 131072;
+pub const JS_DUMP_ATOMS: u32 = 262144;
+pub const JS_DUMP_SHAPES: u32 = 524288;
 pub const JS_ATOM_NULL: u32 = 0;
 pub const JS_CALL_FLAG_CONSTRUCTOR: u32 = 1;
 pub const JS_INVALID_CLASS_ID: u32 = 0;
@@ -336,6 +355,9 @@ extern "C" {
     pub fn JS_SetDumpFlags(rt: *mut JSRuntime, flags: u64);
 }
 extern "C" {
+    pub fn JS_GetDumpFlags(rt: *mut JSRuntime) -> u64;
+}
+extern "C" {
     pub fn JS_GetGCThreshold(rt: *mut JSRuntime) -> size_t;
 }
 extern "C" {
@@ -378,7 +400,7 @@ extern "C" {
     pub fn JS_RunGC(rt: *mut JSRuntime);
 }
 extern "C" {
-    pub fn JS_IsLiveObject(rt: *mut JSRuntime, obj: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsLiveObject(rt: *mut JSRuntime, obj: JSValue) -> bool;
 }
 extern "C" {
     pub fn JS_NewContext(rt: *mut JSRuntime) -> *mut JSContext;
@@ -453,22 +475,13 @@ extern "C" {
     pub fn JS_IsEqual(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn JS_IsStrictEqual(
-        ctx: *mut JSContext,
-        op1: JSValue,
-        op2: JSValue,
-    ) -> ::std::os::raw::c_int;
+    pub fn JS_IsStrictEqual(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> bool;
 }
 extern "C" {
-    pub fn JS_IsSameValue(ctx: *mut JSContext, op1: JSValue, op2: JSValue)
-        -> ::std::os::raw::c_int;
+    pub fn JS_IsSameValue(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> bool;
 }
 extern "C" {
-    pub fn JS_IsSameValueZero(
-        ctx: *mut JSContext,
-        op1: JSValue,
-        op2: JSValue,
-    ) -> ::std::os::raw::c_int;
+    pub fn JS_IsSameValueZero(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> bool;
 }
 extern "C" {
     pub fn js_string_codePointRange(
@@ -900,7 +913,7 @@ extern "C" {
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSPropertyEnum {
-    pub is_enumerable: ::std::os::raw::c_int,
+    pub is_enumerable: bool,
     pub atom: JSAtom,
 }
 #[test]
@@ -1252,7 +1265,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: JSClassID) -> ::std::os::raw::c_int;
+    pub fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: JSClassID) -> bool;
 }
 extern "C" {
     pub fn JS_NewNumber(ctx: *mut JSContext, d: f64) -> JSValue;
@@ -1270,13 +1283,13 @@ extern "C" {
     pub fn JS_GetException(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
-    pub fn JS_HasException(ctx: *mut JSContext) -> ::std::os::raw::c_int;
+    pub fn JS_HasException(ctx: *mut JSContext) -> bool;
 }
 extern "C" {
-    pub fn JS_IsError(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsError(ctx: *mut JSContext, val: JSValue) -> bool;
 }
 extern "C" {
-    pub fn JS_IsUncatchableError(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsUncatchableError(ctx: *mut JSContext, val: JSValue) -> bool;
 }
 extern "C" {
     pub fn JS_SetUncatchableError(ctx: *mut JSContext, val: JSValue);
@@ -1408,7 +1421,7 @@ extern "C" {
         ctx: *mut JSContext,
         plen: *mut size_t,
         val1: JSValue,
-        cesu8: ::std::os::raw::c_int,
+        cesu8: bool,
     ) -> *const ::std::os::raw::c_char;
 }
 extern "C" {
@@ -1434,23 +1447,22 @@ extern "C" {
     pub fn JS_ToObject(ctx: *mut JSContext, val: JSValue) -> JSValue;
 }
 extern "C" {
-    pub fn JS_IsFunction(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_ToObjectString(ctx: *mut JSContext, val: JSValue) -> JSValue;
 }
 extern "C" {
-    pub fn JS_IsConstructor(ctx: *mut JSContext, val: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsFunction(ctx: *mut JSContext, val: JSValue) -> bool;
 }
 extern "C" {
-    pub fn JS_SetConstructorBit(
-        ctx: *mut JSContext,
-        func_obj: JSValue,
-        val: ::std::os::raw::c_int,
-    ) -> ::std::os::raw::c_int;
+    pub fn JS_IsConstructor(ctx: *mut JSContext, val: JSValue) -> bool;
 }
 extern "C" {
-    pub fn JS_IsRegExp(val: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_SetConstructorBit(ctx: *mut JSContext, func_obj: JSValue, val: bool) -> bool;
 }
 extern "C" {
-    pub fn JS_IsMap(val: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsRegExp(val: JSValue) -> bool;
+}
+extern "C" {
+    pub fn JS_IsMap(val: JSValue) -> bool;
 }
 extern "C" {
     pub fn JS_NewArray(ctx: *mut JSContext) -> JSValue;
@@ -1462,7 +1474,7 @@ extern "C" {
     pub fn JS_NewDate(ctx: *mut JSContext, epoch_ms: f64) -> JSValue;
 }
 extern "C" {
-    pub fn JS_IsDate(v: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsDate(v: JSValue) -> bool;
 }
 extern "C" {
     pub fn JS_GetProperty(ctx: *mut JSContext, this_obj: JSValue, prop: JSAtom) -> JSValue;
@@ -1612,10 +1624,7 @@ extern "C" {
     ) -> JSValue;
 }
 extern "C" {
-    pub fn JS_DetectModule(
-        input: *const ::std::os::raw::c_char,
-        input_len: size_t,
-    ) -> ::std::os::raw::c_int;
+    pub fn JS_DetectModule(input: *const ::std::os::raw::c_char, input_len: size_t) -> bool;
 }
 extern "C" {
     pub fn JS_Eval(
@@ -1741,7 +1750,7 @@ extern "C" {
         len: size_t,
         free_func: JSFreeArrayBufferDataFunc,
         opaque: *mut ::std::os::raw::c_void,
-        is_shared: ::std::os::raw::c_int,
+        is_shared: bool,
     ) -> JSValue;
 }
 extern "C" {
@@ -1754,7 +1763,7 @@ extern "C" {
     pub fn JS_GetArrayBuffer(ctx: *mut JSContext, psize: *mut size_t, obj: JSValue) -> *mut u8;
 }
 extern "C" {
-    pub fn JS_IsArrayBuffer(obj: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsArrayBuffer(obj: JSValue) -> bool;
 }
 extern "C" {
     pub fn JS_GetUint8Array(ctx: *mut JSContext, psize: *mut size_t, obj: JSValue) -> *mut u8;
@@ -1796,7 +1805,7 @@ extern "C" {
         len: size_t,
         free_func: JSFreeArrayBufferDataFunc,
         opaque: *mut ::std::os::raw::c_void,
-        is_shared: ::std::os::raw::c_int,
+        is_shared: bool,
     ) -> JSValue;
 }
 extern "C" {
@@ -1898,13 +1907,13 @@ extern "C" {
     pub fn JS_PromiseResult(ctx: *mut JSContext, promise: JSValue) -> JSValue;
 }
 extern "C" {
-    pub fn JS_IsPromise(val: JSValue) -> ::std::os::raw::c_int;
+    pub fn JS_IsPromise(val: JSValue) -> bool;
 }
 extern "C" {
     pub fn JS_NewSymbol(
         ctx: *mut JSContext,
         description: *const ::std::os::raw::c_char,
-        is_global: ::std::os::raw::c_int,
+        is_global: bool,
     ) -> JSValue;
 }
 pub type JSHostPromiseRejectionTracker = ::std::option::Option<
@@ -1912,7 +1921,7 @@ pub type JSHostPromiseRejectionTracker = ::std::option::Option<
         ctx: *mut JSContext,
         promise: JSValue,
         reason: JSValue,
-        is_handled: ::std::os::raw::c_int,
+        is_handled: bool,
         opaque: *mut ::std::os::raw::c_void,
     ),
 >;
@@ -1937,7 +1946,7 @@ extern "C" {
     );
 }
 extern "C" {
-    pub fn JS_SetCanBlock(rt: *mut JSRuntime, can_block: ::std::os::raw::c_int);
+    pub fn JS_SetCanBlock(rt: *mut JSRuntime, can_block: bool);
 }
 extern "C" {
     pub fn JS_SetIsHTMLDDA(ctx: *mut JSContext, obj: JSValue);
@@ -1995,7 +2004,7 @@ extern "C" {
     ) -> ::std::os::raw::c_int;
 }
 extern "C" {
-    pub fn JS_IsJobPending(rt: *mut JSRuntime) -> ::std::os::raw::c_int;
+    pub fn JS_IsJobPending(rt: *mut JSRuntime) -> bool;
 }
 extern "C" {
     pub fn JS_ExecutePendingJob(
