@@ -101,7 +101,7 @@ jobs:
     # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
     strategy:
       matrix:
-        msrv: [1.77.0] # Workspace Inheritance stabilized in 1.64.0, offset_of was added in 1.77.0
+        msrv: [1.81.0] # 'home' crate requires 1.81.0
     name: ubuntu / ${{ matrix.msrv }}
     steps:
       - uses: actions/checkout@v4
