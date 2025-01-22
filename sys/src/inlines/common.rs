@@ -82,7 +82,7 @@ pub unsafe fn JS_IsObject(v: JSValue) -> bool {
 
 #[inline]
 pub unsafe fn JS_ToCString(ctx: *mut JSContext, val: JSValue) -> *const c_char {
-    JS_ToCStringLen2(ctx, ptr::null_mut(), val, false)
+    JS_ToCStringLen2(ctx, ptr::null_mut(), val, (false).into())
 }
 #[inline]
 pub unsafe fn JS_ToCStringLen(
@@ -90,7 +90,7 @@ pub unsafe fn JS_ToCStringLen(
     plen: *mut usize,
     val: JSValue,
 ) -> *const c_char {
-    JS_ToCStringLen2(ctx, plen as _, val, false)
+    JS_ToCStringLen2(ctx, plen as _, val, (false).into())
 }
 
 #[inline]
