@@ -352,13 +352,13 @@ impl<'js> Value<'js> {
     /// Check if the value is a function
     #[inline]
     pub fn is_function(&self) -> bool {
-        (unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) }).into()
+        (unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) }) as bool
     }
 
     /// Check if the value is a constructor function
     #[inline]
     pub fn is_constructor(&self) -> bool {
-        (unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) }).into()
+        (unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) }) as bool
     }
 
     /// Check if the value is a promise.
@@ -376,7 +376,7 @@ impl<'js> Value<'js> {
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
-        (unsafe { qjs::JS_IsError(self.ctx.as_ptr(), self.value) }).into()
+        (unsafe { qjs::JS_IsError(self.ctx.as_ptr(), self.value) }) as bool
     }
 
     /// Reference as value
