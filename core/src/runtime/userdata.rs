@@ -10,9 +10,9 @@ use std::{
 
 use crate::JsLifetime;
 
-unsafe fn to_static<'js, T: JsLifetime<'js>>(this: T) -> T::Changed<'static>
+unsafe fn to_static<'js, T>(this: T) -> T::Changed<'static>
 where
-    T: Sized,
+    T: JsLifetime<'js> + Sized,
 {
     assert_eq!(
         std::mem::size_of::<T>(),
@@ -40,9 +40,9 @@ where
     )
 }
 
-unsafe fn from_static_box<'js, T: JsLifetime<'js>>(this: Box<T::Changed<'static>>) -> Box<T>
+unsafe fn from_static_box<'js, T>(this: Box<T::Changed<'static>>) -> Box<T>
 where
-    T: Sized,
+    T: JsLifetime<'js> + Sized,
 {
     assert_eq!(
         std::mem::size_of::<T>(),
@@ -58,9 +58,9 @@ where
     Box::from_raw(Box::into_raw(this) as *mut T)
 }
 
-unsafe fn from_static_ref<'a, 'js, T: JsLifetime<'js>>(this: &'a T::Changed<'static>) -> &'a T
+unsafe fn from_static_ref<'a, 'js, T>(this: &'a T::Changed<'static>) -> &'a T
 where
-    T: Sized,
+    T: JsLifetime<'js> + Sized,
 {
     std::mem::transmute(this)
 }

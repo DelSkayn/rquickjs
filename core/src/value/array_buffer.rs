@@ -67,7 +67,7 @@ impl<'js> ArrayBuffer<'js> {
                 size as _,
                 Some(drop_raw::<T>),
                 capacity as _,
-                0,
+                false,
             );
             ctx.handle_exception(val).inspect_err(|_| {
                 // don't forget to free data when error occurred

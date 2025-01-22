@@ -324,7 +324,13 @@ impl<'js, T> IntoJs<'js> for TypedArray<'js, T> {
 impl<'js> Object<'js> {
     pub fn is_typed_array<T: TypedArrayItem>(&self) -> bool {
         let array_type = unsafe { qjs::JS_GetTypedArrayType(self.value) };
-        T::ARRAY_TYPE == array_type.try_into().unwrap()
+        if array_type < 0 {
+            return false;
+        }
+        if let Ok(array_type) = TryInto::<qjs::JSTypedArrayEnum>::try_into(array_type) {
+            return array_type == T::ARRAY_TYPE;
+        }
+        return false;
     }
 
     /// Interpret as [`TypedArray`]
@@ -434,6 +440,25 @@ mod test {
             res[4..].copy_from_slice(&bytes_1);
 
             assert_eq!(val.as_bytes().unwrap(), &res)
+        });
+    }
+
+    #[test]
+    fn is_typed_array() {
+        test_with(|ctx| {
+            let val: Value = ctx
+                .eval(
+                    r#"
+                        new Uint32Array([0xCAFEDEAD, 0xFEEDBEAD])
+                    "#,
+                )
+                .unwrap();
+            let obj = val.into_object().unwrap();
+            assert!(obj.is_typed_array::<u32>());
+            assert!(!obj.is_typed_array::<i32>());
+
+            let obj = Object::new(ctx).unwrap();
+            assert!(!obj.is_typed_array::<u8>());
         });
     }
 }

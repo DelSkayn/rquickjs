@@ -210,7 +210,7 @@ impl RawRuntime {
     }
 
     pub fn is_job_pending(&self) -> bool {
-        0 != unsafe { qjs::JS_IsJobPending(self.rt.as_ptr()) }
+        (unsafe { qjs::JS_IsJobPending(self.rt.as_ptr()) } as i32) != 0
     }
 
     pub fn execute_pending_job(&mut self) -> StdResult<bool, *mut qjs::JSContext> {
