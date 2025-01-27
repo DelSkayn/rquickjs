@@ -13,10 +13,10 @@ use crate::allocator::{Allocator, AllocatorHolder};
 use crate::loader::{Loader, LoaderHolder, Resolver};
 use crate::{
     qjs::{self, size_t},
-    Error, Result,
+    Ctx, Error, Result, Value,
 };
 
-use super::{opaque::Opaque, InterruptHandler};
+use super::{opaque::Opaque, InterruptHandler, RejectionTracker};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;
@@ -288,6 +288,41 @@ impl RawRuntime {
         let mut stats = mem::MaybeUninit::uninit();
         qjs::JS_ComputeMemoryUsage(self.rt.as_ptr(), stats.as_mut_ptr());
         stats.assume_init()
+    }
+
+    pub unsafe fn set_host_promise_rejection_tracker(&mut self, tracker: Option<RejectionTracker>) {
+        unsafe extern "C" fn rejection_tracker_wrapper(
+            ctx: *mut rquickjs_sys::JSContext,
+            promise: rquickjs_sys::JSValue,
+            reason: rquickjs_sys::JSValue,
+            is_handled: bool,
+            opaque: *mut ::std::os::raw::c_void,
+        ) {
+            let ctx = Ctx::from_ptr(ctx);
+
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+                opaque.as_ref().run_rejection_tracker(
+                    ctx.clone(),
+                    Value::from_raw(ctx.clone(), promise),
+                    Value::from_raw(ctx.clone(), reason),
+                    is_handled,
+                );
+            }));
+            match catch_unwind {
+                Ok(_) => {}
+                Err(panic) => {
+                    opaque.as_ref().set_panic(panic);
+                }
+            }
+        }
+        qjs::JS_SetHostPromiseRejectionTracker(
+            self.rt.as_ptr(),
+            tracker.as_ref().map(|_| rejection_tracker_wrapper as _),
+            qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
+        );
+        self.get_opaque().set_rejection_tracker(tracker);
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.
