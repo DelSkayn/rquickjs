@@ -298,15 +298,15 @@ impl RawRuntime {
             is_handled: bool,
             opaque: *mut ::std::os::raw::c_void,
         ) {
-            let ctx = Ctx::from_ptr(ctx);
-
             let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
 
             let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+                let ctx = Ctx::from_ptr(ctx);
+
                 opaque.as_ref().run_rejection_tracker(
                     ctx.clone(),
                     Value::from_raw(ctx.clone(), promise),
-                    Value::from_raw(ctx.clone(), reason),
+                    Value::from_raw(ctx, reason),
                     is_handled,
                 );
             }));
