@@ -35,7 +35,7 @@ trybuild = "1.0.23"
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "loader", "allocator", "dyn-load", "either", "indexmap", "classes", "properties", "array-buffer"]
+full = ["chrono", "loader", "dyn-load", "either", "indexmap"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
@@ -53,21 +53,12 @@ loader = ["relative-path"]
 # Enable native module loading support
 dyn-load = ["loader", "dlopen"]
 
-# Enable user-defined allocator support
-allocator = []
-
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
-rust-alloc = ["allocator"]
+rust-alloc = []
 
 # Enable user-defined classes support
-classes = []
 
-# Enable user-defined properties support
-properties = []
-
-# Enable ArrayBuffer and TypedArray support
-array-buffer = []
 
 # Enable interop between Rust futures and JS Promises
 futures = ["dep:async-lock"]
@@ -96,5 +87,10 @@ compile-tests = []
 # Enable unstable doc-cfg feature (for docs.rs)
 doc-cfg = []
 
+# Deprecated features
+properties = []
+classes = []
+array-buffer = []
+allocator = []
 
 

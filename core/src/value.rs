@@ -25,14 +25,10 @@ pub use promise::Promise;
 pub use string::{CString, String};
 pub use symbol::Symbol;
 
-#[cfg(feature = "array-buffer")]
 pub mod array_buffer;
-#[cfg(feature = "array-buffer")]
 pub mod typed_array;
 
-#[cfg(feature = "array-buffer")]
 pub use array_buffer::ArrayBuffer;
-#[cfg(feature = "array-buffer")]
 pub use typed_array::TypedArray;
 
 /// Any JavaScript value

@@ -35,7 +35,6 @@ impl fmt::Display for AsSliceError {
 
 /// Rust representation of a JavaScript object of class ArrayBuffer.
 ///
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 #[derive(Debug, PartialEq, Clone, Eq, Hash)]
 #[repr(transparent)]
 pub struct ArrayBuffer<'js>(pub(crate) Object<'js>);
