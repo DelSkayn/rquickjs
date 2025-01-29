@@ -35,7 +35,7 @@ trybuild = "1.0.23"
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "loader", "allocator", "dyn-load", "either", "indexmap", "classes", "properties", "array-buffer"]
+full = ["chrono", "loader", "dyn-load", "either", "indexmap"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
@@ -55,7 +55,7 @@ dyn-load = ["loader", "dlopen"]
 
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
-rust-alloc = ["allocator"]
+rust-alloc = []
 
 # Enable user-defined classes support
 
