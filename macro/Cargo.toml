@@ -27,7 +27,7 @@ phf_shared = { version = "0.11", optional = true }
 phf_generator = { version = "0.11",  optional = true }
 
 [dev-dependencies]
-rquickjs = { path = "../", features = ["macro", "classes", "properties", "futures","phf"] }
+rquickjs = { path = "../", features = ["macro", "futures","phf"] }
 difference = "2"
 async-std = { version = "1", features = ["attributes"] }
 
