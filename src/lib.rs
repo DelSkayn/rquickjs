@@ -29,22 +29,9 @@
 //!
 //! # Optional features
 //!
-//! ## Default
-//!
-//! This crate can be customized via features. The following features are enabled by default but can
-//! be disabled when not needed:
-//!
-//! - `classes` enables support for ES6 classes. Any user-defined Rust
-//! type can be exported to JS as an ES6 class which can be derived and extended by JS.
-//! - `properties` enables support for object properties (`Object.defineProperty`).
-//!
 //! ## Advanced
 //!
 //! The following features may be enabled to get an extra functionality:
-//!
-//! - `allocator` adds support for custom allocators for [`Runtime`]. The allocators should
-//! implements [`std::alloc::Allocator`] trait and can be plugged on [`Runtime`] creation via
-//! [`Runtime::new_with_alloc`].
 //!
 //! - `rust-alloc` forces using Rust's global allocator by default instead of libc's one.
 //!
@@ -55,8 +42,6 @@
 //! previous resolver or loader failed the next one will be applied.
 //!
 //! - `dyn-load` adds support for loadable native modules (so/dll/dylib).
-//!
-//! - `array-buffer` adds support for [`ArrayBuffer`] and [`TypedArray`].
 //!
 //! - `futures` adds support for async Rust. When enabled the library exports [`AsyncRuntime`] and
 //! [`AsyncContext`]. These are the asynchronous variants of the normal runtime and context. In
