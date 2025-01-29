@@ -27,7 +27,7 @@ relative-path = { version = "1.9", optional = true }
 [dev-dependencies]
 futures-rs = { package = "futures", version = "0.3"}
 tokio = { version = "1.0", default-features = false, features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
-rquickjs = { workspace = true }
+rquickjs.path = "../"
 approx = "0.5"
 trybuild = "1.0.23"
 

@@ -14,7 +14,7 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 proc-macro = true
 
 [dependencies]
-rquickjs-core = { workspace = true, features = ["loader"] }
+rquickjs-core = { path = "../core", features = ["loader"] }
 proc-macro2 = "1"
 proc-macro-crate = "3"
 quote = "1"
@@ -27,7 +27,7 @@ phf_shared = { version = "0.11", optional = true }
 phf_generator = { version = "0.11",  optional = true }
 
 [dev-dependencies]
-rquickjs = { workspace = true, features = ["macro", "classes", "properties", "futures","phf"] }
+rquickjs = { path = "../", features = ["macro", "classes", "properties", "futures","phf"] }
 difference = "2"
 async-std = { version = "1", features = ["attributes"] }
 
