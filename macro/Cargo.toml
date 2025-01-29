@@ -14,7 +14,7 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 proc-macro = true
 
 [dependencies]
-rquickjs-core = { path = "../core", features = ["loader"] }
+rquickjs-core = { workspace = true, features = ["loader"] }
 proc-macro2 = "1"
 proc-macro-crate = "3"
 quote = "1"
