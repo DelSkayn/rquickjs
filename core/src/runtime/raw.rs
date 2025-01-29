@@ -366,3 +366,38 @@ impl RawRuntime {
         }
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::{cell::RefCell, rc::Rc};
+
+    use crate::{Context, Runtime};
+
+    #[test]
+    fn promise_rejection_handler() {
+        let counter = Rc::new(RefCell::new(0));
+        let rt = Runtime::new().unwrap();
+        {
+            let counter = counter.clone();
+            rt.set_host_promise_rejection_tracker(Some(Box::new(move |_, _, _, is_handled| {
+                if !is_handled {
+                    let mut c = counter.borrow_mut();
+                    *c += 1;
+                }
+            })));
+        }
+        let context = Context::full(&rt).unwrap();
+        context.with(|ctx| {
+            let _: Result<(), _> = ctx.eval(
+                r#"
+                const x = async () => {
+                    throw new Error("Uncaught")
+                }
+                x()
+                throw new Error("Caught")
+            "#,
+            );
+        });
+        assert_eq!(*counter.borrow(), 1);
+    }
+}
