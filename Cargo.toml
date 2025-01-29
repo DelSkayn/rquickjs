@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 rust-version = "1.81"
@@ -23,10 +23,10 @@ members = [
 ]
 
 [workspace.dependencies]
-rquickjs-core = { version = "0.8.1", path = "core" }
-rquickjs-macro = { version = "0.8.1", path = "macro" }
-rquickjs-sys = { version = "0.8.1", path = "sys" }
-rquickjs = { version = "0.8.1", path = "./" }
+rquickjs-core = { version = "0.9.0", path = "core" }
+rquickjs-macro = { version = "0.9.0", path = "macro" }
+rquickjs-sys = { version = "0.9.0", path = "sys" }
+rquickjs = { version = "0.9.0", path = "./" }
 
 [dependencies]
 indexmap-rs = { package = "indexmap", version = "2", optional = true }

@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-macro"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["K. <kayo@illumium.org>", "Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2021"
 license = "MIT"
