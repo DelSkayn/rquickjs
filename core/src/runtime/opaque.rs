@@ -231,6 +231,7 @@ impl<'js> Opaque<'js> {
     /// Called before dropping the runtime to ensure that we drop everything before freeing the
     /// runtime.
     pub fn clear(&mut self) {
+        self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
         self.prototypes.get_mut().clear();

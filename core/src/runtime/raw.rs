@@ -305,8 +305,8 @@ impl RawRuntime {
 
                 opaque.as_ref().run_rejection_tracker(
                     ctx.clone(),
-                    Value::from_raw(ctx.clone(), promise),
-                    Value::from_raw(ctx, reason),
+                    Value::from_js_value_const(ctx.clone(), promise),
+                    Value::from_js_value_const(ctx, reason),
                     is_handled,
                 );
             }));
