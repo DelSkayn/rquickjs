@@ -369,19 +369,19 @@ impl RawRuntime {
 
 #[cfg(test)]
 mod test {
-    use std::{cell::RefCell, rc::Rc};
+    use std::sync::{Arc, Mutex};
 
     use crate::{Context, Runtime};
 
     #[test]
     fn promise_rejection_handler() {
-        let counter = Rc::new(RefCell::new(0));
+        let counter = Arc::new(Mutex::new(0));
         let rt = Runtime::new().unwrap();
         {
             let counter = counter.clone();
             rt.set_host_promise_rejection_tracker(Some(Box::new(move |_, _, _, is_handled| {
                 if !is_handled {
-                    let mut c = counter.borrow_mut();
+                    let mut c = counter.lock().unwrap();
                     *c += 1;
                 }
             })));
@@ -398,6 +398,6 @@ mod test {
             "#,
             );
         });
-        assert_eq!(*counter.borrow(), 1);
+        assert_eq!(*counter.lock().unwrap(), 1);
     }
 }
