@@ -119,7 +119,7 @@ unsafe impl Allocator for RustAllocator {
     }
 }
 
-#[cfg(all(test, feature = "rust-alloc", feature = "allocator"))]
+#[cfg(all(test, feature = "rust-alloc"))]
 mod test {
     use super::RustAllocator;
     use crate::{allocator::Allocator, Context, Runtime};

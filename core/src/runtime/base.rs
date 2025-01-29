@@ -1,7 +1,6 @@
 //! QuickJS runtime related types.
 
 use super::{opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, RejectionTracker};
-#[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
@@ -46,8 +45,6 @@ impl Runtime {
     /// Create a new runtime using specified allocator
     ///
     /// Will generally only fail if not enough memory was available.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
-    #[cfg(feature = "allocator")]
     pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,

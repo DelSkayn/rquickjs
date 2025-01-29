@@ -16,7 +16,6 @@ pub use rust::RustAllocator;
 /// memory atleast `new_size` bytes and aligned to the size of `usize`.
 /// - `usable_size` must return the amount of available memory for any allocation allocated with
 /// this allocator.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
 pub unsafe trait Allocator {
     /// Allocate new memory
     ///

@@ -15,7 +15,6 @@ use super::{
     opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
     InterruptHandler, MemoryUsage,
 };
-#[cfg(feature = "allocator")]
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
@@ -129,8 +128,6 @@ impl AsyncRuntime {
     /// Create a new runtime using specified allocator
     ///
     /// Will generally only fail if not enough memory was available.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
-    #[cfg(feature = "allocator")]
     // Annoying false positive clippy lint
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new_with_alloc<A>(allocator: A) -> Result<Self>

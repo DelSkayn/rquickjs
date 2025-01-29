@@ -15,7 +15,6 @@ use super::array_buffer::RawArrayBuffer;
 
 /// The trait which implements types which capable to be TypedArray items
 ///
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub trait TypedArrayItem: Copy {
     const CLASS_NAME: PredefinedAtom;
     const ARRAY_TYPE: qjs::JSTypedArrayEnum;
@@ -60,7 +59,6 @@ typedarray_items! {
 /// | `BigInt64Array`    | [`TypedArray<i64>`]   |
 /// | `BigUint64Array`   | [`TypedArray<u64>`]   |
 ///
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 #[repr(transparent)]
 pub struct TypedArray<'js, T>(pub(crate) Object<'js>, PhantomData<T>);
 

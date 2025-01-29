@@ -26,7 +26,6 @@ impl<'js> Object<'js> {
     /// ).unwrap();
     /// # })
     /// ```
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
     pub fn prop<K, V, P>(&self, key: K, prop: V) -> Result<()>
     where
         K: IntoAtom<'js>,
@@ -57,7 +56,6 @@ impl<'js> Object<'js> {
 pub type PropertyFlags = qjs::c_int;
 
 /// The property interface
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
 pub trait AsProperty<'js, P> {
     /// Property configuration
     ///
@@ -73,7 +71,6 @@ macro_rules! wrapper_impls {
 	  ($($(#[$type_meta:meta])* $type:ident<$($param:ident),*>($($field:ident)*; $($flag:ident)*))*) => {
         $(
             $(#[$type_meta])*
-            #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "properties")))]
             #[derive(Debug, Clone, Copy)]
             pub struct $type<$($param),*> {
                 flags: PropertyFlags,

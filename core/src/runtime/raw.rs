@@ -7,7 +7,6 @@ use std::{
     result::Result as StdResult,
 };
 
-#[cfg(feature = "allocator")]
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
@@ -114,7 +113,6 @@ pub(crate) struct RawRuntime {
     #[allow(dead_code)]
     pub info: Option<CString>,
 
-    #[cfg(feature = "allocator")]
     #[allow(dead_code)]
     pub allocator: Option<AllocatorHolder>,
     #[cfg(feature = "loader")]
@@ -162,14 +160,12 @@ impl RawRuntime {
         Ok(RawRuntime {
             rt,
             info: None,
-            #[cfg(feature = "allocator")]
             allocator: None,
             #[cfg(feature = "loader")]
             loader: None,
         })
     }
 
-    #[cfg(feature = "allocator")]
     pub unsafe fn new_with_allocator<A>(mut opaque: Opaque<'static>, allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
