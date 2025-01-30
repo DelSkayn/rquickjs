@@ -141,6 +141,27 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: OS,RUST
 
+  sanitizer:
+    runs-on: ubuntu-latest
+    name: ubuntu / nightly / sanitizer 
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: cargo generate-lockfile
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+      - name: Run tests with address sanitizer
+        run: CC=clang RUSTFLAGS=-Zsanitizer=address cargo test --tests --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
+      - name: Run tests with thread sanitizer
+        run: CC=clang RUSTFLAGS=-Zsanitizer=thread cargo test --tests --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
+      - name: Run tests with memory sanitizer
+        run: CC=clang RUSTFLAGS=-Zsanitizer=memory cargo test --tests --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
+
   test:
     needs:
       - format
