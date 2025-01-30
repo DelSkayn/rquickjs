@@ -157,21 +157,18 @@ fn main() {
 
     match env::var("CARGO_CFG_SANITIZE").as_deref() {
         Ok("address") => {
-            println!("cargo::warning=Building with address sanitizer");
             builder
                 .flag("-fsanitize=address")
                 .flag("-fno-sanitize-recover=all")
                 .flag("-fno-omit-frame-pointer");
         }
         Ok("memory") => {
-            println!("cargo::warning=Building with memory sanitizer");
             builder
                 .flag("-fsanitize=memory")
                 .flag("-fno-sanitize-recover=all")
                 .flag("-fno-omit-frame-pointer");
         }
         Ok("thread") => {
-            println!("cargo::warning=Building with thread sanitizer");
             builder
                 .flag("-fsanitize=thread")
                 .flag("-fno-sanitize-recover=all")
