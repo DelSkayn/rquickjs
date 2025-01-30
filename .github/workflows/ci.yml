@@ -150,6 +150,8 @@ jobs:
           submodules: true
       - name: Install stable
         uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
