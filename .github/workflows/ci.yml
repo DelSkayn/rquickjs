@@ -143,7 +143,7 @@ jobs:
 
   sanitizer:
     runs-on: ubuntu-latest
-    name: ubuntu / nightly / coverage
+    name: ubuntu / nightly / sanitizer 
     steps:
       - uses: actions/checkout@v4
         with:
