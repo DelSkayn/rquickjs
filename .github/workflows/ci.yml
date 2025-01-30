@@ -156,11 +156,11 @@ jobs:
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
       - name: Run tests with address sanitizer
-        run: CC=clang RUSTFLAGS=-Zsanitizer=address cargo test --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,compile-tests,bindgen
+        run: CC=clang RUSTFLAGS=-Zsanitizer=address cargo test --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
       - name: Run tests with thread sanitizer
-        run: CC=clang RUSTFLAGS=-Zsanitizer=thread cargo test --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,compile-tests,bindgen
+        run: CC=clang RUSTFLAGS=-Zsanitizer=thread cargo test --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
       - name: Run tests with memory sanitizer
-        run: CC=clang RUSTFLAGS=-Zsanitizer=memory cargo test --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,compile-tests,bindgen
+        run: CC=clang RUSTFLAGS=-Zsanitizer=memory cargo test --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
 
   test:
     needs:
