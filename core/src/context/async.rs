@@ -110,8 +110,7 @@ impl DropContext for AsyncRuntime {
                 }
                 #[cfg(feature = "parallel")]
                 {
-                    self.rt
-                        .drop_send
+                    self.drop_send
                         .send(ctx)
                         .expect("runtime should be alive while contexts life");
                     return;
