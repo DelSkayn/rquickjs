@@ -249,14 +249,17 @@ mod test {
 
             assert_eq!(val, 2);
             println!("{:?}", ctx.globals());
-        });
+        })
+        .await;
 
-        ctx_clone.with(|ctx| {
-            let val: i32 = ctx.eval(r#"1+1"#).unwrap();
+        ctx_clone
+            .with(|ctx| {
+                let val: i32 = ctx.eval(r#"1+1"#).unwrap();
 
-            assert_eq!(val, 2);
-            println!("{:?}", ctx.globals());
-        });
+                assert_eq!(val, 2);
+                println!("{:?}", ctx.globals());
+            })
+            .await;
     }
 
     #[cfg(feature = "parallel")]
