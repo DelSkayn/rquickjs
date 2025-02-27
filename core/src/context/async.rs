@@ -1,4 +1,8 @@
-use super::{intrinsic, r#ref::ContextRef, ContextBuilder, Intrinsic};
+use super::{
+    intrinsic,
+    owner::{ContextOwner, DropContext},
+    ContextBuilder, Intrinsic,
+};
 use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
 use std::{future::Future, mem, pin::Pin, ptr::NonNull};
 
@@ -84,33 +88,16 @@ macro_rules! async_with{
     };
 }
 
-pub(crate) struct Inner {
-    pub(crate) ctx: NonNull<qjs::JSContext>,
-    pub(crate) rt: AsyncRuntime,
-}
-
-impl Clone for Inner {
-    fn clone(&self) -> Inner {
-        let ctx = unsafe { NonNull::new_unchecked(qjs::JS_DupContext(self.ctx.as_ptr())) };
-        let rt = self.rt.clone();
-        Self { ctx, rt }
-    }
-}
-
-#[cfg(feature = "parallel")]
-unsafe impl Send for Inner {}
-
-impl Drop for Inner {
-    fn drop(&mut self) {
+impl DropContext for AsyncRuntime {
+    unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>) {
         //TODO
-        let guard = match self.rt.inner.try_lock() {
+        let guard = match self.inner.try_lock() {
             Some(x) => x,
             None => {
                 #[cfg(not(feature = "parallel"))]
                 {
-                    let p = unsafe {
-                        &mut *(self.ctx.as_ptr() as *mut crate::context::ctx::RefCountHeader)
-                    };
+                    let p =
+                        unsafe { &mut *(ctx.as_ptr() as *mut crate::context::ctx::RefCountHeader) };
                     if p.ref_count <= 1 {
                         // Lock was poisoned, this should only happen on a panic.
                         // We should still free the context.
@@ -118,21 +105,20 @@ impl Drop for Inner {
                         // following assertion to trigger
                         assert!(std::thread::panicking());
                     }
-                    unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
+                    unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
                     return;
                 }
                 #[cfg(feature = "parallel")]
                 {
-                    self.rt
-                        .drop_send
-                        .send(self.ctx)
+                    self.drop_send
+                        .send(ctx)
                         .expect("runtime should be alive while contexts life");
                     return;
                 }
             }
         };
         guard.runtime.update_stack_top();
-        unsafe { qjs::JS_FreeContext(self.ctx.as_ptr()) }
+        unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
     }
@@ -143,7 +129,7 @@ impl Drop for Inner {
 /// Can share objects with other contexts of the same runtime.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
-pub struct AsyncContext(pub(crate) ContextRef<Inner>);
+pub struct AsyncContext(pub(crate) ContextOwner<AsyncRuntime>);
 
 impl AsyncContext {
     /// Create a async context form a raw context pointer.
@@ -153,7 +139,7 @@ impl AsyncContext {
     /// The context must also have valid reference count, one which can be decremented when this
     /// object is dropped without going negative.
     pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
-        AsyncContext(ContextRef::new(Inner { ctx, rt }))
+        AsyncContext(ContextOwner::new(ctx, rt))
     }
 
     /// Creates a base context with only the required functions registered.
@@ -171,14 +157,11 @@ impl AsyncContext {
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.runtime.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
         unsafe { I::add_intrinsic(ctx) };
-        let res = Inner {
-            ctx,
-            rt: runtime.clone(),
-        };
+        let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         guard.drop_pending();
         mem::drop(guard);
 
-        Ok(AsyncContext(ContextRef::new(res)))
+        Ok(AsyncContext(res))
     }
 
     /// Creates a context with all standard available intrinsics registered.
@@ -188,15 +171,12 @@ impl AsyncContext {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.runtime.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
-        let res = Inner {
-            ctx,
-            rt: runtime.clone(),
-        };
+        let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         guard.drop_pending();
         mem::drop(guard);
 
-        Ok(AsyncContext(ContextRef::new(res)))
+        Ok(AsyncContext(res))
     }
 
     /// Create a context builder for creating a context with a specific set of intrinsics
@@ -206,7 +186,7 @@ impl AsyncContext {
 
     /// Returns the associated runtime
     pub fn runtime(&self) -> &AsyncRuntime {
-        &self.0.rt
+        self.0.rt()
     }
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
@@ -235,7 +215,7 @@ impl AsyncContext {
         F: for<'js> FnOnce(Ctx<'js>) -> R + ParallelSend,
         R: ParallelSend,
     {
-        let guard = self.0.rt.inner.lock().await;
+        let guard = self.0.rt().inner.lock().await;
         guard.runtime.update_stack_top();
         let ctx = unsafe { Ctx::new_async(self) };
         let res = f(ctx);
@@ -255,8 +235,33 @@ unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]
 mod test {
-    #[cfg(feature = "parallel")]
     use crate::{AsyncContext, AsyncRuntime};
+
+    #[tokio::test]
+    async fn clone_ctx() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        let ctx_clone = ctx.clone();
+
+        ctx.with(|ctx| {
+            let val: i32 = ctx.eval(r#"1+1"#).unwrap();
+
+            assert_eq!(val, 2);
+            println!("{:?}", ctx.globals());
+        })
+        .await;
+
+        ctx_clone
+            .with(|ctx| {
+                let val: i32 = ctx.eval(r#"1+1"#).unwrap();
+
+                assert_eq!(val, 2);
+                println!("{:?}", ctx.globals());
+            })
+            .await;
+    }
+
     #[cfg(feature = "parallel")]
     #[tokio::test]
     async fn parallel_drop() {
