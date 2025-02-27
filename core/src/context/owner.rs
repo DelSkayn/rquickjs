@@ -5,6 +5,8 @@ use crate::qjs;
 #[cfg(feature = "parallel")]
 use std::sync::Arc;
 
+/// Trait to specify how to drop a context once it goes out of scope.
+/// Implemented on Runtime and AsyncRuntime.
 pub(crate) trait DropContext: Clone {
     unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>);
 }
