@@ -384,8 +384,10 @@ jobs:
         if: matrix.target == 'wasm32-wasip1'
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
-          echo "CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime" >> $GITHUB_ENV
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
+          if [ -f "$HOME/.bashrc" ]; then source "$HOME/.bashrc"; fi
+          export PATH="$HOME/.wasmtime/bin:$PATH"
+          echo "CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime" >> $GITHUB_ENV
           wasmtime --version
       - name: Setup msys2 toolchains
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
