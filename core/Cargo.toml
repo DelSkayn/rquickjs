@@ -25,8 +25,13 @@ relative-path = { version = "1.9", optional = true }
 
 
 [dev-dependencies]
-futures-rs = { package = "futures", version = "0.3"}
-tokio = { version = "1.0", default-features = false, features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
+futures-rs = { package = "futures", version = "0.3" }
+tokio = { version = "1.0", default-features = false, features = [
+    "rt",
+    "time",
+    "macros",
+    "sync",
+] }
 rquickjs.path = "../"
 approx = "0.5"
 trybuild = "1.0.23"
@@ -35,7 +40,7 @@ trybuild = "1.0.23"
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "loader", "dyn-load", "either", "indexmap"]
+full = ["chrono", "loader", "dyn-load", "either", "indexmap", "multi-thread"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
@@ -66,6 +71,8 @@ futures = ["dep:async-lock"]
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
 
+multi-thread = ["tokio/rt-multi-thread"]
+
 # Enable QuickJS dumps for debug
 dump-bytecode = ["rquickjs-sys/dump-bytecode"]
 dump-gc = ["rquickjs-sys/dump-gc"]
@@ -92,5 +99,3 @@ properties = []
 classes = []
 array-buffer = []
 allocator = []
-
-

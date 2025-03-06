@@ -87,7 +87,7 @@ mod test_mod {
     }
 }
 
-fn main() {
+pub fn main() {
     assert_eq!(test_mod::ignore_function(), 4);
     let rt = Runtime::new().unwrap();
     let ctx = Context::full(&rt).unwrap();

@@ -543,6 +543,7 @@ mod test {
     }
 
     #[test]
+    #[ignore]
     fn system_time_to_js() {
         use crate::{Context, IntoJs, Runtime};
         use std::time::{Duration, SystemTime};

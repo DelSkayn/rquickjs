@@ -18,7 +18,6 @@ members = [
     "core",
     "macro",
     "examples/native-module",
-    "examples/module-loader",
     "examples/rquickjs-cli",
 ]
 
@@ -39,15 +38,7 @@ rquickjs-macro = { workspace = true, optional = true }
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = [
-    "chrono",
-    "loader",
-    "dyn-load",
-    "either",
-    "indexmap",
-    "macro",
-    "phf",
-]
+full = ["chrono", "loader", "dyn-load", "either", "indexmap", "macro", "phf"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
@@ -80,7 +71,6 @@ dyn-load = ["rquickjs-core/dyn-load"]
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
 rust-alloc = ["rquickjs-core/rust-alloc"]
-
 
 
 # Enable helper macros

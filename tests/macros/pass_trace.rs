@@ -79,7 +79,7 @@ impl<'js> JsClass<'js> for TraceEnum {
     }
 }
 
-fn main() {
+pub fn main() {
     let rt = Runtime::new().unwrap();
     let ctx = Context::full(&rt).unwrap();
 

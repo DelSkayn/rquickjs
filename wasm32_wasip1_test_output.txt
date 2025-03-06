@@ -1,0 +1,193 @@
+Running unittests src/lib.rs (target/wasm32-wasip1/debug/deps/native_module-ccc297da8e274ca0.wasm)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/wasm32-wasip1/debug/deps/rquickjs-7b0f47a051e1e7ac.wasm)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/compile.rs (target/wasm32-wasip1/debug/deps/compile-7bcb05702060ac18.wasm)
+
+running 4 tests
+test macro_tests::pass_class ... ok
+test macro_tests::pass_method ... ok
+test macro_tests::pass_module ... ok
+test macro_tests::pass_trace ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/main.rs (target/wasm32-wasip1/debug/deps/rquickjs_cli-53ac703b02aa7434.wasm)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/wasm32-wasip1/debug/deps/rquickjs_core-d8297652eb5516dc.wasm)
+
+running 119 tests
+test allocator::rust::test::test_gc_working_correctly ... ok
+test class::test::constructor ... ok
+test class::test::extend_class ... ok
+test class::test::generic_types ... ok
+test class::test::get_prototype ... ok
+test class::test::trace ... ok
+test context::base::test::base ... ok
+test context::base::test::basic ... ok
+test context::base::test::exception - should panic ... ignored
+test context::base::test::minimal ... ok
+test context::base::test::module ... ok
+test context::builder::tests::all_intrinsinces ... ok
+test context::ctx::test::eval ... ok
+test context::ctx::test::eval_minimal_test ... ok
+test context::ctx::test::eval_with_options_no_strict_sloppy_code ... ok
+test context::ctx::test::eval_with_options_strict_sloppy_code - should panic ... ignored
+test context::ctx::test::eval_with_sloppy_code - should panic ... ignored
+test context::ctx::test::exports ... ok
+test context::ctx::test::json_parse ... ok
+test context::ctx::test::json_stringify ... ok
+test context::ctx::test::userdata ... ok
+test loader::test::custom_loader ... ok
+test loader::test::resolving_error - should panic ... ignored
+test persistent::test::different_context ... ok
+test persistent::test::different_runtime - should panic ... ignored
+test persistent::test::persistent_function ... ok
+test persistent::test::persistent_value ... ok
+test runtime::base::test::base_runtime ... ok
+test runtime::r#async::test::basic ... ok
+test runtime::r#async::test::drive ... ok
+test runtime::r#async::test::idle ... ok
+test runtime::r#async::test::no_drive ... ok
+test runtime::r#async::test::recursive_spawn ... ok
+test runtime::r#async::test::recursive_spawn_from_script ... ok
+test runtime::r#async::test::sleep_closure ... ok
+test runtime::raw::test::promise_rejection_handler ... ok
+test value::array::test::collect_js ... ok
+test value::array::test::from_javascript ... ok
+test value::array::test::into_iter ... ok
+test value::array::test::into_object ... ok
+test value::array::test::iter ... ok
+test value::array_buffer::test::as_bytes ... ok
+test value::array_buffer::test::from_javascript_f32 ... ok
+test value::array_buffer::test::from_javascript_i8 ... ok
+test value::array_buffer::test::into_javascript_f32 ... ok
+test value::array_buffer::test::into_javascript_i8 ... ok
+test value::atom::predefined::test::string_correct ... ok
+test value::bigint::test::from_javascript ... ok
+test value::bigint::test::to_javascript ... ok
+test value::convert::from::test::js_to_system_time ... ignored
+test value::convert::into::test::char_to_js ... ok
+test value::convert::into::test::system_time_to_js ... ignored
+test value::function::test::apply_rust_fn_with_this_and_args ... ok
+test value::function::test::bind_rust_fn_with_this_and_call_with_args ... ok
+test value::function::test::call_js_fn_with_1_arg_and_return ... ok
+test value::function::test::call_js_fn_with_1_arg_deferred ... ok
+test value::function::test::call_js_fn_with_2_args_and_return ... ok
+test value::function::test::call_js_fn_with_no_args_and_no_return ... ok
+test value::function::test::call_js_fn_with_no_args_and_return ... ok
+test value::function::test::call_js_fn_with_no_args_and_throw ... ok
+test value::function::test::call_js_fn_with_rest_args_and_return ... ok
+test value::function::test::call_js_fn_with_this_and_1_arg_and_return ... ok
+test value::function::test::call_js_fn_with_this_and_no_args_and_return ... ok
+test value::function::test::call_js_fn_with_var_args_and_return ... ok
+test value::function::test::call_rust_fn_with_ctx_and_value ... ok
+test value::function::test::call_rust_fn_with_rest_args ... ok
+test value::function::test::call_rust_fn_with_this_and_args ... ok
+test value::function::test::call_rust_fn_with_var_args ... ok
+test value::function::test::const_callback ... ok
+test value::function::test::js_fn_wrappers ... ok
+test value::function::test::multiple_const_callbacks ... ok
+test value::function::test::mutable_callback ... ok
+test value::function::test::mutable_callback_which_can_fail ... ok
+test value::function::test::mutable_callback_with_ctx_which_reads_globals ... ok
+test value::function::test::recursively_called_mutable_callback - should panic ... ignored
+test value::function::test::repeatedly_called_once_callback - should panic ... ignored
+test value::function::test::static_callback ... ok
+test value::module::test::access_before_fully_evaluating_module ... ok
+test value::module::test::eval_crashing_module_inside_module ... ok
+test value::module::test::from_javascript ... ok
+test value::module::test::from_rust_def ... ok
+test value::module::test::from_rust_def_eval ... ok
+test value::module::test::import ... ok
+test value::module::test::import_async ... ok
+test value::module::test::import_crashing - should panic ... ignored
+test value::module::test::import_native ... ok
+test value::object::property::test::property_with_data_descriptor ... ok
+test value::object::property::test::property_with_data_descriptor_configurable ... ok
+test value::object::property::test::property_with_data_descriptor_enumerable ... ok
+test value::object::property::test::property_with_data_descriptor_not_configurable - should panic ... ignored
+test value::object::property::test::property_with_data_descriptor_not_enumerable ... ok
+test value::object::property::test::property_with_data_descriptor_readonly - should panic ... ignored
+test value::object::property::test::property_with_data_descriptor_writable ... ok
+test value::object::property::test::property_with_getter_and_setter ... ok
+test value::object::property::test::property_with_getter_only ... ok
+test value::object::property::test::property_with_undefined ... ok
+test value::object::property::test::property_with_value ... ok
+test value::object::test::collect_js ... ok
+test value::object::test::from_javascript ... ok
+test value::object::test::into_iter ... ok
+test value::object::test::iter_take ... ok
+test value::object::test::own_keys_iter ... ok
+test value::object::test::own_props_iter ... ok
+test value::object::test::types ... ok
+test value::promise::test::promise ... ok
+test value::promise::test::promise_then ... ok
+test value::promise::test::promised ... ok
+test value::string::test::from_javascript ... ok
+test value::string::test::from_javascript_c ... ok
+test value::string::test::to_javascript ... ok
+test value::string::test::to_javascript_c ... ok
+test value::symbol::test::description ... ok
+test value::test::type_matches ... ok
+test value::typed_array::test::as_bytes ... ok
+test value::typed_array::test::from_javascript_f32 ... ok
+test value::typed_array::test::from_javascript_i8 ... ok
+test value::typed_array::test::into_javascript_f32 ... ok
+test value::typed_array::test::into_javascript_i8 ... ok
+test value::typed_array::test::is_typed_array ... ok
+
+test result: ok. 107 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out; finished in 1.21s
+
+     Running unittests src/lib.rs (target/debug/deps/rquickjs_macro-3a129e36e0157099)
+
+running 2 tests
+test embed::test::parse ... ok
+test embed::test::test_expand ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/lib.rs (target/wasm32-wasip1/debug/deps/rquickjs_sys-8b4a134ad8d9806d.wasm)
+
+running 17 tests
+test bindgen_test_layout_JSCFunctionListEntry ... ok
+test bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1 ... ok
+test bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_1 ... ok
+test bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_2 ... ok
+test bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_3 ... ok
+test bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1__bindgen_ty_4 ... ok
+test bindgen_test_layout_JSCFunctionType ... ok
+test bindgen_test_layout_JSClassDef ... ok
+test bindgen_test_layout_JSClassExoticMethods ... ok
+test bindgen_test_layout_JSMallocFunctions ... ok
+test bindgen_test_layout_JSMemoryUsage ... ok
+test bindgen_test_layout_JSPropertyDescriptor ... ok
+test bindgen_test_layout_JSPropertyEnum ... ok
+test bindgen_test_layout_JSSABTab ... ok
+test bindgen_test_layout_JSSharedArrayBufferFunctions ... ok
+test test_JS_FLOAT64_TAG_ADDEND ... ok
+test test_JS_NAN ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests rquickjs_macro
+
+running 4 tests
+test macro/src/lib.rs - embed (line 507) ... ok
+test macro/src/lib.rs - class (line 63) ... ok
+test macro/src/lib.rs - module (line 353) ... ok
+test macro/src/lib.rs - methods (line 190) ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s

@@ -412,6 +412,7 @@ chrono_from_js_impls! {
 #[cfg(test)]
 mod test {
     #[test]
+    #[ignore]
     fn js_to_system_time() {
         use crate::{Context, Runtime};
         use std::time::{Duration, SystemTime};

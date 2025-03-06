@@ -346,14 +346,18 @@ macro_rules! async_test_case {
     ($name:ident => ($rt:ident,$ctx:ident) { $($t:tt)* }) => {
     #[test]
     fn $name() {
-        let rt = if cfg!(feature = "parallel") {
-            tokio::runtime::Builder::new_multi_thread()
-        } else {
-            tokio::runtime::Builder::new_current_thread()
-        }
-        .enable_all()
-        .build()
-        .unwrap();
+
+        #[cfg(all(feature = "parallel", feature = "multi-thread"))]
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+
+        #[cfg(not(all(feature = "parallel", feature = "multi-thread")))]
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
 
         #[cfg(feature = "parallel")]
         {
