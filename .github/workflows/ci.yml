@@ -143,7 +143,7 @@ jobs:
 
   sanitizer:
     runs-on: ubuntu-latest
-    name: ubuntu / nightly / sanitizer 
+    name: ubuntu / nightly / sanitizer
     steps:
       - uses: actions/checkout@v4
         with:
@@ -241,7 +241,6 @@ jobs:
             rust: stable
             target: wasm32-wasip1
             features: full-async
-            no-build: true
           - task: bindings
             os: ubuntu-latest
             rust: nightly
