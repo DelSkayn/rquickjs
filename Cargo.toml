@@ -40,8 +40,14 @@ default = []
 # Almost all features excluding "parallel" and support for async runtimes
 full = ["chrono", "loader", "dyn-load", "either", "indexmap", "macro", "phf"]
 
+# A version of full designed for wasm32-wasip1 (simply excludes dyn-load)
+full-wasip1 = ["chrono", "loader", "either", "indexmap", "macro", "phf"]
+
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
+
+# A version of full-async designed for wasm32-wasip1
+full-async-wasip1 = ["full-wasip1", "futures"]
 
 # Chrono support.
 chrono = ["rquickjs-core/chrono"]

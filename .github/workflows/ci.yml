@@ -240,7 +240,8 @@ jobs:
           - task: bindings
             os: ubuntu-latest
             rust: stable
-            target: wasm32-wasip1
+            target:
+            features: full-async-wasip1
           - task: bindings
             os: ubuntu-latest
             rust: nightly
