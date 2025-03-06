@@ -247,7 +247,7 @@ jobs:
             rust: nightly
             target: wasm32-wasip2
             features: full-async
-            no-build: true
+            no-test: true
           # Test features
           - task: features
             os: ubuntu-latest
