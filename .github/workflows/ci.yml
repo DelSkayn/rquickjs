@@ -384,8 +384,8 @@ jobs:
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-          if [ -f "$HOME/.bashrc" ]; then source "$HOME/.bashrc"; fi
-          # export PATH="$HOME/.wasmtime/bin:$PATH"
+          # if [ -f "$HOME/.bashrc" ]; then source "$HOME/.bashrc"; fi
+          export PATH="$HOME/.wasmtime/bin:$PATH"
           wasmtime --version
       - name: Export wasm32-wasip1 cargo runner environment variable for wasmtime
         if: matrix.target == 'wasm32-wasip1'
