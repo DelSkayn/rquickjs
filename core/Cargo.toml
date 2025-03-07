@@ -40,7 +40,7 @@ trybuild = "1.0.23"
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "loader", "dyn-load", "either", "indexmap", "multi-thread"]
+full = ["chrono", "loader", "dyn-load", "either", "indexmap"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
@@ -50,7 +50,7 @@ full-async = ["full", "futures"]
 bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
-parallel = []
+parallel = ["tokio/rt-multi-thread"]
 
 # Enable user-defined module loader support
 loader = ["relative-path"]
@@ -70,8 +70,6 @@ futures = ["dep:async-lock"]
 
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
-
-multi-thread = ["tokio/rt-multi-thread"]
 
 # Enable QuickJS dumps for debug
 dump-bytecode = ["rquickjs-sys/dump-bytecode"]
