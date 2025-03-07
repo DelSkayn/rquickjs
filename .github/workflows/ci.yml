@@ -289,6 +289,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: true
+      - name: clang version
+        run: clang --version
       - name: Setup cross linux toolchain
         if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'loongarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
         run: |
