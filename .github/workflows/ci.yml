@@ -382,14 +382,19 @@ jobs:
 
           echo "/musl/bin" >> $GITHUB_PATH
       - name: Setup wasmtime for wasip1
-        if: matrix.target == 'wasm32-wasip1'
+        if: matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2'
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
           echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
           if [ -f "$HOME/.bashrc" ]; then source "$HOME/.bashrc"; fi
           export PATH="$HOME/.wasmtime/bin:$PATH"
-          echo "CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime" >> $GITHUB_ENV
           wasmtime --version
+      - name: Export wasm32-wasip1 cargo runner environment variable for wasmtime
+        if: matrix.target == 'wasm32-wasip1'
+        run: echo "CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime" >> $GITHUB_ENV
+      - name: Export wasm32-wasip2 cargo runner environment variable for wasmtime
+        if: matrix.target == 'wasm32-wasip2'
+        run: echo "CARGO_TARGET_WASM32_WASIP2_RUNNER=wasmtime" >> $GITHUB_ENV
       - name: Setup msys2 toolchains
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         uses: msys2/setup-msys2@v2
