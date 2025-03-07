@@ -382,6 +382,7 @@ jobs:
       - name: Setup wasmtime for wasm32-wasip1 and wasm32-wasip2
         if: matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2'
         uses: bytecodealliance/actions/wasmtime/setup@v1
+      - name: Setup msys2 toolchains
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         uses: msys2/setup-msys2@v2
         with:
