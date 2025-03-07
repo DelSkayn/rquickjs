@@ -381,12 +381,10 @@ jobs:
           echo "/musl/bin" >> $GITHUB_PATH
       - name: Setup wasmtime for wasm32-wasip1 and wasm32-wasip2
         if: matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2'
-        run: |
-          curl https://wasmtime.dev/install.sh -sSf | bash
-          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-          # if [ -f "$HOME/.bashrc" ]; then source "$HOME/.bashrc"; fi
-          # export PATH="$HOME/.wasmtime/bin:$PATH"
-          wasmtime --version
+        uses: bytecodealliance/actions/wasmtime/setup@v1
+      - name: Verify wasmtime installation and see version for wasm32-wasip1 and wasm32-wasip2
+        if: matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2'
+        run: wasmtime --version
       - name: Export wasm32-wasip1 cargo runner environment variable for wasmtime
         if: matrix.target == 'wasm32-wasip1'
         run: echo "CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime" >> $GITHUB_ENV
