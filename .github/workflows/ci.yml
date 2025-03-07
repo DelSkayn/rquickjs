@@ -383,7 +383,7 @@ jobs:
         if: matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2'
         run: |
           curl https://wasmtime.dev/install.sh -sSf | bash
-          echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
+          # echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
           # if [ -f "$HOME/.bashrc" ]; then source "$HOME/.bashrc"; fi
           export PATH="$HOME/.wasmtime/bin:$PATH"
           wasmtime --version
