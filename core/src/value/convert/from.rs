@@ -429,6 +429,15 @@ mod test {
                 res.duration_since(SystemTime::UNIX_EPOCH).unwrap()
             );
 
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let res: SystemTime = ctx.eval("new Date(-123456789)").unwrap();
+                assert_eq!(
+                    Duration::from_millis(123456789),
+                    SystemTime::UNIX_EPOCH.duration_since(res).unwrap()
+                );
+            }
+
             // wasm32-wasip1 and wasm32-wasip2 do not support SystemTime before the Unix Epoch
             #[cfg(target_arch = "wasm32")]
             {
