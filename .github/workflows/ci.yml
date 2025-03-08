@@ -134,13 +134,12 @@ jobs:
         run: cargo llvm-cov --locked --no-default-features --features full-async,compile-tests,bindgen --workspace --lcov --output-path lcov.info
       - name: Record Rust version
         run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
-      # TODO just removing this temporarily to test from our own repo
-      # - name: Upload to codecov.io
-      #   uses: codecov/codecov-action@v4
-      #   with:
-      #     fail_ci_if_error: true
-      #     token: ${{ secrets.CODECOV_TOKEN }}
-      #     env_vars: OS,RUST
+      - name: Upload to codecov.io
+        uses: codecov/codecov-action@v4
+        with:
+          fail_ci_if_error: true
+          token: ${{ secrets.CODECOV_TOKEN }}
+          env_vars: OS,RUST
 
   sanitizer:
     runs-on: ubuntu-latest
