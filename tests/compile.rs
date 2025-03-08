@@ -1,6 +1,3 @@
-// TODO trybuild will attempt to execute rustc and thus can't be used in Wasm
-// TODO figure out another way to run these tests in wasm32-wasip1
-
 #[cfg(target_arch = "wasm32")]
 #[path = "macros/pass_class.rs"]
 pub mod pass_class;
@@ -27,38 +24,35 @@ mod macro_tests {
     fn macros() {
         let t = trybuild::TestCases::new();
         t.pass("tests/macros/pass_*.rs");
-
         #[cfg(feature = "compile-tests")]
         t.compile_fail("tests/compile_fail/*.rs");
-
         #[cfg(all(feature = "futures", feature = "compile-tests"))]
         t.compile_fail("tests/async_compile_fail/*.rs");
-
         #[cfg(all(feature = "futures", feature = "parallel", feature = "compile-tests"))]
         t.compile_fail("tests/async_parallel_compile_fail/*.rs");
     }
 
     #[cfg(target_arch = "wasm32")]
     #[test]
-    fn pass_class() {
+    fn macros_pass_class() {
         pass_class::main();
     }
 
     #[cfg(target_arch = "wasm32")]
     #[test]
-    fn pass_method() {
+    fn macros_pass_method() {
         pass_method::main();
     }
 
     #[cfg(target_arch = "wasm32")]
     #[test]
-    fn pass_module() {
+    fn macros_pass_module() {
         pass_module::main();
     }
 
     #[cfg(target_arch = "wasm32")]
     #[test]
-    fn pass_trace() {
+    fn macros_pass_trace() {
         pass_trace::main();
     }
 }
