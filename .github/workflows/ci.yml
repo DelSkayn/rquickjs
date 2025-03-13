@@ -184,6 +184,7 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: full-async
+
           - task: bindings
             os: macos-latest
             rust: stable
@@ -195,6 +196,7 @@ jobs:
             target: aarch64-apple-darwin
             features: full-async
             no-test: true
+
           - task: bindings
             os: windows-latest
             rust: stable
@@ -211,6 +213,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             features: full-async
             optimization: true
+
           - task: bindings
             os: ubuntu-latest
             rust: stable
@@ -221,11 +224,13 @@ jobs:
             rust: stable
             target: aarch64-unknown-linux-musl
             features: full-async
+
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
             features: full-async
+
           - task: bindings
             os: ubuntu-24.04
             rust: nightly
@@ -236,6 +241,7 @@ jobs:
             rust: nightly
             target: loongarch64-unknown-linux-gnu
             features: full-async
+
           - task: bindings
             os: ubuntu-latest
             rust: stable
@@ -248,6 +254,7 @@ jobs:
             target: wasm32-wasip2
             features: full-async
             no-build: true
+
           # Test features
           - task: features
             os: ubuntu-latest
@@ -269,6 +276,7 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: parallel
+
           # Test channels
           - task: channels
             os: ubuntu-latest
@@ -385,7 +393,6 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           release: false
-          install: mingw-w64-x86_64-gcc mingw-w64-i686-gcc
       - name: Prepare env for windows
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         run: |
