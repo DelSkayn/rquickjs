@@ -156,6 +156,7 @@ impl AsyncContext {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.runtime.rt.as_ptr()) })
             .ok_or_else(|| Error::Allocation)?;
+        unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         guard.drop_pending();
@@ -236,6 +237,16 @@ unsafe impl Sync for AsyncContext {}
 #[cfg(test)]
 mod test {
     use crate::{AsyncContext, AsyncRuntime};
+
+    #[cfg(feature = "parallel")]
+    #[tokio::test]
+    async fn base_asyc_context() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
+        async_with!(ctx => |ctx|{
+            ctx.globals();
+        })
+    }
 
     #[tokio::test]
     async fn clone_ctx() {
