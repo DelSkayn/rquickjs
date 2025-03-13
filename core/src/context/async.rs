@@ -238,14 +238,14 @@ unsafe impl Sync for AsyncContext {}
 mod test {
     use crate::{AsyncContext, AsyncRuntime};
 
-    #[cfg(feature = "parallel")]
     #[tokio::test]
     async fn base_asyc_context() {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
-        async_with!(ctx => |ctx|{
+        async_with!(&ctx => |ctx|{
             ctx.globals();
         })
+        .await;
     }
 
     #[tokio::test]
