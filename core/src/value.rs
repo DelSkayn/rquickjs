@@ -19,7 +19,7 @@ pub use bigint::BigInt;
 pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
 pub use exception::Exception;
 pub use function::{Constructor, Function};
-pub use module::Module;
+pub use module::{Module, WriteOptions, WriteOptionsEndianness};
 pub use object::{Filter, Object};
 pub use promise::Promise;
 pub use string::{CString, String};

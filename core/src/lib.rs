@@ -28,7 +28,8 @@ pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, Throw
 pub use value::{
     array, atom, convert, function, module, object, promise, Array, Atom, BigInt, CString, Coerced,
     Exception, Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs,
-    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value,
+    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value, WriteOptions,
+    WriteOptionsEndianness,
 };
 
 pub mod allocator;
