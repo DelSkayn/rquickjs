@@ -84,7 +84,8 @@ See below for a list of supported platforms.
 | x86_64-pc-windows-mvsc         |           ✅         |      ✅    |      ❌ experimental!    |
 | x86_64-apple-darwin            |           ✅         |      ✅    |             ✅           |
 | aarch64-apple-darwin           |           ✅         |      ❌    |             ✅           |
-| wasm32-wasi                    |           ✅         |      ❌    |             ✅           |
+| wasm32-wasip1                  |           ✅         |      ✅    |             ✅           |
+| wasm32-wasip2                  |           ✅         |      ✅    |             ✅           |
 | other                          |           ❌         |      ❌    |          Unknown         |
 
 ## License
