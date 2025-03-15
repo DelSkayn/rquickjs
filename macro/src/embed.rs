@@ -3,7 +3,7 @@ use std::{env, path::Path};
 use crate::common::crate_ident;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use rquickjs_core::{Context, Module, Result as JsResult, Runtime};
+use rquickjs_core::{Context, Module, Result as JsResult, Runtime, WriteOptions};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
@@ -99,7 +99,8 @@ pub fn embed(modules: EmbedModules) -> Result<TokenStream> {
 
         ctx.with(|ctx| -> JsResult<()> {
             for f in files.into_iter() {
-                let bc = Module::declare(ctx.clone(), f.0.clone(), f.1)?.write(false)?;
+                let bc = Module::declare(ctx.clone(), f.0.clone(), f.1)?
+                    .write(WriteOptions::default())?;
                 modules.push((f.0, bc));
             }
             Ok(())
