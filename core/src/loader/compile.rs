@@ -1,6 +1,6 @@
 use crate::{
     loader::{util::resolve_simple, Loader, Resolver},
-    Ctx, Lock, Module, Mut, Ref, Result,
+    Ctx, Lock, Module, Mut, Ref, Result, WriteOptions,
 };
 use std::{
     collections::{hash_map::Iter as HashMapIter, HashMap},
@@ -186,7 +186,7 @@ where
 {
     fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
         let module = self.inner.load(ctx, path)?;
-        let data = module.write(false)?;
+        let data = module.write(WriteOptions::default())?;
         self.data.lock().bytecodes.push((path.into(), data));
         Ok(module)
     }
