@@ -13,6 +13,68 @@ use crate::{
     Promise, Result, Value,
 };
 
+#[derive(Default)]
+pub enum WriteOptionsEndianness {
+    /// Native endian.
+    #[default]
+    Native,
+    /// Little endian.
+    Little,
+    /// Big endian.
+    Big,
+    /// Swaps from native to other kind.
+    Swap,
+}
+
+/// Module write options.
+#[derive(Default)]
+pub struct WriteOptions {
+    /// Endianness of bytecode.
+    pub endianness: WriteOptionsEndianness,
+    /// Allow SharedArrayBuffer.
+    pub allow_shared_array_buffer: bool,
+    /// Allow object references to encode arbitrary object graph.
+    pub object_reference: bool,
+    /// Do not write source code information.
+    pub strip_source: bool,
+    /// Do not write debug information.
+    pub strip_debug: bool,
+}
+
+impl WriteOptions {
+    fn to_flag(&self) -> i32 {
+        let mut flag = qjs::JS_WRITE_OBJ_BYTECODE;
+
+        let should_swap = match &self.endianness {
+            WriteOptionsEndianness::Native => false,
+            WriteOptionsEndianness::Little => cfg!(target_endian = "big"),
+            WriteOptionsEndianness::Big => cfg!(target_endian = "little"),
+            WriteOptionsEndianness::Swap => true,
+        };
+        if should_swap {
+            flag |= qjs::JS_WRITE_OBJ_BSWAP;
+        }
+
+        if self.allow_shared_array_buffer {
+            flag |= qjs::JS_WRITE_OBJ_SAB;
+        }
+
+        if self.object_reference {
+            flag |= qjs::JS_WRITE_OBJ_REFERENCE;
+        }
+
+        if self.strip_source {
+            flag |= qjs::JS_WRITE_OBJ_STRIP_SOURCE;
+        }
+
+        if self.strip_source {
+            flag |= qjs::JS_WRITE_OBJ_STRIP_DEBUG;
+        }
+
+        flag as i32
+    }
+}
+
 /// Helper macro to provide module init function.
 /// Use for exporting module definitions to be loaded as part of a dynamic library.
 /// ```
@@ -363,37 +425,36 @@ impl<'js> Module<'js, Declared> {
 }
 
 impl<'js, Evaluated> Module<'js, Evaluated> {
-    /// Write object bytecode for the module in little endian format.
-    pub fn write_le(&self) -> Result<Vec<u8>> {
-        let swap = cfg!(target_endian = "big");
-        self.write(swap)
-    }
-
-    /// Write object bytecode for the module in big endian format.
-    pub fn write_be(&self) -> Result<Vec<u8>> {
-        let swap = cfg!(target_endian = "little");
-        self.write(swap)
-    }
-
     /// Write object bytecode for the module.
     ///
-    /// `swap_endianess` swaps the endianness of the bytecode, if true, from native to the other
-    /// kind. Use if the bytecode is meant for a target with a different endianness than the
-    /// current.
-    pub fn write(&self, swap_endianess: bool) -> Result<Vec<u8>> {
+    /// # Examples
+    ///
+    /// ```
+    /// use rquickjs::{Context, Module, Result, Runtime, WriteOptions, WriteOptionsEndianness};
+    /// fn main() -> Result<()> {
+    ///     let rt = Runtime::new()?;
+    ///     let ctx = Context::full(&rt)?;
+    ///     let bytecode = ctx.with(|ctx| {
+    ///         let src = "console.log('hello world')";
+    ///         let module = Module::declare(ctx.clone(), "foo.js", src)?;
+    ///         module.write(WriteOptions {
+    ///             endianness: WriteOptionsEndianness::Little,
+    ///             ..Default::default()
+    ///         })
+    ///     })?;
+    ///     println!("bytecode: {bytecode:?}");
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn write(&self, options: WriteOptions) -> Result<Vec<u8>> {
         let ctx = &self.ctx;
         let mut len = MaybeUninit::uninit();
-        // TODO: Allow inclusion of other flags?
-        let mut flags = qjs::JS_WRITE_OBJ_BYTECODE;
-        if swap_endianess {
-            flags |= qjs::JS_WRITE_OBJ_BSWAP;
-        }
         let buf = unsafe {
             qjs::JS_WriteObject(
                 ctx.as_ptr(),
                 len.as_mut_ptr(),
                 qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.ptr.as_ptr().cast()),
-                flags as i32,
+                options.to_flag(),
             )
         };
         if buf.is_null() {
