@@ -10,6 +10,7 @@ impl<'js> String<'js> {
     /// Convert the JavaScript string to a Rust string.
     pub fn to_string(&self) -> Result<StdString> {
         let mut len = mem::MaybeUninit::uninit();
+
         let ptr = unsafe {
             qjs::JS_ToCStringLen(self.0.ctx.as_ptr(), len.as_mut_ptr(), self.0.as_js_value())
         };
@@ -20,9 +21,108 @@ impl<'js> String<'js> {
         }
         let len = unsafe { len.assume_init() };
         let bytes: &[u8] = unsafe { slice::from_raw_parts(ptr as _, len as _) };
-        let result = str::from_utf8(bytes).map(|s| s.into());
+
+        let string = Self::replace_invalid_utf8_and_utf16(bytes);
+
         unsafe { qjs::JS_FreeCString(self.0.ctx.as_ptr(), ptr) };
-        Ok(result?)
+        Ok(string)
+    }
+
+    fn replace_invalid_utf8_and_utf16(bytes: &[u8]) -> StdString {
+        let mut result = StdString::with_capacity(bytes.len());
+        let mut i = 0;
+
+        while i < bytes.len() {
+            let current = bytes[i];
+            match current {
+                // ASCII (1-byte)
+                0x00..=0x7F => {
+                    result.push(current as char);
+                    i += 1;
+                }
+                // 2-byte UTF-8 sequence
+                0xC0..=0xDF => {
+                    if i + 1 < bytes.len() {
+                        let next = bytes[i + 1];
+                        if (next & 0xC0) == 0x80 {
+                            let code_point = ((current as u32 & 0x1F) << 6) | (next as u32 & 0x3F);
+                            if let Some(c) = char::from_u32(code_point) {
+                                result.push(c);
+                            } else {
+                                result.push('�');
+                            }
+                            i += 2;
+                        } else {
+                            result.push('�');
+                            i += 1;
+                        }
+                    } else {
+                        result.push('�');
+                        i += 1;
+                    }
+                }
+                // 3-byte UTF-8 sequence
+                0xE0..=0xEF => {
+                    if i + 2 < bytes.len() {
+                        let next1 = bytes[i + 1];
+                        let next2 = bytes[i + 2];
+                        if (next1 & 0xC0) == 0x80 && (next2 & 0xC0) == 0x80 {
+                            let code_point = ((current as u32 & 0x0F) << 12)
+                                | ((next1 as u32 & 0x3F) << 6)
+                                | (next2 as u32 & 0x3F);
+                            if let Some(c) = char::from_u32(code_point) {
+                                result.push(c);
+                            } else {
+                                result.push('�');
+                            }
+                            i += 3;
+                        } else {
+                            result.push('�');
+                            i += 1;
+                        }
+                    } else {
+                        result.push('�');
+                        i += 1;
+                    }
+                }
+                // 4-byte UTF-8 sequence
+                0xF0..=0xF7 => {
+                    if i + 3 < bytes.len() {
+                        let next1 = bytes[i + 1];
+                        let next2 = bytes[i + 2];
+                        let next3 = bytes[i + 3];
+                        if (next1 & 0xC0) == 0x80
+                            && (next2 & 0xC0) == 0x80
+                            && (next3 & 0xC0) == 0x80
+                        {
+                            let code_point = ((current as u32 & 0x07) << 18)
+                                | ((next1 as u32 & 0x3F) << 12)
+                                | ((next2 as u32 & 0x3F) << 6)
+                                | (next3 as u32 & 0x3F);
+                            if let Some(c) = char::from_u32(code_point) {
+                                result.push(c);
+                            } else {
+                                result.push('�');
+                            }
+                            i += 4;
+                        } else {
+                            result.push('�');
+                            i += 1;
+                        }
+                    } else {
+                        result.push('�');
+                        i += 1;
+                    }
+                }
+                // Invalid starting byte
+                _ => {
+                    result.push('�');
+                    i += 1;
+                }
+            }
+        }
+
+        result
     }
 
     /// Convert the Javascript string to a Javascript C string.
@@ -140,6 +240,19 @@ mod test {
             let func: Function = ctx.eval("x =>  x + 'bar'").unwrap();
             let text: StdString = (string,).apply(&func).unwrap();
             assert_eq!(text, "foobar".to_string());
+        });
+    }
+
+    #[test]
+    fn utf8_sliced_string() {
+        test_with(|ctx| {
+            let string = String::from_str(ctx.clone(), "🌍🌎🌏").unwrap();
+
+            assert_eq!(string.to_string().unwrap(), "🌍🌎🌏".to_string());
+
+            let func: Function = ctx.eval("x => x.slice(1)").unwrap();
+            let text: StdString = (string,).apply(&func).unwrap();
+            assert_eq!(text, "�🌎🌏".to_string());
         });
     }
 }
