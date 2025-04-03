@@ -259,9 +259,12 @@ mod test {
             let string = String::from_str(ctx.clone(), "🌍🌎🌏").unwrap();
 
             assert_eq!(string.to_string().unwrap(), "🌍🌎🌏".to_string());
+            assert_eq!(string.to_string_lossy().unwrap(), "🌍🌎🌏".to_string());
 
             let func: Function = ctx.eval("x => x.slice(1)").unwrap();
-            let text: StdString = (string,).apply(&func).unwrap();
+            let text: String = (string,).apply(&func).unwrap();
+            let text = text.to_string_lossy().unwrap();
+
             assert_eq!(text, "�🌎🌏".to_string());
         });
     }
