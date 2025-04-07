@@ -19,20 +19,16 @@ pub use bigint::BigInt;
 pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
 pub use exception::Exception;
 pub use function::{Constructor, Function};
-pub use module::Module;
+pub use module::{Module, WriteOptions, WriteOptionsEndianness};
 pub use object::{Filter, Object};
 pub use promise::Promise;
 pub use string::{CString, String};
 pub use symbol::Symbol;
 
-#[cfg(feature = "array-buffer")]
 pub mod array_buffer;
-#[cfg(feature = "array-buffer")]
 pub mod typed_array;
 
-#[cfg(feature = "array-buffer")]
 pub use array_buffer::ArrayBuffer;
-#[cfg(feature = "array-buffer")]
 pub use typed_array::TypedArray;
 
 /// Any JavaScript value

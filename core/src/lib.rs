@@ -28,11 +28,10 @@ pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, Throw
 pub use value::{
     array, atom, convert, function, module, object, promise, Array, Atom, BigInt, CString, Coerced,
     Exception, Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs,
-    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value,
+    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value, WriteOptions,
+    WriteOptionsEndianness,
 };
 
-#[cfg(feature = "allocator")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
 pub mod allocator;
 #[cfg(feature = "loader")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -46,8 +45,6 @@ pub use context::MultiWith;
 #[cfg(feature = "futures")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub use runtime::AsyncRuntime;
-#[cfg(feature = "array-buffer")]
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "array-buffer")))]
 pub use value::{ArrayBuffer, TypedArray};
 
 //#[doc(hidden)]
@@ -91,4 +88,46 @@ where
     let rt = Runtime::new().unwrap();
     let ctx = Context::full(&rt).unwrap();
     ctx.with(func)
+}
+
+mod deprecated_features {
+    #[cfg(feature = "properties")]
+    #[allow(unused_imports)]
+    use properties as _;
+    #[cfg(feature = "properties")]
+    #[deprecated(
+        note = "The rquickjs crate feature `properties` is deprecated, the functionality it provided is now enabled by default.
+To remove this warning remove the use of the feature when specifying the dependency."
+    )]
+    mod properties {}
+
+    #[cfg(feature = "array-buffer")]
+    #[allow(unused_imports)]
+    use array_buffer as _;
+    #[cfg(feature = "array-buffer")]
+    #[deprecated(
+        note = "The rquickjs crate feature `array-buffer` is deprecated, the functionality it provided is now enabled by default.
+To remove this warning remove the use of the feature when specifying the dependency."
+    )]
+    mod array_buffer {}
+
+    #[cfg(feature = "classes")]
+    #[allow(unused_imports)]
+    use classes as _;
+    #[cfg(feature = "classes")]
+    #[deprecated(
+        note = "The rquickjs crate feature `classes` is deprecated, the functionality it provided is now enabled by default.
+To remove this warning remove the use of the feature when specifying the dependency."
+    )]
+    mod classes {}
+
+    #[cfg(feature = "allocator")]
+    #[allow(unused_imports)]
+    use allocator as _;
+    #[cfg(feature = "allocator")]
+    #[deprecated(
+        note = "The rquickjs crate feature `allocator` is deprecated, the functionality it provided is now enabled by default.
+To remove this warning remove the use of the feature when specifying the dependency."
+    )]
+    mod allocator {}
 }

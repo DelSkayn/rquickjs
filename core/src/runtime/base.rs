@@ -1,7 +1,6 @@
 //! QuickJS runtime related types.
 
-use super::{opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage};
-#[cfg(feature = "allocator")]
+use super::{opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, RejectionTracker};
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
@@ -46,8 +45,6 @@ impl Runtime {
     /// Create a new runtime using specified allocator
     ///
     /// Will generally only fail if not enough memory was available.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
-    #[cfg(feature = "allocator")]
     pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
@@ -62,6 +59,16 @@ impl Runtime {
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
         WeakRuntime(Ref::downgrade(&self.inner))
+    }
+
+    /// Set a closure which is called when a Promise is rejected.
+    #[inline]
+    pub fn set_host_promise_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
+        unsafe {
+            self.inner
+                .lock()
+                .set_host_promise_rejection_tracker(tracker);
+        }
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.

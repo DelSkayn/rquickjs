@@ -7,16 +7,15 @@ use std::{
     result::Result as StdResult,
 };
 
-#[cfg(feature = "allocator")]
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
 use crate::{
     qjs::{self, size_t},
-    Error, Result,
+    Ctx, Error, Result, Value,
 };
 
-use super::{opaque::Opaque, InterruptHandler};
+use super::{opaque::Opaque, InterruptHandler, RejectionTracker};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;
@@ -114,7 +113,6 @@ pub(crate) struct RawRuntime {
     #[allow(dead_code)]
     pub info: Option<CString>,
 
-    #[cfg(feature = "allocator")]
     #[allow(dead_code)]
     pub allocator: Option<AllocatorHolder>,
     #[cfg(feature = "loader")]
@@ -162,14 +160,12 @@ impl RawRuntime {
         Ok(RawRuntime {
             rt,
             info: None,
-            #[cfg(feature = "allocator")]
             allocator: None,
             #[cfg(feature = "loader")]
             loader: None,
         })
     }
 
-    #[cfg(feature = "allocator")]
     pub unsafe fn new_with_allocator<A>(mut opaque: Opaque<'static>, allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
@@ -290,6 +286,41 @@ impl RawRuntime {
         stats.assume_init()
     }
 
+    pub unsafe fn set_host_promise_rejection_tracker(&mut self, tracker: Option<RejectionTracker>) {
+        unsafe extern "C" fn rejection_tracker_wrapper(
+            ctx: *mut rquickjs_sys::JSContext,
+            promise: rquickjs_sys::JSValue,
+            reason: rquickjs_sys::JSValue,
+            is_handled: bool,
+            opaque: *mut ::std::os::raw::c_void,
+        ) {
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+                let ctx = Ctx::from_ptr(ctx);
+
+                opaque.as_ref().run_rejection_tracker(
+                    ctx.clone(),
+                    Value::from_js_value_const(ctx.clone(), promise),
+                    Value::from_js_value_const(ctx, reason),
+                    is_handled,
+                );
+            }));
+            match catch_unwind {
+                Ok(_) => {}
+                Err(panic) => {
+                    opaque.as_ref().set_panic(panic);
+                }
+            }
+        }
+        qjs::JS_SetHostPromiseRejectionTracker(
+            self.rt.as_ptr(),
+            tracker.as_ref().map(|_| rejection_tracker_wrapper as _),
+            qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
+        );
+        self.get_opaque().set_rejection_tracker(tracker);
+    }
+
     /// Set a closure which is regularly called by the engine when it is executing code.
     /// If the provided closure returns `true` the interpreter will raise and uncatchable
     /// exception and return control flow to the caller.
@@ -329,5 +360,40 @@ impl RawRuntime {
         unsafe {
             qjs::JS_SetDumpFlags(rt, build_dump_flags());
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{Context, Runtime};
+
+    #[test]
+    fn promise_rejection_handler() {
+        let counter = Arc::new(Mutex::new(0));
+        let rt = Runtime::new().unwrap();
+        {
+            let counter = counter.clone();
+            rt.set_host_promise_rejection_tracker(Some(Box::new(move |_, _, _, is_handled| {
+                if !is_handled {
+                    let mut c = counter.lock().unwrap();
+                    *c += 1;
+                }
+            })));
+        }
+        let context = Context::full(&rt).unwrap();
+        context.with(|ctx| {
+            let _: Result<(), _> = ctx.eval(
+                r#"
+                const x = async () => {
+                    throw new Error("Uncaught")
+                }
+                x()
+                throw new Error("Caught")
+            "#,
+            );
+        });
+        assert_eq!(*counter.lock().unwrap(), 1);
     }
 }

@@ -113,6 +113,7 @@ fn main() {
     for feature in &features {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
+    println!("cargo:rerun-if-env-changed=CARGO_CFG_SANITIZE");
 
     let src_dir = Path::new("quickjs");
 
@@ -153,6 +154,29 @@ fn main() {
         //.flag("-Wno-array-bounds")
         //.flag("-Wno-format-truncation")
         ;
+
+    match env::var("CARGO_CFG_SANITIZE").as_deref() {
+        Ok("address") => {
+            builder
+                .flag("-fsanitize=address")
+                .flag("-fno-sanitize-recover=all")
+                .flag("-fno-omit-frame-pointer");
+        }
+        Ok("memory") => {
+            builder
+                .flag("-fsanitize=memory")
+                .flag("-fno-sanitize-recover=all")
+                .flag("-fno-omit-frame-pointer");
+        }
+        Ok("thread") => {
+            builder
+                .flag("-fsanitize=thread")
+                .flag("-fno-sanitize-recover=all")
+                .flag("-fno-omit-frame-pointer");
+        }
+        Ok(x) => println!("cargo:warning=Unsupported sanitize_option: '{x}'"),
+        _ => {}
+    }
 
     let mut bindgen_cflags = vec![];
 

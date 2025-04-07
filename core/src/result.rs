@@ -11,7 +11,6 @@ use std::{
 
 #[cfg(feature = "futures")]
 use crate::context::AsyncContext;
-#[cfg(feature = "array-buffer")]
 use crate::value::array_buffer::AsSliceError;
 use crate::{
     atom::PredefinedAtom, qjs, runtime::UserDataError, value::exception::ERROR_FORMAT_STR, Context,
@@ -118,7 +117,6 @@ pub enum Error {
         name: StdString,
         message: Option<StdString>,
     },
-    #[cfg(feature = "array-buffer")]
     AsSlice(AsSliceError),
     /// Error when restoring a Persistent in a runtime other than the original runtime.
     UnrelatedRuntime,
@@ -294,7 +292,6 @@ impl Error {
                     )
                 }
             }
-            #[cfg(feature = "array-buffer")]
             AsSlice(_) => {
                 let message = self.to_cstring();
                 unsafe {
@@ -461,7 +458,6 @@ impl Display for Error {
             }
             Error::WouldBlock => "Error blocking on a promise resulted in a dead lock".fmt(f)?,
             Error::UserData(x) => x.fmt(f)?,
-            #[cfg(feature = "array-buffer")]
             Error::AsSlice(x) => {
                 "Could not convert array buffer to slice: ".fmt(f)?;
                 x.fmt(f)?;
@@ -503,7 +499,6 @@ impl<T> From<UserDataError<T>> for Error {
     }
 }
 
-#[cfg(feature = "array-buffer")]
 impl From<AsSliceError> for Error {
     fn from(value: AsSliceError) -> Self {
         Error::AsSlice(value)

@@ -1,11 +1,11 @@
 use crate::{
     class::{self, ffi::VTable, JsClass},
-    qjs, Ctx, Error, JsLifetime, Object,
+    qjs, Ctx, Error, JsLifetime, Object, Value,
 };
 
 use super::{
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, UserDataError,
+    InterruptHandler, RejectionTracker, UserDataError,
 };
 use std::{
     any::{Any, TypeId},
@@ -29,6 +29,9 @@ pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
     panic: Cell<Option<Box<dyn Any + Send + 'static>>>,
 
+    /// The user provided rejection tracker, if any.
+    rejection_tracker: UnsafeCell<Option<RejectionTracker>>,
+
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
 
@@ -51,6 +54,8 @@ impl<'js> Opaque<'js> {
     pub fn new() -> Self {
         Opaque {
             panic: Cell::new(None),
+
+            rejection_tracker: UnsafeCell::new(None),
 
             interrupt_handler: UnsafeCell::new(None),
 
@@ -164,6 +169,22 @@ impl<'js> Opaque<'js> {
         self.userdata.get()
     }
 
+    pub fn set_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
+        unsafe { (*self.rejection_tracker.get()) = tracker }
+    }
+
+    pub fn run_rejection_tracker<'a>(
+        &self,
+        ctx: Ctx<'a>,
+        promise: Value<'a>,
+        reason: Value<'a>,
+        is_handled: bool,
+    ) {
+        unsafe {
+            (*self.rejection_tracker.get()).as_mut().unwrap()(ctx, promise, reason, is_handled)
+        }
+    }
+
     pub fn set_interrupt_handler(&self, interupt: Option<InterruptHandler>) {
         unsafe { (*self.interrupt_handler.get()) = interupt }
     }
@@ -210,6 +231,7 @@ impl<'js> Opaque<'js> {
     /// Called before dropping the runtime to ensure that we drop everything before freeing the
     /// runtime.
     pub fn clear(&mut self) {
+        self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
         self.prototypes.get_mut().clear();

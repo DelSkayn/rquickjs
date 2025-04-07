@@ -141,6 +141,27 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           env_vars: OS,RUST
 
+  sanitizer:
+    runs-on: ubuntu-latest
+    name: ubuntu / nightly / sanitizer 
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - name: Install stable
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
+      - name: cargo generate-lockfile
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+      - name: Run tests with address sanitizer
+        run: CC=clang RUSTFLAGS=-Zsanitizer=address cargo test --tests --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
+      - name: Run tests with thread sanitizer
+        run: CC=clang RUSTFLAGS=-Zsanitizer=thread cargo test --tests --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
+      - name: Run tests with memory sanitizer
+        run: CC=clang RUSTFLAGS=-Zsanitizer=memory cargo test --tests --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
+
   test:
     needs:
       - format
@@ -163,6 +184,7 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: full-async
+
           - task: bindings
             os: macos-latest
             rust: stable
@@ -174,6 +196,7 @@ jobs:
             target: aarch64-apple-darwin
             features: full-async
             no-test: true
+
           - task: bindings
             os: windows-latest
             rust: stable
@@ -190,6 +213,7 @@ jobs:
             target: x86_64-pc-windows-msvc
             features: full-async
             optimization: true
+
           - task: bindings
             os: ubuntu-latest
             rust: stable
@@ -200,11 +224,13 @@ jobs:
             rust: stable
             target: aarch64-unknown-linux-musl
             features: full-async
+
           - task: bindings
             os: ubuntu-latest
             rust: stable
             target: aarch64-unknown-linux-gnu
             features: full-async
+
           - task: bindings
             os: ubuntu-24.04
             rust: nightly
@@ -215,6 +241,7 @@ jobs:
             rust: nightly
             target: loongarch64-unknown-linux-gnu
             features: full-async
+
           - task: bindings
             os: ubuntu-latest
             rust: stable
@@ -227,6 +254,7 @@ jobs:
             target: wasm32-wasip2
             features: full-async
             no-build: true
+
           # Test features
           - task: features
             os: ubuntu-latest
@@ -242,22 +270,13 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
-            features: classes
-          - task: features
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
-            features: properties
-          - task: features
-            os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-gnu
             features: futures
           - task: features
             os: ubuntu-latest
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: parallel
+
           # Test channels
           - task: channels
             os: ubuntu-latest
@@ -291,11 +310,13 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y libc6-dev:${SYSTEM_ARCH} gcc-${GCC_TARGET} libgcc-s1:${SYSTEM_ARCH}
           echo "CARGO_TARGET_${ENV_TARGET}_LINKER=${GCC_TARGET}-gcc" >> $GITHUB_ENV
+
       - name: Setup musl-tools
         if: startsWith(matrix.target, 'x86_64-') && endsWith(matrix.target, '-musl')
         run: sudo apt-get update -y && sudo apt-get install -y musl-tools
-      - name: Setup musl aarch64
-        if: startsWith(matrix.target, 'aarch64') && contains(matrix.target, '-linux-')
+
+      - name: Setup gnu aarch64
+        if: startsWith(matrix.target, 'aarch64') && endsWith(matrix.target, '-gnu')
         run: |
           sudo apt-get update -y
           sudo apt-get install -y \
@@ -309,15 +330,6 @@ jobs:
             qemu-utils \
             qemu-user
 
-          curl --retry 5 https://musl.cc/aarch64-linux-musl-cross.tgz | tar xzf -
-          sudo mv aarch64-linux-musl-cross /musl
-
-          echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> $GITHUB_ENV
-          echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> $GITHUB_ENV
-          echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
-
           echo "CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc" >> $GITHUB_ENV
           echo "CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++" >> $GITHUB_ENV
           echo "AR_aarch64_unknown_linux_gnu=aarch64-linux-gnu-ar" >> $GITHUB_ENV
@@ -329,12 +341,41 @@ jobs:
           sudo ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
 
           mkdir -p ~/.cargo/
-          echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
-          echo 'rustflags = ["-C", "link-self-contained=yes","-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
           echo "[target.aarch64-unknown-linux-gnu]" >> ~/.cargo/config.toml
           echo 'rustflags = ["-C", "linker=aarch64-linux-gnu-gcc"]' >> ~/.cargo/config.toml
 
-          echo "/musl/bin" >> $GITHUB_PATH
+      - name: Setup musl aarch64
+        if: startsWith(matrix.target, 'aarch64') && contains(matrix.target, '-musl')
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            curl \
+            libc6-arm64-cross \
+            libc6-dev-arm64-cross \
+            crossbuild-essential-arm64 \
+            clang \
+            qemu-system-arm \
+            qemu-efi-aarch64 \
+            qemu-utils \
+            qemu-user
+
+            curl --retry 5 https://musl.cc/aarch64-linux-musl-cross.tgz | tar xzf -
+            sudo mv aarch64-linux-musl-cross /musl
+
+            echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> $GITHUB_ENV
+            echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
+
+            sudo ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
+
+            mkdir -p ~/.cargo/
+            echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
+            echo 'rustflags = ["-C", "link-self-contained=yes","-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
+
+            echo "/musl/bin" >> $GITHUB_PATH
+
       - name: Setup cross loongarch64
         if: startsWith(matrix.target, 'loongarch64') && contains(matrix.target, '-linux-')
         run: |
@@ -347,7 +388,7 @@ jobs:
             clang \
             qemu-user
 
-          curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/download/20241103/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
+          curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
           sudo mv loongarch64-unknown-linux-musl /musl
 
           echo "CC_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
@@ -374,7 +415,6 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           release: false
-          install: mingw-w64-x86_64-gcc mingw-w64-i686-gcc
       - name: Prepare env for windows
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         run: |

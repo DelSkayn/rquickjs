@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs"
-version = "0.8.1"
+version = "0.9.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 rust-version = "1.81"
@@ -23,10 +23,10 @@ members = [
 ]
 
 [workspace.dependencies]
-rquickjs-core = { version = "0.8.1", path = "core" }
-rquickjs-macro = { version = "0.8.1", path = "macro" }
-rquickjs-sys = { version = "0.8.1", path = "sys" }
-rquickjs = { version = "0.8.1", path = "./" }
+rquickjs-core = { version = "0.9.0", path = "core" }
+rquickjs-macro = { version = "0.9.0", path = "macro" }
+rquickjs-sys = { version = "0.9.0", path = "sys" }
+rquickjs = { version = "0.9.0", path = "./" }
 
 [dependencies]
 indexmap-rs = { package = "indexmap", version = "2", optional = true }
@@ -36,19 +36,15 @@ rquickjs-macro = { workspace = true, optional = true }
 
 
 [features]
-default = ["classes", "properties"]
+default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
 full = [
     "chrono",
     "loader",
-    "allocator",
     "dyn-load",
     "either",
     "indexmap",
-    "classes",
-    "properties",
-    "array-buffer",
     "macro",
     "phf",
 ]
@@ -81,21 +77,11 @@ loader = ["rquickjs-core/loader"]
 # Enable native module loading support
 dyn-load = ["rquickjs-core/dyn-load"]
 
-# Enable user-defined allocator support
-allocator = ["rquickjs-core/allocator"]
-
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
 rust-alloc = ["rquickjs-core/rust-alloc"]
 
-# Enable user-defined classes support
-classes = ["rquickjs-core/classes"]
 
-# Enable user-defined properties support
-properties = ["rquickjs-core/properties"]
-
-# Enable ArrayBuffer and TypedArray support
-array-buffer = ["rquickjs-core/array-buffer"]
 
 # Enable helper macros
 macro = ["rquickjs-macro"]
@@ -127,6 +113,13 @@ compile-tests = ["rquickjs-core/compile-tests"]
 
 # Enable unstable doc-cfg feature (for docs.rs)
 doc-cfg = ["rquickjs-core/doc-cfg"]
+
+# Deprecated features
+classes = ["rquickjs-core/classes"]
+array-buffer = ["rquickjs-core/array-buffer"]
+allocator = ["rquickjs-core/allocator"]
+properties = ["rquickjs-core/properties"]
+
 
 [dev-dependencies]
 trybuild = "1.0.82"

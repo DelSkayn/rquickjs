@@ -260,7 +260,7 @@ trace_impls! {
     std::collections::HashSet {S},
     std::collections::BTreeSet,
     #[cfg(feature = "indexmap")]
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(all(feature = "classes", feature = "indexmap"))))]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(all(feature = "indexmap"))))]
     indexmap::IndexSet {S},
 }
 
@@ -269,6 +269,6 @@ trace_impls! {
     std::collections::HashMap {S},
     std::collections::BTreeMap,
     #[cfg(feature = "indexmap")]
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(all(feature = "classes", feature = "indexmap"))))]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(all(feature = "indexmap"))))]
     indexmap::IndexMap {S},
 }
