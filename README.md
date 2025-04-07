@@ -81,7 +81,7 @@ See below for a list of supported platforms.
 | loongarch64-unknown-linux-musl |           ✅         |      ✅    |             ✅           |
 | x86_64-pc-windows-gnu          |           ✅         |      ✅    |             ✅           |
 | i686-pc-windows-gnu            |           ✅         |      ✅    |             ✅           |
-| x86_64-pc-windows-mvsc         |           ✅         |      ✅    |      ❌ experimental!    |
+| x86_64-pc-windows-msvc         |           ✅         |      ✅    |      ❌ experimental!    |
 | x86_64-apple-darwin            |           ✅         |      ✅    |             ✅           |
 | aarch64-apple-darwin           |           ✅         |      ❌    |             ✅           |
 | wasm32-wasi                    |           ✅         |      ❌    |             ✅           |
