@@ -1,4 +1,4 @@
-use std::{
+use core::{
     pin::Pin,
     ptr::NonNull,
     sync::atomic::Ordering,

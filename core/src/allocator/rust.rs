@@ -1,7 +1,6 @@
-use std::{
-    alloc::{self, Layout},
-    mem, ptr,
-};
+use core::{alloc::Layout, mem, ptr};
+use alloc::alloc;
+
 
 use super::Allocator;
 

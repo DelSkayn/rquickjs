@@ -7,19 +7,25 @@ use super::{
     userdata::{UserDataGuard, UserDataMap},
     InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
 };
-use std::{
+use alloc::boxed::Box;
+use core::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
-    collections::{hash_map::Entry, HashMap},
     marker::PhantomData,
     ptr,
 };
+
+#[cfg(feature = "std")]
+use std::collections::{hash_map::Entry, HashMap};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{hash_map::Entry, HashMap};
 
 #[cfg(feature = "futures")]
 use super::{schedular::SchedularPoll, spawner::Spawner};
 
 #[cfg(feature = "futures")]
-use std::{
+use core::{
     future::Future,
     task::{Context, Waker},
 };
@@ -212,6 +218,7 @@ impl<'js> Opaque<'js> {
         unsafe { (*self.interrupt_handler.get()).as_mut().unwrap()() }
     }
 
+    #[allow(dead_code)] // not used in no_std
     pub fn set_panic(&self, panic: Box<dyn Any + Send + 'static>) {
         self.panic.set(Some(panic))
     }

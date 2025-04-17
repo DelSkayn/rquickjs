@@ -1,9 +1,10 @@
 use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value};
-use core::fmt;
-use std::{
+use alloc::vec::Vec;
+use core::{
+    ffi::c_void,
+    fmt,
     mem::{self, size_of, ManuallyDrop, MaybeUninit},
     ops::Deref,
-    os::raw::c_void,
     ptr::NonNull,
     result::Result as StdResult,
     slice,
@@ -80,7 +81,7 @@ impl<'js> ArrayBuffer<'js> {
     pub fn new_copy<T: Copy>(ctx: Ctx<'js>, src: impl AsRef<[T]>) -> Result<Self> {
         let src = src.as_ref();
         let ptr = src.as_ptr();
-        let size = std::mem::size_of_val(src);
+        let size = core::mem::size_of_val(src);
 
         Ok(Self(Object(unsafe {
             let val = qjs::JS_NewArrayBufferCopy(ctx.as_ptr(), ptr as _, size as _);

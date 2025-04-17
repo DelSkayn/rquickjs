@@ -1,5 +1,5 @@
 use crate::{convert::Coerced, qjs, Ctx, FromJs, Result, StdString, String, Value};
-use std::{
+use core::{
     mem::MaybeUninit,
     ops::{Deref, DerefMut},
 };

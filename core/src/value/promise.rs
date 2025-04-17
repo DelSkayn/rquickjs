@@ -5,14 +5,15 @@ use crate::{
 #[cfg(feature = "futures")]
 use crate::{function::This, CatchResultExt, CaughtError};
 #[cfg(feature = "futures")]
-use std::{
+use core::{
     cell::RefCell,
     future::Future,
     marker::PhantomData,
     pin::Pin,
-    rc::Rc,
     task::{Context as TaskContext, Poll, Waker},
 };
+#[cfg(feature = "futures")]
+use alloc::rc::Rc;
 
 /// The execution state of a promise.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
@@ -66,8 +67,9 @@ impl<'js> Promise<'js> {
                 },
             };
             // TODO figure out something better to do here.
-            if let Err(e) = err {
-                println!("promise handle function returned error:{}", e);
+            if let Err(_e) = err {
+                #[cfg(feature = "std")]
+                println!("promise handle function returned error:{}", _e);
             }
         };
         ctx.spawn(future);

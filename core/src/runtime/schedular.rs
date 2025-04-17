@@ -1,11 +1,12 @@
-use std::{
+use core::{
     cell::Cell,
     future::Future,
     mem::offset_of,
     pin::Pin,
-    sync::{atomic::Ordering, Arc},
+    sync::atomic::Ordering,
     task::{Context, Poll},
 };
+use alloc::sync::Arc;
 
 mod atomic_waker;
 mod queue;
@@ -221,6 +222,7 @@ impl Schedular {
                 queue::Pop::Empty => break,
                 queue::Pop::Value(x) => x,
                 queue::Pop::Inconsistant => {
+                    #[cfg(feature = "std")]
                     std::thread::yield_now();
                     continue;
                 }

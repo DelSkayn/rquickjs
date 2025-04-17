@@ -6,7 +6,15 @@
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
-pub(crate) use std::{result::Result as StdResult, string::String as StdString};
+#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
+
+#[cfg(not(feature = "std"))]
+extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std as alloc;
+
+pub(crate) use alloc::string::String as StdString;
+pub(crate) use core::result::Result as StdResult;
 
 mod js_lifetime;
 pub mod markers;
