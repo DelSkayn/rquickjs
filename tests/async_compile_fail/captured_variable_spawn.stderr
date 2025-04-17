@@ -7,7 +7,7 @@ error[E0597]: `var` does not live long enough
    |                   ^^^^^^^^ borrowed value does not live long enough
 ...
 13 |         ctx.globals().set("t",func).unwrap();
-   |         --------------------------- argument requires that `var` is borrowed for `'static`
+   |         ------------- argument requires that `var` is borrowed for `'static`
 ...
 16 | }
    | - `var` dropped here while still borrowed
