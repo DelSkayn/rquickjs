@@ -39,18 +39,16 @@ rquickjs-macro = { workspace = true, optional = true }
 default = []
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = [
-    "chrono",
-    "loader",
-    "dyn-load",
-    "either",
-    "indexmap",
-    "macro",
-    "phf",
-]
+full = ["chrono", "loader", "dyn-load", "either", "indexmap", "macro", "phf"]
+
+# A version of full designed for wasm32-wasip1 and wasm32-wasip2 (simply excludes dyn-load)
+full-wasi = ["chrono", "loader", "either", "indexmap", "macro", "phf"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
+
+# A version of full-async designed for wasm32-wasip1 and wasm32-wasip2
+full-async-wasi = ["full-wasi", "futures"]
 
 # Chrono support.
 chrono = ["rquickjs-core/chrono"]
@@ -80,7 +78,6 @@ dyn-load = ["rquickjs-core/dyn-load"]
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
 rust-alloc = ["rquickjs-core/rust-alloc"]
-
 
 
 # Enable helper macros

@@ -545,7 +545,9 @@ mod test {
     #[test]
     fn system_time_to_js() {
         use crate::{Context, IntoJs, Runtime};
-        use std::time::{Duration, SystemTime};
+        #[cfg(not(target_arch = "wasm32"))]
+        use std::time::Duration;
+        use std::time::SystemTime;
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
@@ -563,18 +565,23 @@ mod test {
             assert_eq!(millis, res as _);
         });
 
-        let ts = SystemTime::UNIX_EPOCH - Duration::from_millis(123456);
-        let millis = SystemTime::UNIX_EPOCH
-            .duration_since(ts)
-            .unwrap()
-            .as_millis();
+        // wasm32-wasip1 and wasm32-wasip2 do not support SystemTime before the Unix epoch.
+        // The subtraction from the Unix epoch would panic with: overflow when subtracting duration from instant
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let ts = SystemTime::UNIX_EPOCH - Duration::from_millis(123456);
+            let millis = SystemTime::UNIX_EPOCH
+                .duration_since(ts)
+                .unwrap()
+                .as_millis();
 
-        ctx.with(|ctx| {
-            let globs = ctx.globals();
-            globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
-            let res: i64 = ctx.eval("ts.getTime()").unwrap();
-            assert_eq!(-(millis as i64), res as _);
-        });
+            ctx.with(|ctx| {
+                let globs = ctx.globals();
+                globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
+                let res: i64 = ctx.eval("ts.getTime()").unwrap();
+                assert_eq!(-(millis as i64), res as _);
+            });
+        }
     }
 
     #[cfg(feature = "chrono")]

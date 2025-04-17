@@ -411,6 +411,9 @@ chrono_from_js_impls! {
 
 #[cfg(test)]
 mod test {
+    #[cfg(target_arch = "wasm32")]
+    use super::Error;
+
     #[test]
     fn js_to_system_time() {
         use crate::{Context, Runtime};
@@ -426,11 +429,26 @@ mod test {
                 res.duration_since(SystemTime::UNIX_EPOCH).unwrap()
             );
 
-            let res: SystemTime = ctx.eval("new Date(-123456789)").unwrap();
-            assert_eq!(
-                Duration::from_millis(123456789),
-                SystemTime::UNIX_EPOCH.duration_since(res).unwrap()
-            );
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let res: SystemTime = ctx.eval("new Date(-123456789)").unwrap();
+                assert_eq!(
+                    Duration::from_millis(123456789),
+                    SystemTime::UNIX_EPOCH.duration_since(res).unwrap()
+                );
+            }
+
+            // wasm32-wasip1 and wasm32-wasip2 do not support SystemTime before the Unix Epoch
+            #[cfg(target_arch = "wasm32")]
+            {
+                let res: Error = ctx
+                    .eval::<SystemTime, &str>("new Date(-123456789)")
+                    .unwrap_err();
+                assert_eq!(
+                    "Error converting from js 'Date' into type 'SystemTime': Timestamp too small",
+                    res.to_string()
+                );
+            }
         });
     }
 
