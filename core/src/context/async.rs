@@ -4,7 +4,8 @@ use super::{
     ContextBuilder, Intrinsic,
 };
 use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
-use std::{future::Future, mem, pin::Pin, ptr::NonNull};
+use core::{future::Future, mem, pin::Pin, ptr::NonNull};
+use alloc::boxed::Box;
 
 mod future;
 
@@ -103,6 +104,7 @@ impl DropContext for AsyncRuntime {
                         // We should still free the context.
                         // TODO see if there is a way to recover from a panic which could cause the
                         // following assertion to trigger
+                        #[cfg(feature = "std")]
                         assert!(std::thread::panicking());
                     }
                     unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }

@@ -8,7 +8,7 @@ pub use self::futures::*;
 
 #[cfg(feature = "futures")]
 mod futures {
-    use std::{
+    use core::{
         future::Future,
         marker::PhantomData,
         mem::ManuallyDrop,

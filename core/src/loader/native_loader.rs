@@ -1,4 +1,5 @@
 use crate::{loader::util::check_extensions, module::ModuleLoadFn, Ctx, Error, Module, Result};
+use alloc::{string::String, vec::Vec};
 
 use super::Loader;
 

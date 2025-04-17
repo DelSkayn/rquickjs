@@ -1,3 +1,4 @@
+use alloc::string::{String, ToString as _};
 use relative_path::RelativePath;
 
 pub fn resolve_simple(base: &str, name: &str) -> String {
@@ -10,6 +11,7 @@ pub fn resolve_simple(base: &str, name: &str) -> String {
     name.into()
 }
 
+#[allow(dead_code)] // not used in no_std
 pub fn check_extensions(name: &str, extensions: &[String]) -> bool {
     let path = RelativePath::new(name);
     path.extension()
