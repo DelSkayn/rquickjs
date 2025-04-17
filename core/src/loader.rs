@@ -10,6 +10,7 @@ mod builtin_loader;
 mod builtin_resolver;
 pub mod bundle;
 mod compile;
+#[cfg(feature = "std")]
 mod file_resolver;
 mod module_loader;
 mod script_loader;
@@ -21,6 +22,7 @@ mod native_loader;
 pub use builtin_loader::BuiltinLoader;
 pub use builtin_resolver::BuiltinResolver;
 pub use compile::Compile;
+#[cfg(feature = "std")]
 pub use file_resolver::FileResolver;
 pub use module_loader::ModuleLoader;
 pub use script_loader::ScriptLoader;

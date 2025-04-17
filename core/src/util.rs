@@ -171,7 +171,7 @@ pub fn resume_unwind(payload: alloc::boxed::Box<dyn core::any::Any + Send>) -> !
 }
 
 #[cfg(not(feature = "std"))]
-pub fn resume_unwind(payload: alloc::boxed::Box<dyn core::any::Any + Send>) -> ! {
+pub fn resume_unwind(_payload: alloc::boxed::Box<dyn core::any::Any + Send>) -> ! {
     // with no-std we can't unwind, just panic
     panic!()
 }
