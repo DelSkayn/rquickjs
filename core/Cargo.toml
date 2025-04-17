@@ -22,7 +22,6 @@ either = { version = "1", optional = true }
 async-lock = { version = "3", optional = true }
 chrono = { version = "0.4", optional = true }
 dlopen = { version = "0.1", optional = true }
-relative-path = { version = "1.9", optional = true }
 
 
 [dev-dependencies]
@@ -59,7 +58,7 @@ bindgen = ["rquickjs-sys/bindgen"]
 parallel = ["std", "tokio/rt-multi-thread"]
 
 # Enable user-defined module loader support
-loader = ["relative-path"]
+loader = []
 
 # Enable native module loading support
 dyn-load = ["loader", "dlopen"]
