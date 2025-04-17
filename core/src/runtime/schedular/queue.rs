@@ -1,4 +1,4 @@
-use std::{
+use core::{
     cell::Cell,
     pin::Pin,
     ptr::{self, NonNull},
@@ -78,14 +78,14 @@ impl Queue {
         let mut tail = self.tail.get();
         let mut next = (*tail).next.load(Ordering::Acquire);
 
-        if std::ptr::eq(tail, &self.get_ref().stub) {
+        if core::ptr::eq(tail, &self.get_ref().stub) {
             if next.is_null() {
                 return Pop::Empty;
             }
 
             self.tail.set(next);
             tail = next;
-            next = (*next).next.load(std::sync::atomic::Ordering::Acquire);
+            next = (*next).next.load(core::sync::atomic::Ordering::Acquire);
         }
 
         if !next.is_null() {
@@ -94,7 +94,7 @@ impl Queue {
         }
 
         let head = self.head.load(Ordering::Acquire);
-        if !std::ptr::eq(head, tail) {
+        if !core::ptr::eq(head, tail) {
             return Pop::Inconsistant;
         }
 

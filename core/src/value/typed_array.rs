@@ -1,14 +1,19 @@
+use alloc::vec::Vec;
+
 use crate::{
     atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result,
     Value,
 };
-use std::{
+use core::{
     fmt,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
     ptr::{null_mut, NonNull},
     slice,
+    panic,
+    assert,
+    debug_assert_eq,
 };
 
 use super::array_buffer::RawArrayBuffer;

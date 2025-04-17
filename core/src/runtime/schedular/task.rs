@@ -1,11 +1,12 @@
-use std::{
+use core::{
     cell::{Cell, UnsafeCell},
     future::Future,
     mem::ManuallyDrop,
     ptr::{addr_of_mut, NonNull},
-    sync::{atomic::AtomicBool, Arc, Weak},
+    sync::atomic::AtomicBool,
     task::{Context, Poll},
 };
+use alloc::sync::{Arc, Weak};
 
 use super::{
     queue::{NodeHeader, Queue},
@@ -102,7 +103,7 @@ impl ErasedTask {
 
     pub fn into_ptr(this: Self) -> ErasedTaskPtr {
         let res = this.0;
-        std::mem::forget(this);
+        core::mem::forget(this);
         res
     }
 

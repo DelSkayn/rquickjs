@@ -12,6 +12,7 @@ pub(crate) mod schedular;
 #[cfg(feature = "futures")]
 mod spawner;
 
+use alloc::boxed::Box;
 pub use base::{Runtime, WeakRuntime};
 pub use userdata::{UserDataError, UserDataGuard};
 

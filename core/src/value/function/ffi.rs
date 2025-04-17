@@ -5,6 +5,8 @@ use crate::{
     Ctx, Function, JsLifetime, Object, Result, Value,
 };
 
+use alloc::boxed::Box;
+
 use super::Constructor;
 
 pub unsafe extern "C" fn defer_call_job(

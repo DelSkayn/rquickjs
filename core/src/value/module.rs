@@ -1,7 +1,8 @@
 //! Types for loading and handling JS modules.
 
-use std::{
-    ffi::{CStr, CString},
+use alloc::{ffi::CString, vec::Vec};
+use core::{
+    ffi::CStr,
     marker::PhantomData,
     mem::MaybeUninit,
     ptr::{self, NonNull},
