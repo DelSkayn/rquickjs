@@ -363,7 +363,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> Re
         let mod_name = module.name.clone();
 
         module.export(
-            name,
+            js_name.clone(),
             f.sig.ident.span(),
             quote! {
                 _exports.export(#js_name,#mod_name::#ident)?;
