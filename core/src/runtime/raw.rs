@@ -15,7 +15,7 @@ use crate::{
     Ctx, Error, Result, Value,
 };
 
-use super::{opaque::Opaque, InterruptHandler, RejectionTracker};
+use super::{opaque::Opaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;
@@ -284,6 +284,49 @@ impl RawRuntime {
         let mut stats = mem::MaybeUninit::uninit();
         qjs::JS_ComputeMemoryUsage(self.rt.as_ptr(), stats.as_mut_ptr());
         stats.assume_init()
+    }
+
+    pub unsafe fn set_promise_hook(&mut self, hook: Option<PromiseHook>) {
+        unsafe extern "C" fn promise_hook_wrapper(
+            ctx: *mut rquickjs_sys::JSContext,
+            type_: u32,
+            promise: rquickjs_sys::JSValue,
+            parent: rquickjs_sys::JSValue,
+            opaque: *mut ::std::os::raw::c_void,
+        ) {
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+                let ctx = Ctx::from_ptr(ctx);
+
+                let rtype = match type_ {
+                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_INIT => PromiseHookType::Init,
+                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_BEFORE => PromiseHookType::Before,
+                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_AFTER => PromiseHookType::After,
+                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE => PromiseHookType::Resolve,
+                    _ => unreachable!(),
+                };
+
+                opaque.as_ref().run_promise_hook(
+                    ctx.clone(),
+                    rtype,
+                    Value::from_js_value_const(ctx.clone(), promise),
+                    Value::from_js_value_const(ctx, parent),
+                );
+            }));
+            match catch_unwind {
+                Ok(_) => {}
+                Err(panic) => {
+                    opaque.as_ref().set_panic(panic);
+                }
+            }
+        }
+        qjs::JS_SetPromiseHook(
+            self.rt.as_ptr(),
+            hook.as_ref().map(|_| promise_hook_wrapper as _),
+            qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
+        );
+        self.get_opaque().set_promise_hook(hook);
     }
 
     pub unsafe fn set_host_promise_rejection_tracker(&mut self, tracker: Option<RejectionTracker>) {
