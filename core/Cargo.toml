@@ -37,7 +37,7 @@ approx = "0.5"
 trybuild = "1.0.23"
 
 [features]
-default = []
+default = ["std"]
 
 std = ["relative-path?/std"]
 
