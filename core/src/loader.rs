@@ -1,8 +1,8 @@
 //! Loaders and resolvers for loading JS modules.
 
-use core::{ffi::CStr, ptr};
 use alloc::boxed::Box;
 use alloc::string::String;
+use core::{ffi::CStr, ptr};
 
 use crate::{module::Declared, qjs, Ctx, Module, Result};
 
@@ -13,9 +13,9 @@ mod compile;
 #[cfg(feature = "std")]
 mod file_resolver;
 mod module_loader;
+mod path;
 mod script_loader;
 mod util;
-mod path;
 
 #[cfg(feature = "dyn-load")]
 mod native_loader;

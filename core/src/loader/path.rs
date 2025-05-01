@@ -3,16 +3,15 @@
 /// Vendored version of relative-path that supports no_std
 /// Taken from on:
 ///   https://github.com/udoprog/relative-path/blob/7a3a0fb6472e13b43103b28eea725f11dc6e1f11/relative-path/src/lib.rs
-/// 
+///
 /// Go back to upstream dependency when https://github.com/udoprog/relative-path/pull/64 is merged
 /// and a new version is released.
-
 use alloc::{
     borrow::{Borrow, Cow, ToOwned},
+    boxed::Box,
     rc::Rc,
     string::String,
     sync::Arc,
-    boxed::Box,
 };
 use core::{
     cmp, error, fmt,

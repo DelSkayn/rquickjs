@@ -1,8 +1,8 @@
-use alloc::vec::Vec;
 use crate::{
     function::{Flat, Opt, Rest, This},
     qjs, Ctx, FromJs, Function, IntoJs, Result, Value,
 };
+use alloc::vec::Vec;
 
 use super::{ffi::defer_call_job, Constructor};
 
