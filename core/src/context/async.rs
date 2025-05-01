@@ -4,8 +4,8 @@ use super::{
     ContextBuilder, Intrinsic,
 };
 use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
-use core::{future::Future, mem, pin::Pin, ptr::NonNull};
 use alloc::boxed::Box;
+use core::{future::Future, mem, pin::Pin, ptr::NonNull};
 
 mod future;
 

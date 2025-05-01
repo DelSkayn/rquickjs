@@ -1,6 +1,5 @@
-use core::{alloc::Layout, mem, ptr};
 use alloc::alloc;
-
+use core::{alloc::Layout, mem, ptr};
 
 use super::Allocator;
 

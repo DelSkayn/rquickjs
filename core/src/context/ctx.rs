@@ -1,6 +1,7 @@
 #[cfg(feature = "futures")]
 use core::future::Future;
 
+use alloc::{boxed::Box, ffi::CString, vec::Vec};
 use core::{
     any::Any,
     ffi::CStr,
@@ -8,7 +9,6 @@ use core::{
     ptr::NonNull,
     result::Result as StdResult,
 };
-use alloc::{boxed::Box, ffi::CString, vec::Vec};
 
 #[cfg(feature = "std")]
 use std::{fs, path::Path};

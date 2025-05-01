@@ -1,7 +1,7 @@
 use super::{JsClass, Tracer};
 use crate::{class::JsCell, function::Params, qjs, runtime::opaque::Opaque, Value};
-use core::{any::TypeId, panic::AssertUnwindSafe, ptr::NonNull};
 use alloc::boxed::Box;
+use core::{any::TypeId, panic::AssertUnwindSafe, ptr::NonNull};
 
 /// FFI finalizer, destroying the object once it is delete by the Gc.
 pub(crate) unsafe extern "C" fn class_finalizer(rt: *mut qjs::JSRuntime, val: qjs::JSValue) {

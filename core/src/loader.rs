@@ -1,8 +1,8 @@
 //! Loaders and resolvers for loading JS modules.
 
-use core::{ffi::CStr, ptr};
 use alloc::boxed::Box;
 use alloc::string::String;
+use core::{ffi::CStr, ptr};
 
 use crate::{module::Declared, qjs, Ctx, Module, Result};
 

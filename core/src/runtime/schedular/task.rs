@@ -1,3 +1,4 @@
+use alloc::sync::{Arc, Weak};
 use core::{
     cell::{Cell, UnsafeCell},
     future::Future,
@@ -6,7 +7,6 @@ use core::{
     sync::atomic::AtomicBool,
     task::{Context, Poll},
 };
-use alloc::sync::{Arc, Weak};
 
 use super::{
     queue::{NodeHeader, Queue},

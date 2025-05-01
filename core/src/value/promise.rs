@@ -5,6 +5,8 @@ use crate::{
 #[cfg(feature = "futures")]
 use crate::{function::This, CatchResultExt, CaughtError};
 #[cfg(feature = "futures")]
+use alloc::rc::Rc;
+#[cfg(feature = "futures")]
 use core::{
     cell::RefCell,
     future::Future,
@@ -12,8 +14,6 @@ use core::{
     pin::Pin,
     task::{Context as TaskContext, Poll, Waker},
 };
-#[cfg(feature = "futures")]
-use alloc::rc::Rc;
 
 /// The execution state of a promise.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]

@@ -1,9 +1,9 @@
+use alloc::vec::Vec;
 use core::{
     cell::{Cell, RefCell},
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
-use alloc::vec::Vec;
 
 use crate::{Ctx, Function, IntoJs, Result, Value};
 
