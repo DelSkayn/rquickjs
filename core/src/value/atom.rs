@@ -1,8 +1,8 @@
 //!  QuickJS atom functionality.
 
 use crate::{qjs, Ctx, Error, Result, String, Value};
-use core::{ffi::CStr, hash::Hash};
 use alloc::string::{String as StdString, ToString as _};
+use core::{ffi::CStr, hash::Hash};
 
 mod predefined;
 pub use predefined::PredefinedAtom;

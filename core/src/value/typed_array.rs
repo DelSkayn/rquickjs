@@ -5,15 +5,13 @@ use crate::{
     Value,
 };
 use core::{
-    fmt,
+    assert, debug_assert_eq, fmt,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
+    panic,
     ptr::{null_mut, NonNull},
     slice,
-    panic,
-    assert,
-    debug_assert_eq,
 };
 
 use super::array_buffer::RawArrayBuffer;

@@ -1,10 +1,10 @@
+use alloc::boxed::Box;
 use core::{
     future::Future,
     mem::{self, ManuallyDrop},
     pin::Pin,
     task::{ready, Context, Poll},
 };
-use alloc::boxed::Box;
 
 use async_lock::futures::Lock;
 

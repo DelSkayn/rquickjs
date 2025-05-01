@@ -6,8 +6,8 @@ use crate::{
     value::Constructor,
     Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
-use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 use alloc::boxed::Box;
+use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
 mod cell;
 mod trace;

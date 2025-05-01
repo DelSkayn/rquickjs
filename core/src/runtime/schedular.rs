@@ -1,3 +1,4 @@
+use alloc::sync::Arc;
 use core::{
     cell::Cell,
     future::Future,
@@ -6,7 +7,6 @@ use core::{
     sync::atomic::Ordering,
     task::{Context, Poll},
 };
-use alloc::sync::Arc;
 
 mod atomic_waker;
 mod queue;
