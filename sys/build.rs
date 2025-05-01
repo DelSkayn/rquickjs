@@ -121,7 +121,8 @@ fn main() {
     let out_dir = Path::new(&out_dir);
 
     let header_files = [
-        "libbf.h",
+        "builtin-array-fromasync.h",
+        "xsum.h",
         "libregexp-opcode.h",
         "libregexp.h",
         "libunicode-table.h",
@@ -139,7 +140,7 @@ fn main() {
         "libunicode.c",
         "cutils.c",
         "quickjs.c",
-        "libbf.c",
+        "xsum.c",
     ];
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];

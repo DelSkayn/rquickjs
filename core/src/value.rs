@@ -342,7 +342,7 @@ impl<'js> Value<'js> {
     /// Check if the value is an array
     #[inline]
     pub fn is_array(&self) -> bool {
-        0 != unsafe { qjs::JS_IsArray(self.ctx.as_ptr(), self.value) }
+        unsafe { qjs::JS_IsArray(self.value) }
     }
 
     /// Check if the value is a function

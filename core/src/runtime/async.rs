@@ -13,7 +13,7 @@ use async_lock::Mutex;
 
 use super::{
     opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
-    InterruptHandler, MemoryUsage,
+    InterruptHandler, MemoryUsage, PromiseHook,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
@@ -157,6 +157,14 @@ impl AsyncRuntime {
             inner: Arc::downgrade(&self.inner),
             #[cfg(feature = "parallel")]
             drop_send: self.drop_send.clone(),
+        }
+    }
+
+    /// Set a closure which is called when a promise is created, resolved, or chained.
+    #[inline]
+    pub async fn set_promise_hook(&self, tracker: Option<PromiseHook>) {
+        unsafe {
+            self.inner.lock().await.runtime.set_promise_hook(tracker);
         }
     }
 

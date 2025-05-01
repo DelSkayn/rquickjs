@@ -25,6 +25,15 @@ pub enum PromiseState {
     Rejected,
 }
 
+/// The type of promise event.
+#[derive(Clone, Copy, Eq, PartialEq, Debug)]
+pub enum PromiseHookType {
+    Init,
+    Before,
+    After,
+    Resolve,
+}
+
 /// A JavaScript promise.
 #[derive(Debug, PartialEq, Clone, Hash, Eq)]
 #[repr(transparent)]
