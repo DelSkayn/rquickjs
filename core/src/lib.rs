@@ -7,7 +7,8 @@
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 #![cfg_attr(not(test), no_std)]
 
-extern crate alloc;
+#[doc(hidden)]
+pub extern crate alloc;
 
 #[cfg(any(feature = "std", test))]
 extern crate std;
