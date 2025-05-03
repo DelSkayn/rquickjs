@@ -118,6 +118,7 @@
 //! - `dump-read-object`
 
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
+#![no_std]
 
 pub use rquickjs_core::*;
 
