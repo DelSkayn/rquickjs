@@ -11,7 +11,8 @@
 #![allow(clippy::doc_lazy_continuation)]
 #![cfg_attr(not(test), no_std)]
 
-extern crate alloc;
+#[doc(hidden)]
+pub extern crate alloc;
 
 #[cfg(any(feature = "std", test))]
 extern crate std;
