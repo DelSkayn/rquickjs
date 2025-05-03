@@ -14,6 +14,8 @@ use core::{
     pin::Pin,
     task::{Context as TaskContext, Poll, Waker},
 };
+#[cfg(all(feature = "std", feature = "futures"))]
+use std::println;
 
 /// The execution state of a promise.
 #[derive(Clone, Copy, Eq, PartialEq, Debug)]
