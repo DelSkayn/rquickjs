@@ -5,12 +5,12 @@
 
 #![allow(clippy::needless_lifetimes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
-#![cfg_attr(all(not(feature = "std"), not(test)), no_std)]
+#![cfg_attr(not(test), no_std)]
 
-#[cfg(not(feature = "std"))]
 extern crate alloc;
-#[cfg(feature = "std")]
-extern crate std as alloc;
+
+#[cfg(any(feature = "std", test))]
+extern crate std;
 
 pub(crate) use alloc::string::String as StdString;
 pub(crate) use core::result::Result as StdResult;

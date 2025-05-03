@@ -4,6 +4,8 @@ use alloc::{
     vec::Vec,
 };
 use core::{ptr::NonNull, result::Result as StdResult, task::Poll};
+#[cfg(feature = "std")]
+use std::println;
 
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Receiver, Sender};
