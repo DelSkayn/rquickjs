@@ -1,6 +1,6 @@
 //! Utility types and traits.
 
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 // Super nice trick taken from the rlua library.
 // Can be used to pin a lifetime so that all functions which use

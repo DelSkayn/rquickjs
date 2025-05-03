@@ -23,10 +23,10 @@ members = [
 ]
 
 [workspace.dependencies]
-rquickjs-core = { version = "0.9.0", path = "core" }
-rquickjs-macro = { version = "0.9.0", path = "macro" }
-rquickjs-sys = { version = "0.9.0", path = "sys" }
-rquickjs = { version = "0.9.0", path = "./" }
+rquickjs-core = { version = "0.9.0", path = "core", default-features = false }
+rquickjs-macro = { version = "0.9.0", path = "macro", default-features = false  }
+rquickjs-sys = { version = "0.9.0", path = "sys", default-features = false  }
+rquickjs = { version = "0.9.0", path = "./", default-features = false  }
 
 [dependencies]
 indexmap-rs = { package = "indexmap", version = "2", optional = true }
@@ -36,19 +36,22 @@ rquickjs-macro = { workspace = true, optional = true }
 
 
 [features]
-default = []
+default = ["std"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "loader", "dyn-load", "either", "indexmap", "macro", "phf"]
+full = ["std", "chrono", "loader", "dyn-load", "either", "indexmap", "macro", "phf"]
 
 # A version of full designed for wasm32-wasip1 and wasm32-wasip2 (simply excludes dyn-load)
-full-wasi = ["chrono", "loader", "either", "indexmap", "macro", "phf"]
+full-wasi = ["std", "chrono", "loader", "either", "indexmap", "macro", "phf"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
 
 # A version of full-async designed for wasm32-wasip1 and wasm32-wasip2
 full-async-wasi = ["full-wasi", "futures"]
+
+# Enable use of the rust standard library
+std = ["rquickjs-core/std"]
 
 # Chrono support.
 chrono = ["rquickjs-core/chrono"]

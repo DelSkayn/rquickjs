@@ -8,7 +8,7 @@ use crate::{
 #[cfg(feature = "futures")]
 use crate::{function::types::Async, promise::Promised};
 #[cfg(feature = "futures")]
-use std::future::Future;
+use core::future::Future;
 
 macro_rules! impl_to_js_function {
     ($($t:ident),*$(,)?) => {

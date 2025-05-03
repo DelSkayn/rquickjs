@@ -4,7 +4,7 @@ use crate::{
     convert::FromIteratorJs, qjs, Array, Atom, Ctx, FromAtom, FromJs, IntoAtom, IntoJs, Result,
     Value,
 };
-use std::{iter::FusedIterator, marker::PhantomData, mem};
+use core::{iter::FusedIterator, marker::PhantomData, mem};
 
 mod property;
 pub use property::{Accessor, AsProperty, Property, PropertyFlags};

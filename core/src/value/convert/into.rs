@@ -4,9 +4,18 @@ use crate::{
     Array, CString, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String,
     Value,
 };
+use alloc::{
+    boxed::Box,
+    collections::{BTreeMap, BTreeSet, LinkedList, VecDeque},
+    string::ToString as _,
+    vec::Vec,
+};
+use core::cell::{Cell, RefCell};
+use hashbrown::{HashMap as HashbrownMap, HashSet as HashbrownSet};
+
+#[cfg(feature = "std")]
 use std::{
-    cell::{Cell, RefCell},
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
+    collections::{HashMap, HashSet},
     sync::{Mutex, RwLock},
     time::SystemTime,
 };
@@ -203,6 +212,7 @@ where
     }
 }
 
+#[cfg(feature = "std")]
 impl<'js, T> IntoJs<'js> for Mutex<T>
 where
     T: IntoJs<'js>,
@@ -213,6 +223,7 @@ where
     }
 }
 
+#[cfg(feature = "std")]
 impl<'js, T> IntoJs<'js> for &Mutex<T>
 where
     for<'r> &'r T: IntoJs<'js>,
@@ -223,6 +234,7 @@ where
     }
 }
 
+#[cfg(feature = "std")]
 impl<'js, T> IntoJs<'js> for RwLock<T>
 where
     T: IntoJs<'js>,
@@ -233,6 +245,7 @@ where
     }
 }
 
+#[cfg(feature = "std")]
 impl<'js, T> IntoJs<'js> for &RwLock<T>
 where
     for<'r> &'r T: IntoJs<'js>,
@@ -433,7 +446,10 @@ into_js_impls! {
     /// Convert from Rust linked list to JS array
     LinkedList,
     /// Convert from Rust hash set to JS array
+    #[cfg(feature = "std")]
     HashSet {S},
+    /// Convert from hashbrown hash set to JS array
+    HashbrownSet {S},
     /// Convert from Rust btree set to JS array
     BTreeSet,
     /// Convert from Rust index set to JS array
@@ -445,7 +461,10 @@ into_js_impls! {
 into_js_impls! {
     map:
     /// Convert from Rust hash map to JS object
+    #[cfg(feature = "std")]
     HashMap {S},
+    /// Convert from hashbrown hash map to JS object
+    HashbrownMap {S},
     /// Convert from Rust btree map to JS object
     BTreeMap,
     /// Convert from Rust index map to JS object
@@ -466,12 +485,14 @@ into_js_impls! {
     i32 f64 => i64 u32 u64 usize isize,
 }
 
+#[allow(dead_code)]
 fn millis_to_date<'js>(ctx: &Ctx<'js>, millis: i64) -> Result<Value<'js>> {
     let date_ctor: Constructor = ctx.globals().get("Date")?;
 
     date_ctor.construct((millis,))
 }
 
+#[cfg(feature = "std")]
 impl<'js> IntoJs<'js> for SystemTime {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         let millis = match self.duration_since(SystemTime::UNIX_EPOCH) {

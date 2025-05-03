@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, ptr::NonNull};
+use core::{marker::PhantomData, ptr::NonNull};
 
 #[cfg(feature = "futures")]
 use crate::{context::AsyncContext, runtime::AsyncRuntime};
