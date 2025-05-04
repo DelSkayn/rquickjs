@@ -81,7 +81,7 @@ impl<'js> Function<'js> {
     /// Defer call the function with given arguments.
     ///
     /// Calling a function with defer is equivalent to calling a JavaScript function with
-    /// `setTimeout(func,0)`.
+    /// `queueMicrotask()`.
     pub fn defer<A>(&self, args: A) -> Result<()>
     where
         A: IntoArgs<'js>,
