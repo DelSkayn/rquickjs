@@ -4,6 +4,7 @@
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
 
 #![allow(clippy::needless_lifetimes)]
+#![allow(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
@@ -26,10 +27,10 @@ pub use js_lifetime::JsLifetime;
 pub use persistent::Persistent;
 pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, ThrowResultExt};
 pub use value::{
-    array, atom, convert, function, module, object, promise, Array, Atom, BigInt, CString, Coerced,
-    Exception, Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs,
-    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value, WriteOptions,
-    WriteOptionsEndianness,
+    Array, Atom, BigInt, CString, Coerced, Exception, Filter, FromAtom, FromIteratorJs, FromJs,
+    Function, IntoAtom, IntoJs, IteratorJs, Module, Null, Object, Promise, String, Symbol, Type,
+    Undefined, Value, WriteOptions, WriteOptionsEndianness, array, atom, convert, function, module,
+    object, promise,
 };
 
 pub mod allocator;
@@ -64,13 +65,13 @@ pub mod prelude {
     #[cfg(feature = "multi-ctx")]
     pub use crate::context::MultiWith;
     pub use crate::{
+        JsLifetime,
         context::Ctx,
         convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs, List},
         function::{
             Exhaustive, Flat, Func, FuncArg, IntoArg, IntoArgs, MutFn, OnceFn, Opt, Rest, This,
         },
         result::{CatchResultExt, ThrowResultExt},
-        JsLifetime,
     };
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]

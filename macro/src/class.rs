@@ -1,16 +1,16 @@
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
+    Error, ItemEnum, ItemStruct, LitStr, Result, Token,
     fold::Fold,
     parse::{Parse, ParseStream},
     punctuated::{Pair, Punctuated},
     spanned::Spanned,
-    Error, ItemEnum, ItemStruct, LitStr, Result, Token,
 };
 
 use crate::{
-    attrs::{take_attributes, FlagOption, OptionList, ValueOption},
-    common::{add_js_lifetime, crate_ident, kw, Case},
+    attrs::{FlagOption, OptionList, ValueOption, take_attributes},
+    common::{Case, add_js_lifetime, crate_ident, kw},
     fields::Fields,
 };
 
@@ -48,16 +48,16 @@ impl Parse for ClassOption {
 impl ClassConfig {
     pub fn apply(&mut self, option: &ClassOption) {
         match option {
-            ClassOption::Frozen(ref x) => {
+            ClassOption::Frozen(x) => {
                 self.frozen = x.is_true();
             }
-            ClassOption::Crate(ref x) => {
+            ClassOption::Crate(x) => {
                 self.crate_ = Some(x.value.value());
             }
-            ClassOption::Rename(ref x) => {
+            ClassOption::Rename(x) => {
                 self.rename = Some(x.value.value());
             }
-            ClassOption::RenameAll(ref x) => {
+            ClassOption::RenameAll(x) => {
                 self.rename_all = Some(x.value);
             }
         }
@@ -128,15 +128,15 @@ impl Class {
 
     pub fn config(&self) -> &ClassConfig {
         match self {
-            Class::Enum { ref config, .. } => config,
-            Class::Struct { ref config, .. } => config,
+            Class::Enum { config, .. } => config,
+            Class::Struct { config, .. } => config,
         }
     }
 
     pub fn ident(&self) -> &Ident {
         match self {
-            Class::Struct { ref ident, .. } => ident,
-            Class::Enum { ref ident, .. } => ident,
+            Class::Struct { ident, .. } => ident,
+            Class::Enum { ident, .. } => ident,
         }
     }
 
@@ -234,8 +234,8 @@ impl Class {
 
     pub fn generics(&self) -> &syn::Generics {
         match self {
-            Class::Enum { ref generics, .. } => generics,
-            Class::Struct { ref generics, .. } => generics,
+            Class::Enum { generics, .. } => generics,
+            Class::Struct { generics, .. } => generics,
         }
     }
 
@@ -259,7 +259,7 @@ impl Class {
     }
 
     pub fn expand_props(&self, crate_name: &Ident) -> TokenStream {
-        let Class::Struct { ref fields, .. } = self else {
+        let Class::Struct { fields, .. } = self else {
             return TokenStream::new();
         };
 

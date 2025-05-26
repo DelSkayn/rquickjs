@@ -13,10 +13,10 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
+    Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserDataError, UserDataGuard},
-    Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
+    runtime::{UserDataError, UserDataGuard, opaque::Opaque},
 };
 
 use super::Context;
@@ -174,7 +174,7 @@ impl<'js> Ctx<'js> {
         source: S,
         options: EvalOptions,
     ) -> Result<V> {
-        let file_name = CStr::from_bytes_with_nul(b"eval_script\0").unwrap();
+        let file_name = c"eval_script";
 
         V::from_js(self, unsafe {
             let val = self.eval_raw(source, file_name, options.to_flag())?;
@@ -426,7 +426,7 @@ impl<'js> Ctx<'js> {
     pub fn script_or_module_name(&self, stack_level: isize) -> Option<Atom<'js>> {
         let stack_level = std::os::raw::c_int::try_from(stack_level).unwrap();
         let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
-        if qjs::__JS_ATOM_NULL as u32 == atom {
+        if qjs::__JS_ATOM_NULL as qjs::JSAtom == atom {
             unsafe { qjs::JS_FreeAtom(self.as_ptr(), atom) };
             return None;
         }
@@ -490,7 +490,7 @@ mod test {
 
     #[test]
     fn exports() {
-        use crate::{context::intrinsic, Context, Function, Module, Promise, Runtime};
+        use crate::{Context, Function, Module, Promise, Runtime, context::intrinsic};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
@@ -567,7 +567,7 @@ mod test {
 
     #[test]
     fn eval_with_options_no_strict_sloppy_code() {
-        use crate::{context::EvalOptions, Context, Runtime};
+        use crate::{Context, Runtime, context::EvalOptions};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
@@ -596,7 +596,7 @@ mod test {
     #[test]
     #[should_panic(expected = "foo is not defined")]
     fn eval_with_options_strict_sloppy_code() {
-        use crate::{context::EvalOptions, CatchResultExt, Context, Runtime};
+        use crate::{CatchResultExt, Context, Runtime, context::EvalOptions};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();

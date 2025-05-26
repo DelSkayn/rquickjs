@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Result, Value};
+use crate::{Ctx, Error, FromJs, IntoJs, JsLifetime, Result, Value, qjs};
 
 use std::{
     fmt,

@@ -1,10 +1,11 @@
 //! JavaScript function functionality
 
 use crate::{
+    Ctx, Error, FromJs, IntoJs, Object, Result, Value,
     atom::PredefinedAtom,
     class::{Class, JsClass},
     function::ffi::RustFunc,
-    qjs, Ctx, Error, FromJs, IntoJs, Object, Result, Value,
+    qjs,
 };
 
 mod args;
@@ -170,6 +171,8 @@ impl<'js> Function<'js> {
             qjs::JS_SetConstructorBit(
                 self.ctx().as_ptr(),
                 self.0.as_js_value(),
+                // This parameter is not always a boolean
+                #[allow(clippy::useless_conversion)]
                 is_constructor.into(),
             )
         };

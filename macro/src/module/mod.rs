@@ -1,12 +1,12 @@
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 use crate::{
-    attrs::{take_attributes, OptionList},
+    attrs::{OptionList, take_attributes},
     class::Class,
 };
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
-use syn::{spanned::Spanned, Attribute, Error, ItemFn, ItemMod, Result, UseTree};
+use syn::{Attribute, Error, ItemFn, ItemMod, Result, UseTree, spanned::Spanned};
 
 mod config;
 mod declare;
@@ -155,7 +155,10 @@ fn export_use(use_: &UseTree, module: &mut JsModule, config: &ModuleItemConfig) 
                 )
         }
         UseTree::Glob(x) => {
-            return Err(Error::new(x.star_token.span(),"Using a glob export does not export the items to JavaScript.Please specify each item to be exported individially."))
+            return Err(Error::new(
+                x.star_token.span(),
+                "Using a glob export does not export the items to JavaScript.Please specify each item to be exported individially.",
+            ));
         }
         UseTree::Group(x) => {
             for i in x.items.iter() {
@@ -203,7 +206,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> Re
         ));
     }
 
-    let Some((_, ref mut items)) = content else {
+    let Some((_, items)) = content else {
         return Err(Error::new(
             Span::call_site(),
             "The `module` macro can only be applied to modules with a definition in the same file.",
@@ -264,7 +267,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> Re
                     _enums.push((i, config))
                 }
             }
-            syn::Item::Fn(ref mut i) => {
+            syn::Item::Fn(i) => {
                 let mut config = ModuleFunctionConfig::default();
                 let mut span = None;
 

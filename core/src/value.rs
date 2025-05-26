@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, Result};
+use crate::{Ctx, Error, Result, qjs};
 use std::{fmt, hash::Hash, mem, ops::Deref, result::Result as StdResult, str};
 
 pub mod array;

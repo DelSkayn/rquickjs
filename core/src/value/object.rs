@@ -1,8 +1,8 @@
 //! Module for types dealing with JS objects.
 
 use crate::{
-    convert::FromIteratorJs, qjs, Array, Atom, Ctx, FromAtom, FromJs, IntoAtom, IntoJs, Result,
-    Value,
+    Array, Atom, Ctx, FromAtom, FromJs, IntoAtom, IntoJs, Result, Value, convert::FromIteratorJs,
+    qjs,
 };
 use std::{iter::FusedIterator, marker::PhantomData, mem};
 

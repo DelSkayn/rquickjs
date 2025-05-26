@@ -2,7 +2,7 @@
 
 use std::{ffi::CStr, ptr};
 
-use crate::{module::Declared, qjs, Ctx, Module, Result};
+use crate::{Ctx, Module, Result, module::Declared, qjs};
 
 mod builtin_loader;
 mod builtin_resolver;

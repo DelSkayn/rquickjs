@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, Result, Value};
+use crate::{Ctx, Error, Result, Value, qjs};
 
 /// Rust representation of a JavaScript big int.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

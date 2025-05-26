@@ -9,8 +9,8 @@ use std::{
 };
 
 use crate::{
-    atom::PredefinedAtom, qjs, Atom, Ctx, Error, FromAtom, FromJs, IntoAtom, IntoJs, Object,
-    Promise, Result, Value,
+    Atom, Ctx, Error, FromAtom, FromJs, IntoAtom, IntoJs, Object, Promise, Result, Value,
+    atom::PredefinedAtom, qjs,
 };
 
 #[derive(Default)]
@@ -78,23 +78,28 @@ impl WriteOptions {
 /// Helper macro to provide module init function.
 /// Use for exporting module definitions to be loaded as part of a dynamic library.
 /// ```
-/// use rquickjs::{module::ModuleDef, module_init};
+/// use rquickjs::{module::ModuleDef, unsafe_module_init};
 ///
 /// struct MyModule;
 /// impl ModuleDef for MyModule {}
 ///
-/// module_init!(MyModule);
+/// unsafe_module_init!(MyModule);
 /// // or
-/// module_init!(js_init_my_module: MyModule);
+/// unsafe_module_init!(js_init_my_module: MyModule);
 /// ```
+///
+/// # Safety
+/// This macro is marked unsafe as it creates an unmangled symbol. Creating an unmangled symbol
+/// which collides with an other symbol can result in undefined behavior. This macro is safe as
+/// long as it's name does not collide with another symbol.
 #[macro_export]
-macro_rules! module_init {
+macro_rules! unsafe_module_init {
     ($type:ty) => {
-        $crate::module_init!(js_init_module: $type);
+        $crate::unsafe_module_init!(js_init_module: $type);
     };
 
     ($name:ident: $type:ty) => {
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $name(
             ctx: *mut $crate::qjs::JSContext,
             module_name: *const $crate::qjs::c_char,

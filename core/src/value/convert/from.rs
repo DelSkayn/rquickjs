@@ -1,6 +1,6 @@
 use crate::{
-    convert::List, Array, CString, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String,
-    Type, Value,
+    Array, CString, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type, Value,
+    convert::List,
 };
 use std::{
     cell::{Cell, RefCell},

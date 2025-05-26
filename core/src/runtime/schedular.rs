@@ -3,7 +3,7 @@ use std::{
     future::Future,
     mem::offset_of,
     pin::Pin,
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
     task::{Context, Poll},
 };
 

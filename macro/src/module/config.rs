@@ -2,14 +2,15 @@ use convert_case::Casing;
 use proc_macro2::Span;
 use quote::quote;
 use syn::{
+    Attribute, Error, Ident, LitStr, Path, Result, Token,
     parse::{Parse, ParseStream},
-    parse_quote, Attribute, Error, Ident, LitStr, Path, Result, Token,
+    parse_quote,
 };
 
 use crate::{
     attrs::{FlagOption, ValueOption},
     class::{ClassConfig, ClassOption},
-    common::{crate_ident, kw, Case},
+    common::{Case, crate_ident, kw},
     function::{FunctionConfig, FunctionOption},
 };
 
@@ -25,19 +26,19 @@ pub(crate) struct ModuleConfig {
 impl ModuleConfig {
     pub fn apply(&mut self, option: &ModuleOption) {
         match option {
-            ModuleOption::Crate(ref x) => {
+            ModuleOption::Crate(x) => {
                 self.crate_ = Some(x.value.value());
             }
-            ModuleOption::RenameVars(ref x) => {
+            ModuleOption::RenameVars(x) => {
                 self.rename_vars = Some(x.value);
             }
-            ModuleOption::RenameTypes(ref x) => {
+            ModuleOption::RenameTypes(x) => {
                 self.rename_types = Some(x.value);
             }
-            ModuleOption::Rename(ref x) => {
+            ModuleOption::Rename(x) => {
                 self.rename = Some(x.value.value());
             }
-            ModuleOption::Prefix(ref x) => {
+            ModuleOption::Prefix(x) => {
                 self.prefix = Some(x.value.value());
             }
         }

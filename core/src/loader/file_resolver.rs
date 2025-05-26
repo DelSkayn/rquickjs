@@ -1,4 +1,4 @@
-use crate::{loader::Resolver, Ctx, Error, Result};
+use crate::{Ctx, Error, Result, loader::Resolver};
 use relative_path::{RelativePath, RelativePathBuf};
 
 /// The file module resolver
@@ -99,11 +99,7 @@ impl FileResolver {
             self.patterns.iter().find_map(|pattern| {
                 let name = pattern.replace("{}", path.file_name()?);
                 let file = path.with_file_name(name);
-                if is_file(&file) {
-                    Some(file)
-                } else {
-                    None
-                }
+                if is_file(&file) { Some(file) } else { None }
             })
         }
     }

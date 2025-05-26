@@ -10,4 +10,4 @@ use hand_written::NativeModule;
 //#[cfg(feature = "macro")]
 //use using_macro::NativeModule;
 
-rquickjs::module_init!(NativeModule);
+rquickjs::unsafe_module_init!(NativeModule);

@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use rquickjs::{
-    class::{JsClass, Readable, Trace, Tracer},
     Class, Context, JsLifetime, Null, Runtime,
+    class::{JsClass, Readable, Trace, Tracer},
 };
 use std::sync::Mutex;
 

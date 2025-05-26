@@ -1,10 +1,10 @@
 //! JavaScript classes defined from Rust.
 
 use crate::{
+    Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
     function::Params,
     qjs::{self},
     value::Constructor,
-    Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
 use std::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
@@ -232,7 +232,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
             }
         };
 
-        let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0 .0.as_js_value(), id) };
+        let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0.0.as_js_value(), id) };
 
         NonNull::new(ptr.cast()).expect("invalid class object, object didn't have opaque value")
     }
@@ -337,23 +337,23 @@ impl<'js, C: JsClass<'js>> FromJs<'js> for Class<'js, C> {
 
 impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
     fn into_js(self, _ctx: &Ctx<'js>) -> Result<Value<'js>> {
-        Ok(self.0 .0)
+        Ok(self.0.0)
     }
 }
 
 #[cfg(test)]
 mod test {
     use std::sync::{
-        atomic::{AtomicBool, Ordering},
         Arc,
+        atomic::{AtomicBool, Ordering},
     };
 
     use crate::{
+        CatchResultExt, Class, Context, FromJs, Function, IntoJs, JsLifetime, Object, Runtime,
         class::{JsClass, Readable, Trace, Tracer, Writable},
         function::This,
         test_with,
         value::Constructor,
-        CatchResultExt, Class, Context, FromJs, Function, IntoJs, JsLifetime, Object, Runtime,
     };
 
     /// Test circular references.

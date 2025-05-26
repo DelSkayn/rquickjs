@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{spanned::Spanned, Error, Ident, ItemFn, Result, ReturnType};
+use syn::{Error, Ident, ItemFn, Result, ReturnType, spanned::Spanned};
 
 /// make sure the declare function has the right type.
 pub fn validate(func: &ItemFn) -> Result<()> {
@@ -25,7 +25,9 @@ pub fn validate(func: &ItemFn) -> Result<()> {
     }
     if sig.inputs.len() != 2 || sig.output == ReturnType::Default {
         return Err(Error::new(
-            func.span(), "Invalid module evaluation function. Function should implement `fn(rquickjs::Ctx,&mut rquickjs::module::Exports) -> rquickjs::result<()>`."));
+            func.span(),
+            "Invalid module evaluation function. Function should implement `fn(rquickjs::Ctx,&mut rquickjs::module::Exports) -> rquickjs::result<()>`.",
+        ));
     }
 
     Ok(())

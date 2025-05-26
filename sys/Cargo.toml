@@ -1,21 +1,21 @@
 [package]
 name = "rquickjs-sys"
-version = "0.9.0"
-authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
-edition = "2021"
-license = "MIT"
 readme = "README.md"
-description = "QuickJS bindings for rquickjs"
-keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+keywords.workspace = true
+repository.workspace = true
 categories = ["external-ffi-bindings"]
-repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [build-dependencies]
 cc = "1"
 
 [build-dependencies.bindgen-rs]
 package = "bindgen"
-version = "0.69"
+version = "0.71"
 optional = true
 
 [build-dependencies.pretty_env_logger]

@@ -1,4 +1,4 @@
-use crate::{loader::Resolver, Ctx, Error, Result};
+use crate::{Ctx, Error, Result, loader::Resolver};
 use relative_path::RelativePath;
 use std::collections::HashSet;
 

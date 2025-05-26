@@ -1,7 +1,7 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value};
+use crate::{Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value, qjs};
 use core::fmt;
 use std::{
-    mem::{self, size_of, ManuallyDrop, MaybeUninit},
+    mem::{self, ManuallyDrop, MaybeUninit, size_of},
     ops::Deref,
     os::raw::c_void,
     ptr::NonNull,

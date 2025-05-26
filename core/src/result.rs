@@ -13,8 +13,8 @@ use std::{
 use crate::context::AsyncContext;
 use crate::value::array_buffer::AsSliceError;
 use crate::{
-    atom::PredefinedAtom, qjs, runtime::UserDataError, value::exception::ERROR_FORMAT_STR, Context,
-    Ctx, Exception, Object, StdResult, StdString, Type, Value,
+    Context, Ctx, Exception, Object, StdResult, StdString, Type, Value, atom::PredefinedAtom, qjs,
+    runtime::UserDataError, value::exception::ERROR_FORMAT_STR,
 };
 
 /// Result type used throughout the library.

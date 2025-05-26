@@ -16,11 +16,7 @@ struct Header {
 }
 
 const fn max(a: usize, b: usize) -> usize {
-    if a < b {
-        b
-    } else {
-        a
-    }
+    if a < b { b } else { a }
 }
 
 /// Head needs to be at least alloc aligned so all that values after the header are aligned.
@@ -28,7 +24,7 @@ const HEADER_SIZE: usize = max(mem::size_of::<Header>(), ALLOC_ALIGN);
 
 #[inline]
 fn round_size(size: usize) -> usize {
-    (size + ALLOC_ALIGN - 1) / ALLOC_ALIGN * ALLOC_ALIGN
+    size.div_ceil(ALLOC_ALIGN) * ALLOC_ALIGN
 }
 
 /// The allocator which uses Rust global allocator
@@ -122,7 +118,7 @@ unsafe impl Allocator for RustAllocator {
 #[cfg(all(test, feature = "rust-alloc"))]
 mod test {
     use super::RustAllocator;
-    use crate::{allocator::Allocator, Context, Runtime};
+    use crate::{Context, Runtime, allocator::Allocator};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     static ALLOC_SIZE: AtomicUsize = AtomicUsize::new(0);

@@ -5,9 +5,9 @@ use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use rquickjs_core::{Context, Module, Result as JsResult, Runtime, WriteOptions};
 use syn::{
+    Error, LitStr, Result, Token,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    Error, LitStr, Result, Token,
 };
 
 /// A line of embedded modules.
@@ -168,7 +168,7 @@ pub fn expand(modules: &[(String, TokenStream)]) -> Result<TokenStream> {
 
 #[cfg(test)]
 mod test {
-    use super::{expand, to_entries, EmbedModules};
+    use super::{EmbedModules, expand, to_entries};
     use quote::quote;
 
     #[cfg(feature = "phf")]

@@ -1,6 +1,6 @@
 //! JavaScript array types.
 
-use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
+use crate::{Ctx, FromJs, IntoJs, Object, Result, Value, atom::PredefinedAtom, qjs};
 use std::{iter::FusedIterator, marker::PhantomData};
 
 use super::convert::FromIteratorJs;

@@ -1,12 +1,12 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    spanned::Spanned as _, visit::Visit, Data, DeriveInput, Error, Field, Fields, GenericArgument,
-    GenericParam, Generics, Lifetime, Result, Type,
+    Data, DeriveInput, Error, Field, Fields, GenericArgument, GenericParam, Generics, Lifetime,
+    Result, Type, spanned::Spanned as _, visit::Visit,
 };
 
 use crate::{
-    attrs::{take_attributes, OptionList},
+    attrs::{OptionList, take_attributes},
     common::crate_ident,
     trace::{ImplConfig, TraceOption},
 };
@@ -16,7 +16,10 @@ pub fn retrieve_lifetime(generics: &Generics) -> Result<Option<&Lifetime>> {
     for p in generics.params.iter() {
         if let GenericParam::Lifetime(x) = p {
             if let Some(x) = lifetime.as_ref() {
-                return Err(Error::new(x.span(),"Type has multiple lifetimes, this is not supported by the JsLifetime derive macro"));
+                return Err(Error::new(
+                    x.span(),
+                    "Type has multiple lifetimes, this is not supported by the JsLifetime derive macro",
+                ));
             }
             lifetime = Some(&x.lifetime);
         }
@@ -51,7 +54,7 @@ pub fn extract_types_need_checking(lt: &Lifetime, data: &Data) -> Result<Vec<Typ
             return Err(Error::new(
                 u.union_token.span(),
                 "Union types are not supported",
-            ))
+            ));
         }
     }
 

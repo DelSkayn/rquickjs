@@ -2,8 +2,8 @@ use std::{
     cell::{Cell, UnsafeCell},
     future::Future,
     mem::ManuallyDrop,
-    ptr::{addr_of_mut, NonNull},
-    sync::{atomic::AtomicBool, Arc, Weak},
+    ptr::{NonNull, addr_of_mut},
+    sync::{Arc, Weak, atomic::AtomicBool},
     task::{Context, Poll},
 };
 

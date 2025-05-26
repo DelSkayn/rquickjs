@@ -1,5 +1,5 @@
 use super::{JsClass, Tracer};
-use crate::{class::JsCell, function::Params, qjs, runtime::opaque::Opaque, Value};
+use crate::{Value, class::JsCell, function::Params, qjs, runtime::opaque::Opaque};
 use std::{any::TypeId, panic::AssertUnwindSafe, ptr::NonNull};
 
 /// FFI finalizer, destroying the object once it is delete by the Gc.

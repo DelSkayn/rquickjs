@@ -1,9 +1,10 @@
 use crate::{
+    Ctx, FromJs, Function, IntoJs, Result, Value,
     function::{Flat, Opt, Rest, This},
-    qjs, Ctx, FromJs, Function, IntoJs, Result, Value,
+    qjs,
 };
 
-use super::{ffi::defer_call_job, Constructor};
+use super::{Constructor, ffi::defer_call_job};
 
 const ARGS_ON_STACK: usize = 4;
 

@@ -1,14 +1,14 @@
 [package]
 name = "rquickjs-macro"
-version = "0.9.0"
-authors = ["K. <kayo@illumium.org>", "Mees Delzenne <mees.delzenne@gmail.com>"]
-edition = "2021"
-license = "MIT"
 readme = "README.md"
-description = "Procedural macros for rquickjs"
-keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
-categories = ["api-bindings"]
-repository = "https://github.com/DelSkayn/rquickjs.git"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+repository.workspace = true
 
 [lib]
 proc-macro = true

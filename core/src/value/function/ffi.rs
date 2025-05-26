@@ -1,8 +1,8 @@
 use crate::{
+    Ctx, Function, JsLifetime, Object, Result, Value,
     class::{JsCell, JsClass, Readable, Trace, Tracer},
     qjs,
     value::function::Params,
-    Ctx, Function, JsLifetime, Object, Result, Value,
 };
 
 use super::Constructor;

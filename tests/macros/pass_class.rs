@@ -1,4 +1,4 @@
-use rquickjs::{class::Trace, CatchResultExt, Class, Context, JsLifetime, Object, Runtime};
+use rquickjs::{CatchResultExt, Class, Context, JsLifetime, Object, Runtime, class::Trace};
 
 #[derive(Trace, JsLifetime)]
 #[rquickjs::class(rename_all = "camelCase")]

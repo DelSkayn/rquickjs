@@ -1,6 +1,6 @@
 use syn::{
-    parse::{Parse, ParseStream},
     Attribute, LitBool, Token,
+    parse::{Parse, ParseStream},
 };
 
 /// An value option with an assigned value.

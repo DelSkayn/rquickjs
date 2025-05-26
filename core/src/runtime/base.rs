@@ -1,12 +1,12 @@
 //! QuickJS runtime related types.
 
 use super::{
-    opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker, opaque::Opaque, raw::RawRuntime,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{result::JobException, Context, Mut, Ref, Result, Weak};
+use crate::{Context, Mut, Ref, Result, Weak, result::JobException};
 use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
 
 /// A weak handle to the runtime.

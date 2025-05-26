@@ -2,13 +2,13 @@ use convert_case::Casing;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    parse::{Parse, ParseStream},
     Attribute, Ident, LitStr, Result, Type, Visibility,
+    parse::{Parse, ParseStream},
 };
 
 use crate::{
-    attrs::{take_attributes, FlagOption, OptionList, ValueOption},
-    common::{kw, Case},
+    attrs::{FlagOption, OptionList, ValueOption, take_attributes},
+    common::{Case, kw},
 };
 
 #[derive(Default, Debug)]
@@ -73,22 +73,22 @@ impl FieldConfig {
 
     pub(crate) fn apply(&mut self, option: &FieldOption) {
         match option {
-            FieldOption::Get(ref x) => {
+            FieldOption::Get(x) => {
                 self.get = x.is_true();
             }
-            FieldOption::Set(ref x) => {
+            FieldOption::Set(x) => {
                 self.set = x.is_true();
             }
-            FieldOption::Enumerable(ref x) => {
+            FieldOption::Enumerable(x) => {
                 self.enumerable = x.is_true();
             }
-            FieldOption::Configurable(ref x) => {
+            FieldOption::Configurable(x) => {
                 self.configurable = x.is_true();
             }
-            FieldOption::SkipTrace(ref x) => {
+            FieldOption::SkipTrace(x) => {
                 self.skip_trace = x.is_true();
             }
-            FieldOption::Rename(ref x) => {
+            FieldOption::Rename(x) => {
                 self.rename = Some(x.value.value());
             }
         }
@@ -276,16 +276,16 @@ impl Field {
 
     pub fn expand_field(&self) -> TokenStream {
         let Field {
-            ref ident,
-            ref vis,
-            ref ty,
-            ref attrs,
+            ident,
+            vis,
+            ty,
+            attrs,
             ..
         } = self;
 
         let rexported_attrs = self.expand_attrs();
 
-        if let Some(ref ident) = ident {
+        if let Some(ident) = ident {
             quote! {
                 #(#attrs)*
                 #rexported_attrs

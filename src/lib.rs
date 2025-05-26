@@ -36,25 +36,25 @@
 //! - `rust-alloc` forces using Rust's global allocator by default instead of libc's one.
 //!
 //! - `loader` adds support for custom ES6 modules resolvers and loaders. The resolvers and loaders
-//! should implements [`Resolver`](loader::Resolver) and [Loader](loader::Loader) traits
-//! respectively and can be plugged in already existing [`Runtime`] before loading modules via
-//! [`Runtime::set_loader`]. The resolvers and loaders can be easily combined via tuples. When the
-//! previous resolver or loader failed the next one will be applied.
+//!   should implements [`Resolver`](loader::Resolver) and [Loader](loader::Loader) traits
+//!   respectively and can be plugged in already existing [`Runtime`] before loading modules via
+//!   [`Runtime::set_loader`]. The resolvers and loaders can be easily combined via tuples. When the
+//!   previous resolver or loader failed the next one will be applied.
 //!
 //! - `dyn-load` adds support for loadable native modules (so/dll/dylib).
 //!
 //! - `futures` adds support for async Rust. When enabled the library exports [`AsyncRuntime`] and
-//! [`AsyncContext`]. These are the asynchronous variants of the normal runtime and context. In
-//! order to ensure that QuickJS is used properly the runtime is placed behind a lock. For the
-//! normal runtime this is a normal mutex. You should avoid blocking threads in asynchronous Rust
-//! so the async runtime uses a future aware mutex. In the async runtime Rust futures can be passed
-//! to JS as [ES6
-//! Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
-//! and ES6 Promises can be given back as Rust futures.
+//!   [`AsyncContext`]. These are the asynchronous variants of the normal runtime and context. In
+//!   order to ensure that QuickJS is used properly the runtime is placed behind a lock. For the
+//!   normal runtime this is a normal mutex. You should avoid blocking threads in asynchronous Rust
+//!   so the async runtime uses a future aware mutex. In the async runtime Rust futures can be passed
+//!   to JS as [ES6
+//!   Promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Promise)
+//!   and ES6 Promises can be given back as Rust futures.
 //!
 //! - `macro` enables some useful procedural macros which gets Rust/JS interop much easy. An
-//! [attribute](#attributes) macros can be applied to functions, constants and modules. An
-//! [derive](#derives) macros can be used with structs and enums.
+//!   [attribute](#attributes) macros can be applied to functions, constants and modules. An
+//!   [derive](#derives) macros can be used with structs and enums.
 //!
 //! - `phf` enables using Perfect Hash Function for builtin modules lookup
 //!
@@ -67,7 +67,7 @@
 //! - `either` adds [`FromJs`]/[`IntoJs`] implementations for [`Either`](`either::Either`)
 //!
 //! - `indexmap` adds [`FromJs`]/[`IntoJs`] implementations for [`IndexSet`](`indexmap::IndexSet`)
-//! and [`IndexMap`](`indexmap_rs::IndexMap`)
+//!   and [`IndexMap`](`indexmap_rs::IndexMap`)
 //!
 //! ## Bindings
 //!
@@ -121,7 +121,7 @@ pub use rquickjs_core::*;
 
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "macro")))]
 #[cfg(feature = "macro")]
-pub use rquickjs_macro::{class, embed, function, methods, module, JsLifetime};
+pub use rquickjs_macro::{JsLifetime, class, embed, function, methods, module};
 
 pub mod class {
     //! JavaScript classes defined from Rust.

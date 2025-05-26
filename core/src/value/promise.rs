@@ -1,9 +1,9 @@
 //! Javascript promises and future integration.
-use crate::{
-    atom::PredefinedAtom, qjs, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
-};
 #[cfg(feature = "futures")]
-use crate::{function::This, CatchResultExt, CaughtError};
+use crate::{CatchResultExt, CaughtError, function::This};
+use crate::{
+    Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value, atom::PredefinedAtom, qjs,
+};
 #[cfg(feature = "futures")]
 use std::{
     cell::RefCell,
@@ -360,12 +360,12 @@ mod test {
     use super::Promise;
     #[cfg(feature = "futures")]
     use crate::{
-        async_with, function::Async, promise::Promised, AsyncContext, AsyncRuntime, CaughtError,
-        Result,
+        AsyncContext, AsyncRuntime, CaughtError, Result, async_with, function::Async,
+        promise::Promised,
     };
     use crate::{
-        function::Func, prelude::This, promise::PromiseState, CatchResultExt, Context, Function,
-        Runtime,
+        CatchResultExt, Context, Function, Runtime, function::Func, prelude::This,
+        promise::PromiseState,
     };
 
     #[cfg(feature = "futures")]

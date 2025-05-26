@@ -1,6 +1,6 @@
 //!  QuickJS atom functionality.
 
-use crate::{qjs, Ctx, Error, Result, String, Value};
+use crate::{Ctx, Error, Result, String, Value, qjs};
 use std::{ffi::CStr, hash::Hash, string::String as StdString};
 
 mod predefined;
