@@ -20,7 +20,17 @@ pub(crate) use r#async::InnerRuntime;
 #[cfg(feature = "futures")]
 pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
 
+use crate::value::promise::PromiseHookType;
 use crate::{Ctx, Value};
+
+/// The type of the promise hook.
+#[cfg(not(feature = "parallel"))]
+pub type PromiseHook =
+    Box<dyn for<'a> Fn(Ctx<'a>, PromiseHookType, Value<'a>, Value<'a>) + 'static>;
+/// The type of the promise hook.
+#[cfg(feature = "parallel")]
+pub type PromiseHook =
+    Box<dyn for<'a> Fn(Ctx<'a>, PromiseHookType, Value<'a>, Value<'a>) + Send + 'static>;
 
 /// The type of the promise rejection tracker.
 #[cfg(not(feature = "parallel"))]

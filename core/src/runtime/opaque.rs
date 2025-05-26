@@ -5,7 +5,7 @@ use crate::{
 
 use super::{
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, RejectionTracker, UserDataError,
+    InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
 };
 use std::{
     any::{Any, TypeId},
@@ -28,6 +28,9 @@ use std::{
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
     panic: Cell<Option<Box<dyn Any + Send + 'static>>>,
+
+    /// The user provided promise hook, if any.
+    promise_hook: UnsafeCell<Option<PromiseHook>>,
 
     /// The user provided rejection tracker, if any.
     rejection_tracker: UnsafeCell<Option<RejectionTracker>>,
@@ -54,6 +57,8 @@ impl<'js> Opaque<'js> {
     pub fn new() -> Self {
         Opaque {
             panic: Cell::new(None),
+
+            promise_hook: UnsafeCell::new(None),
 
             rejection_tracker: UnsafeCell::new(None),
 
@@ -167,6 +172,20 @@ impl<'js> Opaque<'js> {
         U::Changed<'static>: Any,
     {
         self.userdata.get()
+    }
+
+    pub fn set_promise_hook(&self, promise_hook: Option<PromiseHook>) {
+        unsafe { (*self.promise_hook.get()) = promise_hook }
+    }
+
+    pub fn run_promise_hook<'a>(
+        &self,
+        ctx: Ctx<'a>,
+        type_: PromiseHookType,
+        promise: Value<'a>,
+        parent: Value<'a>,
+    ) {
+        unsafe { (*self.promise_hook.get()).as_mut().unwrap()(ctx, type_, promise, parent) }
     }
 
     pub fn set_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
