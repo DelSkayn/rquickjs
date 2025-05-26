@@ -322,7 +322,7 @@ where
         });
     }
 
-    let Ok(target) = bindgen_rs::RustTarget::stable(85, 1) else {
+    let Ok(rust_target) = bindgen_rs::RustTarget::stable(85, 1) else {
         unreachable!()
     };
     let mut builder = bindgen_rs::Builder::default()
@@ -340,7 +340,7 @@ where
         .opaque_type("FILE")
         .blocklist_type("FILE")
         .blocklist_function("JS_DumpMemoryUsage")
-        .rust_target(target);
+        .rust_target(rust_target);
 
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
         builder = builder.clang_arg("-fvisibility=default");
