@@ -8,7 +8,7 @@ use function::FunctionOption;
 use methods::ImplOption;
 use module::ModuleOption;
 use proc_macro::TokenStream as TokenStream1;
-use syn::{parse_macro_input, spanned::Spanned, DeriveInput, Error, Item};
+use syn::{DeriveInput, Error, Item, parse_macro_input, spanned::Spanned};
 
 #[cfg(test)]
 macro_rules! assert_eq_tokens {

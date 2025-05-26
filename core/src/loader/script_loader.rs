@@ -1,6 +1,6 @@
 use crate::{
-    loader::{util::check_extensions, Loader},
     Ctx, Error, Module, Result,
+    loader::{Loader, util::check_extensions},
 };
 
 /// The script module loader

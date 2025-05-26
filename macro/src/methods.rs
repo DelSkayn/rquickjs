@@ -3,14 +3,14 @@ use std::collections::HashMap;
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
+    Error, ItemImpl, LitStr, Result, Token, Type,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Error, ItemImpl, LitStr, Result, Token, Type,
 };
 
 use crate::{
-    attrs::{take_attributes, OptionList, ValueOption},
-    common::{add_js_lifetime, crate_ident, kw, Case, BASE_PREFIX, IMPL_PREFIX},
+    attrs::{OptionList, ValueOption, take_attributes},
+    common::{BASE_PREFIX, Case, IMPL_PREFIX, add_js_lifetime, crate_ident, kw},
 };
 
 mod accessor;

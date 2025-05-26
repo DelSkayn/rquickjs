@@ -13,11 +13,11 @@ use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
 use crate::{
-    qjs::{self, size_t},
     Ctx, Error, Result, Value,
+    qjs::{self, size_t},
 };
 
-use super::{opaque::Opaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker};
+use super::{InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, opaque::Opaque};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;

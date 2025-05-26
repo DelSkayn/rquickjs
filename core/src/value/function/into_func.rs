@@ -1,8 +1,8 @@
 use super::{FromParams, IntoJsFunc, ParamRequirement, Params};
 use crate::{
+    IntoJs, Result, Value,
     function::types::{MutFn, OnceFn},
     result::{BorrowError, Error},
-    IntoJs, Result, Value,
 };
 
 #[cfg(feature = "futures")]

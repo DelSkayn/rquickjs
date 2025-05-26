@@ -1,11 +1,11 @@
 use convert_case::Case as ConvertCase;
-use proc_macro2::Span;
 use proc_macro_crate::FoundCrate;
+use proc_macro2::Span;
 use quote::{ToTokens, TokenStreamExt};
 use syn::{
+    Error, Generics, Lifetime, LifetimeParam, LitStr, Result, Type,
     fold::Fold,
     parse::{Parse, ParseStream},
-    Error, Generics, Lifetime, LifetimeParam, LitStr, Result, Type,
 };
 
 /// prefix for getter implementations
@@ -41,7 +41,10 @@ impl Parse for Case {
             "PascalCase" => Ok(Case::Pascal),
             "snake_case" => Ok(Case::Snake),
             "SCREAMING_SNAKE" => Ok(Case::ScreamingSnake),
-            _ => Err(syn::Error::new(str_lit.span(), "Invalid casing, expected one of 'lowercase', 'UPPERCASE', 'camelCase','PascalCase','snake_case','SCREAMING_SNAKE'"))
+            _ => Err(syn::Error::new(
+                str_lit.span(),
+                "Invalid casing, expected one of 'lowercase', 'UPPERCASE', 'camelCase','PascalCase','snake_case','SCREAMING_SNAKE'",
+            )),
         }
     }
 }

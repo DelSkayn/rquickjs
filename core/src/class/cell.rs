@@ -1,5 +1,5 @@
 use super::{Class, JsClass};
-use crate::{result::BorrowError, Ctx, Error, FromJs, IntoJs, Value};
+use crate::{Ctx, Error, FromJs, IntoJs, Value, result::BorrowError};
 use std::{
     cell::{Cell, UnsafeCell},
     marker::PhantomData,

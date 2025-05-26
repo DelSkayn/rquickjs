@@ -1,12 +1,12 @@
 use super::{
-    schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
+    schedular::{Schedular, SchedularPoll},
 };
 use crate::AsyncRuntime;
 use std::{
     future::Future,
     pin::Pin,
-    task::{ready, Context, Poll, Waker},
+    task::{Context, Poll, Waker, ready},
 };
 
 use async_lock::futures::LockArc;
@@ -121,7 +121,7 @@ impl Future for DriveFuture {
                 // TODO: Handle error.
                 match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
-                        break
+                        break;
                     }
                     SchedularPoll::PendingProgress => {}
                 }

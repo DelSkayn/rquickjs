@@ -6,8 +6,8 @@ use std::{
 };
 
 use super::{
-    task::{ErasedTask, ErasedTaskPtr},
     Task,
+    task::{ErasedTask, ErasedTaskPtr},
 };
 
 unsafe fn inner_clone(ptr: *const ()) {

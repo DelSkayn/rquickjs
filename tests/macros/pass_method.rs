@@ -1,6 +1,6 @@
 use rquickjs::{
-    atom::PredefinedAtom, class::Trace, prelude::Func, CatchResultExt, Class, Context, Ctx,
-    JsLifetime, Object, Result, Runtime,
+    CatchResultExt, Class, Context, Ctx, JsLifetime, Object, Result, Runtime, atom::PredefinedAtom,
+    class::Trace, prelude::Func,
 };
 
 #[derive(Trace, JsLifetime)]

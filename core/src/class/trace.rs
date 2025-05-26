@@ -1,5 +1,5 @@
 use super::JsClass;
-use crate::{markers::Invariant, qjs, Class, Ctx, Module, Value};
+use crate::{Class, Ctx, Module, Value, markers::Invariant, qjs};
 use std::marker::PhantomData;
 
 #[cfg(feature = "either")]
