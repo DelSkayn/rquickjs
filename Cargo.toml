@@ -1,15 +1,15 @@
 [package]
 name = "rquickjs"
-version = "0.9.0"
-authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
-edition = "2021"
-rust-version = "1.81"
-license = "MIT"
 readme = "README.md"
-description = "High level bindings to the QuickJS JavaScript engine"
-keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
-categories = ["api-bindings"]
-repository = "https://github.com/DelSkayn/rquickjs.git"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description.workspace = true
+keywords.workspace = true 
+categories.workspace = true
+repository.workspace = true
 
 
 [workspace]
@@ -22,11 +22,23 @@ members = [
     "examples/rquickjs-cli",
 ]
 
+[workspace.package]
+edition = "2024"
+license = "MIT"
+version = "0.9.0"
+rust-version = "1.85.0"
+description = "High level bindings to the QuickJS JavaScript engine"
+repository = "https://github.com/DelSkayn/rquickjs.git"
+categories = ["api-bindings"]
+keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
+authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
+
 [workspace.dependencies]
 rquickjs-core = { version = "0.9.0", path = "core" }
 rquickjs-macro = { version = "0.9.0", path = "macro" }
 rquickjs-sys = { version = "0.9.0", path = "sys" }
 rquickjs = { version = "0.9.0", path = "./" }
+
 
 [dependencies]
 indexmap-rs = { package = "indexmap", version = "2", optional = true }

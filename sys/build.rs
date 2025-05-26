@@ -34,7 +34,9 @@ fn download_wasi_sdk() -> PathBuf {
             other => panic!("Unsupported platform tuple {:?}", other),
         };
 
-        let uri = format!("https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{major_version}/wasi-sdk-{major_version}.{minor_version}-{file_suffix}.tar.gz");
+        let uri = format!(
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{major_version}/wasi-sdk-{major_version}.{minor_version}-{file_suffix}.tar.gz"
+        );
 
         println!("Downloading WASI SDK archive from {uri} to {archive_path:?}");
 
@@ -183,12 +185,16 @@ fn main() {
 
     if target_os == "windows" {
         if target_env == "msvc" {
-            env::set_var(
-                "CFLAGS",
-                "/DWIN32_LEAN_AND_MEAN /std:c11 /experimental:c11atomics",
-            );
+            unsafe {
+                env::set_var(
+                    "CFLAGS",
+                    "/DWIN32_LEAN_AND_MEAN /std:c11 /experimental:c11atomics",
+                )
+            };
         } else {
-            env::set_var("CFLAGS", "-DWIN32_LEAN_AND_MEAN -std=c11");
+            unsafe {
+                env::set_var("CFLAGS", "-DWIN32_LEAN_AND_MEAN -std=c11");
+            }
         }
     }
 
@@ -214,13 +220,13 @@ fn main() {
                 wasi_sdk_path.display()
             );
         }
-        env::set_var("CC", wasi_sdk_path.join("bin/clang").to_str().unwrap());
-        env::set_var("AR", wasi_sdk_path.join("bin/ar").to_str().unwrap());
+        unsafe { env::set_var("CC", wasi_sdk_path.join("bin/clang").to_str().unwrap()) };
+        unsafe { env::set_var("AR", wasi_sdk_path.join("bin/ar").to_str().unwrap()) };
         let sysroot = format!(
             "--sysroot={}",
             wasi_sdk_path.join("share/wasi-sysroot").display()
         );
-        env::set_var("CFLAGS", &sysroot);
+        unsafe { env::set_var("CFLAGS", &sysroot) };
         bindgen_cflags.push(sysroot);
     }
 
@@ -316,6 +322,9 @@ where
         });
     }
 
+    let Ok(target) = bindgen_rs::RustTarget::stable(85, 1) else {
+        unreachable!()
+    };
     let mut builder = bindgen_rs::Builder::default()
         .detect_include_paths(true)
         .clang_arg("-xc")
@@ -330,7 +339,8 @@ where
         .allowlist_var("JS.*")
         .opaque_type("FILE")
         .blocklist_type("FILE")
-        .blocklist_function("JS_DumpMemoryUsage");
+        .blocklist_function("JS_DumpMemoryUsage")
+        .rust_target(target);
 
     if env::var("CARGO_CFG_TARGET_OS").unwrap() == "wasi" {
         builder = builder.clang_arg("-fvisibility=default");
