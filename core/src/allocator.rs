@@ -1,5 +1,7 @@
 //! Tools for using different allocators with QuickJS.
 
+use std::ptr::NonNull;
+
 use crate::qjs;
 
 mod rust;
@@ -11,11 +13,11 @@ pub use rust::RustAllocator;
 /// # Safety
 /// Failure to implement this trait correctly will result in undefined behavior.
 /// - `alloc` must return a either a null pointer or a pointer to an available region of memory
-/// atleast `size` bytes and aligned to the size of `usize`.
+///   atleast `size` bytes and aligned to the size of `usize`.
 /// - `realloc` must either return a null pointer or return a pointer to an available region of
-/// memory atleast `new_size` bytes and aligned to the size of `usize`.
+///   memory atleast `new_size` bytes and aligned to the size of `usize`.
 /// - `usable_size` must return the amount of available memory for any allocation allocated with
-/// this allocator.
+///   this allocator.
 pub unsafe trait Allocator {
     /// Allocate new memory
     ///
@@ -51,14 +53,17 @@ pub unsafe trait Allocator {
         Self: Sized;
 }
 
-type DynAllocator = Box<dyn Allocator>;
-
 #[derive(Debug)]
-pub(crate) struct AllocatorHolder(*mut DynAllocator);
+pub(crate) struct AllocatorHolder {
+    ptr: NonNull<()>,
+    drop: unsafe fn(NonNull<()>),
+}
 
 impl Drop for AllocatorHolder {
     fn drop(&mut self) {
-        let _ = unsafe { Box::from_raw(self.0) };
+        unsafe {
+            (self.drop)(self.ptr);
+        }
     }
 }
 
@@ -81,11 +86,22 @@ impl AllocatorHolder {
     where
         A: Allocator + 'static,
     {
-        Self(Box::into_raw(Box::new(Box::new(allocator))))
+        let alloc = Box::new(allocator);
+        //Box::into_raw is gaurenteed to return a non-null pointer.
+        let ptr = unsafe { NonNull::new_unchecked(Box::into_raw(alloc)) };
+        let drop = Self::drop::<A>;
+        AllocatorHolder {
+            ptr: ptr.cast(),
+            drop,
+        }
     }
 
-    pub(crate) fn opaque_ptr(&self) -> *mut DynAllocator {
-        self.0
+    pub(crate) fn opaque_ptr(&self) -> *mut () {
+        self.ptr.as_ptr()
+    }
+
+    unsafe fn drop<A>(ptr: NonNull<()>) {
+        let _ = Box::<A>::from_raw(ptr.cast().as_ptr());
     }
 
     unsafe extern "C" fn calloc<A>(
@@ -96,7 +112,7 @@ impl AllocatorHolder {
     where
         A: Allocator,
     {
-        let allocator = &mut *(opaque as *mut DynAllocator);
+        let allocator = &mut *(opaque as *mut A);
         let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
         let rust_count: usize = count.try_into().expect(qjs::SIZE_T_ERROR);
         allocator.calloc(rust_count, rust_size) as *mut qjs::c_void
@@ -106,7 +122,7 @@ impl AllocatorHolder {
     where
         A: Allocator,
     {
-        let allocator = &mut *(opaque as *mut DynAllocator);
+        let allocator = &mut *(opaque as *mut A);
         let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
         allocator.alloc(rust_size) as *mut qjs::c_void
     }
@@ -121,7 +137,7 @@ impl AllocatorHolder {
             return;
         }
 
-        let allocator = &mut *(opaque as *mut DynAllocator);
+        let allocator = &mut *(opaque as *mut A);
         allocator.dealloc(ptr as _);
     }
 
@@ -134,7 +150,7 @@ impl AllocatorHolder {
         A: Allocator,
     {
         let rust_size: usize = size.try_into().expect(qjs::SIZE_T_ERROR);
-        let allocator = &mut *(opaque as *mut DynAllocator);
+        let allocator = &mut *(opaque as *mut A);
         allocator.realloc(ptr as _, rust_size) as *mut qjs::c_void
     }
 

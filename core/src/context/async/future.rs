@@ -2,15 +2,15 @@ use std::{
     future::Future,
     mem::{self, ManuallyDrop},
     pin::Pin,
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
 };
 
 use async_lock::futures::Lock;
 
 use crate::{
-    markers::ParallelSend,
-    runtime::{schedular::SchedularPoll, InnerRuntime},
     AsyncContext, Ctx,
+    markers::ParallelSend,
+    runtime::{InnerRuntime, schedular::SchedularPoll},
 };
 
 pub struct WithFuture<'a, F, R> {
@@ -26,7 +26,7 @@ enum LockState<'a> {
 
 impl<'a> Drop for LockState<'a> {
     fn drop(&mut self) {
-        if let LockState::Pending(ref mut x) = self {
+        if let LockState::Pending(x) = self {
             unsafe { ManuallyDrop::drop(x) }
         }
     }
@@ -68,7 +68,7 @@ where
 
         let mut lock = loop {
             // We don't move the lock_state as long as it is pending
-            if let LockState::Pending(ref mut fut) = &mut this.lock_state {
+            if let LockState::Pending(fut) = &mut this.lock_state {
                 // SAFETY: Sound as we don't move future while it is pending.
                 let pin = unsafe { Pin::new_unchecked(&mut **fut) };
                 let lock = ready!(pin.poll(cx));

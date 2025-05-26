@@ -1,4 +1,4 @@
-use crate::{qjs, Ctx, Error, Result, StdString, Value};
+use crate::{Ctx, Error, Result, StdString, Value, qjs};
 use std::{ffi::c_char, mem, ptr::NonNull, slice, str};
 
 /// Rust representation of a JavaScript string.

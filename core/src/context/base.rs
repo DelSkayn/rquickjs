@@ -1,10 +1,10 @@
 use super::{
+    ContextBuilder, Intrinsic,
     ctx::RefCountHeader,
     intrinsic,
     owner::{ContextOwner, DropContext},
-    ContextBuilder, Intrinsic,
 };
-use crate::{qjs, Ctx, Error, Result, Runtime};
+use crate::{Ctx, Error, Result, Runtime, qjs};
 use std::{mem, ptr::NonNull};
 
 impl DropContext for Runtime {

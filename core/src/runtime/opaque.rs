@@ -1,16 +1,17 @@
 use crate::{
-    class::{self, ffi::VTable, JsClass},
-    qjs, Ctx, Error, JsLifetime, Object, Value,
+    Ctx, Error, JsLifetime, Object, Value,
+    class::{self, JsClass, ffi::VTable},
+    qjs,
 };
 
 use super::{
-    userdata::{UserDataGuard, UserDataMap},
     InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
+    userdata::{UserDataGuard, UserDataMap},
 };
 use std::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
-    collections::{hash_map::Entry, HashMap},
+    collections::{HashMap, hash_map::Entry},
     marker::PhantomData,
     ptr,
 };

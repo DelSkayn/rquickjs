@@ -13,10 +13,10 @@ use std::{
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
+    Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserDataError, UserDataGuard},
-    Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
+    runtime::{UserDataError, UserDataGuard, opaque::Opaque},
 };
 
 use super::Context;
@@ -491,7 +491,7 @@ mod test {
 
     #[test]
     fn exports() {
-        use crate::{context::intrinsic, Context, Function, Module, Promise, Runtime};
+        use crate::{Context, Function, Module, Promise, Runtime, context::intrinsic};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::custom::<(intrinsic::Promise, intrinsic::Eval)>(&runtime).unwrap();
@@ -568,7 +568,7 @@ mod test {
 
     #[test]
     fn eval_with_options_no_strict_sloppy_code() {
-        use crate::{context::EvalOptions, Context, Runtime};
+        use crate::{Context, Runtime, context::EvalOptions};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
@@ -597,7 +597,7 @@ mod test {
     #[test]
     #[should_panic(expected = "foo is not defined")]
     fn eval_with_options_strict_sloppy_code() {
-        use crate::{context::EvalOptions, CatchResultExt, Context, Runtime};
+        use crate::{CatchResultExt, Context, Runtime, context::EvalOptions};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
