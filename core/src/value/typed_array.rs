@@ -1,13 +1,13 @@
 use crate::{
-    atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result,
-    Value,
+    ArrayBuffer, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
+    atom::PredefinedAtom, qjs,
 };
 use std::{
     fmt,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
-    ptr::{null_mut, NonNull},
+    ptr::{NonNull, null_mut},
     slice,
 };
 
@@ -328,7 +328,7 @@ impl<'js> Object<'js> {
         if let Ok(array_type) = TryInto::<qjs::JSTypedArrayEnum>::try_into(array_type) {
             return array_type == T::ARRAY_TYPE;
         }
-        return false;
+        false
     }
 
     /// Interpret as [`TypedArray`]

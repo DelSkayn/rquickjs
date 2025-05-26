@@ -2,17 +2,17 @@ use convert_case::Casing;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
+    Error, FnArg, LitStr, Result, Signature, Token, Type, Visibility,
     fold::Fold,
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
-    Error, FnArg, LitStr, Result, Signature, Token, Type, Visibility,
 };
 
 use crate::{
-    attrs::{take_attributes, OptionList, ValueOption},
-    common::{crate_ident, kw, Case, SelfReplacer, BASE_PREFIX},
+    attrs::{OptionList, ValueOption, take_attributes},
+    common::{BASE_PREFIX, Case, SelfReplacer, crate_ident, kw},
 };
 
 #[derive(Debug, Default)]
@@ -45,13 +45,13 @@ impl Parse for FunctionOption {
 impl FunctionConfig {
     pub fn apply(&mut self, option: &FunctionOption) {
         match option {
-            FunctionOption::Crate(ref x) => {
+            FunctionOption::Crate(x) => {
                 self.crate_ = Some(x.value.value());
             }
-            FunctionOption::Rename(ref x) => {
+            FunctionOption::Rename(x) => {
                 self.rename = Some(x.value.value());
             }
-            FunctionOption::Prefix(ref x) => {
+            FunctionOption::Prefix(x) => {
                 self.prefix = Some(x.value.value());
             }
         }
@@ -141,12 +141,12 @@ pub(crate) struct JsFunction {
 impl JsFunction {
     pub fn new(vis: Visibility, sig: &Signature, self_type: Option<&Type>) -> Result<Self> {
         let Signature {
-            ref asyncness,
-            ref unsafety,
-            ref abi,
-            ref variadic,
-            ref ident,
-            ref inputs,
+            asyncness,
+            unsafety,
+            abi,
+            variadic,
+            ident,
+            inputs,
             ..
         } = sig;
 
@@ -159,11 +159,14 @@ impl JsFunction {
         if let Some(abi) = abi {
             return Err(Error::new(
                 abi.span(),
-                "implementing JavaScript callbacks functions with an non Rust abi is not supported."
+                "implementing JavaScript callbacks functions with an non Rust abi is not supported.",
             ));
         }
         if let Some(variadic) = variadic {
-            return Err(Error::new(variadic.span(),"implementing JavaScript callbacks for functions with variadic params is not supported."));
+            return Err(Error::new(
+                variadic.span(),
+                "implementing JavaScript callbacks for functions with variadic params is not supported.",
+            ));
         }
         let is_async = asyncness.is_some();
 
