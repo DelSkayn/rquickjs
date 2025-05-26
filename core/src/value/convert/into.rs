@@ -1,8 +1,8 @@
 use crate::{
-    convert::{IteratorJs, List},
-    value::Constructor,
     Array, CString, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String,
     Value,
+    convert::{IteratorJs, List},
+    value::Constructor,
 };
 use std::{
     cell::{Cell, RefCell},

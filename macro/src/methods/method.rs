@@ -2,14 +2,14 @@ use convert_case::Casing;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use syn::{
+    Attribute, Block, Error, Expr, ImplItemFn, LitStr, Result, Signature, Token, Type, Visibility,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Attribute, Block, Error, Expr, ImplItemFn, LitStr, Result, Signature, Token, Type, Visibility,
 };
 
 use crate::{
-    attrs::{take_attributes, FlagOption, OptionList, ValueOption},
-    common::{kw, Case},
+    attrs::{FlagOption, OptionList, ValueOption, take_attributes},
+    common::{Case, kw},
     function::JsFunction,
 };
 

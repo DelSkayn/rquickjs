@@ -23,7 +23,7 @@ pub trait MultiWith<'js> {
 }
 
 pub use base::Context;
-pub use builder::{intrinsic, ContextBuilder, Intrinsic};
+pub use builder::{ContextBuilder, Intrinsic, intrinsic};
 pub use ctx::{Ctx, EvalOptions};
 
 #[cfg(feature = "futures")]

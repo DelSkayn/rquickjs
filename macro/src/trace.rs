@@ -1,13 +1,13 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
+    Data, DataEnum, DataStruct, DeriveInput, Error, LitStr, Result, Token,
     parse::{Parse, ParseStream},
     spanned::Spanned,
-    Data, DataEnum, DataStruct, DeriveInput, Error, LitStr, Result, Token,
 };
 
 use crate::{
-    attrs::{take_attributes, OptionList, ValueOption},
+    attrs::{OptionList, ValueOption, take_attributes},
     common::{add_js_lifetime, crate_ident},
     fields::Fields,
 };

@@ -1,6 +1,6 @@
 use std::{error::Error as ErrorTrait, ffi::CStr, fmt};
 
-use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Result, Value};
+use crate::{Ctx, Error, Object, Result, Value, atom::PredefinedAtom, convert::Coerced, qjs};
 
 /// A JavaScript instance of Error
 ///

@@ -1,4 +1,4 @@
-use crate::{loader::util::check_extensions, module::ModuleLoadFn, Ctx, Error, Module, Result};
+use crate::{Ctx, Error, Module, Result, loader::util::check_extensions, module::ModuleLoadFn};
 
 use super::Loader;
 

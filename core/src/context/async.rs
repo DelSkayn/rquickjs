@@ -1,9 +1,8 @@
 use super::{
-    intrinsic,
+    ContextBuilder, Intrinsic, intrinsic,
     owner::{ContextOwner, DropContext},
-    ContextBuilder, Intrinsic,
 };
-use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
+use crate::{Ctx, Error, Result, markers::ParallelSend, qjs, runtime::AsyncRuntime};
 use std::{future::Future, mem, pin::Pin, ptr::NonNull};
 
 mod future;

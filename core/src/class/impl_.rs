@@ -1,6 +1,6 @@
 //! Helper classes and functions for use inside the macros.
 
-use crate::{value::Constructor, Ctx, Object, Result};
+use crate::{Ctx, Object, Result, value::Constructor};
 use std::marker::PhantomData;
 
 /// Trait used for borrow specialization for implementing methods without access to the class.

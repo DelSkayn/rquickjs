@@ -1,4 +1,4 @@
-use crate::{qjs, Atom, Ctx, Result, Value};
+use crate::{Atom, Ctx, Result, Value, qjs};
 
 /// Rust representation of a JavaScript symbol.
 #[derive(Debug, Clone, PartialEq, Hash)]

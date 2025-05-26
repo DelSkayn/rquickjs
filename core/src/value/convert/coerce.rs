@@ -1,4 +1,4 @@
-use crate::{convert::Coerced, qjs, Ctx, FromJs, Result, StdString, String, Value};
+use crate::{Ctx, FromJs, Result, StdString, String, Value, convert::Coerced, qjs};
 use std::{
     mem::MaybeUninit,
     ops::{Deref, DerefMut},

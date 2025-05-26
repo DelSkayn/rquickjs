@@ -1,8 +1,8 @@
 use std::{marker::PhantomData, ptr::NonNull};
 
+use crate::{Context, Result, Runtime, qjs, util::Sealed};
 #[cfg(feature = "futures")]
 use crate::{context::AsyncContext, runtime::AsyncRuntime};
-use crate::{qjs, util::Sealed, Context, Result, Runtime};
 
 /// The internal trait to add JS builtins
 pub trait Intrinsic: Sealed {
@@ -49,7 +49,7 @@ macro_rules! intrinsic_impls {
 ///
 /// You can select just you need only. If `lto = true` any unused code will be drop by link-time optimizer.
 pub mod intrinsic {
-    use super::{qjs, Intrinsic, NonNull};
+    use super::{Intrinsic, NonNull, qjs};
 
     intrinsic_impls! {
         @builtin:

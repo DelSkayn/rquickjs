@@ -1,6 +1,6 @@
 //! Utilities for embedding JS modules.
 
-use super::{util::resolve_simple, Loader, Resolver};
+use super::{Loader, Resolver, util::resolve_simple};
 use crate::{Ctx, Error, Module, Result};
 use std::ops::Deref;
 

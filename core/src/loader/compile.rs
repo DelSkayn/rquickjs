@@ -1,9 +1,9 @@
 use crate::{
-    loader::{util::resolve_simple, Loader, Resolver},
     Ctx, Lock, Module, Mut, Ref, Result, WriteOptions,
+    loader::{Loader, Resolver, util::resolve_simple},
 };
 use std::{
-    collections::{hash_map::Iter as HashMapIter, HashMap},
+    collections::{HashMap, hash_map::Iter as HashMapIter},
     iter::FusedIterator,
     ops::{Deref, DerefMut},
 };

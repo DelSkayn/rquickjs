@@ -1,5 +1,5 @@
 use crate::{
-    atom::PredefinedAtom, qjs, Atom, Ctx, FromAtom, IntoAtom, Result, StdString, String, Value,
+    Atom, Ctx, FromAtom, IntoAtom, Result, StdString, String, Value, atom::PredefinedAtom, qjs,
 };
 
 impl<'js> FromAtom<'js> for Atom<'js> {
