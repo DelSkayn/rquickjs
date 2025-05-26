@@ -78,14 +78,14 @@ impl WriteOptions {
 /// Helper macro to provide module init function.
 /// Use for exporting module definitions to be loaded as part of a dynamic library.
 /// ```
-/// use rquickjs::{module::ModuleDef, module_init};
+/// use rquickjs::{module::ModuleDef, unsafe_module_init};
 ///
 /// struct MyModule;
 /// impl ModuleDef for MyModule {}
 ///
-/// module_init!(MyModule);
+/// unsafe_module_init!(MyModule);
 /// // or
-/// module_init!(js_init_my_module: MyModule);
+/// unsafe_module_init!(js_init_my_module: MyModule);
 /// ```
 ///
 /// # Safety
