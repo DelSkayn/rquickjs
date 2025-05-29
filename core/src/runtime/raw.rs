@@ -1,11 +1,6 @@
-#![allow(dead_code)]
-use std::{
-    ffi::CString,
-    mem,
-    panic::{self, AssertUnwindSafe},
-    ptr::NonNull,
-    result::Result as StdResult,
-};
+#![allow(dead_code, unused_imports)]
+use alloc::{boxed::Box, ffi::CString};
+use core::{mem, panic::AssertUnwindSafe, ptr::NonNull, result::Result as StdResult};
 
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
@@ -292,11 +287,11 @@ impl RawRuntime {
             type_: u32,
             promise: rquickjs_sys::JSValue,
             parent: rquickjs_sys::JSValue,
-            opaque: *mut ::std::os::raw::c_void,
+            opaque: *mut ::core::ffi::c_void,
         ) {
             let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
 
-            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+            let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
                 let ctx = Ctx::from_ptr(ctx);
 
                 let rtype = match type_ {
@@ -335,11 +330,11 @@ impl RawRuntime {
             promise: rquickjs_sys::JSValue,
             reason: rquickjs_sys::JSValue,
             is_handled: bool,
-            opaque: *mut ::std::os::raw::c_void,
+            opaque: *mut ::core::ffi::c_void,
         ) {
             let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
 
-            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+            let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
                 let ctx = Ctx::from_ptr(ctx);
 
                 opaque.as_ref().run_rejection_tracker(
@@ -370,24 +365,27 @@ impl RawRuntime {
     pub unsafe fn set_interrupt_handler(&mut self, handler: Option<InterruptHandler>) {
         unsafe extern "C" fn interrupt_handler_trampoline(
             _rt: *mut qjs::JSRuntime,
-            opaque: *mut ::std::os::raw::c_void,
-        ) -> ::std::os::raw::c_int {
+            opaque: *mut ::core::ffi::c_void,
+        ) -> ::core::ffi::c_int {
             // This should be safe as the value is set below to a non-null pointer.
             let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
 
-            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
-                opaque.as_ref().run_interrupt_handler()
-            }));
-            let should_interrupt = match catch_unwind {
-                Ok(should_interrupt) => should_interrupt,
-                Err(panic) => {
-                    opaque.as_ref().set_panic(panic);
-                    // Returning true here will cause the interpreter to raise an un-catchable exception.
-                    // The Rust code that is running the interpreter will see that exception and continue
-                    // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
-                    true
+            let should_interrupt = {
+                let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
+                    opaque.as_ref().run_interrupt_handler()
+                }));
+                match catch_unwind {
+                    Ok(should_interrupt) => should_interrupt,
+                    Err(panic) => {
+                        opaque.as_ref().set_panic(panic);
+                        // Returning true here will cause the interpreter to raise an un-catchable exception.
+                        // The Rust code that is running the interpreter will see that exception and continue
+                        // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
+                        true
+                    }
                 }
             };
+
             should_interrupt as _
         }
 

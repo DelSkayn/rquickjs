@@ -1,4 +1,8 @@
 use crate::{loader::Loader, module::Declared, Ctx, Error, Module, Result};
+use alloc::{string::String, vec::Vec};
+#[cfg(not(feature = "std"))]
+use hashbrown::HashMap;
+#[cfg(feature = "std")]
 use std::collections::HashMap;
 
 /// The builtin script module loader

@@ -1,4 +1,5 @@
 use relative_path::RelativePath;
+use alloc::string::{String, ToString as _};
 
 pub fn resolve_simple(base: &str, name: &str) -> String {
     if name.starts_with('.') {
@@ -10,6 +11,7 @@ pub fn resolve_simple(base: &str, name: &str) -> String {
     name.into()
 }
 
+#[allow(dead_code)] // not used in no_std
 pub fn check_extensions(name: &str, extensions: &[String]) -> bool {
     let path = RelativePath::new(name);
     path.extension()

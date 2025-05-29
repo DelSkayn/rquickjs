@@ -7,7 +7,8 @@ use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
 use crate::{result::JobException, Context, Mut, Ref, Result, Weak};
-use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
+use alloc::{ffi::CString, vec::Vec};
+use core::{ptr::NonNull, result::Result as StdResult};
 
 /// A weak handle to the runtime.
 ///

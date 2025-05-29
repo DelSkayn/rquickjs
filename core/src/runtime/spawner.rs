@@ -3,7 +3,8 @@ use super::{
     AsyncWeakRuntime, InnerRuntime,
 };
 use crate::AsyncRuntime;
-use std::{
+use alloc::vec::Vec;
+use core::{
     future::Future,
     pin::Pin,
     task::{ready, Context, Poll, Waker},
@@ -77,7 +78,7 @@ impl DriveFuture {
 impl Future for DriveFuture {
     type Output = ();
 
-    fn poll(self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> Poll<Self::Output> {
         // Safety: We manually ensure that pinned values remained properly pinned.
         let this = unsafe { self.get_unchecked_mut() };
         loop {

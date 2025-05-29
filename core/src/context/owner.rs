@@ -1,4 +1,4 @@
-use std::ptr::NonNull;
+use core::ptr::NonNull;
 
 use crate::qjs;
 
@@ -20,7 +20,7 @@ pub(crate) struct ContextOwner<R: DropContext> {
     ctx: NonNull<qjs::JSContext>,
     #[cfg(feature = "parallel")]
     pub(crate) ctx: Arc<NonNull<qjs::JSContext>>,
-    rt: R,
+    pub(crate) rt: R,
 }
 
 impl<R: DropContext> ContextOwner<R> {

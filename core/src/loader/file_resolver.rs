@@ -1,5 +1,10 @@
-use crate::{loader::Resolver, Ctx, Error, Result};
 use relative_path::{RelativePath, RelativePathBuf};
+use crate::{loader::Resolver, Ctx, Error, Result};
+use alloc::{
+    string::{String, ToString as _},
+    vec,
+    vec::Vec,
+};
 
 /// The file module resolver
 ///

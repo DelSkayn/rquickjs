@@ -1,9 +1,9 @@
-use std::{
+use alloc::sync::Arc;
+use core::{
     future::Future,
     mem::ManuallyDrop,
     pin::Pin,
     ptr::NonNull,
-    sync::Arc,
     task::{Context, Poll},
 };
 
