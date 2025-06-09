@@ -375,6 +375,12 @@ impl<'js> Value<'js> {
         (unsafe { qjs::JS_IsError(self.ctx.as_ptr(), self.value) } as i32) != 0
     }
 
+    /// Check if the value is a BigInt
+    #[inline]
+    pub fn is_big_int(&self) -> bool {
+        unsafe { qjs::JS_IsBigInt(self.value) }
+    }
+
     /// Reference as value
     #[inline]
     pub fn as_value(&self) -> &Self {
@@ -485,6 +491,7 @@ macro_rules! type_impls {
                 let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
                 match tag {
                     $(qjs::$tag if type_impls!(@cond $type self) => Type::$type,)*
+                    qjs::JS_TAG_SHORT_BIG_INT => Type::BigInt,
                     _ => Type::Unknown,
                 }
             }
@@ -783,5 +790,15 @@ mod test {
         assert!(!Type::Object.interpretable_as(Type::Function));
 
         assert!(!Type::Bool.interpretable_as(Type::Int));
+    }
+
+    #[test]
+    fn big_int() {
+        test_with(|ctx| {
+            let val: Value = ctx.eval(r#"1n"#).unwrap();
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val: Value = ctx.eval(r#"999999999999999999999n"#).unwrap();
+            assert_eq!(val.type_of(), Type::BigInt);
+        });
     }
 }
