@@ -80,6 +80,12 @@ mod test_mod {
         1 + 1
     }
 
+    #[rquickjs::function]
+    #[qjs(rename = "renamedFoo")]
+    pub fn renamed_foo() -> u32 {
+        1 + 2
+    }
+
     /// You can make items public but not export them to JavaScript by adding the skip attribute.
     #[qjs(skip)]
     pub fn ignore_function() -> u32 {
@@ -98,8 +104,11 @@ pub fn main() {
             ctx.clone(),
             "test2",
             r"
-            import { foo,aManuallyExportedValue, aConstValue, aStaticValue, FooBar } from 'test';
+            import { foo, renamedFoo, aManuallyExportedValue, aConstValue, aStaticValue, FooBar } from 'test';
             if (foo() !== 2){
+                throw new Error(1);
+            }
+            if (abc() !== 2) {
                 throw new Error(1);
             }
             if (aManuallyExportedValue !== 'Some Value'){
