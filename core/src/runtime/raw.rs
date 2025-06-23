@@ -333,7 +333,7 @@ impl RawRuntime {
                 promise_hook_wrapper
                     as unsafe extern "C" fn(
                         *mut rquickjs_sys::JSContext,
-                        u32,
+                        std::os::raw::c_uint,
                         rquickjs_sys::JSValue,
                         rquickjs_sys::JSValue,
                         *mut std::ffi::c_void,
