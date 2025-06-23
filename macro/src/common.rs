@@ -74,12 +74,10 @@ impl Case {
 
 pub(crate) fn crate_ident() -> Result<String> {
     match proc_macro_crate::crate_name("rquickjs") {
-        Err(e) => {
-            Err(Error::new(
-                Span::call_site(),
-                format_args!("could not find rquickjs package: {e}"),
-            ))
-        }
+        Err(e) => Err(Error::new(
+            Span::call_site(),
+            format_args!("could not find rquickjs package: {e}"),
+        )),
         Ok(FoundCrate::Itself) => Ok("rquickjs".to_owned()),
         Ok(FoundCrate::Name(x)) => Ok(x.to_string()),
     }
