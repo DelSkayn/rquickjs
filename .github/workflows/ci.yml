@@ -389,7 +389,7 @@ jobs:
           curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
           sudo mv loongarch64-unknown-linux-musl /musl
 
-          ln -s /musl/loongarch64-unknown-linux-musl/sysroot/ld-linux-loongarch64.so.1 /lib/ld-linux-loongarch64.so.1
+          sudo ln -s /musl/loongarch64-unknown-linux-musl/sysroot/ld-linux-loongarch64.so.1 /lib/ld-linux-loongarch64.so.1
 
           echo "CC_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
           echo "CXX_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
