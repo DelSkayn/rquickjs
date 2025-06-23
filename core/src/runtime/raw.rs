@@ -287,9 +287,14 @@ impl RawRuntime {
     }
 
     pub unsafe fn set_promise_hook(&mut self, hook: Option<PromiseHook>) {
+        #[cfg(target_env = "msvc")]
+        type JSPromiseHookType = i32;
+        #[cfg(not(target_env = "msvc"))]
+        type JSPromiseHookType = u32;
+
         unsafe extern "C" fn promise_hook_wrapper(
             ctx: *mut rquickjs_sys::JSContext,
-            type_: u32,
+            type_: JSPromiseHookType,
             promise: rquickjs_sys::JSValue,
             parent: rquickjs_sys::JSValue,
             opaque: *mut ::std::os::raw::c_void,
@@ -304,7 +309,7 @@ impl RawRuntime {
                 const AFTER: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_AFTER as u32;
                 const RESOLVE: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE as u32;
 
-                let rtype = match type_ {
+                let rtype = match type_ as u32 {
                     INIT => PromiseHookType::Init,
                     BEFORE => PromiseHookType::Before,
                     AFTER => PromiseHookType::After,
@@ -333,7 +338,7 @@ impl RawRuntime {
                 promise_hook_wrapper
                     as unsafe extern "C" fn(
                         *mut rquickjs_sys::JSContext,
-                        std::os::raw::c_uint,
+                        JSPromiseHookType,
                         rquickjs_sys::JSValue,
                         rquickjs_sys::JSValue,
                         *mut std::ffi::c_void,
