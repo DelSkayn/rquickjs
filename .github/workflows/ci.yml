@@ -384,7 +384,10 @@ jobs:
             gcc-14-loongarch64-linux-gnu \
             g++-14-loongarch64-linux-gnu \
             clang \
-            qemu-user
+            qemu-user \
+            qemu-system-arm \
+            qemu-efi-aarch64 \
+            qemu-utils
 
           curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
           sudo mv loongarch64-unknown-linux-musl /musl
