@@ -463,6 +463,7 @@ jobs:
         run: |
           cargo clean
           cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging
+          cat sys/src/bindings/${{ matrix.target }}.rs
       - name: Upload bindings
         if: matrix.task == 'bindings'
         uses: actions/upload-artifact@v4
@@ -475,7 +476,6 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
         run: |
-          cat target/${{ matrix.target }}/build/${{ matrix.target }}-build.env
           cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         if: ${{ !matrix.no-build && !matrix.no-test }}
