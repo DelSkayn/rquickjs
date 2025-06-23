@@ -357,7 +357,7 @@ jobs:
             qemu-utils \
             qemu-user
 
-            curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/aarch64-unknown-linux-musl.tar.xz | tar xzf -
+            curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/aarch64-unknown-linux-musl.tar.xz | tar xJf -
             sudo mv aarch64-unknown-linux-musl /musl
 
             echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> $GITHUB_ENV
