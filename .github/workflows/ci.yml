@@ -476,7 +476,7 @@ jobs:
           BUILD_TARGET: ${{ matrix.target }}
         run: |
           touch sys/build.rs
-          cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+          cargo build -vv ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         if: ${{ !matrix.no-build && !matrix.no-test }}
         timeout-minutes: 12
