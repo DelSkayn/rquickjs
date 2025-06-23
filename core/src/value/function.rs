@@ -170,7 +170,7 @@ impl<'js> Function<'js> {
             qjs::JS_SetConstructorBit(
                 self.ctx().as_ptr(),
                 self.0.as_js_value(),
-                is_constructor.into(),
+                is_constructor,
             )
         };
     }

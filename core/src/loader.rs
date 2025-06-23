@@ -120,7 +120,7 @@ impl LoaderHolder {
         // We should transfer ownership of this string to QuickJS
         Ok(
             unsafe {
-                qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.as_bytes().len() as _)
+                qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.len() as _)
             },
         )
     }

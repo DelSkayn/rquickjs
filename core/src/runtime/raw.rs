@@ -286,6 +286,7 @@ impl RawRuntime {
         stats.assume_init()
     }
 
+    #[allow(clippy::unnecessary_cast)]
     pub unsafe fn set_promise_hook(&mut self, hook: Option<PromiseHook>) {
         #[cfg(all(windows, target_env = "msvc"))]
         type JSPromiseHookType = i32;

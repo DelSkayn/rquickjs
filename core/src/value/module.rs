@@ -518,12 +518,12 @@ mod test {
 
     impl ModuleDef for RustModule {
         fn declare(define: &Declarations) -> Result<()> {
-            define.declare_c_str(CStr::from_bytes_with_nul(b"hello\0")?)?;
+            define.declare_c_str(c"hello")?;
             Ok(())
         }
 
         fn evaluate<'js>(_ctx: &Ctx<'js>, exports: &Exports<'js>) -> Result<()> {
-            exports.export_c_str(CStr::from_bytes_with_nul(b"hello\0")?, "world")?;
+            exports.export_c_str(c"hello", "world")?;
             Ok(())
         }
     }

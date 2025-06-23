@@ -28,7 +28,7 @@ const HEADER_SIZE: usize = max(mem::size_of::<Header>(), ALLOC_ALIGN);
 
 #[inline]
 fn round_size(size: usize) -> usize {
-    (size + ALLOC_ALIGN - 1) / ALLOC_ALIGN * ALLOC_ALIGN
+    size.div_ceil(ALLOC_ALIGN) * ALLOC_ALIGN
 }
 
 /// The allocator which uses Rust global allocator

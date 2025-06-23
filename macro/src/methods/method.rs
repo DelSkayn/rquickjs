@@ -177,10 +177,8 @@ impl Method {
 
         config.validate(attr_span)?;
 
-        let attr_span = attrs
-            .is_empty()
-            .then_some(span)
-            .unwrap_or_else(|| attrs[0].span());
+        let attr_span = if attrs
+            .is_empty() { span } else { attrs[0].span() };
 
         if let Some(d) = defaultness {
             return Err(Error::new(d.span(), "specialized fn's are not supported."));

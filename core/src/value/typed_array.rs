@@ -330,7 +330,7 @@ impl<'js> Object<'js> {
         if let Ok(array_type) = TryInto::<qjs::JSTypedArrayEnum>::try_into(array_type) {
             return array_type == T::ARRAY_TYPE;
         }
-        return false;
+        false
     }
 
     /// Interpret as [`TypedArray`]
