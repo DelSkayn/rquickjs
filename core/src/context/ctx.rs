@@ -426,7 +426,8 @@ impl<'js> Ctx<'js> {
     pub fn script_or_module_name(&self, stack_level: isize) -> Option<Atom<'js>> {
         let stack_level = std::os::raw::c_int::try_from(stack_level).unwrap();
         let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
-        if qjs::__JS_ATOM_NULL == atom {
+        #[allow(clippy::useless_conversion)] //needed for multi platform binding support
+        if qjs::__JS_ATOM_NULL == atom.try_into().unwrap() {
             unsafe { qjs::JS_FreeAtom(self.as_ptr(), atom) };
             return None;
         }
