@@ -5,7 +5,7 @@
 
 #![allow(clippy::needless_lifetimes)]
 #![allow(clippy::uninlined_format_args)]
-#![allow(mismatched_lifetime_syntaxes)]
+#![allow(clippy::mismatched_lifetime_syntaxes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
