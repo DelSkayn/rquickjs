@@ -108,6 +108,7 @@ pub struct WritableCell<T> {
 }
 
 #[doc(hidden)]
+#[allow(dead_code)]
 pub struct WriteBorrow<'a, T> {
     cell: &'a WritableCell<T>,
     _marker: PhantomData<&'a T>,
@@ -128,6 +129,7 @@ impl<'a, T> Drop for WriteBorrow<'a, T> {
 }
 
 #[doc(hidden)]
+#[allow(dead_code)]
 pub struct WriteBorrowMut<'a, T> {
     cell: &'a WritableCell<T>,
     _marker: PhantomData<&'a T>,
