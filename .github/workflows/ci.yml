@@ -408,7 +408,7 @@ jobs:
 
           mkdir -p ~/.cargo/
           echo "[target.loongarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
-          echo 'rustflags = ["-C", "target-feature=+crt-static", "-C", "link-self-contained=yes", "-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "target-feature=+crt-static", "-C", "link-self-contained=yes", "-C", "linker=loongarch64-unknown-linux-musl-gcc"]' >> ~/.cargo/config.toml
           echo "[target.loongarch64-unknown-linux-gnu]" >> ~/.cargo/config.toml
           echo 'rustflags = ["-C", "linker=loongarch64-linux-gnu-gcc-14"]' >> ~/.cargo/config.toml
 

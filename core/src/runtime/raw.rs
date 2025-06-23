@@ -287,9 +287,9 @@ impl RawRuntime {
     }
 
     pub unsafe fn set_promise_hook(&mut self, hook: Option<PromiseHook>) {
-        #[cfg(all(target_os = "windows", any(target_env = "msvc", target_env = "gnu")))]
+        #[cfg(all(target_os = "windows", target_env = "msvc"))]
         type JSPromiseHookType = i32;
-        #[cfg(not(target_os = "windows"))]
+        #[cfg(not(all(target_os = "windows", target_env = "msvc")))]
         type JSPromiseHookType = u32;
 
         unsafe extern "C" fn promise_hook_wrapper(
