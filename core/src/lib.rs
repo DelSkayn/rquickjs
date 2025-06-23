@@ -3,9 +3,10 @@
 //! The `rquickjs` crate provides safe high-level bindings to the [QuickJS](https://bellard.org/quickjs/) JavaScript engine.
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
 
+#![warn(unknown_lints)]
 #![allow(clippy::needless_lifetimes)]
 #![allow(clippy::uninlined_format_args)]
-#![allow(clippy::mismatched_lifetime_syntaxes)]
+#![allow(mismatched_lifetime_syntaxes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};

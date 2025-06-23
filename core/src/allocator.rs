@@ -62,6 +62,7 @@ impl Drop for AllocatorHolder {
     }
 }
 
+#[allow(clippy::extra_unused_type_parameters)]
 impl AllocatorHolder {
     pub(crate) fn functions<A>() -> qjs::JSMallocFunctions
     where

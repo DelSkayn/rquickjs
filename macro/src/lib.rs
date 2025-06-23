@@ -1,3 +1,5 @@
+#![allow(clippy::uninlined_format_args)]
+
 use attrs::OptionList;
 use class::ClassOption;
 use function::FunctionOption;
