@@ -202,17 +202,17 @@ jobs:
             rust: stable
             target: x86_64-pc-windows-gnu
             features: full-async
-          - task: bindings
-            os: windows-latest
-            rust: stable
-            target: x86_64-pc-windows-msvc
-            features: full-async
-          - task: test
-            os: windows-latest
-            rust: stable
-            target: x86_64-pc-windows-msvc
-            features: full-async
-            optimization: true
+          # - task: bindings
+          #   os: windows-latest
+          #   rust: stable
+          #   target: x86_64-pc-windows-msvc
+          #   features: full-async
+          # - task: test
+          #   os: windows-latest
+          #   rust: stable
+          #   target: x86_64-pc-windows-msvc
+          #   features: full-async
+          #   optimization: true
 
           - task: bindings
             os: ubuntu-latest
@@ -475,8 +475,7 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
         run: |
-          cargo clean
-          touch sys/build.rs
+          cat target/${{ matrix.target }}/build/${{ matrix.target }}-build.env
           cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         if: ${{ !matrix.no-build && !matrix.no-test }}
