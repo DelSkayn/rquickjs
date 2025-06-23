@@ -430,6 +430,7 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
         run: |
+          cargo clean
           cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
         if: ${{ !matrix.no-build && !matrix.no-test }}
@@ -437,7 +438,6 @@ jobs:
         env:
           RUST_BACKTRACE: full
         run: |
-          cargo clean
           ${{ matrix.target == 'wasm32-wasip1' && 'CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime' || '' }} ${{ matrix.target == 'wasm32-wasip2' && 'CARGO_TARGET_WASM32_WASIP2_RUNNER=wasmtime' || '' }} cargo test ${{ matrix.optimization && '--release' || '' }} --all ${{ (matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2') && '--exclude module-loader' || ''  }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
   update-bindings:
