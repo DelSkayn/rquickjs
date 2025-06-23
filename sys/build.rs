@@ -260,7 +260,11 @@ where
     K: AsRef<str> + 'a,
     V: AsRef<str> + 'a,
 {
-    let target = env::var("TARGET").unwrap();
+    let target = if let Ok(build_target) = env::var("CARGO_BUILD_TARGET") {
+        build_target
+    } else {
+        env::var("TARGET").unwrap()
+    };
 
     if !Path::new("./")
         .join("src")

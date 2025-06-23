@@ -406,7 +406,6 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          override: false
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
           components: rustfmt
