@@ -406,6 +406,7 @@ jobs:
       - name: Setup Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          override: false
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
           components: rustfmt
@@ -416,7 +417,6 @@ jobs:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
         run: |
           cargo clean
-          rustup override unset
           cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging
           cat sys/src/bindings/${{ matrix.target }}.rs
       - name: Upload bindings
