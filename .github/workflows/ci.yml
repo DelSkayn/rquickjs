@@ -408,15 +408,13 @@ jobs:
         with:
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
-          components: rustfmt
+          components: rustfmt rust-src
       - name: Update deps
         run: cargo update
       - name: Build sys
         env:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
         run: |
-          rustup toolchain install ${{ matrix.rust }} --target ${{ matrix.target }}
-          rustup target add ${{ matrix.target }}
           cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging
           cat sys/src/bindings/${{ matrix.target }}.rs
       - name: Upload bindings
