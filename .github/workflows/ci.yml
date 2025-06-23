@@ -202,17 +202,17 @@ jobs:
             rust: stable
             target: x86_64-pc-windows-gnu
             features: full-async
-          # - task: bindings
-          #   os: windows-latest
-          #   rust: stable
-          #   target: x86_64-pc-windows-msvc
-          #   features: full-async
-          # - task: test
-          #   os: windows-latest
-          #   rust: stable
-          #   target: x86_64-pc-windows-msvc
-          #   features: full-async
-          #   optimization: true
+          - task: bindings
+            os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+            features: full-async
+          - task: test
+            os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+            features: full-async
+            optimization: true
 
           - task: bindings
             os: ubuntu-latest
@@ -360,13 +360,11 @@ jobs:
             curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/aarch64-unknown-linux-musl.tar.xz | tar xJf -
             sudo mv aarch64-unknown-linux-musl /musl
 
-            echo "LD_LIBRARY_PATH=/musl/aarch64-unknown-linux-musl/sysroot/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
-
             echo "CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
             echo "CXX_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
             echo "AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar" >> $GITHUB_ENV
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64 -L /musl/aarch64-unknown-linux-musl/sysroot" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
 
             mkdir -p ~/.cargo/
             echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
@@ -393,7 +391,7 @@ jobs:
           curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
           sudo mv loongarch64-unknown-linux-musl /musl
 
-          echo "LD_LIBRARY_PATH=/musl/loongarch64-unknown-linux-musl/sysroot/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+          ls -al /usr/loongarch64-linux-gnu
 
           echo "CC_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
           echo "CXX_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
