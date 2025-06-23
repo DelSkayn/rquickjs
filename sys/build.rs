@@ -113,7 +113,7 @@ fn main() {
     for feature in &features {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
-    println!("cargo:rerun-if-env-changed=CARGO_CFG_SANITIZE");
+    //println!("cargo:rerun-if-env-changed=CARGO_CFG_SANITIZE");
 
     let src_dir = Path::new("quickjs");
 
