@@ -299,11 +299,16 @@ impl RawRuntime {
             let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
                 let ctx = Ctx::from_ptr(ctx);
 
+                const INIT: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_INIT as u32;
+                const BEFORE: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_BEFORE as u32;
+                const AFTER: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_AFTER as u32;
+                const RESOLVE: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE as u32;
+
                 let rtype = match type_ {
-                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_INIT => PromiseHookType::Init,
-                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_BEFORE => PromiseHookType::Before,
-                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_AFTER => PromiseHookType::After,
-                    qjs::JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE => PromiseHookType::Resolve,
+                    INIT => PromiseHookType::Init,
+                    BEFORE => PromiseHookType::Before,
+                    AFTER => PromiseHookType::After,
+                    RESOLVE => PromiseHookType::Resolve,
                     _ => unreachable!(),
                 };
 
@@ -321,9 +326,19 @@ impl RawRuntime {
                 }
             }
         }
+
         qjs::JS_SetPromiseHook(
             self.rt.as_ptr(),
-            hook.as_ref().map(|_| promise_hook_wrapper as _),
+            hook.as_ref().map(|_| {
+                promise_hook_wrapper
+                    as unsafe extern "C" fn(
+                        *mut rquickjs_sys::JSContext,
+                        u32,
+                        rquickjs_sys::JSValue,
+                        rquickjs_sys::JSValue,
+                        *mut std::ffi::c_void,
+                    )
+            }),
             qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
         );
         self.get_opaque().set_promise_hook(hook);

@@ -360,10 +360,10 @@ jobs:
             curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/aarch64-unknown-linux-musl.tar.xz | tar xJf -
             sudo mv aarch64-unknown-linux-musl /musl
 
-            echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> $GITHUB_ENV
-            echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> $GITHUB_ENV
-            echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> $GITHUB_ENV
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+            echo "CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
+            echo "AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
 
             sudo ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1

@@ -325,6 +325,8 @@ impl<'js> Object<'js> {
         if array_type < 0 {
             return false;
         }
+
+        #[allow(irrefutable_let_patterns)]
         if let Ok(array_type) = TryInto::<qjs::JSTypedArrayEnum>::try_into(array_type) {
             return array_type == T::ARRAY_TYPE;
         }
