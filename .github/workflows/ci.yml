@@ -360,15 +360,13 @@ jobs:
             curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/aarch64-unknown-linux-musl.tar.xz | tar xJf -
             sudo mv aarch64-unknown-linux-musl /musl
 
-            echo "LD_LIBRARY_PATH=/musl/aarch64-unknown-linux-musl/sysroot/lib" >> $GITHUB_ENV
+            echo "LD_LIBRARY_PATH=/musl/aarch64-unknown-linux-musl/sysroot/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
             echo "CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
             echo "CXX_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
             echo "AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar" >> $GITHUB_ENV
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
-
-            #sudo ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
 
             mkdir -p ~/.cargo/
             echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
@@ -394,7 +392,7 @@ jobs:
           curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
           sudo mv loongarch64-unknown-linux-musl /musl
 
-          echo "LD_LIBRARY_PATH=/musl/loongarch64-unknown-linux-musl/sysroot/lib" >> $GITHUB_ENV
+          echo "LD_LIBRARY_PATH=/musl/loongarch64-unknown-linux-musl/sysroot/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
 
           echo "CC_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
           echo "CXX_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
