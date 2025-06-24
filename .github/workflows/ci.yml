@@ -167,26 +167,22 @@ jobs:
             features: full-async
             no-test: true
 
-          # Windows builds - run sequentially to avoid double compilation
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-gnu
             features: full-async
-            windows_group: 1
           - task: bindings
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-msvc
             features: full-async
-            windows_group: 2
           - task: test
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-msvc
             features: full-async
             optimization: true
-            windows_group: 3
 
           - task: bindings
             os: ubuntu-latest
@@ -394,12 +390,6 @@ jobs:
         uses: msys2/setup-msys2@v2
         with:
           release: false
-      # Ensure Windows jobs run sequentially
-      - name: Wait for previous Windows job
-        if: startsWith(matrix.os, 'windows') && matrix.windows_group > 1
-        run: |
-          echo "Waiting for previous Windows job to complete..."
-          sleep 60
       - name: Prepare env for windows
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         run: |
@@ -424,6 +414,8 @@ jobs:
       - name: Build sys
         env:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
+          BUILD_TARGET: ${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
         run: |
           cargo clean
           cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging

@@ -7,6 +7,8 @@ use std::{
     result::Result as StdResult,
 };
 
+use rquickjs_sys::JSPromiseHookType;
+
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
@@ -288,11 +290,6 @@ impl RawRuntime {
 
     #[allow(clippy::unnecessary_cast)]
     pub unsafe fn set_promise_hook(&mut self, hook: Option<PromiseHook>) {
-        #[cfg(all(windows, target_env = "msvc"))]
-        type JSPromiseHookType = i32;
-        #[cfg(not(all(windows, target_env = "msvc")))]
-        type JSPromiseHookType = u32;
-
         unsafe extern "C" fn promise_hook_wrapper(
             ctx: *mut rquickjs_sys::JSContext,
             type_: JSPromiseHookType,
