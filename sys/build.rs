@@ -279,8 +279,6 @@ where
 
     let bindings_file = out_dir.as_ref().join("bindings.rs");
 
-    println!("cargo:warning=Target: {}", target);
-
     fs::write(
         bindings_file,
         format!(
