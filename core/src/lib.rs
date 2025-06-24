@@ -10,6 +10,7 @@
 #![allow(unsafe_op_in_unsafe_fn)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
 #![allow(clippy::doc_lazy_continuation)]
+#![allow(clippy::collapsible_if)]
 
 pub(crate) use std::{result::Result as StdResult, string::String as StdString};
 
