@@ -32,7 +32,7 @@ impl<'js> String<'js> {
 
     /// Create a new JavaScript string from an Rust string.
     pub fn from_str(ctx: Ctx<'js>, s: &str) -> Result<Self> {
-        let len = s.as_bytes().len();
+        let len = s.len();
         let ptr = s.as_ptr();
         Ok(unsafe {
             let js_val = qjs::JS_NewStringLen(ctx.as_ptr(), ptr as _, len as _);

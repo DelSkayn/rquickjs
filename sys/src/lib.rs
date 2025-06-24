@@ -4,6 +4,7 @@
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::uninlined_format_args)]
 
 use std::ptr;
 

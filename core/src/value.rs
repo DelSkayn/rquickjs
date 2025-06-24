@@ -721,8 +721,10 @@ macro_rules! void_types {
         $(
             $(#[$meta])*
             #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+            #[allow(dead_code)]
             pub struct $type;
 
+            #[allow(dead_code)]
             impl $type {
                 /// Convert into value
                 pub fn into_value<'js>(self, ctx: Ctx<'js>) -> Value<'js> {

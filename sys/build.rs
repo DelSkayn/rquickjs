@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -109,7 +110,6 @@ fn main() {
         "dump-read-object",
     ];
 
-    println!("cargo:rerun-if-changed=build.rs");
     for feature in &features {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
@@ -183,9 +183,12 @@ fn main() {
 
     if target_os == "windows" {
         if target_env == "msvc" {
-            env::set_var("CFLAGS", "/std:c11 /experimental:c11atomics");
+            env::set_var(
+                "CFLAGS",
+                "/DWIN32_LEAN_AND_MEAN /std:c11 /experimental:c11atomics",
+            );
         } else {
-            env::set_var("CFLAGS", "-std=c11");
+            env::set_var("CFLAGS", "-DWIN32_LEAN_AND_MEAN -std=c11");
         }
     }
 
