@@ -60,14 +60,14 @@ impl ToTokens for Case {
 }
 
 impl Case {
-    pub fn to_convert_case(self) -> ConvertCase {
+    pub fn to_convert_case(self) -> ConvertCase<'static> {
         match self {
             Case::Lower => ConvertCase::Lower,
             Case::Upper => ConvertCase::Upper,
             Case::Camel => ConvertCase::Camel,
             Case::Pascal => ConvertCase::Pascal,
             Case::Snake => ConvertCase::Snake,
-            Case::ScreamingSnake => ConvertCase::ScreamingSnake,
+            Case::ScreamingSnake => ConvertCase::Constant,
         }
     }
 }
