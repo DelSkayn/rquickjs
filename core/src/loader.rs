@@ -118,11 +118,7 @@ impl LoaderHolder {
         let name = opaque.resolver.resolve(ctx, base, name)?;
 
         // We should transfer ownership of this string to QuickJS
-        Ok(
-            unsafe {
-                qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.as_bytes().len() as _)
-            },
-        )
+        Ok(unsafe { qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.len() as _) })
     }
 
     unsafe extern "C" fn normalize_raw(

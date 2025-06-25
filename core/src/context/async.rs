@@ -154,7 +154,7 @@ impl AsyncContext {
     pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.runtime.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
+            .ok_or(Error::Allocation)?;
         unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
@@ -170,7 +170,7 @@ impl AsyncContext {
     pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.runtime.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
+            .ok_or(Error::Allocation)?;
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         guard.drop_pending();
