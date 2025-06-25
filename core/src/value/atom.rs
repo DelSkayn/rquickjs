@@ -2,7 +2,7 @@
 
 use crate::{qjs, Ctx, Error, Result, String, Value};
 use alloc::string::{String as StdString, ToString as _};
-use core::{ffi::CStr, hash::Hash};
+use core::{ffi::CStr, hash::Hash, ptr::null_mut};
 
 mod predefined;
 pub use predefined::PredefinedAtom;
