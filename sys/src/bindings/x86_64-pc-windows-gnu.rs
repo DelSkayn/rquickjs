@@ -433,7 +433,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn js_malloc_usable_size(ctx: *mut JSContext, ptr: *const ::std::os::raw::c_void)
-        -> size_t;
+    -> size_t;
 }
 unsafe extern "C" {
     pub fn js_realloc2(
@@ -884,7 +884,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_ToFloat64(ctx: *mut JSContext, pres: *mut f64, val: JSValue)
-        -> ::std::os::raw::c_int;
+    -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn JS_ToBigInt64(
@@ -1099,7 +1099,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_GetLength(ctx: *mut JSContext, obj: JSValue, pres: *mut i64)
-        -> ::std::os::raw::c_int;
+    -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn JS_SetLength(ctx: *mut JSContext, obj: JSValue, len: i64) -> ::std::os::raw::c_int;
@@ -1264,7 +1264,7 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_SetOpaque(obj: JSValue, opaque: *mut ::std::os::raw::c_void)
-        -> ::std::os::raw::c_int;
+    -> ::std::os::raw::c_int;
 }
 unsafe extern "C" {
     pub fn JS_GetOpaque(obj: JSValue, class_id: JSClassID) -> *mut ::std::os::raw::c_void;
