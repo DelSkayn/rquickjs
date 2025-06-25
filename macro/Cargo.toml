@@ -24,7 +24,7 @@ indexmap = "2"
 convert_case = "0.8"
 syn = { version = "2", features = ["full","fold","extra-traits","visit"] }
 phf_shared = { version = "0.11", optional = true }
-phf_generator = { version = "0.11",  optional = true }
+phf_generator = { version = "0.12",  optional = true }
 
 [dev-dependencies]
 rquickjs = { path = "../", features = ["macro", "futures","phf"] }
