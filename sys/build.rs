@@ -317,6 +317,7 @@ where
     }
 
     let mut builder = bindgen_rs::Builder::default()
+        .use_core()
         .detect_include_paths(true)
         .clang_arg("-xc")
         .clang_arg("-v")

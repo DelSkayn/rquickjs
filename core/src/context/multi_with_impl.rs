@@ -1,6 +1,6 @@
 #![allow(clippy::many_single_char_names)]
 use super::{Context, Ctx, MultiWith};
-use std::mem;
+use core::mem;
 
 macro_rules! list {
     ({$($r:ident,)+} => $e:ty) => {

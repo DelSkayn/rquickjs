@@ -1,10 +1,11 @@
-use std::{
+use alloc::{
     ffi::CString,
-    ptr::NonNull,
-    result::Result as StdResult,
     sync::{Arc, Weak},
-    task::Poll,
+    vec::Vec,
 };
+use core::{ptr::NonNull, result::Result as StdResult, task::Poll};
+#[cfg(feature = "std")]
+use std::println;
 
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -314,11 +315,13 @@ impl AsyncRuntime {
                         // SAFETY: Runtime is already locked so creating a context is safe.
                         let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx().as_ptr()) };
                         let err = ctx.catch();
-                        if let Some(x) = err.clone().into_object().and_then(Exception::from_object)
+                        if let Some(_x) = err.clone().into_object().and_then(Exception::from_object)
                         {
                             // TODO do something better with errors.
-                            println!("error executing job: {}", x);
+                            #[cfg(feature = "std")]
+                            println!("error executing job: {}", _x);
                         } else {
+                            #[cfg(feature = "std")]
                             println!("error executing job: {:?}", err);
                         }
                     }

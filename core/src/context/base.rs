@@ -5,7 +5,7 @@ use super::{
     ContextBuilder, Intrinsic,
 };
 use crate::{qjs, Ctx, Error, Result, Runtime};
-use std::{mem, ptr::NonNull};
+use core::{mem, ptr::NonNull};
 
 impl DropContext for Runtime {
     unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>) {
@@ -19,6 +19,7 @@ impl DropContext for Runtime {
                     // We should still free the context.
                     // TODO see if there is a way to recover from a panic which could cause the
                     // following assertion to trigger
+                    #[cfg(feature = "std")]
                     assert!(std::thread::panicking());
                 }
                 unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }

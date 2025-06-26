@@ -1,6 +1,6 @@
 use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Result, Value};
 
-use std::{
+use core::{
     fmt,
     mem::{self, ManuallyDrop},
 };

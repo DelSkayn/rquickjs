@@ -1,7 +1,8 @@
 //!  QuickJS atom functionality.
 
 use crate::{qjs, Ctx, Error, Result, String, Value};
-use std::{ffi::CStr, hash::Hash, string::String as StdString};
+use alloc::string::{String as StdString, ToString as _};
+use core::{ffi::CStr, hash::Hash};
 
 mod predefined;
 pub use predefined::PredefinedAtom;
@@ -32,7 +33,7 @@ impl<'js> PartialEq for Atom<'js> {
 impl<'js> Eq for Atom<'js> {}
 
 impl<'js> Hash for Atom<'js> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         state.write_u32(self.atom)
     }
 }
@@ -94,7 +95,7 @@ impl<'js> Atom<'js> {
     /// Create an atom from a Rust string
     pub fn from_str(ctx: Ctx<'js>, name: &str) -> Result<Atom<'js>> {
         unsafe {
-            let ptr = name.as_ptr() as *const std::os::raw::c_char;
+            let ptr = name.as_ptr() as *const core::ffi::c_char;
             let atom = qjs::JS_NewAtomLen(ctx.as_ptr(), ptr, name.len() as _);
             if atom == qjs::JS_ATOM_NULL {
                 // Should never invoke a callback so no panics
@@ -121,7 +122,7 @@ impl<'js> Atom<'js> {
             }
             let bytes = CStr::from_ptr(c_str).to_bytes();
             // Safety: QuickJS should return valid utf8 so this should be safe.
-            let res = std::str::from_utf8_unchecked(bytes).to_string();
+            let res = core::str::from_utf8_unchecked(bytes).to_string();
             qjs::JS_FreeCString(self.ctx.as_ptr(), c_str);
             Ok(res)
         }
