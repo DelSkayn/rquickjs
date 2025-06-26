@@ -1,5 +1,5 @@
 use crate::{qjs, Ctx, Error, Result};
-use std::{fmt, hash::Hash, mem, ops::Deref, result::Result as StdResult, str};
+use core::{fmt, hash::Hash, mem, ops::Deref, result::Result as StdResult, str};
 
 pub mod array;
 pub mod atom;
@@ -19,7 +19,7 @@ pub use bigint::BigInt;
 pub use convert::{Coerced, FromAtom, FromIteratorJs, FromJs, IntoAtom, IntoJs, IteratorJs};
 pub use exception::Exception;
 pub use function::{Constructor, Function};
-pub use module::Module;
+pub use module::{Module, WriteOptions, WriteOptionsEndianness};
 pub use object::{Filter, Object};
 pub use promise::Promise;
 pub use string::{CString, String};
@@ -52,7 +52,7 @@ impl<'js> PartialEq for Value<'js> {
 impl<'js> Eq for Value<'js> {}
 
 impl<'js> Hash for Value<'js> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let tag = unsafe { qjs::JS_VALUE_GET_TAG(self.value) };
         let bits = unsafe { qjs::JS_VALUE_GET_FLOAT64(self.value).to_bits() };
         state.write_i32(tag);
@@ -342,7 +342,7 @@ impl<'js> Value<'js> {
     /// Check if the value is an array
     #[inline]
     pub fn is_array(&self) -> bool {
-        0 != unsafe { qjs::JS_IsArray(self.ctx.as_ptr(), self.value) }
+        unsafe { qjs::JS_IsArray(self.value) }
     }
 
     /// Check if the value is a function
@@ -360,7 +360,7 @@ impl<'js> Value<'js> {
     /// Check if the value is a promise.
     #[inline]
     pub fn is_promise(&self) -> bool {
-        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as std::os::raw::c_int) >= 0
+        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as core::ffi::c_int) >= 0
     }
 
     /// Check if the value is an exception
@@ -627,7 +627,7 @@ macro_rules! sub_types {
                 }
 
                 #[doc = concat!("Try convert into [`",stringify!($head),"`] returning self if the conversion fails.")]
-                pub fn $try_into(self) -> std::result::Result<$head<'js>, Value<'js>> {
+                pub fn $try_into(self) -> core::result::Result<$head<'js>, Value<'js>> {
                     if self.type_of().interpretable_as(Type::$head) {
                         Ok(sub_types!(@wrap $head$(->$sub_type)* self))
                     } else {
@@ -721,8 +721,10 @@ macro_rules! void_types {
         $(
             $(#[$meta])*
             #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+            #[allow(dead_code)]
             pub struct $type;
 
+            #[allow(dead_code)]
             impl $type {
                 /// Convert into value
                 pub fn into_value<'js>(self, ctx: Ctx<'js>) -> Value<'js> {

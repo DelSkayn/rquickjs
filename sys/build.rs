@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -109,10 +110,10 @@ fn main() {
         "dump-read-object",
     ];
 
-    println!("cargo:rerun-if-changed=build.rs");
     for feature in &features {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
+    println!("cargo:rerun-if-env-changed=CARGO_CFG_SANITIZE");
 
     let src_dir = Path::new("quickjs");
 
@@ -120,7 +121,8 @@ fn main() {
     let out_dir = Path::new(&out_dir);
 
     let header_files = [
-        "libbf.h",
+        "builtin-array-fromasync.h",
+        "xsum.h",
         "libregexp-opcode.h",
         "libregexp.h",
         "libunicode-table.h",
@@ -138,7 +140,7 @@ fn main() {
         "libunicode.c",
         "cutils.c",
         "quickjs.c",
-        "libbf.c",
+        "xsum.c",
     ];
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
@@ -154,13 +156,39 @@ fn main() {
         //.flag("-Wno-format-truncation")
         ;
 
+    match env::var("CARGO_CFG_SANITIZE").as_deref() {
+        Ok("address") => {
+            builder
+                .flag("-fsanitize=address")
+                .flag("-fno-sanitize-recover=all")
+                .flag("-fno-omit-frame-pointer");
+        }
+        Ok("memory") => {
+            builder
+                .flag("-fsanitize=memory")
+                .flag("-fno-sanitize-recover=all")
+                .flag("-fno-omit-frame-pointer");
+        }
+        Ok("thread") => {
+            builder
+                .flag("-fsanitize=thread")
+                .flag("-fno-sanitize-recover=all")
+                .flag("-fno-omit-frame-pointer");
+        }
+        Ok(x) => println!("cargo:warning=Unsupported sanitize_option: '{x}'"),
+        _ => {}
+    }
+
     let mut bindgen_cflags = vec![];
 
     if target_os == "windows" {
         if target_env == "msvc" {
-            env::set_var("CFLAGS", "/std:c11 /experimental:c11atomics");
+            env::set_var(
+                "CFLAGS",
+                "/DWIN32_LEAN_AND_MEAN /std:c11 /experimental:c11atomics",
+            );
         } else {
-            env::set_var("CFLAGS", "-std=c11");
+            env::set_var("CFLAGS", "-DWIN32_LEAN_AND_MEAN -std=c11");
         }
     }
 
@@ -289,6 +317,7 @@ where
     }
 
     let mut builder = bindgen_rs::Builder::default()
+        .use_core()
         .detect_include_paths(true)
         .clang_arg("-xc")
         .clang_arg("-v")

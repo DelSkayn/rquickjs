@@ -1,6 +1,6 @@
 use super::{Class, JsClass};
 use crate::{result::BorrowError, Ctx, Error, FromJs, IntoJs, Value};
-use std::{
+use core::{
     cell::{Cell, UnsafeCell},
     marker::PhantomData,
     mem::ManuallyDrop,
@@ -108,6 +108,7 @@ pub struct WritableCell<T> {
 }
 
 #[doc(hidden)]
+#[allow(dead_code)]
 pub struct WriteBorrow<'a, T> {
     cell: &'a WritableCell<T>,
     _marker: PhantomData<&'a T>,
@@ -128,6 +129,7 @@ impl<'a, T> Drop for WriteBorrow<'a, T> {
 }
 
 #[doc(hidden)]
+#[allow(dead_code)]
 pub struct WriteBorrowMut<'a, T> {
     cell: &'a WritableCell<T>,
     _marker: PhantomData<&'a T>,
@@ -316,7 +318,7 @@ impl<'js, T: JsClass<'js> + 'js> OwnedBorrow<'js, T> {
     pub fn into_inner(mut self) -> Class<'js, T> {
         unsafe { <T::Mutable as Mutability>::unborrow(&self.0.get_cell().cell) };
         let res = unsafe { ManuallyDrop::take(&mut self.0) };
-        std::mem::forget(self);
+        core::mem::forget(self);
         res
     }
 }
@@ -374,7 +376,7 @@ impl<'js, T: JsClass<'js> + 'js> OwnedBorrowMut<'js, T> {
     pub fn into_inner(mut self) -> Class<'js, T> {
         unsafe { <T::Mutable as Mutability>::unborrow_mut(&self.0.get_cell().cell) };
         let res = unsafe { ManuallyDrop::take(&mut self.0) };
-        std::mem::forget(self);
+        core::mem::forget(self);
         res
     }
 }

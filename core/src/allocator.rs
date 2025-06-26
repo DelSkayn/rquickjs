@@ -4,6 +4,7 @@ use crate::qjs;
 
 mod rust;
 
+use alloc::boxed::Box;
 pub use rust::RustAllocator;
 
 /// The allocator interface
@@ -62,6 +63,7 @@ impl Drop for AllocatorHolder {
     }
 }
 
+#[allow(clippy::extra_unused_type_parameters)]
 impl AllocatorHolder {
     pub(crate) fn functions<A>() -> qjs::JSMallocFunctions
     where

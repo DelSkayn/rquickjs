@@ -54,6 +54,7 @@ This crate doesn't aim to provide system and web APIs. The QuickJS library is cl
 If you need APIs from [WinterGC](https://wintercg.org/) or [Node](https://nodejs.org/api/), then you can take a look at the follow community projects:
 
 - [AWS LLRT Modules](https://github.com/awslabs/llrt/tree/main/llrt_modules): Collection of modules that micmic some of the `Node` APIs in pure Rust
+- [Rquickjs Extra](https://github.com/rquickjs/rquickjs-extra): Collection of modules that complement `AWS LLRT Modules` in pure Rust
 
 ## Development status
 
@@ -81,10 +82,11 @@ See below for a list of supported platforms.
 | loongarch64-unknown-linux-musl |           ✅         |      ✅    |             ✅           |
 | x86_64-pc-windows-gnu          |           ✅         |      ✅    |             ✅           |
 | i686-pc-windows-gnu            |           ✅         |      ✅    |             ✅           |
-| x86_64-pc-windows-mvsc         |           ✅         |      ✅    |      ❌ experimental!    |
+| x86_64-pc-windows-msvc         |           ✅         |      ✅    |      ❌ experimental!    |
 | x86_64-apple-darwin            |           ✅         |      ✅    |             ✅           |
 | aarch64-apple-darwin           |           ✅         |      ❌    |             ✅           |
-| wasm32-wasi                    |           ✅         |      ❌    |             ✅           |
+| wasm32-wasip1                  |           ✅         |      ✅    |             ✅           |
+| wasm32-wasip2                  |           ✅         |      ✅    |             ✅           |
 | other                          |           ❌         |      ❌    |          Unknown         |
 
 ## License

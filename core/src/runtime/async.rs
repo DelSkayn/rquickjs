@@ -1,10 +1,11 @@
-use std::{
+use alloc::{
     ffi::CString,
-    ptr::NonNull,
-    result::Result as StdResult,
     sync::{Arc, Weak},
-    task::Poll,
+    vec::Vec,
 };
+use core::{ptr::NonNull, result::Result as StdResult, task::Poll};
+#[cfg(feature = "std")]
+use std::println;
 
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -13,7 +14,7 @@ use async_lock::Mutex;
 
 use super::{
     opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
-    InterruptHandler, MemoryUsage, RejectionTracker,
+    InterruptHandler, MemoryUsage, RejectionTracker, PromiseHook,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
@@ -169,6 +170,14 @@ impl AsyncRuntime {
                 .await
                 .runtime
                 .set_host_promise_rejection_tracker(tracker);
+       }
+    }
+
+    /// Set a closure which is called when a promise is created, resolved, or chained.
+    #[inline]
+    pub async fn set_promise_hook(&self, tracker: Option<PromiseHook>) {
+        unsafe {
+            self.inner.lock().await.runtime.set_promise_hook(tracker);
         }
     }
 
@@ -316,13 +325,15 @@ impl AsyncRuntime {
                 match pending {
                     Err(e) => {
                         // SAFETY: Runtime is already locked so creating a context is safe.
-                        let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx.as_ptr()) };
+                        let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx().as_ptr()) };
                         let err = ctx.catch();
-                        if let Some(x) = err.clone().into_object().and_then(Exception::from_object)
+                        if let Some(_x) = err.clone().into_object().and_then(Exception::from_object)
                         {
                             // TODO do something better with errors.
-                            println!("error executing job: {}", x);
+                            #[cfg(feature = "std")]
+                            println!("error executing job: {}", _x);
                         } else {
+                            #[cfg(feature = "std")]
                             println!("error executing job: {:?}", err);
                         }
                     }
@@ -358,14 +369,16 @@ macro_rules! async_test_case {
     ($name:ident => ($rt:ident,$ctx:ident) { $($t:tt)* }) => {
     #[test]
     fn $name() {
-        let rt = if cfg!(feature = "parallel") {
-            tokio::runtime::Builder::new_multi_thread()
-        } else {
-            tokio::runtime::Builder::new_current_thread()
-        }
-        .enable_all()
-        .build()
-        .unwrap();
+        #[cfg(feature = "parallel")]
+        let mut new_thread = tokio::runtime::Builder::new_multi_thread();
+
+        #[cfg(not(feature = "parallel"))]
+        let mut new_thread = tokio::runtime::Builder::new_current_thread();
+
+        let rt = new_thread
+            .enable_all()
+            .build()
+            .unwrap();
 
         #[cfg(feature = "parallel")]
         {

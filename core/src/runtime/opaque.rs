@@ -5,21 +5,27 @@ use crate::{
 
 use super::{
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, RejectionTracker, UserDataError,
+    InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
 };
-use std::{
+use alloc::boxed::Box;
+use core::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
-    collections::{hash_map::Entry, HashMap},
     marker::PhantomData,
     ptr,
 };
+
+#[cfg(feature = "std")]
+use std::collections::{hash_map::Entry, HashMap};
+
+#[cfg(not(feature = "std"))]
+use hashbrown::{hash_map::Entry, HashMap};
 
 #[cfg(feature = "futures")]
 use super::{schedular::SchedularPoll, spawner::Spawner};
 
 #[cfg(feature = "futures")]
-use std::{
+use core::{
     future::Future,
     task::{Context, Waker},
 };
@@ -28,6 +34,9 @@ use std::{
 pub(crate) struct Opaque<'js> {
     /// Used to carry a panic if a callback triggered one.
     panic: Cell<Option<Box<dyn Any + Send + 'static>>>,
+
+    /// The user provided promise hook, if any.
+    promise_hook: UnsafeCell<Option<PromiseHook>>,
 
     /// The user provided rejection tracker, if any.
     rejection_tracker: UnsafeCell<Option<RejectionTracker>>,
@@ -54,6 +63,8 @@ impl<'js> Opaque<'js> {
     pub fn new() -> Self {
         Opaque {
             panic: Cell::new(None),
+
+            promise_hook: UnsafeCell::new(None),
 
             rejection_tracker: UnsafeCell::new(None),
 
@@ -85,7 +96,7 @@ impl<'js> Opaque<'js> {
         qjs::JS_NewClassID(rt, (&mut self.callable_class_id) as *mut qjs::JSClassID);
 
         let class_def = qjs::JSClassDef {
-            class_name: b"RustClass\0".as_ptr().cast(),
+            class_name: c"RustClass".as_ptr().cast(),
             finalizer: Some(class::ffi::class_finalizer),
             gc_mark: Some(class::ffi::class_trace),
             call: None,
@@ -97,7 +108,7 @@ impl<'js> Opaque<'js> {
         }
 
         let class_def = qjs::JSClassDef {
-            class_name: b"RustFunction\0".as_ptr().cast(),
+            class_name: c"RustFunction".as_ptr().cast(),
             finalizer: Some(class::ffi::callable_finalizer),
             gc_mark: Some(class::ffi::callable_trace),
             call: Some(class::ffi::call),
@@ -169,6 +180,20 @@ impl<'js> Opaque<'js> {
         self.userdata.get()
     }
 
+    pub fn set_promise_hook(&self, promise_hook: Option<PromiseHook>) {
+        unsafe { (*self.promise_hook.get()) = promise_hook }
+    }
+
+    pub fn run_promise_hook<'a>(
+        &self,
+        ctx: Ctx<'a>,
+        type_: PromiseHookType,
+        promise: Value<'a>,
+        parent: Value<'a>,
+    ) {
+        unsafe { (*self.promise_hook.get()).as_mut().unwrap()(ctx, type_, promise, parent) }
+    }
+
     pub fn set_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
         unsafe { (*self.rejection_tracker.get()) = tracker }
     }
@@ -193,6 +218,7 @@ impl<'js> Opaque<'js> {
         unsafe { (*self.interrupt_handler.get()).as_mut().unwrap()() }
     }
 
+    #[allow(dead_code)] // not used in no_std
     pub fn set_panic(&self, panic: Box<dyn Any + Send + 'static>) {
         self.panic.set(Some(panic))
     }

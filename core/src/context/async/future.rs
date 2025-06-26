@@ -1,4 +1,5 @@
-use std::{
+use alloc::boxed::Box;
+use core::{
     future::Future,
     mem::{self, ManuallyDrop},
     pin::Pin,
@@ -83,7 +84,7 @@ where
                 // replace it.
                 // Assign
                 this.lock_state =
-                    LockState::Pending(ManuallyDrop::new(this.context.0.rt.inner.lock()));
+                    LockState::Pending(ManuallyDrop::new(this.context.0.rt().inner.lock()));
             }
         };
 
