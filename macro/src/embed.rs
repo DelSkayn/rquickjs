@@ -179,7 +179,7 @@ mod test {
         let tokens = expand(&test_data);
         let expected = quote! {
             rquickjs::loader::bundle::Bundle(&rquickjs::phf::Map{
-                key: 12913932095322966823u64,
+                key: 16287231350648472473u64,
                 disps: &[(0u32,0u32)],
                 entries: &[
                     ("test_module", &[1u8, 2u8, 3u8,4u8])

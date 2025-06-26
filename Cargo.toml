@@ -122,7 +122,7 @@ properties = ["rquickjs-core/properties"]
 
 
 [dev-dependencies]
-trybuild = "1.0.82"
+trybuild = "1.0.105"
 
 [package.metadata.docs.rs]
 features = ["full-async", "parallel", "doc-cfg"]
