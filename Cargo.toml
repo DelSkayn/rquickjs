@@ -24,9 +24,9 @@ members = [
 
 [workspace.dependencies]
 rquickjs-core = { version = "0.9.0", path = "core", default-features = false }
-rquickjs-macro = { version = "0.9.0", path = "macro", default-features = false  }
-rquickjs-sys = { version = "0.9.0", path = "sys", default-features = false  }
-rquickjs = { version = "0.9.0", path = "./", default-features = false  }
+rquickjs-macro = { version = "0.9.0", path = "macro", default-features = false }
+rquickjs-sys = { version = "0.9.0", path = "sys", default-features = false }
+rquickjs = { version = "0.9.0", path = "./", default-features = false }
 
 [dependencies]
 indexmap-rs = { package = "indexmap", version = "2", optional = true }
@@ -39,7 +39,16 @@ rquickjs-macro = { workspace = true, optional = true }
 default = ["std"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["std", "chrono", "loader", "dyn-load", "either", "indexmap", "macro", "phf"]
+full = [
+    "std",
+    "chrono",
+    "loader",
+    "dyn-load",
+    "either",
+    "indexmap",
+    "macro",
+    "phf",
+]
 
 # A version of full designed for wasm32-wasip1 and wasm32-wasip2 (simply excludes dyn-load)
 full-wasi = ["std", "chrono", "loader", "either", "indexmap", "macro", "phf"]
@@ -122,7 +131,7 @@ properties = ["rquickjs-core/properties"]
 
 
 [dev-dependencies]
-trybuild = "1.0.82"
+trybuild = "1"
 
 [package.metadata.docs.rs]
 features = ["full-async", "parallel", "doc-cfg"]

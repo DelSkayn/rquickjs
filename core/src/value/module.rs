@@ -5,7 +5,7 @@ use core::{
     ffi::CStr,
     marker::PhantomData,
     mem::MaybeUninit,
-    ptr::{self, NonNull},
+    ptr::{self, null_mut, NonNull},
     slice,
 };
 
@@ -412,7 +412,8 @@ impl<'js> Module<'js, Declared> {
                 .script_or_module_name(1)
                 .unwrap_or_else(|| Atom::from_predefined(ctx.clone(), PredefinedAtom::Empty));
 
-            let base_name_c_str = qjs::JS_AtomToCString(ctx.as_ptr(), base_name.atom);
+            let base_name_c_str =
+                qjs::JS_AtomToCStringLen(ctx.as_ptr(), null_mut(), base_name.atom);
 
             let res = qjs::JS_LoadModule(ctx.as_ptr(), base_name_c_str, specifier.as_ptr());
 

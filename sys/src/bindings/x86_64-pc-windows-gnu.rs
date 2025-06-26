@@ -347,9 +347,8 @@ fn bindgen_test_layout_JSMallocFunctions() {
         )
     );
 }
-pub type JSRuntimeFinalizer = ::core::option::Option<
-    unsafe extern "C" fn(rt: *mut JSRuntime, arg: *mut ::core::ffi::c_void),
->;
+pub type JSRuntimeFinalizer =
+    ::core::option::Option<unsafe extern "C" fn(rt: *mut JSRuntime, arg: *mut ::core::ffi::c_void)>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSGCObjectHeader {
@@ -525,20 +524,13 @@ extern "C" {
     ) -> *mut ::core::ffi::c_void;
 }
 extern "C" {
-    pub fn js_malloc_usable_size_rt(
-        rt: *mut JSRuntime,
-        ptr: *const ::core::ffi::c_void,
-    ) -> size_t;
+    pub fn js_malloc_usable_size_rt(rt: *mut JSRuntime, ptr: *const ::core::ffi::c_void) -> size_t;
 }
 extern "C" {
     pub fn js_mallocz_rt(rt: *mut JSRuntime, size: size_t) -> *mut ::core::ffi::c_void;
 }
 extern "C" {
-    pub fn js_calloc(
-        ctx: *mut JSContext,
-        count: size_t,
-        size: size_t,
-    ) -> *mut ::core::ffi::c_void;
+    pub fn js_calloc(ctx: *mut JSContext, count: size_t, size: size_t) -> *mut ::core::ffi::c_void;
 }
 extern "C" {
     pub fn js_malloc(ctx: *mut JSContext, size: size_t) -> *mut ::core::ffi::c_void;
@@ -554,8 +546,7 @@ extern "C" {
     ) -> *mut ::core::ffi::c_void;
 }
 extern "C" {
-    pub fn js_malloc_usable_size(ctx: *mut JSContext, ptr: *const ::core::ffi::c_void)
-        -> size_t;
+    pub fn js_malloc_usable_size(ctx: *mut JSContext, ptr: *const ::core::ffi::c_void) -> size_t;
 }
 extern "C" {
     pub fn js_realloc2(
@@ -918,7 +909,11 @@ extern "C" {
     pub fn JS_AtomToString(ctx: *mut JSContext, atom: JSAtom) -> JSValue;
 }
 extern "C" {
-    pub fn JS_AtomToCString(ctx: *mut JSContext, atom: JSAtom) -> *const ::core::ffi::c_char;
+    pub fn JS_AtomToCStringLen(
+        ctx: *mut JSContext,
+        plen: *mut size_t,
+        atom: JSAtom,
+    ) -> *const ::core::ffi::c_char;
 }
 extern "C" {
     pub fn JS_ValueToAtom(ctx: *mut JSContext, val: JSValue) -> JSAtom;
@@ -974,7 +969,8 @@ pub struct JSPropertyDescriptor {
 }
 #[test]
 fn bindgen_test_layout_JSPropertyDescriptor() {
-    const UNINIT: ::core::mem::MaybeUninit<JSPropertyDescriptor> = ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<JSPropertyDescriptor> =
+        ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::core::mem::size_of::<JSPropertyDescriptor>(),
@@ -1047,11 +1043,7 @@ pub struct JSClassExoticMethods {
         ) -> ::core::ffi::c_int,
     >,
     pub delete_property: ::core::option::Option<
-        unsafe extern "C" fn(
-            ctx: *mut JSContext,
-            obj: JSValue,
-            prop: JSAtom,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(ctx: *mut JSContext, obj: JSValue, prop: JSAtom) -> ::core::ffi::c_int,
     >,
     pub define_own_property: ::core::option::Option<
         unsafe extern "C" fn(
@@ -1065,11 +1057,7 @@ pub struct JSClassExoticMethods {
         ) -> ::core::ffi::c_int,
     >,
     pub has_property: ::core::option::Option<
-        unsafe extern "C" fn(
-            ctx: *mut JSContext,
-            obj: JSValue,
-            atom: JSAtom,
-        ) -> ::core::ffi::c_int,
+        unsafe extern "C" fn(ctx: *mut JSContext, obj: JSValue, atom: JSAtom) -> ::core::ffi::c_int,
     >,
     pub get_property: ::core::option::Option<
         unsafe extern "C" fn(
@@ -1092,7 +1080,8 @@ pub struct JSClassExoticMethods {
 }
 #[test]
 fn bindgen_test_layout_JSClassExoticMethods() {
-    const UNINIT: ::core::mem::MaybeUninit<JSClassExoticMethods> = ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<JSClassExoticMethods> =
+        ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::core::mem::size_of::<JSClassExoticMethods>(),
@@ -1380,11 +1369,8 @@ extern "C" {
     pub fn JS_NewError(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
-    pub fn JS_ThrowPlainError(
-        ctx: *mut JSContext,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> JSValue;
+    pub fn JS_ThrowPlainError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
+        -> JSValue;
 }
 extern "C" {
     pub fn JS_ThrowSyntaxError(
@@ -1394,11 +1380,7 @@ extern "C" {
     ) -> JSValue;
 }
 extern "C" {
-    pub fn JS_ThrowTypeError(
-        ctx: *mut JSContext,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> JSValue;
+    pub fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
 }
 extern "C" {
     pub fn JS_ThrowReferenceError(
@@ -1408,11 +1390,8 @@ extern "C" {
     ) -> JSValue;
 }
 extern "C" {
-    pub fn JS_ThrowRangeError(
-        ctx: *mut JSContext,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> JSValue;
+    pub fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
+        -> JSValue;
 }
 extern "C" {
     pub fn JS_ThrowInternalError(
@@ -1452,29 +1431,16 @@ extern "C" {
     pub fn JS_ToIndex(ctx: *mut JSContext, plen: *mut u64, val: JSValue) -> ::core::ffi::c_int;
 }
 extern "C" {
-    pub fn JS_ToFloat64(ctx: *mut JSContext, pres: *mut f64, val: JSValue)
-        -> ::core::ffi::c_int;
+    pub fn JS_ToFloat64(ctx: *mut JSContext, pres: *mut f64, val: JSValue) -> ::core::ffi::c_int;
 }
 extern "C" {
-    pub fn JS_ToBigInt64(
-        ctx: *mut JSContext,
-        pres: *mut i64,
-        val: JSValue,
-    ) -> ::core::ffi::c_int;
+    pub fn JS_ToBigInt64(ctx: *mut JSContext, pres: *mut i64, val: JSValue) -> ::core::ffi::c_int;
 }
 extern "C" {
-    pub fn JS_ToBigUint64(
-        ctx: *mut JSContext,
-        pres: *mut u64,
-        val: JSValue,
-    ) -> ::core::ffi::c_int;
+    pub fn JS_ToBigUint64(ctx: *mut JSContext, pres: *mut u64, val: JSValue) -> ::core::ffi::c_int;
 }
 extern "C" {
-    pub fn JS_ToInt64Ext(
-        ctx: *mut JSContext,
-        pres: *mut i64,
-        val: JSValue,
-    ) -> ::core::ffi::c_int;
+    pub fn JS_ToInt64Ext(ctx: *mut JSContext, pres: *mut i64, val: JSValue) -> ::core::ffi::c_int;
 }
 extern "C" {
     pub fn JS_NewStringLen(
@@ -1558,6 +1524,21 @@ extern "C" {
 }
 extern "C" {
     pub fn JS_IsMap(val: JSValue) -> bool;
+}
+extern "C" {
+    pub fn JS_IsSet(val: JSValue) -> bool;
+}
+extern "C" {
+    pub fn JS_IsWeakRef(val: JSValue) -> bool;
+}
+extern "C" {
+    pub fn JS_IsWeakSet(val: JSValue) -> bool;
+}
+extern "C" {
+    pub fn JS_IsWeakMap(val: JSValue) -> bool;
+}
+extern "C" {
+    pub fn JS_IsDataView(val: JSValue) -> bool;
 }
 extern "C" {
     pub fn JS_NewArray(ctx: *mut JSContext) -> JSValue;
@@ -1667,8 +1648,7 @@ extern "C" {
     pub fn JS_GetPrototype(ctx: *mut JSContext, val: JSValue) -> JSValue;
 }
 extern "C" {
-    pub fn JS_GetLength(ctx: *mut JSContext, obj: JSValue, pres: *mut i64)
-        -> ::core::ffi::c_int;
+    pub fn JS_GetLength(ctx: *mut JSContext, obj: JSValue, pres: *mut i64) -> ::core::ffi::c_int;
 }
 extern "C" {
     pub fn JS_SetLength(ctx: *mut JSContext, obj: JSValue, len: i64) -> ::core::ffi::c_int;
@@ -1777,11 +1757,7 @@ extern "C" {
     pub fn JS_GetGlobalObject(ctx: *mut JSContext) -> JSValue;
 }
 extern "C" {
-    pub fn JS_IsInstanceOf(
-        ctx: *mut JSContext,
-        val: JSValue,
-        obj: JSValue,
-    ) -> ::core::ffi::c_int;
+    pub fn JS_IsInstanceOf(ctx: *mut JSContext, val: JSValue, obj: JSValue) -> ::core::ffi::c_int;
 }
 extern "C" {
     pub fn JS_DefineProperty(
@@ -1832,8 +1808,7 @@ extern "C" {
     ) -> ::core::ffi::c_int;
 }
 extern "C" {
-    pub fn JS_SetOpaque(obj: JSValue, opaque: *mut ::core::ffi::c_void)
-        -> ::core::ffi::c_int;
+    pub fn JS_SetOpaque(obj: JSValue, opaque: *mut ::core::ffi::c_void) -> ::core::ffi::c_int;
 }
 extern "C" {
     pub fn JS_GetOpaque(obj: JSValue, class_id: JSClassID) -> *mut ::core::ffi::c_void;
@@ -2832,7 +2807,8 @@ fn bindgen_test_layout_JSCFunctionListEntry__bindgen_ty_1() {
 }
 #[test]
 fn bindgen_test_layout_JSCFunctionListEntry() {
-    const UNINIT: ::core::mem::MaybeUninit<JSCFunctionListEntry> = ::core::mem::MaybeUninit::uninit();
+    const UNINIT: ::core::mem::MaybeUninit<JSCFunctionListEntry> =
+        ::core::mem::MaybeUninit::uninit();
     let ptr = UNINIT.as_ptr();
     assert_eq!(
         ::core::mem::size_of::<JSCFunctionListEntry>(),
@@ -2901,7 +2877,7 @@ extern "C" {
         obj: JSValue,
         tab: *const JSCFunctionListEntry,
         len: ::core::ffi::c_int,
-    );
+    ) -> ::core::ffi::c_int;
 }
 pub type JSModuleInitFunc = ::core::option::Option<
     unsafe extern "C" fn(ctx: *mut JSContext, m: *mut JSModuleDef) -> ::core::ffi::c_int,

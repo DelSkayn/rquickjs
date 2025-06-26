@@ -2,7 +2,7 @@
 
 use crate::{qjs, Ctx, Error, Result, String, Value};
 use alloc::string::{String as StdString, ToString as _};
-use core::{ffi::CStr, hash::Hash};
+use core::{ffi::CStr, hash::Hash, ptr::null_mut};
 
 mod predefined;
 pub use predefined::PredefinedAtom;
@@ -113,7 +113,7 @@ impl<'js> Atom<'js> {
     /// Convert the atom to a JavaScript string.
     pub fn to_string(&self) -> Result<StdString> {
         unsafe {
-            let c_str = qjs::JS_AtomToCString(self.ctx.as_ptr(), self.atom);
+            let c_str = qjs::JS_AtomToCStringLen(self.ctx.as_ptr(), null_mut(), self.atom);
             if c_str.is_null() {
                 // Might not ever happen but I am not 100% sure
                 // so just incase check it.

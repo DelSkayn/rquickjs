@@ -22,12 +22,12 @@ ident_case = "1"
 fnv = "1"
 indexmap = "2"
 convert_case = "0.8"
-syn = { version = "2", features = ["full","fold","extra-traits","visit"] }
-phf_shared = { version = "0.11", optional = true }
-phf_generator = { version = "0.11",  optional = true }
+syn = { version = "2", features = ["full", "fold", "extra-traits", "visit"] }
+phf_shared = { version = "0.12", optional = true }
+phf_generator = { version = "0.12", optional = true }
 
 [dev-dependencies]
-rquickjs = { path = "../", features = ["macro", "futures","phf"] }
+rquickjs = { path = "../", features = ["macro", "futures", "phf"] }
 difference = "2"
 async-std = { version = "1", features = ["attributes"] }
 
