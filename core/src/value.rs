@@ -234,6 +234,13 @@ impl<'js> Value<'js> {
 
     /// Create a new number value
     #[inline]
+    pub fn new_big_int(ctx: Ctx<'js>, value: i64) -> Self {
+        let value = unsafe { qjs::JS_NewBigInt64(ctx.as_ptr(), value) };
+        Self { ctx, value }
+    }
+
+    /// Create a new number value
+    #[inline]
     pub fn new_number(ctx: Ctx<'js>, value: f64) -> Self {
         let int = value as i32;
         #[allow(clippy::float_cmp)]
@@ -798,6 +805,10 @@ mod test {
             let val: Value = ctx.eval(r#"1n"#).unwrap();
             assert_eq!(val.type_of(), Type::BigInt);
             let val: Value = ctx.eval(r#"999999999999999999999n"#).unwrap();
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val = Value::new_big_int(ctx.clone(), 1245);
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val = Value::new_big_int(ctx, 9999999999999999);
             assert_eq!(val.type_of(), Type::BigInt);
         });
     }
