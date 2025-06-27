@@ -429,7 +429,7 @@ impl<'js> AsRef<Value<'js>> for Value<'js> {
 
 macro_rules! type_impls {
     // type: name => tag
-    ($($type:ident: $name:ident => $tag:ident,)*) => {
+    ($($type:ident: $name:ident => $tag:ident$(| $tags:ident)*,)*) => {
         /// The type of JavaScript value
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[repr(u8)]
@@ -497,8 +497,7 @@ macro_rules! type_impls {
             pub fn type_of(&self) -> Type {
                 let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
                 match tag {
-                    $(qjs::$tag if type_impls!(@cond $type self) => Type::$type,)*
-                    qjs::JS_TAG_SHORT_BIG_INT => Type::BigInt,
+                    $(qjs::$tag $(| qjs::$tags)* if type_impls!(@cond $type self) => Type::$type,)*
                     _ => Type::Unknown,
                 }
             }
@@ -534,7 +533,7 @@ type_impls! {
     Exception: exception => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
-    BigInt: big_int => JS_TAG_BIG_INT,
+    BigInt: big_int => JS_TAG_BIG_INT | JS_TAG_SHORT_BIG_INT,
 }
 
 macro_rules! sub_types {
