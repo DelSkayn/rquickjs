@@ -234,6 +234,13 @@ impl<'js> Value<'js> {
 
     /// Create a new number value
     #[inline]
+    pub fn new_big_int(ctx: Ctx<'js>, value: i64) -> Self {
+        let value = unsafe { qjs::JS_NewBigInt64(ctx.as_ptr(), value) };
+        Self { ctx, value }
+    }
+
+    /// Create a new number value
+    #[inline]
     pub fn new_number(ctx: Ctx<'js>, value: f64) -> Self {
         let int = value as i32;
         #[allow(clippy::float_cmp)]
@@ -375,6 +382,12 @@ impl<'js> Value<'js> {
         (unsafe { qjs::JS_IsError(self.ctx.as_ptr(), self.value) } as i32) != 0
     }
 
+    /// Check if the value is a BigInt
+    #[inline]
+    pub fn is_big_int(&self) -> bool {
+        unsafe { qjs::JS_IsBigInt(self.value) }
+    }
+
     /// Reference as value
     #[inline]
     pub fn as_value(&self) -> &Self {
@@ -416,7 +429,7 @@ impl<'js> AsRef<Value<'js>> for Value<'js> {
 
 macro_rules! type_impls {
     // type: name => tag
-    ($($type:ident: $name:ident => $tag:ident,)*) => {
+    ($($type:ident: $name:ident => $($tag:ident)|+,)*) => {
         /// The type of JavaScript value
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[repr(u8)]
@@ -484,7 +497,7 @@ macro_rules! type_impls {
             pub fn type_of(&self) -> Type {
                 let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
                 match tag {
-                    $(qjs::$tag if type_impls!(@cond $type self) => Type::$type,)*
+                    $($(qjs::$tag)|+ if type_impls!(@cond $type self) => Type::$type,)*
                     _ => Type::Unknown,
                 }
             }
@@ -520,7 +533,7 @@ type_impls! {
     Exception: exception => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
-    BigInt: big_int => JS_TAG_BIG_INT,
+    BigInt: big_int => JS_TAG_BIG_INT | JS_TAG_SHORT_BIG_INT,
 }
 
 macro_rules! sub_types {
@@ -783,5 +796,19 @@ mod test {
         assert!(!Type::Object.interpretable_as(Type::Function));
 
         assert!(!Type::Bool.interpretable_as(Type::Int));
+    }
+
+    #[test]
+    fn big_int() {
+        test_with(|ctx| {
+            let val: Value = ctx.eval(r#"1n"#).unwrap();
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val: Value = ctx.eval(r#"999999999999999999999n"#).unwrap();
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val = Value::new_big_int(ctx.clone(), 1245);
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val = Value::new_big_int(ctx, 9999999999999999);
+            assert_eq!(val.type_of(), Type::BigInt);
+        });
     }
 }
