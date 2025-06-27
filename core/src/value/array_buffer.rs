@@ -105,6 +105,14 @@ impl<'js> ArrayBuffer<'js> {
     /// Returns `None` if the array is detached.
     pub fn as_bytes(&self) -> Option<&[u8]> {
         let raw = Self::get_raw(self.as_value())?;
+        Some(unsafe { slice::from_raw_parts(raw.ptr.as_ptr(), raw.len) })
+    }
+
+    /// Returns the underlying bytes of the buffer as a mutable slice,
+    ///
+    /// Returns `None` if the array is detached.
+    pub fn as_bytes_mut(&self) -> Option<&mut [u8]> {
+        let raw = Self::get_raw(self.as_value())?;
         Some(unsafe { slice::from_raw_parts_mut(raw.ptr.as_ptr(), raw.len) })
     }
 
