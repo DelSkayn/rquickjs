@@ -1,28 +1,28 @@
 error[E0521]: borrowed data escapes outside of closure
-  --> tests/async_compile_fail/async_nested_contexts.rs:11:38
+  --> tests/async_compile_fail/async_nested_contexts.rs:11:13
    |
 7  | /      async_with!(ctx_1 => |ctx_1|{
 8  | |/         async_with!(ctx_2 => |ctx_2|{
 9  | ||             // It is disallowed to use multiple ctx object together from different with closures.
 10 | ||             // Lifetime on ctx should be unique.
 11 | ||             ctx_1.globals().set("t", ctx_2.globals());
-   | ||                                      ^^^^^^^^^^^^^^^ `ctx_2` escapes the closure body here
+   | ||             ^^^^^^^^^^^^^^^ `ctx_2` escapes the closure body here
 12 | ||         }).await
    | ||__________- `ctx_2` is a reference that is only valid in the closure body
 13 | |      })
    | |_______- `ctx_1` declared here, outside of the closure body
 
 error[E0521]: borrowed data escapes outside of closure
-  --> tests/async_compile_fail/async_nested_contexts.rs:11:13
+  --> tests/async_compile_fail/async_nested_contexts.rs:11:38
    |
 7  | /     async_with!(ctx_1 => |ctx_1|{
 8  | |         async_with!(ctx_2 => |ctx_2|{
 ...  |
 11 | |             ctx_1.globals().set("t", ctx_2.globals());
-   | |             ^^^^^^^^^^^^^^^
-   | |             |
-   | |             `ctx_1` escapes the closure body here
-   | |             argument requires that `'1` must outlive `'static`
+   | |                                      ^^^^^^^^^^^^^^^
+   | |                                      |
+   | |                                      `ctx_1` escapes the closure body here
+   | |                                      argument requires that `'1` must outlive `'static`
 12 | |         }).await
 13 | |     })
    | |      -

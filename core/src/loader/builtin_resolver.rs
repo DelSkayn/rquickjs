@@ -1,5 +1,9 @@
 use crate::{loader::Resolver, Ctx, Error, Result};
+use alloc::string::{String, ToString as _};
+#[cfg(not(feature = "std"))]
+use hashbrown::HashSet;
 use relative_path::RelativePath;
+#[cfg(feature = "std")]
 use std::collections::HashSet;
 
 /// The builtin module resolver

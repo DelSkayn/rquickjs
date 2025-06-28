@@ -1,4 +1,4 @@
-pub use ::std::os::raw::{c_char, c_int, c_uint, c_void};
+pub use ::core::ffi::{c_char, c_int, c_uint, c_void};
 
 pub type JSValueConst = JSValue;
 
@@ -82,6 +82,8 @@ pub unsafe fn JS_IsObject(v: JSValue) -> bool {
 
 #[inline]
 pub unsafe fn JS_ToCString(ctx: *mut JSContext, val: JSValue) -> *const c_char {
+    // Type her can differ depending on architecture.
+    #[allow(clippy::useless_conversion)]
     JS_ToCStringLen2(ctx, ptr::null_mut(), val, (false).into())
 }
 #[inline]
@@ -90,6 +92,8 @@ pub unsafe fn JS_ToCStringLen(
     plen: *mut usize,
     val: JSValue,
 ) -> *const c_char {
+    // Type her can differ depending on architecture.
+    #[allow(clippy::useless_conversion)]
     JS_ToCStringLen2(ctx, plen as _, val, (false).into())
 }
 

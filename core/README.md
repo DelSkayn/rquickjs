@@ -5,7 +5,7 @@
 [![docs](https://img.shields.io/badge/docs.rs-rquickjs-66c2a5?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyByb2xlPSJpbWciIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUxMiA1MTIiPjxwYXRoIGZpbGw9IiNmNWY1ZjUiIGQ9Ik00ODguNiAyNTAuMkwzOTIgMjE0VjEwNS41YzAtMTUtOS4zLTI4LjQtMjMuNC0zMy43bC0xMDAtMzcuNWMtOC4xLTMuMS0xNy4xLTMuMS0yNS4zIDBsLTEwMCAzNy41Yy0xNC4xIDUuMy0yMy40IDE4LjctMjMuNCAzMy43VjIxNGwtOTYuNiAzNi4yQzkuMyAyNTUuNSAwIDI2OC45IDAgMjgzLjlWMzk0YzAgMTMuNiA3LjcgMjYuMSAxOS45IDMyLjJsMTAwIDUwYzEwLjEgNS4xIDIyLjEgNS4xIDMyLjIgMGwxMDMuOS01MiAxMDMuOSA1MmMxMC4xIDUuMSAyMi4xIDUuMSAzMi4yIDBsMTAwLTUwYzEyLjItNi4xIDE5LjktMTguNiAxOS45LTMyLjJWMjgzLjljMC0xNS05LjMtMjguNC0yMy40LTMzLjd6TTM1OCAyMTQuOGwtODUgMzEuOXYtNjguMmw4NS0zN3Y3My4zek0xNTQgMTA0LjFsMTAyLTM4LjIgMTAyIDM4LjJ2LjZsLTEwMiA0MS40LTEwMi00MS40di0uNnptODQgMjkxLjFsLTg1IDQyLjV2LTc5LjFsODUtMzguOHY3NS40em0wLTExMmwtMTAyIDQxLjQtMTAyLTQxLjR2LS42bDEwMi0zOC4yIDEwMiAzOC4ydi42em0yNDAgMTEybC04NSA0Mi41di03OS4xbDg1LTM4Ljh2NzUuNHptMC0xMTJsLTEwMiA0MS40LTEwMi00MS40di0uNmwxMDItMzguMiAxMDIgMzguMnYuNnoiPjwvcGF0aD48L3N2Zz4K)](https://docs.rs/rquickjs-core)
 [![status](https://img.shields.io/github/actions/workflow/status/DelSkayn/rquickjs/ci.yml?branch=master&style=for-the-badge&logo=github-actions&logoColor=white)](https://github.com/DelSkayn/rquickjs/actions?query=workflow%3ARust)
 
-This library is a high level bindings the [QuickJS](https://bellard.org/quickjs/) JavaScript engine.
+This library is a high level bindings of the [QuickJS-NG](https://quickjs-ng.github.io/quickjs/) JavaScript engine, a fork of the [QuickJS](https://bellard.org/quickjs/) Javascript engine.
 Its goal is to be an easy to use, and safe wrapper similar to the rlua library.
 
 **QuickJS** is a small and embeddable JavaScript engine. It supports the _ES2020_ specification including modules, asynchronous generators, proxies and BigInt.
@@ -28,7 +28,6 @@ It optionally supports mathematical extensions such as big decimal floating poin
 
 - Full integration with async Rust
   - The ES6 Promises can be handled as Rust futures and vice versa
-  - Both __Tokio__ and __AsyncStd__ runtimes supported natively
   - Easy integration with almost any async runtime or executor
 - Flexible data conversion between Rust and JS
   - Many widely used Rust types can be converted to JS and vice versa
@@ -46,10 +45,8 @@ It optionally supports mathematical extensions such as big decimal floating poin
   - The properties can be defined with getters and setters
   - Support for constant static properties
   - Support for holding references to JS objects
-    (Data type which holds refs should implement `HasRefs` trait to get garbage collector works properly)
+    (Data type which holds refs should implement `Trace` trait to get garbage collector works properly)
   - Support for extending defined classes by JS
-- Easy bindings using proc macro
-  (The interfacing between JS and Rust became much easy with `bind` macro)
 
 ## Development status
 

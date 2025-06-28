@@ -78,13 +78,16 @@ impl JsAccessor {
 
                 let name = get.name(case);
 
-                let configurable = configurable
-                    .then(|| quote!(.configurable()))
-                    .unwrap_or_default();
-                let enumerable = enumerable
-                    .then(|| quote!(.enumerable()))
-                    .unwrap_or_default();
-
+                let configurable = if configurable {
+                    quote!(.configurable())
+                } else {
+                    Default::default()
+                };
+                let enumerable = if enumerable {
+                    quote!(.enumerable())
+                } else {
+                    Default::default()
+                };
                 let get_name = get.function.expand_carry_type_name(GET_PREFIX);
                 let set_name = set.function.expand_carry_type_name(SET_PREFIX);
                 quote! {_proto.prop(#name,
@@ -99,13 +102,16 @@ impl JsAccessor {
 
                 let name = get.name(case);
 
-                let configurable = configurable
-                    .then(|| quote!(.configurable()))
-                    .unwrap_or_default();
-                let enumerable = enumerable
-                    .then(|| quote!(.enumerable()))
-                    .unwrap_or_default();
-
+                let configurable = if configurable {
+                    quote!(.configurable())
+                } else {
+                    Default::default()
+                };
+                let enumerable = if enumerable {
+                    quote!(.enumerable())
+                } else {
+                    Default::default()
+                };
                 let get_name = get.function.expand_carry_type_name(GET_PREFIX);
                 quote! {_proto.prop(#name,
                         #lib_crate::object::Accessor::new_get(#get_name)
@@ -119,12 +125,16 @@ impl JsAccessor {
 
                 let name = set.name(case);
 
-                let configurable = configurable
-                    .then(|| quote!(.configurable()))
-                    .unwrap_or_default();
-                let enumerable = enumerable
-                    .then(|| quote!(.enumerable()))
-                    .unwrap_or_default();
+                let configurable = if configurable {
+                    quote!(.configurable())
+                } else {
+                    Default::default()
+                };
+                let enumerable = if enumerable {
+                    quote!(.enumerable())
+                } else {
+                    Default::default()
+                };
 
                 let set_name = set.function.expand_carry_type_name(GET_PREFIX);
                 quote! {_proto.prop(#name,

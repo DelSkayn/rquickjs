@@ -15,7 +15,7 @@ cc = "1"
 
 [build-dependencies.bindgen-rs]
 package = "bindgen"
-version = "0.69"
+version = "0.72"
 optional = true
 
 [build-dependencies.pretty_env_logger]

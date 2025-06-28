@@ -3,10 +3,22 @@
 //! The `rquickjs` crate provides safe high-level bindings to the [QuickJS](https://bellard.org/quickjs/) JavaScript engine.
 //! This crate is heavily inspired by the [rlua](https://crates.io/crates/rlua) crate.
 
+#![allow(unknown_lints)]
 #![allow(clippy::needless_lifetimes)]
+#![allow(clippy::uninlined_format_args)]
+#![allow(mismatched_lifetime_syntaxes)]
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
+#![allow(clippy::doc_lazy_continuation)]
+#![cfg_attr(not(test), no_std)]
 
-pub(crate) use std::{result::Result as StdResult, string::String as StdString};
+#[doc(hidden)]
+pub extern crate alloc;
+
+#[cfg(any(feature = "std", test))]
+extern crate std;
+
+pub(crate) use alloc::string::String as StdString;
+pub(crate) use core::result::Result as StdResult;
 
 mod js_lifetime;
 pub mod markers;
@@ -28,7 +40,8 @@ pub use result::{CatchResultExt, CaughtError, CaughtResult, Error, Result, Throw
 pub use value::{
     array, atom, convert, function, module, object, promise, Array, Atom, BigInt, CString, Coerced,
     Exception, Filter, FromAtom, FromIteratorJs, FromJs, Function, IntoAtom, IntoJs, IteratorJs,
-    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value,
+    Module, Null, Object, Promise, String, Symbol, Type, Undefined, Value, WriteOptions,
+    WriteOptionsEndianness,
 };
 
 pub mod allocator;

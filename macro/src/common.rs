@@ -60,26 +60,24 @@ impl ToTokens for Case {
 }
 
 impl Case {
-    pub fn to_convert_case(self) -> ConvertCase {
+    pub fn to_convert_case(self) -> ConvertCase<'static> {
         match self {
             Case::Lower => ConvertCase::Lower,
             Case::Upper => ConvertCase::Upper,
             Case::Camel => ConvertCase::Camel,
             Case::Pascal => ConvertCase::Pascal,
             Case::Snake => ConvertCase::Snake,
-            Case::ScreamingSnake => ConvertCase::ScreamingSnake,
+            Case::ScreamingSnake => ConvertCase::Constant,
         }
     }
 }
 
 pub(crate) fn crate_ident() -> Result<String> {
     match proc_macro_crate::crate_name("rquickjs") {
-        Err(e) => {
-            return Err(Error::new(
-                Span::call_site(),
-                format_args!("could not find rquickjs package: {e}"),
-            ))
-        }
+        Err(e) => Err(Error::new(
+            Span::call_site(),
+            format_args!("could not find rquickjs package: {e}"),
+        )),
         Ok(FoundCrate::Itself) => Ok("rquickjs".to_owned()),
         Ok(FoundCrate::Name(x)) => Ok(x.to_string()),
     }

@@ -2,7 +2,8 @@
 
 use super::{util::resolve_simple, Loader, Resolver};
 use crate::{Ctx, Error, Module, Result};
-use std::ops::Deref;
+use alloc::string::String;
+use core::ops::Deref;
 
 /// The module data which contains bytecode
 ///

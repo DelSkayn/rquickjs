@@ -165,7 +165,7 @@ pub(crate) fn expand(mut input: DeriveInput) -> Result<TokenStream> {
             impl<#lt> ValidJsLifetimeImpl for #name<#lt>
                 where
                     #(
-                        #types: JsLifetime<#lt>
+                        #types: #crate_name::JsLifetime<#lt>
                     ),*
             {
             }
