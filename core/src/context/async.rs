@@ -4,7 +4,8 @@ use super::{
     ContextBuilder, Intrinsic,
 };
 use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
-use std::{future::Future, mem, pin::Pin, ptr::NonNull};
+use alloc::boxed::Box;
+use core::{future::Future, mem, pin::Pin, ptr::NonNull};
 
 mod future;
 
@@ -66,7 +67,7 @@ use future::WithFuture;
 macro_rules! async_with{
     ($context:expr => |$ctx:ident| { $($t:tt)* }) => {
         $crate::AsyncContext::async_with(&$context,|$ctx| {
-            let fut = Box::pin(async move {
+            let fut = $crate::alloc::boxed::Box::pin(async move {
                 $($t)*
             });
             /// SAFETY: While rquickjs objects have a 'js lifetime attached to them,
@@ -80,8 +81,8 @@ macro_rules! async_with{
             /// rquickjs objects are send so the future will never be send.
             /// Since we acquire a lock before running the future and nothing can escape the closure
             /// and future it is safe to recast the future as send.
-            unsafe fn uplift<'a,'b,R>(f: std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'a>>) -> std::pin::Pin<Box<dyn std::future::Future<Output = R> + 'b + Send>>{
-                std::mem::transmute(f)
+            unsafe fn uplift<'a,'b,R>(f: core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'a>>) -> core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'b + Send>>{
+                core::mem::transmute(f)
             }
             unsafe{ uplift(fut) }
         })
@@ -103,6 +104,7 @@ impl DropContext for AsyncRuntime {
                         // We should still free the context.
                         // TODO see if there is a way to recover from a panic which could cause the
                         // following assertion to trigger
+                        #[cfg(feature = "std")]
                         assert!(std::thread::panicking());
                     }
                     unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
@@ -155,7 +157,8 @@ impl AsyncContext {
     pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.runtime.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
+            .ok_or(Error::Allocation)?;
+        unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         guard.drop_pending();
@@ -170,7 +173,7 @@ impl AsyncContext {
     pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.runtime.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
+            .ok_or(Error::Allocation)?;
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         guard.drop_pending();
@@ -236,6 +239,16 @@ unsafe impl Sync for AsyncContext {}
 #[cfg(test)]
 mod test {
     use crate::{AsyncContext, AsyncRuntime};
+
+    #[tokio::test]
+    async fn base_asyc_context() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
+        async_with!(&ctx => |ctx|{
+            ctx.globals();
+        })
+        .await;
+    }
 
     #[tokio::test]
     async fn clone_ctx() {

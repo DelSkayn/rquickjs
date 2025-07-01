@@ -1,11 +1,8 @@
-#![allow(dead_code)]
-use std::{
-    ffi::CString,
-    mem,
-    panic::{self, AssertUnwindSafe},
-    ptr::NonNull,
-    result::Result as StdResult,
-};
+#![allow(dead_code, unused_imports)]
+use alloc::{boxed::Box, ffi::CString};
+use core::{mem, panic::AssertUnwindSafe, ptr::NonNull, result::Result as StdResult};
+
+use rquickjs_sys::JSPromiseHookType;
 
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
@@ -15,7 +12,7 @@ use crate::{
     Ctx, Error, Result, Value,
 };
 
-use super::{opaque::Opaque, InterruptHandler, RejectionTracker};
+use super::{opaque::Opaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;
@@ -286,17 +283,76 @@ impl RawRuntime {
         stats.assume_init()
     }
 
+    #[allow(clippy::unnecessary_cast)]
+    pub unsafe fn set_promise_hook(&mut self, hook: Option<PromiseHook>) {
+        unsafe extern "C" fn promise_hook_wrapper(
+            ctx: *mut rquickjs_sys::JSContext,
+            type_: JSPromiseHookType,
+            promise: rquickjs_sys::JSValue,
+            parent: rquickjs_sys::JSValue,
+            opaque: *mut ::core::ffi::c_void,
+        ) {
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
+                let ctx = Ctx::from_ptr(ctx);
+
+                const INIT: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_INIT as u32;
+                const BEFORE: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_BEFORE as u32;
+                const AFTER: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_AFTER as u32;
+                const RESOLVE: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE as u32;
+
+                let rtype = match type_ as u32 {
+                    INIT => PromiseHookType::Init,
+                    BEFORE => PromiseHookType::Before,
+                    AFTER => PromiseHookType::After,
+                    RESOLVE => PromiseHookType::Resolve,
+                    _ => unreachable!(),
+                };
+
+                opaque.as_ref().run_promise_hook(
+                    ctx.clone(),
+                    rtype,
+                    Value::from_js_value_const(ctx.clone(), promise),
+                    Value::from_js_value_const(ctx, parent),
+                );
+            }));
+            match catch_unwind {
+                Ok(_) => {}
+                Err(panic) => {
+                    opaque.as_ref().set_panic(panic);
+                }
+            }
+        }
+
+        qjs::JS_SetPromiseHook(
+            self.rt.as_ptr(),
+            hook.as_ref().map(|_| {
+                promise_hook_wrapper
+                    as unsafe extern "C" fn(
+                        *mut rquickjs_sys::JSContext,
+                        JSPromiseHookType,
+                        rquickjs_sys::JSValue,
+                        rquickjs_sys::JSValue,
+                        *mut core::ffi::c_void,
+                    )
+            }),
+            qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
+        );
+        self.get_opaque().set_promise_hook(hook);
+    }
+
     pub unsafe fn set_host_promise_rejection_tracker(&mut self, tracker: Option<RejectionTracker>) {
         unsafe extern "C" fn rejection_tracker_wrapper(
             ctx: *mut rquickjs_sys::JSContext,
             promise: rquickjs_sys::JSValue,
             reason: rquickjs_sys::JSValue,
             is_handled: bool,
-            opaque: *mut ::std::os::raw::c_void,
+            opaque: *mut ::core::ffi::c_void,
         ) {
             let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
 
-            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
+            let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
                 let ctx = Ctx::from_ptr(ctx);
 
                 opaque.as_ref().run_rejection_tracker(
@@ -327,24 +383,27 @@ impl RawRuntime {
     pub unsafe fn set_interrupt_handler(&mut self, handler: Option<InterruptHandler>) {
         unsafe extern "C" fn interrupt_handler_trampoline(
             _rt: *mut qjs::JSRuntime,
-            opaque: *mut ::std::os::raw::c_void,
-        ) -> ::std::os::raw::c_int {
+            opaque: *mut ::core::ffi::c_void,
+        ) -> ::core::ffi::c_int {
             // This should be safe as the value is set below to a non-null pointer.
             let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
 
-            let catch_unwind = panic::catch_unwind(AssertUnwindSafe(move || {
-                opaque.as_ref().run_interrupt_handler()
-            }));
-            let should_interrupt = match catch_unwind {
-                Ok(should_interrupt) => should_interrupt,
-                Err(panic) => {
-                    opaque.as_ref().set_panic(panic);
-                    // Returning true here will cause the interpreter to raise an un-catchable exception.
-                    // The Rust code that is running the interpreter will see that exception and continue
-                    // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
-                    true
+            let should_interrupt = {
+                let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
+                    opaque.as_ref().run_interrupt_handler()
+                }));
+                match catch_unwind {
+                    Ok(should_interrupt) => should_interrupt,
+                    Err(panic) => {
+                        opaque.as_ref().set_panic(panic);
+                        // Returning true here will cause the interpreter to raise an un-catchable exception.
+                        // The Rust code that is running the interpreter will see that exception and continue
+                        // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
+                        true
+                    }
                 }
             };
+
             should_interrupt as _
         }
 

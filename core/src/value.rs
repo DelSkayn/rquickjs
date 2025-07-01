@@ -1,5 +1,5 @@
 use crate::{qjs, Ctx, Error, Result};
-use std::{fmt, hash::Hash, mem, ops::Deref, result::Result as StdResult, str};
+use core::{fmt, hash::Hash, mem, ops::Deref, result::Result as StdResult, str};
 
 pub mod array;
 pub mod atom;
@@ -52,7 +52,7 @@ impl<'js> PartialEq for Value<'js> {
 impl<'js> Eq for Value<'js> {}
 
 impl<'js> Hash for Value<'js> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         let tag = unsafe { qjs::JS_VALUE_GET_TAG(self.value) };
         let bits = unsafe { qjs::JS_VALUE_GET_FLOAT64(self.value).to_bits() };
         state.write_i32(tag);
@@ -234,6 +234,13 @@ impl<'js> Value<'js> {
 
     /// Create a new number value
     #[inline]
+    pub fn new_big_int(ctx: Ctx<'js>, value: i64) -> Self {
+        let value = unsafe { qjs::JS_NewBigInt64(ctx.as_ptr(), value) };
+        Self { ctx, value }
+    }
+
+    /// Create a new number value
+    #[inline]
     pub fn new_number(ctx: Ctx<'js>, value: f64) -> Self {
         let int = value as i32;
         #[allow(clippy::float_cmp)]
@@ -342,7 +349,7 @@ impl<'js> Value<'js> {
     /// Check if the value is an array
     #[inline]
     pub fn is_array(&self) -> bool {
-        0 != unsafe { qjs::JS_IsArray(self.ctx.as_ptr(), self.value) }
+        unsafe { qjs::JS_IsArray(self.value) }
     }
 
     /// Check if the value is a function
@@ -360,7 +367,7 @@ impl<'js> Value<'js> {
     /// Check if the value is a promise.
     #[inline]
     pub fn is_promise(&self) -> bool {
-        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as std::os::raw::c_int) >= 0
+        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as core::ffi::c_int) >= 0
     }
 
     /// Check if the value is an exception
@@ -373,6 +380,12 @@ impl<'js> Value<'js> {
     #[inline]
     pub fn is_error(&self) -> bool {
         (unsafe { qjs::JS_IsError(self.ctx.as_ptr(), self.value) } as i32) != 0
+    }
+
+    /// Check if the value is a BigInt
+    #[inline]
+    pub fn is_big_int(&self) -> bool {
+        unsafe { qjs::JS_IsBigInt(self.value) }
     }
 
     /// Reference as value
@@ -416,7 +429,7 @@ impl<'js> AsRef<Value<'js>> for Value<'js> {
 
 macro_rules! type_impls {
     // type: name => tag
-    ($($type:ident: $name:ident => $tag:ident,)*) => {
+    ($($type:ident: $name:ident => $($tag:ident)|+,)*) => {
         /// The type of JavaScript value
         #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
         #[repr(u8)]
@@ -484,7 +497,7 @@ macro_rules! type_impls {
             pub fn type_of(&self) -> Type {
                 let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(self.value) };
                 match tag {
-                    $(qjs::$tag if type_impls!(@cond $type self) => Type::$type,)*
+                    $($(qjs::$tag)|+ if type_impls!(@cond $type self) => Type::$type,)*
                     _ => Type::Unknown,
                 }
             }
@@ -520,7 +533,7 @@ type_impls! {
     Exception: exception => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
-    BigInt: big_int => JS_TAG_BIG_INT,
+    BigInt: big_int => JS_TAG_BIG_INT | JS_TAG_SHORT_BIG_INT,
 }
 
 macro_rules! sub_types {
@@ -627,7 +640,7 @@ macro_rules! sub_types {
                 }
 
                 #[doc = concat!("Try convert into [`",stringify!($head),"`] returning self if the conversion fails.")]
-                pub fn $try_into(self) -> std::result::Result<$head<'js>, Value<'js>> {
+                pub fn $try_into(self) -> core::result::Result<$head<'js>, Value<'js>> {
                     if self.type_of().interpretable_as(Type::$head) {
                         Ok(sub_types!(@wrap $head$(->$sub_type)* self))
                     } else {
@@ -721,8 +734,10 @@ macro_rules! void_types {
         $(
             $(#[$meta])*
             #[derive(Debug, Copy, Clone, PartialEq, Eq)]
+            #[allow(dead_code)]
             pub struct $type;
 
+            #[allow(dead_code)]
             impl $type {
                 /// Convert into value
                 pub fn into_value<'js>(self, ctx: Ctx<'js>) -> Value<'js> {
@@ -781,5 +796,19 @@ mod test {
         assert!(!Type::Object.interpretable_as(Type::Function));
 
         assert!(!Type::Bool.interpretable_as(Type::Int));
+    }
+
+    #[test]
+    fn big_int() {
+        test_with(|ctx| {
+            let val: Value = ctx.eval(r#"1n"#).unwrap();
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val: Value = ctx.eval(r#"999999999999999999999n"#).unwrap();
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val = Value::new_big_int(ctx.clone(), 1245);
+            assert_eq!(val.type_of(), Type::BigInt);
+            let val = Value::new_big_int(ctx, 9999999999999999);
+            assert_eq!(val.type_of(), Type::BigInt);
+        });
     }
 }

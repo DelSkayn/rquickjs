@@ -1,3 +1,7 @@
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::needless_doctest_main)]
+#![allow(clippy::doc_lazy_continuation)]
+
 use attrs::OptionList;
 use class::ClassOption;
 use function::FunctionOption;
@@ -111,7 +115,6 @@ mod trace;
 ///     })
 /// }
 /// ```
-
 #[proc_macro_attribute]
 pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let options = parse_macro_input!(attr as OptionList<ClassOption>);

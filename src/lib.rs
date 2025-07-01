@@ -1,3 +1,5 @@
+#![allow(clippy::doc_lazy_continuation)]
+
 //! # High-level bindings to QuickJS
 //!
 //! The `rquickjs` crate provides safe high-level bindings to the
@@ -116,6 +118,7 @@
 //! - `dump-read-object`
 
 #![cfg_attr(feature = "doc-cfg", feature(doc_cfg))]
+#![cfg_attr(not(test), no_std)]
 
 pub use rquickjs_core::*;
 

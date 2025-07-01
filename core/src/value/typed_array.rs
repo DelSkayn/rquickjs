@@ -1,12 +1,15 @@
+use alloc::vec::Vec;
+
 use crate::{
     atom::PredefinedAtom, qjs, ArrayBuffer, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result,
     Value,
 };
-use std::{
-    fmt,
+use core::{
+    assert, debug_assert_eq, fmt,
     marker::PhantomData,
     mem::{self, MaybeUninit},
     ops::Deref,
+    panic,
     ptr::{null_mut, NonNull},
     slice,
 };
@@ -325,10 +328,12 @@ impl<'js> Object<'js> {
         if array_type < 0 {
             return false;
         }
+
+        #[allow(irrefutable_let_patterns)]
         if let Ok(array_type) = TryInto::<qjs::JSTypedArrayEnum>::try_into(array_type) {
             return array_type == T::ARRAY_TYPE;
         }
-        return false;
+        false
     }
 
     /// Interpret as [`TypedArray`]

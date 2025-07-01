@@ -5,7 +5,7 @@ use super::{
     ContextBuilder, Intrinsic,
 };
 use crate::{qjs, Ctx, Error, Result, Runtime};
-use std::{mem, ptr::NonNull};
+use core::{mem, ptr::NonNull};
 
 impl DropContext for Runtime {
     unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>) {
@@ -19,6 +19,7 @@ impl DropContext for Runtime {
                     // We should still free the context.
                     // TODO see if there is a way to recover from a panic which could cause the
                     // following assertion to trigger
+                    #[cfg(feature = "std")]
                     assert!(std::thread::panicking());
                 }
                 unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
@@ -66,7 +67,7 @@ impl Context {
     pub fn custom<I: Intrinsic>(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
+            .ok_or(Error::Allocation)?;
         // rquickjs assumes the base objects exist, so we allways need to add this.
         unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
@@ -82,7 +83,7 @@ impl Context {
     pub fn full(runtime: &Runtime) -> Result<Self> {
         let guard = runtime.inner.lock();
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
-            .ok_or_else(|| Error::Allocation)?;
+            .ok_or(Error::Allocation)?;
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
@@ -97,7 +98,7 @@ impl Context {
 
     /// Returns the associated runtime
     pub fn runtime(&self) -> &Runtime {
-        &self.0.rt()
+        self.0.rt()
     }
 
     #[allow(dead_code)]

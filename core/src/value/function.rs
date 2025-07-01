@@ -13,6 +13,7 @@ mod into_func;
 mod params;
 mod types;
 
+use alloc::{borrow::ToOwned as _, boxed::Box};
 pub use args::{Args, IntoArg, IntoArgs};
 pub use ffi::RustFunction;
 pub use params::{FromParam, FromParams, ParamRequirement, Params, ParamsAccessor};
@@ -81,7 +82,7 @@ impl<'js> Function<'js> {
     /// Defer call the function with given arguments.
     ///
     /// Calling a function with defer is equivalent to calling a JavaScript function with
-    /// `setTimeout(func,0)`.
+    /// `queueMicrotask()`.
     pub fn defer<A>(&self, args: A) -> Result<()>
     where
         A: IntoArgs<'js>,
@@ -167,11 +168,7 @@ impl<'js> Function<'js> {
     /// Set whether this function is a constructor or not.
     pub fn set_constructor(&self, is_constructor: bool) {
         unsafe {
-            qjs::JS_SetConstructorBit(
-                self.ctx().as_ptr(),
-                self.0.as_js_value(),
-                is_constructor.into(),
-            )
+            qjs::JS_SetConstructorBit(self.ctx().as_ptr(), self.0.as_js_value(), is_constructor)
         };
     }
 

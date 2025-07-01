@@ -2,3 +2,4 @@ target
 .ccls-cache
 .gdb_history
 Cargo.lock
+.DS_Store

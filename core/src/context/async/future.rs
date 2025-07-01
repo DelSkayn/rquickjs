@@ -1,4 +1,5 @@
-use std::{
+use alloc::boxed::Box;
+use core::{
     future::Future,
     mem::{self, ManuallyDrop},
     pin::Pin,

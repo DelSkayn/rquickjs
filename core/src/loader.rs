@@ -1,6 +1,8 @@
 //! Loaders and resolvers for loading JS modules.
 
-use std::{ffi::CStr, ptr};
+use alloc::boxed::Box;
+use alloc::string::String;
+use core::{ffi::CStr, ptr};
 
 use crate::{module::Declared, qjs, Ctx, Module, Result};
 
@@ -8,6 +10,7 @@ mod builtin_loader;
 mod builtin_resolver;
 pub mod bundle;
 mod compile;
+#[cfg(feature = "std")]
 mod file_resolver;
 mod module_loader;
 mod script_loader;
@@ -19,6 +22,7 @@ mod native_loader;
 pub use builtin_loader::BuiltinLoader;
 pub use builtin_resolver::BuiltinResolver;
 pub use compile::Compile;
+#[cfg(feature = "std")]
 pub use file_resolver::FileResolver;
 pub use module_loader::ModuleLoader;
 pub use script_loader::ScriptLoader;
@@ -118,11 +122,7 @@ impl LoaderHolder {
         let name = opaque.resolver.resolve(ctx, base, name)?;
 
         // We should transfer ownership of this string to QuickJS
-        Ok(
-            unsafe {
-                qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.as_bytes().len() as _)
-            },
-        )
+        Ok(unsafe { qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.len() as _) })
     }
 
     unsafe extern "C" fn normalize_raw(
@@ -188,7 +188,7 @@ macro_rules! loader_impls {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
                 fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
-                    let mut messages = Vec::<std::string::String>::new();
+                    let mut messages = alloc::vec::Vec::<alloc::string::String>::new();
                     let ($($t,)*) = self;
                     $(
                         match $t.resolve(_ctx, base, name) {
@@ -215,7 +215,7 @@ macro_rules! loader_impls {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
                 fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js, Declared>> {
-                    let mut messages = Vec::<std::string::String>::new();
+                    let mut messages = alloc::vec::Vec::<alloc::string::String>::new();
                     let ($($t,)*) = self;
                     $(
                         match $t.load(_ctx, name) {
