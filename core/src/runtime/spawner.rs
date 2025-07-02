@@ -1,93 +1,56 @@
-use std::{
+use super::{
+    schedular::{Schedular, SchedularPoll},
+    AsyncWeakRuntime, InnerRuntime,
+};
+use crate::AsyncRuntime;
+use alloc::vec::Vec;
+use core::{
     future::Future,
-    pin::{pin, Pin},
-    task::ready,
-    task::{Poll, Waker},
+    pin::Pin,
+    task::{ready, Context, Poll, Waker},
 };
 
 use async_lock::futures::LockArc;
 
-use crate::AsyncRuntime;
-
-use super::{raw::RawRuntime, AsyncWeakRuntime};
-
 /// A structure to hold futures spawned inside the runtime.
-///
-/// TODO: change future lookup in poll from O(n) to O(1).
-pub struct Spawner<'js> {
-    futures: Vec<Pin<Box<dyn Future<Output = ()> + 'js>>>,
+pub struct Spawner {
+    schedular: Schedular,
     wakeup: Vec<Waker>,
 }
 
-impl<'js> Spawner<'js> {
+impl Spawner {
     pub fn new() -> Self {
         Spawner {
-            futures: Vec::new(),
+            schedular: Schedular::new(),
             wakeup: Vec::new(),
         }
     }
 
-    pub fn push<F>(&mut self, f: F)
+    pub unsafe fn push<F>(&mut self, f: F)
     where
-        F: Future<Output = ()> + 'js,
+        F: Future<Output = ()>,
     {
+        unsafe { self.schedular.push(f) };
         self.wakeup.drain(..).for_each(Waker::wake);
-        self.futures.push(Box::pin(f))
     }
 
     pub fn listen(&mut self, wake: Waker) {
         self.wakeup.push(wake);
     }
 
-    pub fn drive<'a>(&'a mut self) -> SpawnFuture<'a, 'js> {
-        SpawnFuture(self)
-    }
-
     pub fn is_empty(&mut self) -> bool {
-        self.futures.is_empty()
+        self.schedular.is_empty()
     }
-}
 
-impl Drop for Spawner<'_> {
-    fn drop(&mut self) {
-        self.wakeup.drain(..).for_each(Waker::wake)
-    }
-}
-
-pub struct SpawnFuture<'a, 'js>(&'a mut Spawner<'js>);
-
-impl<'a, 'js> Future for SpawnFuture<'a, 'js> {
-    type Output = bool;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        if self.0.futures.is_empty() {
-            return Poll::Ready(false);
-        }
-
-        let item =
-            self.0
-                .futures
-                .iter_mut()
-                .enumerate()
-                .find_map(|(i, f)| match f.as_mut().poll(cx) {
-                    Poll::Ready(_) => Some(i),
-                    Poll::Pending => None,
-                });
-
-        match item {
-            Some(idx) => {
-                self.0.futures.swap_remove(idx);
-                Poll::Ready(true)
-            }
-            None => Poll::Pending,
-        }
+    pub fn poll(&mut self, cx: &mut Context) -> SchedularPoll {
+        unsafe { self.schedular.poll(cx) }
     }
 }
 
 enum DriveFutureState {
     Initial,
     Lock {
-        lock_future: LockArc<RawRuntime>,
+        lock_future: Option<LockArc<InnerRuntime>>,
         // Here to ensure the lock remains valid.
         _runtime: AsyncRuntime,
     },
@@ -115,20 +78,19 @@ impl DriveFuture {
 impl Future for DriveFuture {
     type Output = ();
 
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
+    fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> Poll<Self::Output> {
+        // Safety: We manually ensure that pinned values remained properly pinned.
+        let this = unsafe { self.get_unchecked_mut() };
         loop {
-            let mut lock = match self.state {
+            let mut lock = match this.state {
                 DriveFutureState::Initial => {
-                    let Some(_runtime) = self.rt.try_ref() else {
-                        return Poll::Ready(())
+                    let Some(_runtime) = this.rt.try_ref() else {
+                        return Poll::Ready(());
                     };
 
-                    // Dirty hack to get a owned lock,
-                    // We know the lock will remain alive and won't be moved since it is inside a
-                    // arc like structure and we keep it alive in the lock.
                     let lock_future = _runtime.inner.lock_arc();
-                    self.state = DriveFutureState::Lock {
-                        lock_future,
+                    this.state = DriveFutureState::Lock {
+                        lock_future: Some(lock_future),
                         _runtime,
                     };
                     continue;
@@ -137,43 +99,36 @@ impl Future for DriveFuture {
                     ref mut lock_future,
                     ..
                 } => {
-                    ready!(Pin::new(lock_future).poll(cx))
+                    // Safety: The future will not be moved until it is ready and then dropped.
+                    let res = unsafe {
+                        ready!(Pin::new_unchecked(lock_future.as_mut().unwrap()).poll(cx))
+                    };
+                    // Assign none explicitly so it we don't move out of the future.
+                    *lock_future = None;
+                    res
                 }
             };
 
-            lock.update_stack_top();
+            lock.runtime.update_stack_top();
 
-            unsafe { lock.get_opaque_mut() }
-                .spawner()
-                .listen(cx.waker().clone());
+            lock.runtime.get_opaque().listen(cx.waker().clone());
 
             loop {
                 // TODO: Handle error.
-                if let Ok(true) = lock.execute_pending_job() {
+                if let Ok(true) = lock.runtime.execute_pending_job() {
                     continue;
                 }
 
-                let drive = pin!(unsafe { lock.get_opaque_mut() }.spawner().drive());
-
                 // TODO: Handle error.
-                match drive.poll(cx) {
-                    Poll::Pending => {
-                        // Execute pending jobs to ensure we don't dead lock when waiting on
-                        // quickjs futures.
-                        while let Ok(true) = lock.execute_pending_job() {}
-                        self.state = DriveFutureState::Initial;
-                        return Poll::Pending;
+                match lock.runtime.get_opaque().poll(cx) {
+                    SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
+                        break
                     }
-                    Poll::Ready(false) => {}
-                    Poll::Ready(true) => {
-                        continue;
-                    }
+                    SchedularPoll::PendingProgress => {}
                 }
-
-                break;
             }
 
-            self.state = DriveFutureState::Initial;
+            this.state = DriveFutureState::Initial;
             return Poll::Pending;
         }
     }

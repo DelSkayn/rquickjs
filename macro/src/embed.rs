@@ -1,12 +1,13 @@
-use std::path::Path;
+use std::{env, path::Path};
 
-use proc_macro2::TokenStream;
+use crate::common::crate_ident;
+use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
-use rquickjs_core::{Context, Module, Result, Runtime};
+use rquickjs_core::{Context, Module, Result as JsResult, Runtime, WriteOptions};
 use syn::{
     parse::{Parse, ParseStream},
     punctuated::Punctuated,
-    LitStr, Token,
+    Error, LitStr, Result, Token,
 };
 
 /// A line of embedded modules.
@@ -35,13 +36,13 @@ pub struct EmbedModules(pub Punctuated<EmbedModule, Token![,]>);
 
 impl Parse for EmbedModules {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        let res = input.parse_terminated::<_, Token![,]>(EmbedModule::parse)?;
+        let res = input.parse_terminated(EmbedModule::parse, Token![,])?;
         Ok(EmbedModules(res))
     }
 }
 
 /// Implementation of the macro
-pub fn embed(modules: EmbedModules) -> TokenStream {
+pub fn embed(modules: EmbedModules) -> Result<TokenStream> {
     let mut files = Vec::new();
     for f in modules.0.into_iter() {
         let path = f
@@ -53,19 +54,21 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
         let path = Path::new(&path);
 
         let path = if path.is_relative() {
-            match Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join(path)
-                .canonicalize()
-            {
+            let full_path = Path::new(
+                &env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR should be set"),
+            )
+            .join(path);
+            match full_path.canonicalize() {
                 Ok(x) => x,
                 Err(e) => {
-                    error!(
-                        f.name,
-                        "Error loading embedded js module from path `{}`: {}",
-                        path.display(),
-                        e
-                    );
-                    continue;
+                    return Err(Error::new(
+                        f.name.span(),
+                        format_args!(
+                            "Error loading embedded js module from path `{}`: {}",
+                            full_path.display(),
+                            e
+                        ),
+                    ));
                 }
             }
         } else {
@@ -75,28 +78,29 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
         let source = match std::fs::read_to_string(&path) {
             Ok(x) => x,
             Err(e) => {
-                error!(
-                    f.name,
-                    "Error loading embedded js module from path `{}`: {}",
-                    path.display(),
-                    e
-                );
-                continue;
+                return Err(Error::new(
+                    f.name.span(),
+                    format_args!(
+                        "Error loading embedded js module from path `{}`: {}",
+                        path.display(),
+                        e
+                    ),
+                ));
             }
         };
         files.push((f.name.value(), source));
     }
 
-    let res = (|| -> Result<Vec<(String, Vec<u8>)>> {
+    let res = (|| -> JsResult<Vec<(String, Vec<u8>)>> {
         let rt = Runtime::new()?;
         let ctx = Context::full(&rt)?;
 
         let mut modules = Vec::new();
 
-        ctx.with(|ctx| -> Result<()> {
+        ctx.with(|ctx| -> JsResult<()> {
             for f in files.into_iter() {
-                let bc =
-                    unsafe { Module::unsafe_declare(ctx, f.0.clone(), f.1)?.write_object(false)? };
+                let bc = Module::declare(ctx.clone(), f.0.clone(), f.1)?
+                    .write(WriteOptions::default())?;
                 modules.push((f.0, bc));
             }
             Ok(())
@@ -107,8 +111,10 @@ pub fn embed(modules: EmbedModules) -> TokenStream {
     let res = match res {
         Ok(x) => x,
         Err(e) => {
-            error!("Error compiling embedded js module: {}", e);
-            return quote!();
+            return Err(Error::new(
+                Span::call_site(),
+                format_args!("Error compiling embedded js module: {}", e),
+            ));
         }
     };
 
@@ -124,7 +130,7 @@ fn to_entries(modules: impl Iterator<Item = (String, Vec<u8>)>) -> Vec<(String, 
 }
 
 #[cfg(feature = "phf")]
-pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
+pub fn expand(modules: &[(String, TokenStream)]) -> Result<TokenStream> {
     let keys = modules.iter().map(|(x, _)| x.clone()).collect::<Vec<_>>();
 
     let state = phf_generator::generate_hash(&keys);
@@ -137,27 +143,27 @@ pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
         quote!((#key, #value))
     });
 
-    let lib_crate = super::config::lib_crate();
+    let lib_crate = crate_ident()?;
     let lib_crate = format_ident!("{}", lib_crate);
-    quote! {
+    Ok(quote! {
         #lib_crate::loader::bundle::Bundle(& #lib_crate::phf::Map{
             key: #key,
             disps: &[#(#disps),*],
             entries: &[#(#entries),*],
         })
-    }
+    })
 }
 
 #[cfg(not(feature = "phf"))]
-pub fn expand(modules: &[(String, TokenStream)]) -> TokenStream {
-    let lib_crate = super::config::lib_crate();
+pub fn expand(modules: &[(String, TokenStream)]) -> Result<TokenStream> {
+    let lib_crate = crate_ident()?;
     let lib_crate = format_ident!("{}", lib_crate);
     let entries = modules.iter().map(|(name, data)| {
         quote! { (#name,#data)}
     });
-    quote! {
+    Ok(quote! {
         #lib_crate::loader::bundle::Bundle(&[#(#entries),*])
-    }
+    })
 }
 
 #[cfg(test)]
@@ -173,14 +179,14 @@ mod test {
         let tokens = expand(&test_data);
         let expected = quote! {
             rquickjs::loader::bundle::Bundle(&rquickjs::phf::Map{
-                key: 12913932095322966823u64,
+                key: 16287231350648472473u64,
                 disps: &[(0u32,0u32)],
                 entries: &[
                     ("test_module", &[1u8, 2u8, 3u8,4u8])
                 ],
             })
         };
-        assert_eq_tokens!(tokens, expected);
+        assert_eq_tokens!(tokens.unwrap(), expected);
     }
 
     #[cfg(not(feature = "phf"))]
@@ -194,7 +200,7 @@ mod test {
                 ("test_module", &[1u8, 2u8, 3u8,4u8])
             ])
         };
-        assert_eq_tokens!(tokens, expected);
+        assert_eq_tokens!(tokens.unwrap(), expected);
     }
 
     #[test]

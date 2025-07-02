@@ -1,11 +1,27 @@
-use crate::{Array, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String, Type, Value};
-use std::{
-    cell::{Cell, RefCell},
-    collections::{BTreeMap, BTreeSet, HashMap, HashSet, LinkedList, VecDeque},
-    hash::{BuildHasher, Hash},
+use crate::{
+    convert::List, Array, CString, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String,
+    Type, Value,
+};
+use alloc::{
+    boxed::Box,
+    collections::{BTreeMap, BTreeSet, LinkedList, VecDeque},
     rc::Rc,
-    sync::{Arc, Mutex, RwLock},
-    time::{Duration, SystemTime},
+    sync::Arc,
+    vec::Vec,
+};
+#[allow(unused_imports)]
+use core::{
+    cell::{Cell, RefCell},
+    hash::{BuildHasher, Hash},
+    time::Duration,
+};
+use hashbrown::{HashMap as HashbrownMap, HashSet as HashbrownSet};
+
+#[cfg(feature = "std")]
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Mutex, RwLock},
+    time::SystemTime,
 };
 
 #[cfg(feature = "either")]
@@ -15,20 +31,45 @@ use either::{Either, Left, Right};
 use indexmap::{IndexMap, IndexSet};
 
 impl<'js> FromJs<'js> for Value<'js> {
-    fn from_js(_: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(_: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         Ok(value)
     }
 }
 
 impl<'js> FromJs<'js> for StdString {
-    fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         String::from_value(value).and_then(|string| string.to_string())
+    }
+}
+
+impl<'js> FromJs<'js> for char {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        let type_name = value.type_name();
+        let s = String::from_value(value)?.to_string()?;
+
+        let mut chars = s.chars();
+        let (c, more) = (chars.next(), chars.next());
+
+        match (c, more) {
+            (Some(c), None) => Ok(c),
+            _ => Err(Error::FromJs {
+                from: type_name,
+                to: "char",
+                message: Some("The length of the string converted to char must be 1".into()),
+            }),
+        }
+    }
+}
+
+impl<'js> FromJs<'js> for CString<'js> {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        String::from_value(value)?.to_cstring()
     }
 }
 
 /// Convert from JS as any
 impl<'js> FromJs<'js> for () {
-    fn from_js(_: Ctx<'js>, _: Value<'js>) -> Result<Self> {
+    fn from_js(_: &Ctx<'js>, _: Value<'js>) -> Result<Self> {
         Ok(())
     }
 }
@@ -38,7 +79,7 @@ impl<'js, T> FromJs<'js> for Option<T>
 where
     T: FromJs<'js>,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         if value.type_of().is_void() {
             Ok(None)
         } else {
@@ -53,11 +94,11 @@ where
     T: FromJs<'js>,
 {
     // TODO this function seems a bit hacky.
-    // Expections are generally by the marshalling handled when returned callback.
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    // Exceptions are generally by the marshalling handled when returned callback.
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         unsafe {
             match ctx.handle_exception(value.into_js_value()) {
-                Ok(val) => T::from_js(ctx, Value::from_js_value(ctx, val)).map(Ok),
+                Ok(val) => T::from_js(ctx, Value::from_js_value(ctx.clone(), val)).map(Ok),
                 Err(error) => Ok(Err(error)),
             }
         }
@@ -72,7 +113,7 @@ where
     L: FromJs<'js>,
     R: FromJs<'js>,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         L::from_js(ctx, value.clone()).map(Left).or_else(|error| {
             if error.is_from_js() {
                 R::from_js(ctx, value).map(Right)
@@ -124,7 +165,7 @@ macro_rules! from_js_impls {
             where
                 T: FromJs<'js>,
             {
-                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     T::from_js(ctx, value).map($type::new)
                 }
             }
@@ -134,20 +175,20 @@ macro_rules! from_js_impls {
     // for tuple types
     (tup: $($($type:ident)*,)*) => {
         $(
-            impl<'js, $($type,)*> FromJs<'js> for ($($type,)*)
+            impl<'js, $($type,)*> FromJs<'js> for List<($($type,)*)>
             where
                 $($type: FromJs<'js>,)*
             {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let array = Array::from_value(value)?;
 
                     let tuple_len = 0 $(+ from_js_impls!(@one $type))*;
                     let array_len = array.len();
                     tuple_match_size(array_len, tuple_len)?;
 
-                    Ok((
+                    Ok(List((
                         $(array.get::<$type>(from_js_impls!(@idx $type))?,)*
-                    ))
+                    )))
                 }
             }
         )*
@@ -162,7 +203,7 @@ macro_rules! from_js_impls {
                 T: FromJs<'js> $(+ $($guard)*)*,
                 $($param: $($pguard)*,)*
             {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let array = Array::from_value(value)?;
                     array.iter().collect::<Result<_>>()
                 }
@@ -180,7 +221,7 @@ macro_rules! from_js_impls {
                 V: FromJs<'js>,
                 $($param: $($pguard)*,)*
             {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let object = Object::from_value(value)?;
                     object.props().collect::<Result<_>>()
                 }
@@ -193,7 +234,7 @@ macro_rules! from_js_impls {
     (val: $($type:ty => $($jstype:ident $getfn:ident)*,)*) => {
         $(
             impl<'js> FromJs<'js> for $type {
-                fn from_js(_ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                     let type_ = value.type_of();
                     match type_ {
                         $(Type::$jstype => Ok(unsafe { value.$getfn() } as _),)*
@@ -209,7 +250,7 @@ macro_rules! from_js_impls {
         $(
             $(
                 impl<'js> FromJs<'js> for $type {
-                    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+                    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
                         let num = <$base>::from_js(ctx, value)?;
                         number_match_range(num, $type::MIN as $base, $type::MAX as $base, stringify!($base), stringify!($type))?;
                         Ok(num as $type)
@@ -248,7 +289,7 @@ from_js_impls! {
 from_js_impls! {
     val:
     bool => Bool get_bool,
-    i32 => Int get_int,
+    i32 => Float get_float Int get_int,
     f64 => Float get_float Int get_int,
 }
 
@@ -259,7 +300,9 @@ from_js_impls! {
     Arc,
     Cell,
     RefCell,
+    #[cfg(feature = "std")]
     Mutex,
+    #[cfg(feature = "std")]
     RwLock,
 }
 
@@ -292,7 +335,10 @@ from_js_impls! {
     /// Convert from JS array to Rust linked list
     LinkedList,
     /// Convert from JS array to Rust hash set
+    #[cfg(feature = "std")]
     HashSet {S: Default + BuildHasher} (Eq + Hash),
+    /// Convert from JS array to hashbrown hash set
+    HashbrownSet {S: Default + BuildHasher} (Eq + Hash),
     /// Convert from JS array to Rust btree set
     BTreeSet (Eq + Ord),
     /// Convert from JS array to Rust index set
@@ -304,7 +350,10 @@ from_js_impls! {
 from_js_impls! {
     map:
     /// Convert from JS object to Rust hash map
+    #[cfg(feature = "std")]
     HashMap {S: Default + BuildHasher} (Eq + Hash),
+    /// Convert from JS object to hashbrown hash map
+    HashbrownMap {S: Default + BuildHasher} (Eq + Hash),
     /// Convert from JS object to Rust btree map
     BTreeMap (Eq + Ord),
     /// Convert from JS object to Rust index map
@@ -314,12 +363,13 @@ from_js_impls! {
 }
 
 impl<'js> FromJs<'js> for f32 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         f64::from_js(ctx, value).map(|value| value as _)
     }
 }
 
-fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
+#[allow(dead_code)]
+fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>) -> Result<i64> {
     let global = ctx.globals();
     let date_ctor: Object = global.get("Date")?;
 
@@ -334,19 +384,20 @@ fn date_to_millis<'js>(ctx: Ctx<'js>, value: Value<'js>) -> Result<i64> {
     get_time_fn.call((crate::function::This(value),))
 }
 
+#[cfg(feature = "std")]
 impl<'js> FromJs<'js> for SystemTime {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
         let millis = date_to_millis(ctx, value)?;
 
         if millis >= 0 {
-            /* since unix epoch */
+            // since unix epoch
             SystemTime::UNIX_EPOCH
                 .checked_add(Duration::from_millis(millis as _))
                 .ok_or_else(|| {
                     Error::new_from_js_message("Date", "SystemTime", "Timestamp too big")
                 })
         } else {
-            /* before unix epoch */
+            // before unix epoch
             SystemTime::UNIX_EPOCH
                 .checked_sub(Duration::from_millis((-millis) as _))
                 .ok_or_else(|| {
@@ -361,7 +412,7 @@ macro_rules! chrono_from_js_impls {
         $(
             #[cfg(feature = "chrono")]
             impl<'js> FromJs<'js> for chrono::DateTime<chrono::$type> {
-                fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::$type>> {
+                fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::$type>> {
                     use chrono::TimeZone;
 
                     let millis = date_to_millis(ctx, value)?;
@@ -383,6 +434,9 @@ chrono_from_js_impls! {
 
 #[cfg(test)]
 mod test {
+    #[cfg(target_arch = "wasm32")]
+    use super::Error;
+
     #[test]
     fn js_to_system_time() {
         use crate::{Context, Runtime};
@@ -398,11 +452,26 @@ mod test {
                 res.duration_since(SystemTime::UNIX_EPOCH).unwrap()
             );
 
-            let res: SystemTime = ctx.eval("new Date(-123456789)").unwrap();
-            assert_eq!(
-                Duration::from_millis(123456789),
-                SystemTime::UNIX_EPOCH.duration_since(res).unwrap()
-            );
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let res: SystemTime = ctx.eval("new Date(-123456789)").unwrap();
+                assert_eq!(
+                    Duration::from_millis(123456789),
+                    SystemTime::UNIX_EPOCH.duration_since(res).unwrap()
+                );
+            }
+
+            // wasm32-wasip1 and wasm32-wasip2 do not support SystemTime before the Unix Epoch
+            #[cfg(target_arch = "wasm32")]
+            {
+                let res: Error = ctx
+                    .eval::<SystemTime, &str>("new Date(-123456789)")
+                    .unwrap_err();
+                assert_eq!(
+                    "Error converting from js 'Date' into type 'SystemTime': Timestamp too small",
+                    res.to_string()
+                );
+            }
         });
     }
 

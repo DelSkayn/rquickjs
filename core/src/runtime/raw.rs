@@ -1,62 +1,108 @@
-use std::{
-    any::Any, ffi::CString, marker::PhantomData, mem, panic, ptr::NonNull,
-    result::Result as StdResult,
-};
+#![allow(dead_code, unused_imports)]
+use alloc::{boxed::Box, ffi::CString};
+use core::{mem, panic::AssertUnwindSafe, ptr::NonNull, result::Result as StdResult};
 
-#[cfg(feature = "allocator")]
+use rquickjs_sys::JSPromiseHookType;
+
 use crate::allocator::{Allocator, AllocatorHolder};
 #[cfg(feature = "loader")]
-use crate::loader::{LoaderHolder, RawLoader, Resolver};
-use crate::{qjs, Function};
+use crate::loader::{Loader, LoaderHolder, Resolver};
+use crate::{
+    qjs::{self, size_t},
+    Ctx, Error, Result, Value,
+};
 
-#[cfg(feature = "futures")]
-use super::spawner::Spawner;
-use super::InterruptHandler;
+use super::{opaque::Opaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker};
 
-/// Opaque book keeping data for rust.
-pub(crate) struct Opaque<'js> {
-    /// Used to carry a panic if a callback triggered one.
-    pub panic: Option<Box<dyn Any + Send + 'static>>,
+const DUMP_BYTECODE_FINAL: u64 = 0x01;
+const DUMP_BYTECODE_PASS2: u64 = 0x02;
+const DUMP_BYTECODE_PASS1: u64 = 0x04;
+const DUMP_BYTECODE_HEX: u64 = 0x10;
+const DUMP_BYTECODE_PC2LINE: u64 = 0x20;
+const DUMP_BYTECODE_STACK: u64 = 0x40;
+const DUMP_BYTECODE_STEP: u64 = 0x80;
+const DUMP_READ_OBJECT: u64 = 0x100;
+const DUMP_FREE: u64 = 0x200;
+const DUMP_GC: u64 = 0x400;
+const DUMP_GC_FREE: u64 = 0x800;
+const DUMP_MODULE_RESOLVE: u64 = 0x1000;
+const DUMP_PROMISE: u64 = 0x2000;
+const DUMP_LEAKS: u64 = 0x4000;
+const DUMP_ATOM_LEAKS: u64 = 0x8000;
+const DUMP_MEM: u64 = 0x10000;
+const DUMP_OBJECTS: u64 = 0x20000;
+const DUMP_ATOMS: u64 = 0x40000;
+const DUMP_SHAPES: u64 = 0x80000;
 
-    /// The user provided interrupt handler, if any.
-    pub interrupt_handler: Option<InterruptHandler>,
+// Build the flags using `#[cfg]` at compile time
+const fn build_dump_flags() -> u64 {
+    #[allow(unused_mut)]
+    let mut flags: u64 = 0;
 
-    #[cfg(feature = "futures")]
-    pub spawner: Option<Spawner<'js>>,
+    #[cfg(feature = "dump-bytecode")]
+    {
+        flags |= DUMP_BYTECODE_FINAL | DUMP_BYTECODE_PASS2 | DUMP_BYTECODE_PASS1;
+    }
 
-    _marker: PhantomData<&'js ()>,
+    #[cfg(feature = "dump-gc")]
+    {
+        flags |= DUMP_GC;
+    }
+
+    #[cfg(feature = "dump-gc-free")]
+    {
+        flags |= DUMP_GC_FREE;
+    }
+
+    #[cfg(feature = "dump-free")]
+    {
+        flags |= DUMP_FREE;
+    }
+
+    #[cfg(feature = "dump-leaks")]
+    {
+        flags |= DUMP_LEAKS;
+    }
+
+    #[cfg(feature = "dump-mem")]
+    {
+        flags |= DUMP_MEM;
+    }
+
+    #[cfg(feature = "dump-objects")]
+    {
+        flags |= DUMP_OBJECTS;
+    }
+
+    #[cfg(feature = "dump-atoms")]
+    {
+        flags |= DUMP_ATOMS;
+    }
+
+    #[cfg(feature = "dump-shapes")]
+    {
+        flags |= DUMP_SHAPES;
+    }
+
+    #[cfg(feature = "dump-module-resolve")]
+    {
+        flags |= DUMP_MODULE_RESOLVE;
+    }
+
+    #[cfg(feature = "dump-promise")]
+    {
+        flags |= DUMP_PROMISE;
+    }
+
+    #[cfg(feature = "dump-read-object")]
+    {
+        flags |= DUMP_READ_OBJECT;
+    }
+
+    flags
 }
 
-impl<'js> Opaque<'js> {
-    pub fn new() -> Self {
-        Opaque {
-            panic: None,
-            interrupt_handler: None,
-            #[cfg(feature = "futures")]
-            spawner: None,
-            _marker: PhantomData,
-        }
-    }
-
-    #[cfg(feature = "futures")]
-    pub fn with_spawner() -> Self {
-        Opaque {
-            panic: None,
-            interrupt_handler: None,
-            #[cfg(feature = "futures")]
-            spawner: Some(Spawner::new()),
-            _marker: PhantomData,
-        }
-    }
-
-    #[cfg(feature = "futures")]
-    pub fn spawner(&mut self) -> &mut Spawner<'js> {
-        self.spawner
-            .as_mut()
-            .expect("tried to use async function in non async runtime")
-    }
-}
-
+#[derive(Debug)]
 pub(crate) struct RawRuntime {
     pub(crate) rt: NonNull<qjs::JSRuntime>,
 
@@ -64,7 +110,6 @@ pub(crate) struct RawRuntime {
     #[allow(dead_code)]
     pub info: Option<CString>,
 
-    #[cfg(feature = "allocator")]
     #[allow(dead_code)]
     pub allocator: Option<AllocatorHolder>,
     #[cfg(feature = "loader")]
@@ -79,15 +124,16 @@ impl Drop for RawRuntime {
     fn drop(&mut self) {
         unsafe {
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
-            let opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            let mut opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            opaque.clear();
+            qjs::JS_FreeRuntime(self.rt.as_ptr());
             mem::drop(opaque);
-            qjs::JS_FreeRuntime(self.rt.as_ptr())
         }
     }
 }
 
 impl RawRuntime {
-    pub unsafe fn new(opaque: Opaque<'static>) -> Option<Self> {
+    pub unsafe fn new(opaque: Opaque<'static>) -> Result<Self> {
         #[cfg(not(feature = "rust-alloc"))]
         return Self::new_base(opaque);
 
@@ -96,27 +142,28 @@ impl RawRuntime {
     }
 
     #[allow(dead_code)]
-    pub unsafe fn new_base(opaque: Opaque<'static>) -> Option<Self> {
+    pub unsafe fn new_base(mut opaque: Opaque<'static>) -> Result<Self> {
         let rt = qjs::JS_NewRuntime();
-        let rt = NonNull::new(rt)?;
 
-        Self::init_raw(rt.as_ptr());
+        Self::add_dump_flags(rt);
+
+        let rt = NonNull::new(rt).ok_or(Error::Allocation)?;
+
+        opaque.initialize(rt.as_ptr())?;
 
         let opaque = Box::into_raw(Box::new(opaque));
         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
 
-        Some(RawRuntime {
+        Ok(RawRuntime {
             rt,
             info: None,
-            #[cfg(feature = "allocator")]
             allocator: None,
             #[cfg(feature = "loader")]
             loader: None,
         })
     }
 
-    #[cfg(feature = "allocator")]
-    pub unsafe fn new_with_allocator<A>(opaque: Opaque<'static>, allocator: A) -> Option<Self>
+    pub unsafe fn new_with_allocator<A>(mut opaque: Opaque<'static>, allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
     {
@@ -125,24 +172,23 @@ impl RawRuntime {
         let opaque_ptr = allocator.opaque_ptr();
 
         let rt = qjs::JS_NewRuntime2(&functions, opaque_ptr as _);
-        let rt = NonNull::new(rt)?;
 
-        Self::init_raw(rt.as_ptr());
+        Self::add_dump_flags(rt);
+
+        let rt = NonNull::new(rt).ok_or(Error::Allocation)?;
+
+        opaque.initialize(rt.as_ptr())?;
 
         let opaque = Box::into_raw(Box::new(opaque));
         unsafe { qjs::JS_SetRuntimeOpaque(rt.as_ptr(), opaque as *mut _) };
 
-        Some(RawRuntime {
+        Ok(RawRuntime {
             rt,
             info: None,
             allocator: Some(allocator),
             #[cfg(feature = "loader")]
             loader: None,
         })
-    }
-
-    pub(crate) unsafe fn init_raw(rt: *mut qjs::JSRuntime) {
-        Function::init_raw(rt);
     }
 
     pub fn update_stack_top(&self) {
@@ -152,17 +198,16 @@ impl RawRuntime {
         }
     }
 
-    pub unsafe fn get_opaque_mut<'js>(&mut self) -> &mut Opaque<'js> {
-        &mut *(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *mut _)
+    pub fn get_opaque<'js>(&self) -> &Opaque<'js> {
+        unsafe { &*(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *mut _) }
     }
 
     pub fn is_job_pending(&self) -> bool {
-        0 != unsafe { qjs::JS_IsJobPending(self.rt.as_ptr()) }
+        (unsafe { qjs::JS_IsJobPending(self.rt.as_ptr()) } as i32) != 0
     }
 
     pub fn execute_pending_job(&mut self) -> StdResult<bool, *mut qjs::JSContext> {
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
-        self.update_stack_top();
         let result = unsafe { qjs::JS_ExecutePendingJob(self.rt.as_ptr(), ctx_ptr.as_mut_ptr()) };
         if result == 0 {
             // no jobs executed
@@ -179,7 +224,7 @@ impl RawRuntime {
     pub unsafe fn set_loader<R, L>(&mut self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
-        L: RawLoader + 'static,
+        L: Loader + 'static,
     {
         let loader = LoaderHolder::new(resolver, loader);
         loader.set_to_runtime(self.rt.as_ptr());
@@ -199,14 +244,16 @@ impl RawRuntime {
     /// Note that is a Noop when a custom allocator is being used,
     /// as is the case for the "rust-alloc" or "allocator" features.
     pub unsafe fn set_memory_limit(&mut self, limit: usize) {
-        qjs::JS_SetMemoryLimit(self.rt.as_ptr(), limit as _)
+        let limit: size_t = limit.try_into().unwrap_or(size_t::MAX);
+        qjs::JS_SetMemoryLimit(self.rt.as_ptr(), limit)
     }
 
     /// Set a limit on the max size of stack the runtime will use.
     ///
     /// The default values is 256x1024 bytes.
     pub unsafe fn set_max_stack_size(&mut self, limit: usize) {
-        qjs::JS_SetMaxStackSize(self.rt.as_ptr(), limit as _);
+        let limit: size_t = limit.try_into().unwrap_or(size_t::MAX);
+        qjs::JS_SetMaxStackSize(self.rt.as_ptr(), limit);
     }
 
     /// Set a memory threshold for garbage collection.
@@ -214,10 +261,15 @@ impl RawRuntime {
         qjs::JS_SetGCThreshold(self.rt.as_ptr(), threshold as _);
     }
 
+    /// Set dump flags.
+    pub unsafe fn set_dump_flags(&self, flags: u64) {
+        qjs::JS_SetDumpFlags(self.rt.as_ptr(), flags);
+    }
+
     /// Manually run the garbage collection.
     ///
-    /// Most of quickjs values are reference counted and
-    /// will automaticly free themselfs when they have no more
+    /// Most of QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub unsafe fn run_gc(&mut self) {
@@ -231,28 +283,127 @@ impl RawRuntime {
         stats.assume_init()
     }
 
+    #[allow(clippy::unnecessary_cast)]
+    pub unsafe fn set_promise_hook(&mut self, hook: Option<PromiseHook>) {
+        unsafe extern "C" fn promise_hook_wrapper(
+            ctx: *mut rquickjs_sys::JSContext,
+            type_: JSPromiseHookType,
+            promise: rquickjs_sys::JSValue,
+            parent: rquickjs_sys::JSValue,
+            opaque: *mut ::core::ffi::c_void,
+        ) {
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
+                let ctx = Ctx::from_ptr(ctx);
+
+                const INIT: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_INIT as u32;
+                const BEFORE: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_BEFORE as u32;
+                const AFTER: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_AFTER as u32;
+                const RESOLVE: u32 = qjs::JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE as u32;
+
+                let rtype = match type_ as u32 {
+                    INIT => PromiseHookType::Init,
+                    BEFORE => PromiseHookType::Before,
+                    AFTER => PromiseHookType::After,
+                    RESOLVE => PromiseHookType::Resolve,
+                    _ => unreachable!(),
+                };
+
+                opaque.as_ref().run_promise_hook(
+                    ctx.clone(),
+                    rtype,
+                    Value::from_js_value_const(ctx.clone(), promise),
+                    Value::from_js_value_const(ctx, parent),
+                );
+            }));
+            match catch_unwind {
+                Ok(_) => {}
+                Err(panic) => {
+                    opaque.as_ref().set_panic(panic);
+                }
+            }
+        }
+
+        qjs::JS_SetPromiseHook(
+            self.rt.as_ptr(),
+            hook.as_ref().map(|_| {
+                promise_hook_wrapper
+                    as unsafe extern "C" fn(
+                        *mut rquickjs_sys::JSContext,
+                        JSPromiseHookType,
+                        rquickjs_sys::JSValue,
+                        rquickjs_sys::JSValue,
+                        *mut core::ffi::c_void,
+                    )
+            }),
+            qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
+        );
+        self.get_opaque().set_promise_hook(hook);
+    }
+
+    pub unsafe fn set_host_promise_rejection_tracker(&mut self, tracker: Option<RejectionTracker>) {
+        unsafe extern "C" fn rejection_tracker_wrapper(
+            ctx: *mut rquickjs_sys::JSContext,
+            promise: rquickjs_sys::JSValue,
+            reason: rquickjs_sys::JSValue,
+            is_handled: bool,
+            opaque: *mut ::core::ffi::c_void,
+        ) {
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
+                let ctx = Ctx::from_ptr(ctx);
+
+                opaque.as_ref().run_rejection_tracker(
+                    ctx.clone(),
+                    Value::from_js_value_const(ctx.clone(), promise),
+                    Value::from_js_value_const(ctx, reason),
+                    is_handled,
+                );
+            }));
+            match catch_unwind {
+                Ok(_) => {}
+                Err(panic) => {
+                    opaque.as_ref().set_panic(panic);
+                }
+            }
+        }
+        qjs::JS_SetHostPromiseRejectionTracker(
+            self.rt.as_ptr(),
+            tracker.as_ref().map(|_| rejection_tracker_wrapper as _),
+            qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
+        );
+        self.get_opaque().set_rejection_tracker(tracker);
+    }
+
     /// Set a closure which is regularly called by the engine when it is executing code.
     /// If the provided closure returns `true` the interpreter will raise and uncatchable
     /// exception and return control flow to the caller.
     pub unsafe fn set_interrupt_handler(&mut self, handler: Option<InterruptHandler>) {
         unsafe extern "C" fn interrupt_handler_trampoline(
             _rt: *mut qjs::JSRuntime,
-            opaque: *mut ::std::os::raw::c_void,
-        ) -> ::std::os::raw::c_int {
-            let should_interrupt = match panic::catch_unwind(move || {
-                let opaque = &mut *(opaque as *mut Opaque);
-                opaque.interrupt_handler.as_mut().expect("handler is set")()
-            }) {
-                Ok(should_interrupt) => should_interrupt,
-                Err(panic) => {
-                    let opaque = &mut *(opaque as *mut Opaque);
-                    opaque.panic = Some(panic);
-                    // Returning true here will cause the interpreter to raise an un-catchable exception.
-                    // The rust code that is running the interpreter will see that exception and continue
-                    // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
-                    true
+            opaque: *mut ::core::ffi::c_void,
+        ) -> ::core::ffi::c_int {
+            // This should be safe as the value is set below to a non-null pointer.
+            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+
+            let should_interrupt = {
+                let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
+                    opaque.as_ref().run_interrupt_handler()
+                }));
+                match catch_unwind {
+                    Ok(should_interrupt) => should_interrupt,
+                    Err(panic) => {
+                        opaque.as_ref().set_panic(panic);
+                        // Returning true here will cause the interpreter to raise an un-catchable exception.
+                        // The Rust code that is running the interpreter will see that exception and continue
+                        // the panic handling. See crate::result::{handle_exception, handle_panic} for details.
+                        true
+                    }
                 }
             };
+
             should_interrupt as _
         }
 
@@ -261,6 +412,47 @@ impl RawRuntime {
             handler.as_ref().map(|_| interrupt_handler_trampoline as _),
             qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
         );
-        self.get_opaque_mut().interrupt_handler = handler;
+        self.get_opaque().set_interrupt_handler(handler);
+    }
+
+    fn add_dump_flags(rt: *mut rquickjs_sys::JSRuntime) {
+        unsafe {
+            qjs::JS_SetDumpFlags(rt, build_dump_flags());
+        }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::sync::{Arc, Mutex};
+
+    use crate::{Context, Runtime};
+
+    #[test]
+    fn promise_rejection_handler() {
+        let counter = Arc::new(Mutex::new(0));
+        let rt = Runtime::new().unwrap();
+        {
+            let counter = counter.clone();
+            rt.set_host_promise_rejection_tracker(Some(Box::new(move |_, _, _, is_handled| {
+                if !is_handled {
+                    let mut c = counter.lock().unwrap();
+                    *c += 1;
+                }
+            })));
+        }
+        let context = Context::full(&rt).unwrap();
+        context.with(|ctx| {
+            let _: Result<(), _> = ctx.eval(
+                r#"
+                const x = async () => {
+                    throw new Error("Uncaught")
+                }
+                x()
+                throw new Error("Caught")
+            "#,
+            );
+        });
+        assert_eq!(*counter.lock().unwrap(), 1);
     }
 }

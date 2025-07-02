@@ -4,12 +4,14 @@
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::upper_case_acronyms)]
-#![cfg_attr(test, allow(deref_nullptr))] // TODO: Remove it after closing bindgen#1651
+#![allow(clippy::uninlined_format_args)]
+#![no_std]
 
-use std::ptr;
+use ::core::ptr;
 
-/// Common error message for converting between c 'size_t' and rust 'usize';
-pub const SIZE_T_ERROR: &str = "c type 'size_t' didnt fit into rust type 'usize'";
+/// Common error message for converting between C `size_t` and Rust `usize`;
+pub const SIZE_T_ERROR: &str =
+    "conversion between C type 'size_t' and Rust type 'usize' overflowed.";
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 

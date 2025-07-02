@@ -1,65 +1,63 @@
 [package]
 name = "rquickjs-core"
-version = "0.3.1"
+version = "0.9.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
-edition = "2018"
+edition = "2021"
 license = "MIT"
 readme = "README.md"
-description = "High level bindings to the QuickJS javascript engine"
+description = "High level bindings to the QuickJS JavaScript engine"
 keywords = ["quickjs", "ecmascript", "javascript", "es6", "es2020"]
 categories = ["api-bindings"]
 repository = "https://github.com/DelSkayn/rquickjs.git"
 
-[dependencies.phf]
-version = "0.10"
-optional = true
+[package.metadata.docs.rs]
+features = ["full-async", "doc-cfg"]
 
-[dependencies.indexmap]
-version = "1"
-optional = true
+[dependencies]
+rquickjs-sys = { workspace = true }
+hashbrown = { version = "0.15" }
+phf = { version = "0.12", optional = true }
+indexmap = { version = "2", optional = true }
+either = { version = "1", optional = true }
+async-lock = { version = "3", optional = true, default-features = false }
+chrono = { version = "0.4", optional = true }
+dlopen = { version = "0.1", optional = true }
+relative-path = { version = "2.0", optional = true, default-features = false, features = [
+    "alloc",
+] }
 
-[dependencies.either]
-version = "1"
-optional = true
-
-[dependencies.async-lock]
-version = "2"
-optional = true
-
-[dependencies.chrono]
-version = "0.4"
-optional = true
-
-[dependencies.rquickjs-sys]
-version = "0.3.1"
-path = "../sys"
-
-[dependencies.dlopen]
-version = "0.1"
-optional = true
-
-[dependencies.relative-path]
-version = "1.3"
-optional = true
+[dev-dependencies]
+futures-rs = { package = "futures", version = "0.3" }
+tokio = { version = "1", default-features = false, features = [
+    "rt",
+    "time",
+    "macros",
+    "sync",
+] }
+rquickjs.path = "../"
+approx = "0.5"
+trybuild = "1"
 
 [features]
-default = []
+default = ["std"]
+
+std = ["relative-path?/std"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "exports", "loader", "allocator", "dyn-load", "either", "indexmap", "classes", "properties", "array-buffer"]
+full = ["std", "chrono", "loader", "dyn-load", "either", "indexmap"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
+
+# Enable conversion of chrono types to/from JS
+chrono = ["dep:chrono"]
 
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
 bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
-parallel = []
-
-# Enable support of reading module exports
-exports = ["rquickjs-sys/exports"]
+parallel = ["std", "tokio/rt-multi-thread"]
 
 # Enable user-defined module loader support
 loader = ["relative-path"]
@@ -67,36 +65,18 @@ loader = ["relative-path"]
 # Enable native module loading support
 dyn-load = ["loader", "dlopen"]
 
-# Enable user-defined allocator support
-allocator = []
-
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
-rust-alloc = ["allocator"]
+rust-alloc = []
 
 # Enable user-defined classes support
-classes = []
 
-# Enable user-defined properties support
-properties = []
-
-# Enable ArrayBuffer and TypedArray support
-array-buffer = []
 
 # Enable interop between Rust futures and JS Promises
-futures = ["async-lock"]
+futures = ["dep:async-lock"]
 
-# Max number of function args
-max-args-7 = []
-max-args-8 = ["max-args-7"]
-max-args-9 = ["max-args-8"]
-max-args-10 = ["max-args-9"]
-max-args-11 = ["max-args-10"]
-max-args-12 = ["max-args-11"]
-max-args-13 = ["max-args-12"]
-max-args-14 = ["max-args-13"]
-max-args-15 = ["max-args-14"]
-max-args-16 = ["max-args-15"]
+# Allows transferring objects between different contexts of the same runtime.
+multi-ctx = []
 
 # Enable QuickJS dumps for debug
 dump-bytecode = ["rquickjs-sys/dump-bytecode"]
@@ -119,21 +99,8 @@ compile-tests = []
 # Enable unstable doc-cfg feature (for docs.rs)
 doc-cfg = []
 
-[dev-dependencies.futures-rs]
-package = "futures"
-version = "0.3"
-
-[dev-dependencies.tokio]
-version = "1.0"
-default-features = false
-features = ["rt", "rt-multi-thread", "time", "macros"]
-
-[dev-dependencies.rquickjs]
-path = ".."
-
-[dev-dependencies]
-approx = "0.5"
-trybuild = "1.0.23"
-
-[package.metadata.docs.rs]
-features = ["full-async", "doc-cfg"]
+# Deprecated features
+properties = []
+classes = []
+array-buffer = []
+allocator = []

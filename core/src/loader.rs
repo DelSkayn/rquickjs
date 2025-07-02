@@ -1,34 +1,35 @@
 //! Loaders and resolvers for loading JS modules.
 
-use std::{ffi::CStr, ptr};
+use alloc::boxed::Box;
+use alloc::string::String;
+use core::{ffi::CStr, ptr};
 
-use crate::{module::ModuleData, qjs, Ctx, Module, Result};
-
-mod builtin_resolver;
-pub use builtin_resolver::BuiltinResolver;
-
-mod file_resolver;
-pub use file_resolver::FileResolver;
-
-mod script_loader;
-pub use script_loader::ScriptLoader;
+use crate::{module::Declared, qjs, Ctx, Module, Result};
 
 mod builtin_loader;
-pub use builtin_loader::BuiltinLoader;
-
-mod module_loader;
-pub use module_loader::ModuleLoader;
-
+mod builtin_resolver;
+pub mod bundle;
 mod compile;
-pub use compile::Compile;
+#[cfg(feature = "std")]
+mod file_resolver;
+mod module_loader;
+mod script_loader;
+mod util;
 
 #[cfg(feature = "dyn-load")]
 mod native_loader;
+
+pub use builtin_loader::BuiltinLoader;
+pub use builtin_resolver::BuiltinResolver;
+pub use compile::Compile;
+#[cfg(feature = "std")]
+pub use file_resolver::FileResolver;
+pub use module_loader::ModuleLoader;
+pub use script_loader::ScriptLoader;
+
 #[cfg(feature = "dyn-load")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "dyn-load")))]
 pub use native_loader::NativeLoader;
-
-pub mod bundle;
 
 #[cfg(feature = "phf")]
 /// The type of bundle that the `embed!` macro returns
@@ -37,8 +38,6 @@ pub type Bundle = bundle::Bundle<bundle::PhfBundleData<&'static [u8]>>;
 #[cfg(not(feature = "phf"))]
 /// The type of bundle that the `embed!` macro returns
 pub type Bundle = bundle::Bundle<bundle::ScaBundleData<&'static [u8]>>;
-
-mod util;
 
 /// Module resolver interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -49,7 +48,7 @@ pub trait Resolver {
     ///
     /// ```no_run
     /// # use rquickjs::{Ctx, Result, Error};
-    /// # fn default_resolve<'js>(_ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    /// # fn default_resolve<'js>(_ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
     /// Ok(if !name.starts_with('.') {
     ///     name.into()
     /// } else {
@@ -62,46 +61,22 @@ pub trait Resolver {
     /// })
     /// # }
     /// ```
-    fn resolve<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String>;
+    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String>;
 }
 
 /// Module loader interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Loader {
     /// Load module by name
-    fn load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<ModuleData>;
-}
-
-/// The Raw Module loader interface.
-///
-/// When implementing a module loader prefer the to implement [`Loader`] instead.
-/// All struct which implement [`Loader`] will automatically implement this trait.
-///
-/// # Safety
-/// Implementors must ensure that all module declaration and evaluation errors are returned from
-/// this function.
-#[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-pub unsafe trait RawLoader {
-    /// Load module by name, should return an unevaluted module.
-    ///
-    /// # Safety
-    /// Callers must ensure that the module returned by this function is not used after an module
-    /// declaration or evaluation failed.
-    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>>;
-}
-
-unsafe impl<T: Loader> RawLoader for T {
-    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, name: &str) -> Result<Module<'js>> {
-        let res = self.load(ctx, name)?.unsafe_declare(ctx)?;
-        Ok(res)
-    }
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js, Declared>>;
 }
 
 struct LoaderOpaque {
     resolver: Box<dyn Resolver>,
-    loader: Box<dyn RawLoader>,
+    loader: Box<dyn Loader>,
 }
 
+#[derive(Debug)]
 #[repr(transparent)]
 pub(crate) struct LoaderHolder(*mut LoaderOpaque);
 
@@ -115,7 +90,7 @@ impl LoaderHolder {
     pub fn new<R, L>(resolver: R, loader: L) -> Self
     where
         R: Resolver + 'static,
-        L: RawLoader + 'static,
+        L: Loader + 'static,
     {
         Self(Box::into_raw(Box::new(LoaderOpaque {
             resolver: Box::new(resolver),
@@ -137,7 +112,7 @@ impl LoaderHolder {
     #[inline]
     fn normalize<'js>(
         opaque: &mut LoaderOpaque,
-        ctx: Ctx<'js>,
+        ctx: &Ctx<'js>,
         base: &CStr,
         name: &CStr,
     ) -> Result<*mut qjs::c_char> {
@@ -147,11 +122,7 @@ impl LoaderHolder {
         let name = opaque.resolver.resolve(ctx, base, name)?;
 
         // We should transfer ownership of this string to QuickJS
-        Ok(
-            unsafe {
-                qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.as_bytes().len() as _)
-            },
-        )
+        Ok(unsafe { qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.len() as _) })
     }
 
     unsafe extern "C" fn normalize_raw(
@@ -165,8 +136,8 @@ impl LoaderHolder {
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::normalize(loader, ctx, base, name).unwrap_or_else(|error| {
-            error.throw(ctx);
+        Self::normalize(loader, &ctx, base, name).unwrap_or_else(|error| {
+            error.throw(&ctx);
             ptr::null_mut()
         })
     }
@@ -174,12 +145,12 @@ impl LoaderHolder {
     #[inline]
     unsafe fn load<'js>(
         opaque: &mut LoaderOpaque,
-        ctx: Ctx<'js>,
+        ctx: &Ctx<'js>,
         name: &CStr,
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
 
-        Ok(opaque.loader.raw_load(ctx, name)?.as_module_def().as_ptr())
+        Ok(opaque.loader.load(ctx, name)?.as_ptr())
     }
 
     unsafe extern "C" fn load_raw(
@@ -191,8 +162,8 @@ impl LoaderHolder {
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::load(loader, ctx, name).unwrap_or_else(|error| {
-            error.throw(ctx);
+        Self::load(loader, &ctx, name).unwrap_or_else(|error| {
+            error.throw(&ctx);
             ptr::null_mut()
         })
     }
@@ -216,8 +187,8 @@ macro_rules! loader_impls {
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
-                    let mut messages = Vec::<std::string::String>::new();
+                fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+                    let mut messages = alloc::vec::Vec::<alloc::string::String>::new();
                     let ($($t,)*) = self;
                     $(
                         match $t.resolve(_ctx, base, name) {
@@ -243,8 +214,8 @@ macro_rules! loader_impls {
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
-                    let mut messages = Vec::<std::string::String>::new();
+                fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js, Declared>> {
+                    let mut messages = alloc::vec::Vec::<alloc::string::String>::new();
                     let ($($t,)*) = self;
                     $(
                         match $t.load(_ctx, name) {
@@ -269,14 +240,14 @@ loader_impls!(A B C D E F G H);
 
 #[cfg(test)]
 mod test {
-    use crate::{module::ModuleData, Context, Ctx, Error, Result, Runtime};
+    use crate::{CatchResultExt, Context, Ctx, Error, Module, Result, Runtime};
 
     use super::{Loader, Resolver};
 
     struct TestResolver;
 
     impl Resolver for TestResolver {
-        fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+        fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
             if base == "loader" && name == "test" {
                 Ok(name.into())
             } else {
@@ -292,15 +263,16 @@ mod test {
     struct TestLoader;
 
     impl Loader for TestLoader {
-        fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
+        fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
             if name == "test" {
-                Ok(ModuleData::source(
+                Module::declare(
+                    ctx.clone(),
                     "test",
                     r#"
                       export const n = 123;
                       export const s = "abc";
                     "#,
-                ))
+                )
             } else {
                 Err(Error::new_loading_message(name, "unable to load"))
             }
@@ -313,41 +285,39 @@ mod test {
         let ctx = Context::full(&rt).unwrap();
         rt.set_loader(TestResolver, TestLoader);
         ctx.with(|ctx| {
-            let _module = ctx
-                .compile(
-                    "loader",
-                    r#"
+            Module::evaluate(
+                ctx,
+                "loader",
+                r#"
                       import { n, s } from "test";
                       export default [n, s];
                     "#,
-                )
-                .unwrap();
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
         })
     }
 
     #[test]
-    #[should_panic(expected = "Unable to resolve")]
+    #[should_panic(expected = "Error resolving module")]
     fn resolving_error() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         rt.set_loader(TestResolver, TestLoader);
         ctx.with(|ctx| {
-            let _ = ctx
-                .compile(
-                    "loader",
-                    r#"
+            Module::evaluate(
+                ctx.clone(),
+                "loader",
+                r#"
                       import { n, s } from "test_";
                     "#,
-                )
-                .map_err(|error| {
-                    println!("{error:?}");
-                    // TODO: Error::Resolving
-                    if let Error::Exception = error {
-                    } else {
-                        panic!();
-                    }
-                })
-                .expect("Unable to resolve");
+            )
+            .catch(&ctx)
+            .unwrap()
+            .finish::<()>()
+            .catch(&ctx)
+            .expect("Unable to resolve");
         })
     }
 }

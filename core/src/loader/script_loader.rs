@@ -1,7 +1,9 @@
+use alloc::{string::String, vec, vec::Vec};
+
+#[cfg(feature = "std")]
 use crate::{
     loader::{util::check_extensions, Loader},
-    module::ModuleData,
-    Ctx, Error, Result,
+    Ctx, Error, Module, Result,
 };
 
 /// The script module loader
@@ -35,13 +37,14 @@ impl Default for ScriptLoader {
     }
 }
 
+#[cfg(feature = "std")]
 impl Loader for ScriptLoader {
-    fn load<'js>(&mut self, _ctx: Ctx<'js>, path: &str) -> Result<ModuleData> {
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
         if !check_extensions(path, &self.extensions) {
             return Err(Error::new_loading(path));
         }
 
         let source: Vec<_> = std::fs::read(path)?;
-        Ok(ModuleData::source(path, source))
+        Module::declare(ctx.clone(), path, source)
     }
 }

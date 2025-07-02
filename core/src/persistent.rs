@@ -1,40 +1,9 @@
-use crate::{
-    qjs, Array, BigInt, Ctx, Error, FromJs, Function, IntoJs, Object, Result, String, Symbol, Value,
-};
-use std::{
-    cell::Cell,
-    cmp::PartialEq,
+use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Result, Value};
+
+use core::{
     fmt,
-    hash::{Hash, Hasher},
-    marker::PhantomData,
-    mem,
+    mem::{self, ManuallyDrop},
 };
-
-/// The trait to help break lifetime rules when JS objects leaves current context via [`Persistent`] wrapper.
-pub trait Outlive<'t> {
-    /// The target which has the same type as a `Self` but with another lifetime `'t`
-    type Target;
-}
-
-macro_rules! outlive_impls {
-    ($($type:ident,)*) => {
-        $(
-            impl<'js, 't> Outlive<'t> for $type<'js> {
-                type Target = $type<'t>;
-            }
-        )*
-    };
-}
-
-outlive_impls! {
-    Value,
-    Function,
-    Symbol,
-    String,
-    Object,
-    Array,
-    BigInt,
-}
 
 /// The wrapper for JS values to keep it from GC
 ///
@@ -44,15 +13,15 @@ outlive_impls! {
 /// # let rt = Runtime::new().unwrap();
 /// # let ctx = Context::full(&rt).unwrap();
 /// let func = ctx.with(|ctx| {
-///     Persistent::save(ctx, ctx.eval::<Function, _>("a => a + 1").unwrap())
+///     Persistent::save(&ctx, ctx.eval::<Function, _>("a => a + 1").unwrap())
 /// });
 /// let res: i32 = ctx.with(|ctx| {
-///     let func = func.clone().restore(ctx).unwrap();
+///     let func = func.clone().restore(&ctx).unwrap();
 ///     func.call((2,)).unwrap()
 /// });
 /// assert_eq!(res, 3);
 /// let res: i32 = ctx.with(|ctx| {
-///     let func = func.restore(ctx).unwrap();
+///     let func = func.restore(&ctx).unwrap();
 ///     func.call((0,)).unwrap()
 /// });
 /// assert_eq!(res, 1);
@@ -64,136 +33,104 @@ outlive_impls! {
 /// NOTE: Be careful and ensure that no persistent links outlives the runtime,
 /// otherwise Runtime will abort the process when dropped.
 ///
+#[derive(Eq, PartialEq, Hash)]
 pub struct Persistent<T> {
     pub(crate) rt: *mut qjs::JSRuntime,
-    pub(crate) value: Cell<qjs::JSValue>,
-    marker: PhantomData<T>,
+    pub(crate) value: T,
 }
 
-impl<T> Clone for Persistent<T> {
+impl<T: Clone> Clone for Persistent<T> {
     fn clone(&self) -> Self {
-        let value = unsafe { qjs::JS_DupValue(self.value.get()) };
-        Self::new_raw(self.rt, value)
+        Persistent {
+            rt: self.rt,
+            value: self.value.clone(),
+        }
     }
 }
 
-impl<T> fmt::Debug for Persistent<T> {
+impl<T> fmt::Debug for Persistent<T>
+where
+    T: fmt::Debug,
+{
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.debug_struct("Persistent")
             .field("rt", &self.rt)
-            .field("ptr", &unsafe { qjs::JS_VALUE_GET_PTR(self.value.get()) })
+            .field("value", &self.value)
             .finish()
     }
 }
 
-impl<T> Drop for Persistent<T> {
-    fn drop(&mut self) {
-        unsafe { qjs::JS_FreeValueRT(self.rt, self.value.get()) };
-    }
-}
-
 impl<T> Persistent<T> {
-    fn new_raw(rt: *mut qjs::JSRuntime, value: qjs::JSValue) -> Self {
-        Self {
-            rt,
-            value: Cell::new(value),
-            marker: PhantomData,
-        }
-    }
+    unsafe fn outlive_transmute<'from, 'to, U>(t: U) -> U::Changed<'to>
+    where
+        U: JsLifetime<'from>,
+    {
+        // extremely unsafe code which should be safe if outlive is implemented correctly.
 
-    #[cfg(feature = "classes")]
-    pub(crate) fn mark_raw(&self, mark_func: qjs::JS_MarkFunc) {
-        let value = self.value.get();
-        if unsafe { qjs::JS_VALUE_HAS_REF_COUNT(value) } {
-            unsafe { qjs::JS_MarkValue(self.rt, value, mark_func) };
-            if 0 == unsafe { qjs::JS_ValueRefCount(value) } {
-                self.value.set(qjs::JS_UNDEFINED);
-            }
+        // assertion to check if T and T::Target are the same size, they should be.
+        // should compile away if they are the same size.
+        assert_eq!(mem::size_of::<U>(), mem::size_of::<U::Changed<'static>>());
+        assert_eq!(mem::align_of::<U>(), mem::align_of::<U::Changed<'static>>());
+
+        // union to transmute between two unrelated types
+        // Can't use transmute since it is unable to determine the size of both values.
+        union Transmute<A, B> {
+            a: ManuallyDrop<A>,
+            b: ManuallyDrop<B>,
         }
+        let data = Transmute::<U, U::Changed<'to>> {
+            a: ManuallyDrop::new(t),
+        };
+        unsafe { ManuallyDrop::into_inner(data.b) }
     }
 
     /// Save the value of an arbitrary type
-    pub fn save<'js>(ctx: Ctx<'js>, val: T) -> Persistent<T::Target>
+    pub fn save<'js>(ctx: &Ctx<'js>, val: T) -> Persistent<T::Changed<'static>>
     where
-        T: AsRef<Value<'js>> + Outlive<'static>,
+        T: JsLifetime<'js>,
     {
-        let value = val.as_ref().value;
-        mem::forget(val);
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
-
-        Persistent::new_raw(rt, value)
+        let outlived: T::Changed<'static> =
+            unsafe { Self::outlive_transmute::<'js, 'static, T>(val) };
+        let ptr = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
+        Persistent {
+            rt: ptr,
+            value: outlived,
+        }
     }
 
     /// Restore the value of an arbitrary type
-    pub fn restore<'js>(self, ctx: Ctx<'js>) -> Result<T::Target>
+    pub fn restore<'js>(self, ctx: &Ctx<'js>) -> Result<T::Changed<'js>>
     where
-        T: Outlive<'js>,
-        T::Target: FromJs<'js>,
+        T: JsLifetime<'static>,
     {
         let ctx_runtime_ptr = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
         if self.rt != ctx_runtime_ptr {
             return Err(Error::UnrelatedRuntime);
         }
-        let value = unsafe { Value::from_js_value(ctx, self.value.get()) };
-        mem::forget(self);
-        T::Target::from_js(ctx, value)
-    }
-
-    fn ptr(&self) -> *mut qjs::c_void {
-        unsafe { qjs::JS_VALUE_GET_PTR(self.value.get()) }
-    }
-
-    fn tag(&self) -> qjs::c_int {
-        unsafe { qjs::JS_VALUE_GET_TAG(self.value.get()) }
+        Ok(unsafe { Self::outlive_transmute::<'static, 'js, T>(self.value) })
     }
 }
 
-impl<'js, T> FromJs<'js> for Persistent<T>
+impl<'js, T, R> FromJs<'js> for Persistent<R>
 where
-    T: Outlive<'js>,
-    T::Target: FromJs<'js> + IntoJs<'js>,
+    R: JsLifetime<'static, Changed<'js> = T>,
+    T: JsLifetime<'js, Changed<'static> = R> + FromJs<'js>,
 {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Persistent<T>> {
-        let value = T::Target::from_js(ctx, value)?;
-        let value = value.into_js(ctx)?;
-        let value = value.into_js_value();
-        let rt = unsafe { qjs::JS_GetRuntime(ctx.as_ptr()) };
-
-        Ok(Self::new_raw(rt, value))
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Persistent<R>> {
+        let value = T::from_js(ctx, value)?;
+        Ok(Persistent::save(ctx, value))
     }
 }
 
-impl<'js, 't, T> IntoJs<'js> for Persistent<T>
+impl<'js, T> IntoJs<'js> for Persistent<T>
 where
-    T: Outlive<'t>,
+    T: JsLifetime<'static>,
+    T::Changed<'js>: IntoJs<'js>,
 {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>> {
-        let value = unsafe { Value::from_js_value(ctx, self.value.get()) };
-        mem::forget(self);
-        value.into_js(ctx)
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        self.restore(ctx)?.into_js(ctx)
     }
 }
-
-#[cfg(feature = "parallel")]
-unsafe impl<T> Send for Persistent<T> {}
-
-impl<T> Hash for Persistent<T> {
-    fn hash<H>(&self, state: &mut H)
-    where
-        H: Hasher,
-    {
-        self.ptr().hash(state);
-        self.tag().hash(state);
-    }
-}
-
-impl<T, S> PartialEq<Persistent<S>> for Persistent<T> {
-    fn eq(&self, other: &Persistent<S>) -> bool {
-        (self.tag() == other.tag()) && (self.ptr() == other.ptr())
-    }
-}
-
-impl<T> Eq for Persistent<T> {}
 
 #[cfg(test)]
 mod test {
@@ -207,13 +144,32 @@ mod test {
 
         let persistent_v = ctx.with(|ctx| {
             let v: Value = ctx.eval("1").unwrap();
-            Persistent::save(ctx, v)
+            Persistent::save(&ctx, v)
         });
 
         let rt2 = Runtime::new().unwrap();
         let ctx = Context::full(&rt2).unwrap();
         ctx.with(|ctx| {
-            let _ = persistent_v.clone().restore(ctx).unwrap();
+            let _ = persistent_v.clone().restore(&ctx).unwrap();
+        });
+    }
+
+    #[test]
+    fn different_context() {
+        let rt1 = Runtime::new().unwrap();
+        let ctx1 = Context::full(&rt1).unwrap();
+        let ctx2 = Context::full(&rt1).unwrap();
+
+        let persistent_v = ctx1.with(|ctx| {
+            let v: Object = ctx.eval("({ a: 1 })").unwrap();
+            Persistent::save(&ctx, v)
+        });
+
+        std::mem::drop(ctx1);
+
+        ctx2.with(|ctx| {
+            let obj: Object = persistent_v.clone().restore(&ctx).unwrap();
+            assert_eq!(obj.get::<_, i32>("a").unwrap(), 1);
         });
     }
 
@@ -224,18 +180,18 @@ mod test {
 
         let func = ctx.with(|ctx| {
             let func: Function = ctx.eval("a => a + 1").unwrap();
-            Persistent::save(ctx, func)
+            Persistent::save(&ctx, func)
         });
 
         let res: i32 = ctx.with(|ctx| {
-            let func = func.clone().restore(ctx).unwrap();
+            let func = func.clone().restore(&ctx).unwrap();
             func.call((2,)).unwrap()
         });
         assert_eq!(res, 3);
 
         let ctx2 = Context::full(&rt).unwrap();
         let res: i32 = ctx2.with(|ctx| {
-            let func = func.restore(ctx).unwrap();
+            let func = func.restore(&ctx).unwrap();
             func.call((0,)).unwrap()
         });
         assert_eq!(res, 1);
@@ -248,11 +204,11 @@ mod test {
 
         let persistent_v = ctx.with(|ctx| {
             let v: Value = ctx.eval("1").unwrap();
-            Persistent::save(ctx, v)
+            Persistent::save(&ctx, v)
         });
 
         ctx.with(|ctx| {
-            let v = persistent_v.clone().restore(ctx).unwrap();
+            let v = persistent_v.clone().restore(&ctx).unwrap();
             ctx.globals().set("v", v).unwrap();
             let eq: Value = ctx.eval("v == 1").unwrap();
             assert!(eq.as_bool().unwrap());

@@ -1,23 +1,45 @@
-use crate::{qjs, Ctx, Error, Result, String, Value};
-use std::{ffi::CStr, string::String as StdString};
+//!  QuickJS atom functionality.
 
-/// An atom is value representing the name of a variable of an objects and can be created
-/// from any javascript value.
+use crate::{qjs, Ctx, Error, Result, String, Value};
+use alloc::string::{String as StdString, ToString as _};
+use core::{ffi::CStr, hash::Hash, ptr::null_mut};
+
+mod predefined;
+pub use predefined::PredefinedAtom;
+
+/// A QuickJS Atom.
+///
+/// In QuickJS atoms are similar to interned string but with additional uses.
+/// A symbol for instance is just an atom.
 ///
 /// # Representation
 ///
-/// Atoms in quickjs are handled differently depending on what type of index the represent.
+/// Atoms in QuickJS are handled differently depending on what type of index the represent.
 /// When the atom represents a number like index, like `object[1]` the atom is just
 /// a normal number.
 /// However when the atom represents a string link index like `object["foo"]` or `object.foo`
 /// the atom represents a value in a hashmap.
+#[derive(Debug)]
 pub struct Atom<'js> {
     pub(crate) atom: qjs::JSAtom,
     ctx: Ctx<'js>,
 }
 
+impl<'js> PartialEq for Atom<'js> {
+    fn eq(&self, other: &Self) -> bool {
+        self.atom == other.atom
+    }
+}
+impl<'js> Eq for Atom<'js> {}
+
+impl<'js> Hash for Atom<'js> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        state.write_u32(self.atom)
+    }
+}
+
 impl<'js> Atom<'js> {
-    /// Create a atom from a javascript value.
+    /// Create an atom from a JavaScript value.
     pub fn from_value(ctx: Ctx<'js>, val: &Value<'js>) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val.as_js_value()) };
         if atom == qjs::JS_ATOM_NULL {
@@ -28,7 +50,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create a atom from a u32
+    /// Create an atom from a `u32`
     pub fn from_u32(ctx: Ctx<'js>, val: u32) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_NewAtomUInt32(ctx.as_ptr(), val) };
         if atom == qjs::JS_ATOM_NULL {
@@ -38,7 +60,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create a atom from an i32 via value
+    /// Create an atom from an `i32` via value
     pub fn from_i32(ctx: Ctx<'js>, val: i32) -> Result<Atom<'js>> {
         let atom =
             unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_INT, val)) };
@@ -49,7 +71,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create a atom from a bool via value
+    /// Create an atom from a `bool` via value
     pub fn from_bool(ctx: Ctx<'js>, val: bool) -> Result<Atom<'js>> {
         let val = if val { qjs::JS_TRUE } else { qjs::JS_FALSE };
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), val) };
@@ -60,7 +82,7 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create a atom from a f64 via value
+    /// Create an atom from a `f64` via value
     pub fn from_f64(ctx: Ctx<'js>, val: f64) -> Result<Atom<'js>> {
         let atom = unsafe { qjs::JS_ValueToAtom(ctx.as_ptr(), qjs::JS_NewFloat64(val)) };
         if atom == qjs::JS_ATOM_NULL {
@@ -70,10 +92,10 @@ impl<'js> Atom<'js> {
         Ok(Atom { atom, ctx })
     }
 
-    /// Create a atom from a rust string
+    /// Create an atom from a Rust string
     pub fn from_str(ctx: Ctx<'js>, name: &str) -> Result<Atom<'js>> {
         unsafe {
-            let ptr = name.as_ptr() as *const std::os::raw::c_char;
+            let ptr = name.as_ptr() as *const core::ffi::c_char;
             let atom = qjs::JS_NewAtomLen(ctx.as_ptr(), ptr, name.len() as _);
             if atom == qjs::JS_ATOM_NULL {
                 // Should never invoke a callback so no panics
@@ -83,10 +105,15 @@ impl<'js> Atom<'js> {
         }
     }
 
-    /// Convert the atom to a javascript string.
+    /// Create an atom from a predefined atom.
+    pub fn from_predefined(ctx: Ctx<'js>, predefined: PredefinedAtom) -> Atom<'js> {
+        unsafe { Atom::from_atom_val(ctx, predefined as qjs::JSAtom) }
+    }
+
+    /// Convert the atom to a JavaScript string.
     pub fn to_string(&self) -> Result<StdString> {
         unsafe {
-            let c_str = qjs::JS_AtomToCString(self.ctx.as_ptr(), self.atom);
+            let c_str = qjs::JS_AtomToCStringLen(self.ctx.as_ptr(), null_mut(), self.atom);
             if c_str.is_null() {
                 // Might not ever happen but I am not 100% sure
                 // so just incase check it.
@@ -94,28 +121,33 @@ impl<'js> Atom<'js> {
                 return Err(Error::Unknown);
             }
             let bytes = CStr::from_ptr(c_str).to_bytes();
-            // Safety: quickjs should return valid utf8 so this should be safe.
-            let res = std::str::from_utf8_unchecked(bytes).to_string();
+            // Safety: QuickJS should return valid utf8 so this should be safe.
+            let res = core::str::from_utf8_unchecked(bytes).to_string();
             qjs::JS_FreeCString(self.ctx.as_ptr(), c_str);
             Ok(res)
         }
     }
 
-    /// Convert the atom to a javascript string .
+    /// Convert the atom to a JavaScript string.
     pub fn to_js_string(&self) -> Result<String<'js>> {
         unsafe {
             let val = qjs::JS_AtomToString(self.ctx.as_ptr(), self.atom);
             let val = self.ctx.handle_exception(val)?;
-            Ok(String::from_js_value(self.ctx, val))
+            Ok(String::from_js_value(self.ctx.clone(), val))
         }
     }
 
-    /// Convert the atom to a javascript value.
+    /// Convert the atom to a JavaScript value.
     pub fn to_value(&self) -> Result<Value<'js>> {
         self.to_js_string().map(|String(value)| value)
     }
 
     pub(crate) unsafe fn from_atom_val(ctx: Ctx<'js>, val: qjs::JSAtom) -> Self {
+        Atom { atom: val, ctx }
+    }
+
+    pub(crate) unsafe fn from_atom_val_dup(ctx: Ctx<'js>, val: qjs::JSAtom) -> Self {
+        qjs::JS_DupAtom(ctx.as_ptr(), val);
         Atom { atom: val, ctx }
     }
 }
@@ -125,7 +157,7 @@ impl<'js> Clone for Atom<'js> {
         let atom = unsafe { qjs::JS_DupAtom(self.ctx.as_ptr(), self.atom) };
         Atom {
             atom,
-            ctx: self.ctx,
+            ctx: self.ctx.clone(),
         }
     }
 }

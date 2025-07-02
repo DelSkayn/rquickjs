@@ -1,8 +1,9 @@
-//! Utilites for embedding JS modules.
+//! Utilities for embedding JS modules.
 
 use super::{util::resolve_simple, Loader, Resolver};
-use crate::{module::ModuleData, Ctx, Error, Result};
-use std::ops::Deref;
+use crate::{Ctx, Error, Module, Result};
+use alloc::string::String;
+use core::ops::Deref;
 
 /// The module data which contains bytecode
 ///
@@ -41,7 +42,7 @@ impl<T> Deref for Bundle<T> {
 }
 
 impl<D> Resolver for Bundle<ScaBundleData<D>> {
-    fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
         let path = resolve_simple(base, name);
         if self.iter().any(|(name, _)| *name == path) {
             Ok(path)
@@ -53,7 +54,7 @@ impl<D> Resolver for Bundle<ScaBundleData<D>> {
 
 #[cfg(feature = "phf")]
 impl<D> Resolver for Bundle<PhfBundleData<D>> {
-    fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
         let path = resolve_simple(base, name);
         if self.contains_key(path.as_str()) {
             Ok(path)
@@ -67,11 +68,12 @@ impl<D> Loader for Bundle<ScaBundleData<D>>
 where
     D: HasByteCode<'static>,
 {
-    fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
-        self.iter()
-            .find(|(module_name, _)| *module_name == name)
-            .map(|(_, bytecode)| unsafe { ModuleData::bytecode(name, bytecode.get_bytecode()) })
-            .ok_or_else(|| Error::new_loading(name))
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+        if let Some((_, x)) = self.iter().find(|(module_name, _)| *module_name == name) {
+            let module = unsafe { Module::load(ctx.clone(), x.get_bytecode())? };
+            return Ok(module);
+        }
+        Err(Error::new_loading(name))
     }
 }
 
@@ -80,9 +82,11 @@ impl<D> Loader for Bundle<PhfBundleData<D>>
 where
     D: HasByteCode<'static>,
 {
-    fn load<'js>(&mut self, _ctx: Ctx<'js>, name: &str) -> Result<ModuleData> {
-        self.get(name)
-            .map(|bytecode| unsafe { ModuleData::bytecode(name, bytecode.get_bytecode()) })
-            .ok_or_else(|| Error::new_loading(name))
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+        if let Some(x) = self.get(name) {
+            let module = unsafe { Module::load(ctx.clone(), x.get_bytecode())? };
+            return Ok(module);
+        }
+        Err(Error::new_loading(name))
     }
 }

@@ -1,38 +1,14 @@
-#[cfg(test)]
-macro_rules! abort {
-    ($err:expr) => { panic!($err) };
-    ($fmt:literal $($tts:tt)*) => { panic!("{}", format!($fmt $($tts)*)) };
-    ($span:expr, $($tts:tt)*) => { { let _ = $span; panic!("{}", format!($($tts)*)); } };
-}
+#![allow(clippy::uninlined_format_args)]
+#![allow(clippy::needless_doctest_main)]
+#![allow(clippy::doc_lazy_continuation)]
 
-#[cfg(test)]
-macro_rules! error {
-    ($err:expr) => { panic!($err) };
-    ($fmt:literal $($tts:tt)*) => { eprintln!("{}", format!($fmt $($tts)*)) };
-    ($span:expr, $($tts:tt)*) => { { let _ = $span; eprintln!("{}", format!($($tts)*)); } };
-}
-
-#[cfg(test)]
-macro_rules! warning {
-    ($err:expr) => { panic!($err) };
-    ($fmt:literal $($tts:tt)*) => { eprintln!("{}", format!($fmt $($tts)*)) };
-    ($span:expr, $($tts:tt)*) => { { let _ = $span; eprintln!("{}", format!($($tts)*)); } };
-}
-
-#[cfg(not(test))]
-macro_rules! abort {
-    ($($tokens:tt)*) => { proc_macro_error::abort!($($tokens)*) };
-}
-
-#[cfg(not(test))]
-macro_rules! error {
-    ($($tokens:tt)*) => { proc_macro_error::emit_error!($($tokens)*) };
-}
-
-#[cfg(not(test))]
-macro_rules! warning {
-    ($($tokens:tt)*) => { proc_macro_error::emit_warning!($($tokens)*) };
-}
+use attrs::OptionList;
+use class::ClassOption;
+use function::FunctionOption;
+use methods::ImplOption;
+use module::ModuleOption;
+use proc_macro::TokenStream as TokenStream1;
+use syn::{parse_macro_input, spanned::Spanned, DeriveInput, Error, Item};
 
 #[cfg(test)]
 macro_rules! assert_eq_tokens {
@@ -43,1288 +19,540 @@ macro_rules! assert_eq_tokens {
     };
 }
 
-mod bind;
-mod config;
-mod context;
-mod derive;
+mod attrs;
+mod class;
+mod common;
 mod embed;
-mod shim;
-mod utils;
-
-use bind::{AttrItem, Binder};
-use darling::{FromDeriveInput, FromMeta};
-use derive::{DataType, FromJs, HasRefs, IntoJs};
-use proc_macro::TokenStream as TokenStream1;
-use proc_macro_error::proc_macro_error;
-use shim::AttributeArgs;
-use syn::parse_macro_input;
-
-use proc_macro2::{Ident, TokenStream};
-
-/**
-An attribute to generate bindings easy
-
-This macro allows register Rust constants, functions, data types and modules to use it from JavaScript.
-
-*NOTE: To export any nested items it should be public.*
-
-# Supported attributes
-
-Any attributes which is enclosed by a `#[quickjs(...)]` will be interpreted by this macro to control bindings.
-
-## Macro attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`ident = "MyModule"`__          | The name of target unit struct to export
-__`public`__, __`public = "self/super/crate"`__ | Makes the target unit struct visible
-__`module`__                      | Adds the [`ModuleDef`](rquickjs_core::module::ModuleDef) impl to use bindings as ES6 module
-__`object`__                      | Adds the [`ObjectDef`](rquickjs_core::object::ObjectDef) impl for attaching bindings to an object
-__`init`__, __`init = "js_module_init"`__     | Adds the `js_module_init` function (in particular for creating dynamically loadable modules or static libraries to use from `C`)
-__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
-
-## Module attributes
-
-Attribute                 | Description
-------------------------- | ---------------------------
-__`rename = "new_name"`__ | Renames module to export
-__`bare`__                | Exports contents of the module to the parent module instead of creating submodule (this is off by default)
-__`skip`__                | Skips exporting this module
-__`hide`__                | Do not output this module (bindings only)
-
-## Constant attributes
-
-Attribute                 | Description
-------------------------- | ---------------------------
-__`rename = "new_name"`__ | Renames constant to export
-__`value`__               | Defines a property
-__`writable`__            | Makes property to be writable
-__`configurable`__        | Makes property to be configurable
-__`enumerable`__          | Makes property to be enumerable
-__`proto`__               | Sets constant or property to prototype
-__`skip`__                | Skips exporting this contant
-__`hide`__                | Do not output this constant (bindings only)
-
-## Function attributes
-
-Attribute                 | Description
-------------------------- | ---------------------------
-__`rename = "new_name"`__ | Renames function to export
-__`get`__                 | Uses function as a getter for a property
-__`set`__                 | Uses function as a setter for a property
-__`configurable`__        | Makes property to be configurable
-__`enumerable`__          | Makes property to be enumerable
-__`constructor`__, __`constructor = true`__  | Forces creating contructor
-__`constructor = false`__ | Disables creating contructor
-__`skip`__                | Skips exporting this function
-__`hide`__                | Do not output this function (bindings only)
-
-When multiple functions is declared with same name (i.e. same `rename` attribute value) it will be overloaded. The overloading rules is dead simple, so currently you should be care to get it works.
-Overloading is not supported for property getters/setters.
-
-## Data type attributes
-
-This attributes applies to structs and enums to use it as ES6 classes.
-
-Attribute                 | Description
-------------------------- | ---------------------------
-__`rename = "new_name"`__ | Renames data type to export
-__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::class::HasRefs) to be implemented)
-__`cloneable`__           | Marks data type which implements `Clone` trait
-__`skip`__                | Skips exporting this data type
-__`hide`__                | Do not output this data type (bindings only)
-
-The following traits will be implemented for data type:
-- [`ClassDef`](rquickjs_core::class::ClassDef)
-- [`IntoJs`](rquickjs_core::IntoJs)
-- [`FromJs`](rquickjs_core::FromJs) if `cloneable` attribute is present
-
-The following traits will be implemented for references to data type:
-- [`IntoJs`](rquickjs_core::IntoJs) if `cloneable` attribute is present
-- [`FromJs`](rquickjs_core::IntoJs)
-
-## Data field attributes
-
-This attributes applies to data fields to use it as a properties.
-
-Attribute                 | Description
-------------------------- | ---------------------------
-__`rename = "new_name"`__ | Renames field to export
-__`readonly`__            | Makes this field to be readonly
-__`skip`__                | Skips exporting this field
-
-## `impl` block attributes
-
-This attributes applies to `impl` blocks to bind class methods and properties and also adding static constants and functions.
-
-Attribute                 | Description
-------------------------- | ---------------------------
-__`rename = "new_name"`__ | Renames data type to export
-__`has_refs`__            | Marks data which has internal refs to other JS values (requires [`HasRefs`](rquickjs_core::class::HasRefs) to be implemented)
-__`skip`__                | Skips exporting this impl block
-__`hide`__                | Do not output this impl block (bindings only)
-
-# Examples
-
-### Single function binding
-
-```
-use rquickjs::{Runtime, Context, bind};
-
-#[bind(object)]
-pub fn add2(a: f32, b: f32) -> f32 {
-    a + b
-}
-
-let rt = Runtime::new().unwrap();
-let ctx = Context::full(&rt).unwrap();
-
-ctx.with(|ctx| {
-    let glob = ctx.globals();
-    glob.init_def::<Add2>().unwrap();
-
-    let res: f32 = ctx.eval(r#"add2(1, 2)"#).unwrap();
-    assert_eq!(res, 3.0);
-});
-```
-
-### Module with two functions
-
-```
-use rquickjs::{Runtime, Context, Object, bind};
-
-#[bind(object)]
-pub mod math {
-    pub const PI: f32 = core::f32::consts::PI;
-
-    pub fn add2(a: f32, b: f32) -> f32 {
-        a + b
-    }
-
-    pub fn mul2(a: f32, b: f32) -> f32 {
-        a * b
-    }
-}
-
-let rt = Runtime::new().unwrap();
-let ctx = Context::full(&rt).unwrap();
-
-ctx.with(|ctx| {
-    let glob = ctx.globals();
-    glob.init_def::<Math>().unwrap();
-
-    let res: f32 = ctx.eval(r#"math.mul2(3, math.add2(1, 2))"#).unwrap();
-    assert_eq!(res, 9.0);
-});
-```
-
-### Module with two functions which reused from another module
-
-```
-use rquickjs::{Runtime, Context, Object, bind};
-
-mod my_math {
-    pub const PI: f32 = core::f32::consts::PI;
-
-    pub fn add2(a: f32, b: f32) -> f32 {
-        a + b
-    }
-
-    pub fn mul2(a: f32, b: f32) -> f32 {
-        a * b
-    }
-}
-
-#[bind(object)]
-mod math {
-    pub use super::my_math::*;
-
-    #[quickjs(hide)]
-    pub const PI: f32 = ();
-
-    #[quickjs(hide)]
-    pub fn add2(a: f32, b: f32) -> f32 {}
-
-    #[quickjs(hide)]
-    pub fn mul2(a: f32, b: f32) -> f32 {}
-}
-
-# fn main() {
-let rt = Runtime::new().unwrap();
-let ctx = Context::full(&rt).unwrap();
-
-ctx.with(|ctx| {
-    let glob = ctx.globals();
-    glob.init_def::<Math>().unwrap();
-
-    let res: f32 = ctx.eval(r#"math.mul2(3, math.add2(1, 2))"#).unwrap();
-    assert_eq!(res, 9.0);
-});
-# }
-```
-
-### Bare module definition
-
-```
-use rquickjs::{Runtime, Context, Object, bind};
-
-#[bind(object)]
-#[quickjs(bare)]
-pub mod math {
-    #[quickjs(name = "pi")]
-    pub const PI: f32 = core::f32::consts::PI;
-
-    pub fn add2(a: f32, b: f32) -> f32 {
-        a + b
-    }
-
-    pub fn mul2(a: f32, b: f32) -> f32 {
-        a * b
-    }
-}
-
-let rt = Runtime::new().unwrap();
-let ctx = Context::full(&rt).unwrap();
-
-ctx.with(|ctx| {
-    let glob = ctx.globals();
-    glob.init_def::<Math>().unwrap();
-
-    let res: f32 = ctx.eval(r#"mul2(3, add2(1, 2))"#).unwrap();
-    assert_eq!(res, 9.0);
-});
-```
-
-### Async function binding
-
-```
-# #[async_std::main]
-# async fn main() {
-use rquickjs::{AsyncRuntime, AsyncContext, promise::Promise, bind, async_with, Result};
-
-#[bind(object)]
-pub async fn sleep(msecs: u64) -> Result<()> {
-    async_std::task::sleep(
-        std::time::Duration::from_millis(msecs)
-    ).await;
-    Ok(())
-}
-
-let rt = AsyncRuntime::new().unwrap();
-let ctx = AsyncContext::full(&rt).await.unwrap();
-
-
-async_with!(ctx => |ctx| {
-    ctx.globals().init_def::<Sleep>().unwrap();
-    let promise: Promise<String> = ctx.eval(r#"
-        async function mysleep() {
-            await sleep(50);
-            return "ok";
-        }
-        mysleep()
-    "#).unwrap();
-    let res = promise.await.unwrap();
-    assert_eq!(res, "ok");
-}).await;
-# }
-```
-
-### Class binding
-
-```
-use rquickjs::{bind, Context, Runtime};
-
-#[bind(object)]
-#[quickjs(bare)]
-mod geom {
-    use rquickjs::class::Ref;
-    use std::cell::Cell;
-
-    pub struct Point {
-        // field properties
-        #[quickjs(skip)]
-        pub x: Cell<f64>,
-        #[quickjs(skip)]
-        pub y: Cell<f64>,
-    }
-
-    impl Point {
-        // constructor
-        pub fn new(x: f64, y: f64) -> Self {
-            Self {
-                x: Cell::new(x),
-                y: Cell::new(y),
-            }
-        }
-
-        // instance method
-        pub fn norm(&self) -> f64 {
-            Self::dot(self, self).sqrt()
-        }
-
-        // instance property getter
-        #[quickjs(get, enumerable, rename = "x")]
-        pub fn x_get(&self) -> f64 {
-            self.x.get()
-        }
-
-        // instance property getter
-        #[quickjs(set, enumerable, rename = "x")]
-        pub fn x_set(&self, v: f64) {
-            self.x.set(v);
-        }
-
-        // instance property getter
-        #[quickjs(get, enumerable, rename = "y")]
-        pub fn y_get(&self) -> f64 {
-            self.y.get()
-        }
-
-        // instance property getter
-        #[quickjs(set, enumerable, rename = "y")]
-        pub fn y_set(&self, v: f64) {
-            self.y.set(v);
-        }
-
-        // instance property getter
-        #[quickjs(get, enumerable)]
-        pub fn xy(&self) -> (f64, f64) {
-            (self.x.get(), self.y.get())
-        }
-
-        // instance property setter
-        #[quickjs(rename = "xy", set)]
-        pub fn set_xy(&self, xy: (f64, f64)) {
-            self.x.set(xy.0);
-            self.y.set(xy.1);
-        }
-
-        // static method
-        #[quickjs(rename = "dot")]
-        pub fn dot_js(a: Ref<Point>, b: Ref<Point>) -> f64 {
-            Self::dot(&*a,&*b)
-        }
-
-        #[quickjs(skip)]
-        pub fn dot(a: &Self, b: &Self) -> f64{
-            a.x.get() * b.x.get() + a.y.get() * b.y.get()
-        }
-
-        // static property with getter
-        #[quickjs(get)]
-        pub fn zero() -> Self {
-            Point {
-                x: Cell::new(0.0),
-                y: Cell::new(0.0),
-            }
-        }
-    }
-}
-
-let rt = Runtime::new().unwrap();
-let ctx = Context::full(&rt).unwrap();
-
-ctx.with(|ctx| {
-    ctx.globals().init_def::<Geom>().unwrap();
-});
-
-ctx.with(|ctx| {
-    ctx.eval::<(), _>(
-        r#"
-function assert(res) {
-    if (!res) throw new Error("Assertion failed");
-}
-
-class ColorPoint extends Point {
-    constructor(x, y, color) {
-    super(x, y);
-        this.color = color;
-    }
-    get_color() {
-        return this.color;
-    }
-}
-
-let pt = new Point(2, 3);
-assert(pt.x === 2);
-assert(pt.y === 3);
-pt.x = 4;
-assert(pt.x === 4);
-assert(pt.norm() == 5);
-let xy = pt.xy;
-assert(xy.length === 2);
-assert(xy[0] === 4);
-assert(xy[1] === 3);
-pt.xy = [3, 4];
-assert(pt.x === 3);
-assert(pt.y === 4);
-assert(Point.dot(pt, Point(2, 1)) == 10);
-
-let ptz = Point.zero;
-assert(ptz.x === 0);
-assert(ptz.y === 0);
-
-let ptc = new ColorPoint(2, 3, 0xffffff);
-assert(ptc.x === 2);
-assert(ptc.color === 0xffffff);
-assert(ptc.get_color() === 0xffffff);
-"#,
-    )
-    .unwrap();
-});
-```
-
- */
-#[proc_macro_error]
+mod fields;
+mod function;
+mod js_lifetime;
+mod methods;
+mod module;
+mod trace;
+
+/// An attribute for implementing [`JsClass`](rquickjs_core::class::JsClass`) for a Rust type.
+///
+/// # Attribute options
+///
+/// The attribute has a number of options for configuring the generated trait implementation. These
+/// attributes can be passed to the `class` attribute as an argument: `#[class(rename =
+/// "AnotherName")]` or with a separate `qjs` attribute on the struct item: `#[qjs(rename =
+/// "AnotherName")]`. A option which is a Flag can be set just by adding the attribute:
+/// `#[qjs(flag)]` or by setting it to specific boolean value: `#[qjs(flag = true)]`.
+///
+/// | **Option**   | **Value** | **Description**                                                                                                                                                                         |
+/// |--------------|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `crate`      | String    | Changes the name from which the attribute tries to use rquickjs types. Use when the name behind which the rquickjs crate is declared is not properly resolved by the macro.             |
+/// | `rename`     | String    | Changes the name of the implemented class on the JavaScript side.                                                                                                                       |
+/// | `rename_all` | Casing    | Converts the case of all the fields of this struct which have implement accessors. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+/// | `frozen`     | Flag      | Changes the class implementation to only allow borrowing immutably.  Trying to borrow mutably will result in an error.                                                                  |
+///
+/// # Field options
+///
+/// The fields of a struct (doesn't work on enums) can also tagged with an attribute to, for
+/// example make the fields accessible from JavaScript. These attributes are all in the form of
+/// `#[qjs(option = value)]`.
+///
+/// | **Option**     | **Value** | **Description**                                                                         |
+/// |----------------|-----------|-----------------------------------------------------------------------------------------|
+/// | `get`          | Flag      | Creates a getter for this field, allowing read access to the field from JavaScript.     |
+/// | `set`          | Flag      | Creates a setter for this field, allowing write access to the field from JavaSccript.   |
+/// | `enumerable`   | Flag      | Makes the field, if it has a getter or setter, enumerable in JavaScript.                |
+/// | `configurable` | Flag      | Makes the field, if it has a getter or setter, configurable in JavaScript.              |
+/// | `skip_trace`   | Flag      | Skips the field deriving the `Trace` trait.                                             |
+/// | `rename`       | String    | Changes the name of the field getter and/or setter to the specified name in JavaScript. |
+///
+///
+/// # Example
+/// ```
+/// use rquickjs::{class::Trace, CatchResultExt, Class, Context, Object, Runtime, JsLifetime};
+///
+/// /// Implement JsClass for TestClass.
+/// /// This allows passing any instance of TestClass straight to JavaScript.
+/// /// It is command to also add #[derive(Trace)] as all types which implement JsClass need to
+/// /// also implement trace.
+/// #[derive(Trace, JsLifetime)]
+/// #[rquickjs::class(rename_all = "camelCase")]
+/// pub struct TestClass<'js> {
+///     /// These attribute make the accessible from JavaScript with getters and setters.
+///     /// As we used `rename_all = "camelCase"` in the attribute it will be called `innerObject`
+///     /// on the JavaScript side.
+///     #[qjs(get, set)]
+///     inner_object: Object<'js>,
+///
+///     /// This works for any value which implements `IntoJs` and `FromJs` and is clonable.
+///     #[qjs(get, set)]
+///     some_value: u32,
+///     /// Make a field enumerable.
+///     #[qjs(get, set, enumerable)]
+///     another_value: u32,
+/// }
+///
+/// pub fn main() {
+///     let rt = Runtime::new().unwrap();
+///     let ctx = Context::full(&rt).unwrap();
+///
+///     ctx.with(|ctx| {
+///         /// Create an insance of a JsClass
+///         let cls = Class::instance(
+///             ctx.clone(),
+///             TestClass {
+///                 inner_object: Object::new(ctx.clone()).unwrap(),
+///                 some_value: 1,
+///                 another_value: 2,
+///             },
+///         )
+///         .unwrap();
+///         /// Pass it to JavaScript
+///         ctx.globals().set("t", cls.clone()).unwrap();
+///         ctx.eval::<(), _>(
+///             r#"
+///             // use the actual value.
+///             if(t.someValue !== 1){
+///                 throw new Error(1)
+///             }"#
+///         ).unwrap();
+///     })
+/// }
+/// ```
 #[proc_macro_attribute]
-pub fn bind(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
-    let attr: AttributeArgs = parse_macro_input!(attr);
-    let item = parse_macro_input!(item);
-
-    let attr = AttrItem::from_list(&attr).unwrap_or_else(|error| {
-        abort!("{}", error);
-    });
-    let mut binder = Binder::new(attr.config());
-    let output = binder.expand(attr, item);
-    output.into()
+pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let options = parse_macro_input!(attr as OptionList<ClassOption>);
+    let item = parse_macro_input!(item as Item);
+    match class::expand(options, item) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
 }
 
-/**
- An macro to bundle modules loaded from source.
+/// A attribute for implementing `IntoJsFunc` for a certain function.
+///
+/// Using this attribute allows a wider range of functions to be used as callbacks from JavaScript
+/// then when you use closures or the functions for which the proper traits are already
+/// implemented..
+///
+#[proc_macro_attribute]
+pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let options = parse_macro_input!(attr as OptionList<FunctionOption>);
+    let item = parse_macro_input!(item as Item);
+    match item {
+        Item::Fn(func) => match function::expand(options, func) {
+            Ok(x) => x.into(),
+            Err(e) => e.into_compile_error().into(),
+        },
+        item => Error::new(
+            item.span(),
+            "#[function] macro can only be used on functions",
+        )
+        .into_compile_error()
+        .into(),
+    }
+}
 
- # Examples
-```
-# use rquickjs::{embed, Runtime, Context, Module, loader::Bundle};
+/// A attribute for implementing methods for a class.
+///
+/// This attribute can be added to a impl block which implements methods for a type which uses the
+/// [`macro@class`] attribute to derive [`JsClass`](rquickjs_core::class::JsClass).
+///
+/// # Limitations
+/// Due to limitations in the Rust type system this attribute can be used on only one impl block
+/// per type.
+///
+/// # Attribute options
+///
+/// The attribute has a number of options for configuring the generated trait implementation. These
+/// attributes can be passed to the `methods` attribute as an argument: `#[methods(rename =
+/// "AnotherName")]` or with a separate `qjs` attribute on the impl item: `#[qjs(rename =
+/// "AnotherName")]`. A option which is a Flag can be set just by adding the attribute:
+/// `#[qjs(flag)]` or by setting it to specific boolean value: `#[qjs(flag = true)]`.
+///
+/// | **Option**   | **Value** | **Description**                                                                                                                                                                         |
+/// |--------------|-----------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `crate`      | String    | Changes the name from which the attribute tries to use rquickjs types. Use when the name behind which the rquickjs crate is declared is not properly resolved by the macro.             |
+/// | `rename`     | String    | Changes the name of the implemented class on the JavaScript side.                                                                                                                       |
+/// | `rename_all` | Casing    | Converts the case of all the fields of this struct which have implement accessors. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+///
+///
+/// # Item options
+///
+/// Each item of the impl block can also tagged with an attribute to change the resulting derived method definition.
+/// These attributes are all in the form of `#[qjs(option = value)]`.
+///
+/// | **Option**     | **Value**                                                         | **Description**                                                                                 |
+/// |----------------|-------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
+/// | `get`          | Flag                                                              | Makes this method a getter for a field of the same name.                                        |
+/// | `set`          | Flag                                                              | Makes this method a setter for a field of the same name.                                        |
+/// | `enumerable`   | Flag                                                              | Makes the method, if it is a getter or setter, enumerable in JavaScript.                        |
+/// | `configurable` | Flag                                                              | Makes the method, if it is a getter or setter, configurable in JavaScript.                      |
+/// | `rename`       | String or [`PredefinedAtom`](rquickjs_core::atom::PredefinedAtom) | Changes the name of the field getter and/or setter to the specified name in JavaScript.         |
+/// | `static`       | Flag                                                              | Makes the method a static method i.e. defined on the type constructor instead of the prototype. |
+/// | `constructor`  | Flag                                                              | Marks this method a the constructor for this type.                                              |
+/// | `skip`         | Flag                                                              | Skips defining this method on the JavaScript class.                                             |
+///
+/// # Example
+/// ```
+/// use rquickjs::{
+///     atom::PredefinedAtom, class::Trace, prelude::Func, CatchResultExt, Class, Context, Ctx,
+///     Object, Result, Runtime, JsLifetime
+/// };
+///
+/// #[derive(Trace, JsLifetime)]
+/// #[rquickjs::class]
+/// pub struct TestClass {
+///     value: u32,
+///     another_value: u32,
+/// }
+///
+/// #[rquickjs::methods]
+/// impl TestClass {
+///     /// Marks a method as a constructor.
+///     /// This method will be used when a new TestClass object is created from JavaScript.
+///     #[qjs(constructor)]
+///     pub fn new(value: u32) -> Self {
+///         TestClass {
+///             value,
+///             another_value: value,
+///         }
+///     }
+///
+///     /// Mark a function as a getter.
+///     /// The value of this function can be accessed as a field.
+///     /// This function is also renamed to value
+///     #[qjs(get, rename = "value")]
+///     pub fn get_value(&self) -> u32 {
+///         self.value
+///     }
+///
+///     /// Mark a function as a setter.
+///     /// The value of this function can be set as a field.
+///     /// This function is also renamed to value
+///     #[qjs(set, rename = "value")]
+///     pub fn set_value(&mut self, v: u32) {
+///         self.value = v
+///     }
+///
+///     /// Mark a function as a enumerable gettter.
+///     #[qjs(get, rename = "anotherValue", enumerable)]
+///     pub fn get_another_value(&self) -> u32 {
+///         self.another_value
+///     }
+///
+///     #[qjs(set, rename = "anotherValue", enumerable)]
+///     pub fn set_another_value(&mut self, v: u32) {
+///         self.another_value = v
+///     }
+///
+///     /// Marks a function as static. It will be defined on the constructor object instead of the
+///     /// Class prototype.
+///     #[qjs(static)]
+///     pub fn compare(a: &Self, b: &Self) -> bool {
+///         a.value == b.value && a.another_value == b.another_value
+///     }
+///
+///     /// All functions declared in this impl block will be defined on the prototype of the
+///     /// class. This attributes allows you to skip certain functions.
+///     #[qjs(skip)]
+///     pub fn inner_function(&self) {}
+///
+///     /// Functions can also be renamed to specific symbols. This allows you to make an Rust type
+///     /// act like an iteratable value for example.
+///     #[qjs(rename = PredefinedAtom::SymbolIterator)]
+///     pub fn iterate<'js>(&self, ctx: Ctx<'js>) -> Result<Object<'js>> {
+///         let res = Object::new(ctx)?;
+///
+///         res.set(
+///             PredefinedAtom::Next,
+///             Func::from(|ctx: Ctx<'js>| -> Result<Object<'js>> {
+///                 let res = Object::new(ctx)?;
+///                 res.set(PredefinedAtom::Done, true)?;
+///                 Ok(res)
+///             }),
+///         )?;
+///         Ok(res)
+///     }
+/// }
+///
+/// pub fn main() {
+///     let rt = Runtime::new().unwrap();
+///     let ctx = Context::full(&rt).unwrap();
+///
+///     ctx.with(|ctx| {
+///         /// Define the class constructor on the globals object.
+///         Class::<TestClass>::define(&ctx.globals()).unwrap();
+///         ctx.eval::<(), _>(
+///             r#"
+///             let nv = new TestClass(5);
+///             if(nv.value !== 5){
+///                 throw new Error('invalid value')
+///             }
+///         "#,
+///         ).catch(&ctx).unwrap();
+///     });
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let options = parse_macro_input!(attr as OptionList<ImplOption>);
+    let item = parse_macro_input!(item as Item);
+    match item {
+        Item::Impl(item) => match methods::expand(options, item) {
+            Ok(x) => x.into(),
+            Err(e) => e.into_compile_error().into(),
+        },
+        item => Error::new(
+            item.span(),
+            "#[methods] macro can only be used on impl blocks",
+        )
+        .into_compile_error()
+        .into(),
+    }
+}
 
-static BUNDLE: Bundle = embed!{
-    // Load file `../examples/module-loader/script_module.js" and name it `script_module`
-    "script_module": "../examples/module-loader/script_module.js",
-    // Load file `../examples/module-loader/script_module.js" and name it
-    // `../examples/module-loader/script_module.js`
-    "../examples/module-loader/script_module.js"
-};
+/// An attribute which generates code for exporting a module to Rust.
+///
+/// Any supported item inside the module which is marked as `pub` will be exported as a JavaScript value.
+/// Different items result in different JavaScript values.
+/// The supported items are:
+///
+/// - `struct` and `enum` items. These will be exported as JavaScript
+/// classes with their constructor exported as a function from the module.
+/// - `fn` items, these will be exported as JavaScript functions.
+/// - `use` items, the types which are reexported with `pub` will be handled just like `struct` and
+/// `enum` items defined inside the module. The name of the class can be adjusted by renaming the
+/// reexport with `as`.
+/// - `const` and `static` items, these items will be exported as values with the same name.
+///
+/// # Attribute options
+///
+/// The attribute has a number of options for configuring the generated trait implementation. These
+/// attributes can be passed to the `module` attribute as an argument: `#[module(rename =
+/// "AnotherName")]` or with a separate `qjs` attribute on the impl item: `#[qjs(rename =
+/// "AnotherName")]`. A option which is a Flag can be set just by adding the attribute:
+/// `#[qjs(flag)]` or by setting it to specific boolean value: `#[qjs(flag = true)]`.
+///
+/// | **Option**     | **Value** | **Description**                                                                                                                                                                        |
+/// |----------------|-----------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `crate`        | String    | Changes the name from which the attribute tries to use rquickjs types. Use when the name behind which the rquickjs crate is declared is not properly resolved by the macro.            |
+/// | `rename`       | String    | Changes the name of the implemented module on the JavaScript side.                                                                                                                     |
+/// | `rename_vars`  | Casing    | Alters the name of all items exported as JavaScript values by changing the case.  Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+/// | `rename_types` | Casing    | Alters the name of all items exported as JavaScript classes by changing the case. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
+/// | `prefix`       | String    | The module will be implemented for a new type with roughly the same name as the Rust module with a prefix added. This changes the prefix which will be added. Defaults to `js_`        |
+///
+/// # Item options
+///
+/// The attribute also has a number of options for changing the resulting generated module
+/// implementation for specific items.
+/// These attributes are all in the form of `#[qjs(option = value)]`.
+///
+/// | **Option** | **Value** | **Item Type**  | **Description**                                                                                                                                                                                            |
+/// |------------|-----------|----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `skip`     | Flag      | All            | Skips exporting this item from the JavaScript module.                                                                                                                                                      |
+/// | `rename`   | String    | All except use | Change the name from which this value is exported.                                                                                                                                                         |
+/// | `declare`  | Flag      | Functions Only | Marks this function as the declaration function. This function will be called when the module is declared allowing for exporting items which otherwise are difficult to export using the attribute.        |
+/// | `evaluate` | Flag      | Functions Only | Marks this function as the evaluation function. This function will be called when the module is being evaluated allowing for exporting items which otherwise are difficult to export using the attribute.  |
+///
+/// # Example
+///
+/// ```
+/// use rquickjs::{CatchResultExt, Context, Module, Runtime};
+///
+/// /// A class which will be exported from the module.
+/// #[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
+/// #[rquickjs::class]
+/// pub struct Test {
+///     foo: u32,
+/// }
+///
+/// #[rquickjs::methods]
+/// impl Test {
+///     #[qjs(constructor)]
+///     pub fn new() -> Test {
+///         Test { foo: 3 }
+///     }
+/// }
+///
+/// impl Default for Test {
+///     fn default() -> Self {
+///         Self::new()
+///     }
+/// }
+///
+/// #[rquickjs::module(rename_vars = "camelCase")]
+/// mod test_mod {
+///     /// Imports and other declarations which aren't `pub` won't be exported.
+///     use rquickjs::Ctx;
+///
+///     /// You can even use `use` to export types from outside.
+///     ///
+///     /// Note that this tries to export the type, not the value,
+///     /// So this won't work for functions.
+///     ///
+///     /// By using `as` you can change under which name the constructor is exported.
+///     /// The below type will exported as `RenamedTest`.
+///     pub use super::Test as RenamedTest;
+///
+///     /// A class which will be exported from the module under the name `FooBar`.
+///     #[derive(rquickjs::class::Trace, rquickjs::JsLifetime)]
+///     #[rquickjs::class(rename = "FooBar")]
+///     pub struct Test2 {
+///         bar: u32,
+///     }
+///
+///     /// Implement methods for the class like normal.
+///     #[rquickjs::methods]
+///     impl Test2 {
+///         /// A constructor is required for exporting types.
+///         #[qjs(constructor)]
+///         pub fn new() -> Test2 {
+///             Test2 { bar: 3 }
+///         }
+///     }
+///
+///     impl Default for Test2 {
+///         fn default() -> Self {
+///             Self::new()
+///         }
+///     }
+///
+///     /// Two variables exported as `aConstValue` and `aStaticValue` because of the `rename_all` attr.
+///     pub const A_CONST_VALUE: f32 = 2.0;
+///     pub static A_STATIC_VALUE: f32 = 2.0;
+///
+///     /// If your module doesn't quite fit with how this macro exports you can manually export from
+///     /// the declare and evaluate functions.
+///     #[qjs(declare)]
+///     pub fn declare(declare: &rquickjs::module::Declarations) -> rquickjs::Result<()> {
+///         declare.declare("aManuallyExportedValue")?;
+///         Ok(())
+///     }
+///
+///     #[qjs(evaluate)]
+///     pub fn evaluate<'js>(
+///         _ctx: &Ctx<'js>,
+///         exports: &rquickjs::module::Exports<'js>,
+///     ) -> rquickjs::Result<()> {
+///         exports.export("aManuallyExportedValue", "Some Value")?;
+///         Ok(())
+///     }
+///
+///     /// You can also export functions.
+///     #[rquickjs::function]
+///     pub fn foo() -> u32 {
+///         1 + 1
+///     }
+///
+///     /// You can make items public but not export them to JavaScript by adding the skip attribute.
+///     #[qjs(skip)]
+///     pub fn ignore_function() -> u32 {
+///         2 + 2
+///     }
+/// }
+///
+/// fn main() {
+///     assert_eq!(test_mod::ignore_function(), 4);
+///     let rt = Runtime::new().unwrap();
+///     let ctx = Context::full(&rt).unwrap();
+///
+///     ctx.with(|ctx| {
+///          // These modules are declared like normal with the declare_def function.
+///          // The name of the module is js_ + the name of the module. This prefix can be changed
+///          // by writing for example `#[rquickjs::module(prefix = "prefix_")]`.
+///          Module::declare_def::<js_test_mod, _>(ctx.clone(), "test").unwrap();
+///          let _ = Module::evaluate(
+///              ctx.clone(),
+///              "test2",
+///              r"
+///              import { RenamedTest, foo,aManuallyExportedValue, aConstValue, aStaticValue, FooBar } from 'test';
+///              if (foo() !== 2){
+///                  throw new Error(1);
+///              }
+///              "
+///          )
+///          .catch(&ctx)
+///          .unwrap();
+///      })
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let options = parse_macro_input!(attr as OptionList<ModuleOption>);
+    let item = parse_macro_input!(item as Item);
+    match item {
+        Item::Mod(item) => match module::expand(options, item) {
+            Ok(x) => x.into(),
+            Err(e) => e.into_compile_error().into(),
+        },
+        item => Error::new(item.span(), "#[module] macro can only be used on modules")
+            .into_compile_error()
+            .into(),
+    }
+}
 
-let rt = Runtime::new().unwrap();
-let ctx = Context::full(&rt).unwrap();
+/// A macro for auto deriving the trace trait.
+#[proc_macro_derive(Trace, attributes(qjs))]
+pub fn trace(stream: TokenStream1) -> TokenStream1 {
+    let derive_input = parse_macro_input!(stream as DeriveInput);
+    match trace::expand(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
+}
 
-rt.set_loader(BUNDLE, BUNDLE);
-
-ctx.with(|ctx| {
-    ctx.compile("script", r#"
-        import { n, s, f } from "script_module";
-    "#).unwrap();
-});
-```
-*/
-#[proc_macro_error]
+/// A macro for embedding JavaScript code into a binary.
+///
+/// Compiles a JavaScript module to bytecode and then compiles the resulting bytecode into the
+/// binary. Each file loaded is turned into its own module. The macro takes a list of paths to
+/// files to be compiled into a module with an option name. Module paths are relative to the crate
+/// manifest file.
+///
+/// # Usage
+///
+/// ```
+/// use rquickjs::{embed, loader::Bundle, CatchResultExt, Context, Module, Runtime};
+///
+/// /// load the `my_module.js` file and name it myModule
+/// static BUNDLE: Bundle = embed! {
+///     "myModule": "my_module.js",
+/// };
+///
+/// fn main() {
+///     let rt = Runtime::new().unwrap();
+///     let ctx = Context::full(&rt).unwrap();
+///
+///     rt.set_loader(BUNDLE, BUNDLE);
+///     ctx.with(|ctx| {
+///         Module::evaluate(
+///             ctx.clone(),
+///             "testModule",
+///             r#"
+///             import { foo } from 'myModule';
+///             if(foo() !== 2){
+///                 throw new Error("Function didn't return the correct value");
+///             }
+///         "#,
+///         )
+///         .unwrap()
+///         .finish::<()>()
+///         .catch(&ctx)
+///         .unwrap();
+///     })
+/// }
+/// ```
 #[proc_macro]
 pub fn embed(item: TokenStream1) -> TokenStream1 {
     let embed_modules: embed::EmbedModules = parse_macro_input!(item);
-    embed::embed(embed_modules).into()
+    match embed::embed(embed_modules) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
 }
 
-/**
-A macro to derive [`HasRefs`](rquickjs_core::class::HasRefs)
-
-# Supported attributes
-
-## Macro attributes
-
-Attribute                | Description
------------------------- | --------------------------
-__`crate = "rquickjs"`__ | Allows rename `rquickjs` crate
-
-## Field attributes
-
-Attribute                | Description
------------------------- | --------------------------
-__`has_refs`__           | Mark a field which has referenses
-
-# Examples
-
-## Struct
-
-```
-# use std::collections::HashMap;
-# use rquickjs::{HasRefs, Persistent, Function, Array};
-
-#[derive(HasRefs)]
-struct Data {
-    #[quickjs(has_refs)]
-    lists: HashMap<String, Persistent<Array<'static>>>,
-    #[quickjs(has_refs)]
-    func: Persistent<Function<'static>>,
-    flag: bool,
-    text: String,
-}
-```
-
-## Enum
-
-```
-# use std::collections::HashMap;
-# use rquickjs::{HasRefs, Persistent, Function, Array};
-
-#[derive(HasRefs)]
-enum Data {
-    Lists(
-        #[quickjs(has_refs)]
-        HashMap<String, Persistent<Array<'static>>>
-    ),
-    Func {
-        name: String,
-        #[quickjs(has_refs)]
-        func: Persistent<Function<'static>>,
-    },
-    Flag(bool),
-    Text(String),
-}
-```
-*/
-#[proc_macro_error]
-#[proc_macro_derive(HasRefs, attributes(quickjs))]
-pub fn has_refs(input: TokenStream1) -> TokenStream1 {
-    let input = parse_macro_input!(input);
-    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
-        abort!(input.ident.span(), "HasRefs deriving error: {}", error);
-    });
-    let config = input.config();
-    let binder = HasRefs::new(config);
-    let output = binder.expand(&input);
-    output.into()
-}
-
-/**
-A macro to derive [`FromJs`](rquickjs_core::FromJs) for an arbitrary structured types
-
-# Supported attributes
-
-## Macro attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename_all = "<rule>"`__       | Renames variants and fields by applying renaming rule ("lowercase", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case")
-__`bound = "T: Bound"`__          | Overrides type paremters bounds
-__`tag`__, __`tag = "type"`__     | Turns `enum` representation to **internally tagged**
-__`content`__, __`content = "data"`__ | With `tag` turns `enum` representation to **adjacently tagged**
-__`untagged`__                    | Turns `enum` representation to **untagged**
-__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
-
-The default `enum` representation is **externally tagged**.
-
-## Variant attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename = "new_name"`__         | Renames a variant
-__`skip`__                        | Skips this variant
-
-If a `enum` representation is `untagged` the variants with `discriminant` will be represented as a numbers.
-
-## Field attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename = "new_name"`__         | Renames a field
-__`default`__, __`default = "path"`__ | Sets the default for a field
-__`skip`__                        | Skips this field
-
-# Examples
-
-### Unit struct
-
-```
-use rquickjs::FromJs;
-
-#[derive(FromJs)]
-struct MyUnit;
-```
-
-### Tuple struct
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-struct MyTuple(i32, String);
-```
-
-### Struct with fields
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-struct MyStruct {
-    int: i32,
-    text: String,
-    #[quickjs(skip)]
-    skipped: bool,
-}
-```
-
-### Struct with fields with default values
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-struct MyStruct {
-    #[quickjs(default)]
-    int: i32,
-    #[quickjs(default = "default_text")]
-    text: String,
-}
-
-fn default_text() -> String {
-    "hello".into()
-}
-```
-
-### Externally tagged enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-enum Enum {
-    A(f32),
-    B { s: String },
-    C,
-}
-```
-
-### Internally tagged enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(tag = "tag")]
-enum Enum {
-    A(f32),
-    B { s: String },
-    C,
-}
-```
-
-### Adjacently tagged enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(tag = "type", content = "data")]
-enum Enum {
-    A(f32),
-    B { s: String },
-    C,
-}
-```
-
-### Untagged unit enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(untagged)]
-enum MyEnum {
-    A,
-    B,
-}
-```
-
-### Untagged unit enum with discriminant
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(untagged)]
-enum MyEnum {
-    A = 1,
-    B = 2,
-}
-```
-
-### Externally tagged tuple enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Adjacently tagged tuple enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(tag, content = "data")]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Untagged tuple enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Internally tagged enum with fields
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(tag = "$")]
-enum MyEnum {
-    Foo { x: f64, y: f64 },
-    Bar { msg: String },
-}
-```
-
-### Internally tagged enum with fields with defaults
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(tag = "$")]
-enum MyEnum {
-    Foo {
-        x: f64,
-        #[quickjs(default)]
-        y: f64,
-    },
-    Bar {
-        #[quickjs(default = "default_msg")]
-        msg: String,
-    },
-}
-
-fn default_msg() -> String {
-    "my message".into()
-}
-```
-
-### Untagged enum with fields
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo { x: f64, y: f64 },
-    Bar { msg: String },
-}
-```
-
-### Generic newtype-like struct
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-struct Newtype<T>(pub T);
-```
-
-### Generic struct with fields
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-struct MyStruct<T> {
-    pub tag: i32,
-    pub value: T,
-}
-```
-
-### Generic enum
-
-```
-# use rquickjs::FromJs;
-#[derive(FromJs)]
-enum MyEnum<T> {
-    Foo(T),
-    Bar { value: T, tag: i32 },
-}
-```
- */
-#[proc_macro_error]
-#[proc_macro_derive(FromJs, attributes(quickjs))]
-pub fn from_js(input: TokenStream1) -> TokenStream1 {
-    let input = parse_macro_input!(input);
-    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
-        abort!(input.ident.span(), "FromJs deriving error: {}", error);
-    });
-    let config = input.config();
-    let binder = FromJs::new(config);
-    let output = binder.expand(&input);
-    output.into()
-}
-
-/**
-A macro to derive [`IntoJs`](rquickjs_core::IntoJs) for an arbitrary structured types
-
-# Supported attributes
-
-## Macro attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename_all = "<rule>"`__       | Renames variants and fields by applying renaming rule ("lowercase", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case")
-__`bound = "T: Bound"`__          | Overrides type paremters bounds
-__`tag`__, __`tag = "type"`__     | Turns `enum` representation to **internally tagged**
-__`content`__, __`content = "data"`__ | With `tag` turns `enum` representation to **adjacently tagged**
-__`untagged`__                    | Turns `enum` representation to **untagged**
-__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
-
-The default `enum` representation is **externally tagged**.
-
-## Variant attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename = "new_name"`__         | Renames a variant
-__`skip`__                        | Skips this variant
-
-If a `enum` representation is `untagged` the variants with `discriminant` will be represented as a numbers.
-
-## Field attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename = "new_name"`__         | Renames a field
-__`default`__, __`default = "path"`__ | Sets the default for a field
-__`skip_default`__                | Skip named field when default value is set
-__`skip`__                        | Skips this field
-
-# Examples
-
-### Unit struct
-
-```
-use rquickjs::IntoJs;
-
-#[derive(IntoJs)]
-struct MyUnit;
-```
-
-### Tuple struct
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-struct MyTuple(i32, String);
-```
-
-### Struct with fields
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-struct MyStruct {
-    int: i32,
-    text: String,
-}
-```
-
-### Struct with fields with default values
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-struct MyStruct {
-    #[quickjs(skip_default)]
-    int: i32,
-    #[quickjs(default = "default_text", skip_default)]
-    text: String,
-}
-
-fn default_text() -> String {
-    "hello".into()
-}
-```
-
-### Untagged unit enum
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo,
-    Bar,
-}
-```
-
-### Untagged unit enum with discriminant
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-#[quickjs(untagged)]
-#[repr(i32)]
-enum MyEnum {
-    Foo = 1,
-    Bar = 2,
-}
-```
-
-### Externally tagged tuple enum
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Adjacently tagged tuple enum
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-#[quickjs(tag, content = "data")]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Untagged tuple enum
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Internally tagged enum with fields
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-#[quickjs(tag = "$")]
-enum MyEnum {
-    Foo { x: f64, y: f64 },
-    Bar { msg: String },
-}
-```
-
-### Internally tagged enum with fields with defaults
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-#[quickjs(tag = "$")]
-enum MyEnum {
-    Foo {
-        x: f64,
-        #[quickjs(skip_default)]
-        y: f64,
-    },
-    Bar {
-        #[quickjs(default = "default_msg", skip_default)]
-        msg: String,
-    },
-}
-
-fn default_msg() -> String {
-    "my message".into()
-}
-```
-
-### Untagged enum with fields
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo { x: f64, y: f64 },
-    Bar { msg: String },
-}
-```
-
-### Generic newtype-like struct
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-struct Newtype<T>(pub T);
-```
-
-### Generic struct with fields
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-struct MyStruct<T, V> {
-    pub tag: T,
-    pub value: V,
-}
-```
-
-### Generic enum
-
-```
-# use rquickjs::IntoJs;
-#[derive(IntoJs)]
-enum MyEnum<T, V> {
-    Foo(V),
-    Bar { value: V, tag: T },
-}
- */
-#[proc_macro_error]
-#[proc_macro_derive(IntoJs, attributes(quickjs))]
-pub fn into_js(input: TokenStream1) -> TokenStream1 {
-    let input = parse_macro_input!(input);
-    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
-        abort!(input.ident.span(), "IntoJs deriving error: {}", error);
-    });
-    let config = input.config();
-    let binder = IntoJs::new(config);
-    let output = binder.expand(&input, false);
-    output.into()
-}
-
-/**
-A macro to derive [`IntoJs`](rquickjs_core::IntoJs) for an arbitrary structured types when it used by reference
-
-# Supported attributes
-
-## Macro attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename_all = "<rule>"`__       | Renames variants and fields by applying renaming rule ("lowercase", "PascalCase", "camelCase", "snake_case", "SCREAMING_SNAKE_CASE", "kebab-case")
-__`bound = "for<'a> &'a T: Bound"`__          | Overrides type paremters bounds
-__`tag`__, __`tag = "type"`__     | Turns `enum` representation to **internally tagged**
-__`content`__, __`content = "data"`__ | With `tag` turns `enum` representation to **adjacently tagged**
-__`untagged`__                    | Turns `enum` representation to **untagged**
-__`crate = "rquickjs"`__          | Allows rename `rquickjs` crate
-
-The default `enum` representation is **externally tagged**.
-
-## Variant attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename = "new_name"`__         | Renames a variant
-__`skip`__                        | Skips this variant
-
-If a `enum` representation is `untagged` the variants with `discriminant` will be represented as a numbers.
-
-## Field attributes
-
-Attribute                         | Description
---------------------------------- | ---------------------------
-__`rename = "new_name"`__         | Renames a field
-__`default`__, __`default = "path"`__ | Sets the default for a field
-__`skip_default`__                | Skip named field when default value is set
-__`skip`__                        | Skips this field
-
-# Examples
-
-### Unit struct
-
-```
-use rquickjs::IntoJsByRef;
-
-#[derive(IntoJsByRef)]
-struct MyUnit;
-```
-
-### Tuple struct
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-struct MyTuple(i32, String);
-```
-
-### Struct with fields
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-struct MyStruct {
-    int: i32,
-    text: String,
-}
-```
-
-### Struct with fields with default values
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-struct MyStruct {
-    #[quickjs(skip_default)]
-    int: i32,
-    #[quickjs(default = "default_text", skip_default)]
-    text: String,
-}
-
-fn default_text() -> String {
-    "hello".into()
-}
-```
-
-### Untagged unit enum
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo,
-    Bar,
-}
-```
-
-### Untagged unit enum with discriminant
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-#[quickjs(untagged)]
-#[repr(i32)]
-enum MyEnum {
-    Foo = 1,
-    Bar = 2,
-}
-```
-
-### Externally tagged tuple enum
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Adjacently tagged tuple enum
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-#[quickjs(tag, content = "data")]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Untagged tuple enum
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo(f64, f64),
-    Bar(String),
-}
-```
-
-### Internally tagged enum with fields
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-#[quickjs(tag = "$")]
-enum MyEnum {
-    Foo { x: f64, y: f64 },
-    Bar { msg: String },
-}
-```
-
-### Internally tagged enum with fields with defaults
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-#[quickjs(tag = "$")]
-enum MyEnum {
-    Foo {
-        x: f64,
-        #[quickjs(skip_default)]
-        y: f64,
-    },
-    Bar {
-        #[quickjs(default = "default_msg", skip_default)]
-        msg: String,
-    },
-}
-
-fn default_msg() -> String {
-    "my message".into()
-}
-```
-
-### Untagged enum with fields
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-#[quickjs(untagged)]
-enum MyEnum {
-    Foo { x: f64, y: f64 },
-    Bar { msg: String },
-}
-```
-
-### Generic newtype-like struct
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-struct Newtype<T>(pub T);
-```
-
-### Generic struct with fields
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-struct MyStruct<T, V> {
-    pub tag: T,
-    pub value: V,
-}
-```
-
-### Generic enum
-
-```
-# use rquickjs::IntoJsByRef;
-#[derive(IntoJsByRef)]
-enum MyEnum<T, V> {
-    Foo(V),
-    Bar { value: V, tag: T },
-}
- */
-#[proc_macro_error]
-#[proc_macro_derive(IntoJsByRef, attributes(quickjs))]
-pub fn into_js_by_ref(input: TokenStream1) -> TokenStream1 {
-    let input = parse_macro_input!(input);
-    let input = DataType::from_derive_input(&input).unwrap_or_else(|error| {
-        abort!(input.ident.span(), "IntoJs deriving error: {}", error);
-    });
-    let config = input.config();
-    let binder = IntoJs::new(config);
-    let output = binder.expand(&input, true);
-    output.into()
+/// A Macro for auto deriving the JsLifetime trait.
+#[proc_macro_derive(JsLifetime, attributes(qjs))]
+pub fn js_lifetime(stream: TokenStream1) -> TokenStream1 {
+    let derive_input = parse_macro_input!(stream as DeriveInput);
+    match js_lifetime::expand(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
 }

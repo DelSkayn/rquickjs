@@ -1,19 +1,18 @@
-//! Quickjs runtime related types.
-
-#[cfg(feature = "loader")]
-use crate::loader::{RawLoader, Resolver};
-use crate::{result::JobException, Context, Error, Mut, Ref, Result, Weak};
-use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
-
-#[cfg(feature = "allocator")]
-use crate::allocator::Allocator;
+//! QuickJS runtime related types.
 
 use super::{
-    raw::{Opaque, RawRuntime},
-    InterruptHandler, MemoryUsage,
+    opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
+use crate::allocator::Allocator;
+#[cfg(feature = "loader")]
+use crate::loader::{Loader, Resolver};
+use crate::{result::JobException, Context, Mut, Ref, Result, Weak};
+use alloc::{ffi::CString, vec::Vec};
+use core::{ptr::NonNull, result::Result as StdResult};
 
 /// A weak handle to the runtime.
+///
+/// Holding onto this struct does not prevent the runtime from being dropped.
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct WeakRuntime(Weak<Mut<RawRuntime>>);
@@ -24,7 +23,7 @@ impl WeakRuntime {
     }
 }
 
-/// Quickjs runtime, entry point of the library.
+/// QuickJS runtime, entry point of the library.
 #[derive(Clone)]
 #[repr(transparent)]
 pub struct Runtime {
@@ -40,7 +39,7 @@ impl Runtime {
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new() -> Result<Self> {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new(opaque) }.ok_or(Error::Allocation)?;
+        let rt = unsafe { RawRuntime::new(opaque)? };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
         })
@@ -49,15 +48,12 @@ impl Runtime {
     /// Create a new runtime using specified allocator
     ///
     /// Will generally only fail if not enough memory was available.
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "allocator")))]
-    #[cfg(feature = "allocator")]
     pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
     where
         A: Allocator + 'static,
     {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }
-            .ok_or(Error::Allocation)?;
+        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator)? };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
         })
@@ -66,6 +62,24 @@ impl Runtime {
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
         WeakRuntime(Ref::downgrade(&self.inner))
+    }
+
+    /// Set a closure which is called when a promise is created, resolved, or chained.
+    #[inline]
+    pub fn set_promise_hook(&self, tracker: Option<PromiseHook>) {
+        unsafe {
+            self.inner.lock().set_promise_hook(tracker);
+        }
+    }
+
+    /// Set a closure which is called when a Promise is rejected.
+    #[inline]
+    pub fn set_host_promise_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
+        unsafe {
+            self.inner
+                .lock()
+                .set_host_promise_rejection_tracker(tracker);
+        }
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.
@@ -84,7 +98,7 @@ impl Runtime {
     pub fn set_loader<R, L>(&self, resolver: R, loader: L)
     where
         R: Resolver + 'static,
-        L: RawLoader + 'static,
+        L: Loader + 'static,
     {
         unsafe {
             self.inner.lock().set_loader(resolver, loader);
@@ -128,10 +142,17 @@ impl Runtime {
         }
     }
 
+    /// Set debug flags for dumping memory
+    pub fn set_dump_flags(&self, flags: u64) {
+        unsafe {
+            self.inner.lock().set_dump_flags(flags);
+        }
+    }
+
     /// Manually run the garbage collection.
     ///
-    /// Most of quickjs values are reference counted and
-    /// will automaticly free themselfs when they have no more
+    /// Most of QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub fn run_gc(&self) {
@@ -158,11 +179,15 @@ impl Runtime {
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        self.inner.lock().execute_pending_job().map_err(|e| {
-            JobException(Context::from_raw(
-                NonNull::new(e).expect("quickjs returned null ptr for job error"),
-                self.clone(),
-            ))
+        let mut lock = self.inner.lock();
+        lock.update_stack_top();
+        lock.execute_pending_job().map_err(|e| {
+            JobException(unsafe {
+                Context::from_raw(
+                    NonNull::new(e).expect("QuickJS returned null ptr for job error"),
+                    self.clone(),
+                )
+            })
         })
     }
 }
@@ -176,7 +201,7 @@ unsafe impl Send for WeakRuntime {}
 
 // Since a global lock needs to be locked for safe use
 // using runtime in a sync way should be safe as
-// simultanious accesses is syncronized behind a lock.
+// simultaneous accesses is synchronized behind a lock.
 #[cfg(feature = "parallel")]
 unsafe impl Sync for Runtime {}
 #[cfg(feature = "parallel")]

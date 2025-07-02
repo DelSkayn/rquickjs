@@ -1,6 +1,6 @@
 #![allow(clippy::many_single_char_names)]
 use super::{Context, Ctx, MultiWith};
-use std::mem;
+use core::mem;
 
 macro_rules! list {
     ({$($r:ident,)+} => $e:ty) => {
@@ -21,7 +21,7 @@ macro_rules! impl_multi_with{
 
                 $(assert!(self.0.get_runtime_ptr() == $t.get_runtime_ptr(),
                           "Tried to use contexts of different runtimes with each other");)*
-                let guard = self.0.rt.inner.lock();
+                let guard = self.0.0.rt.inner.lock();
                 guard.update_stack_top();
                 let res = f(($(unsafe{ Ctx::new($t) },)*));
                 mem::drop(guard);

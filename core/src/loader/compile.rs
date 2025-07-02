@@ -1,13 +1,16 @@
 use crate::{
-    loader::{util::resolve_simple, Loader, RawLoader, Resolver},
-    module::ModuleDataKind,
-    Ctx, Lock, Module, Mut, Ref, Result,
+    loader::{util::resolve_simple, Loader, Resolver},
+    Ctx, Lock, Module, Mut, Ref, Result, WriteOptions,
 };
-use std::{
-    collections::{hash_map::Iter as HashMapIter, HashMap},
-    iter::{ExactSizeIterator, FusedIterator},
+use alloc::{string::String, vec::Vec};
+use core::{
+    iter::FusedIterator,
     ops::{Deref, DerefMut},
 };
+#[cfg(not(feature = "std"))]
+use hashbrown::{hash_map::Iter as HashMapIter, HashMap};
+#[cfg(feature = "std")]
+use std::collections::{hash_map::Iter as HashMapIter, HashMap};
 
 /// Modules compiling data
 #[derive(Default, Clone)]
@@ -173,28 +176,21 @@ impl<R> Resolver for Compile<R>
 where
     R: Resolver,
 {
-    fn resolve<'js>(&mut self, ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
-        self.inner.resolve(ctx, base, name).map(|path| {
+    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+        self.inner.resolve(ctx, base, name).inspect(|path| {
             let name = resolve_simple(base, name);
             self.data.lock().modules.insert(path.clone(), name);
-            path
         })
     }
 }
 
-unsafe impl<L> RawLoader for Compile<L>
+impl<L> Loader for Compile<L>
 where
     L: Loader,
 {
-    unsafe fn raw_load<'js>(&mut self, ctx: Ctx<'js>, path: &str) -> Result<Module<'js>> {
-        let data = self.inner.load(ctx, path)?;
-        assert!(
-            matches!(data.kind(), ModuleDataKind::Source(_) | ModuleDataKind::ByteCode(_)) ,
-            "can't compile native modules, loader `{}` returned a native module, but `Compile` can only handle modules loaded from source or bytecode",
-            std::any::type_name::<L>()
-        );
-        let module = data.unsafe_declare(ctx)?;
-        let data = module.write_object(false)?;
+    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
+        let module = self.inner.load(ctx, path)?;
+        let data = module.write(WriteOptions::default())?;
         self.data.lock().bytecodes.push((path.into(), data));
         Ok(module)
     }

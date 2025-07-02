@@ -1,5 +1,9 @@
 use crate::{loader::Resolver, Ctx, Error, Result};
+use alloc::string::{String, ToString as _};
+#[cfg(not(feature = "std"))]
+use hashbrown::HashSet;
 use relative_path::RelativePath;
+#[cfg(feature = "std")]
 use std::collections::HashSet;
 
 /// The builtin module resolver
@@ -26,7 +30,7 @@ impl BuiltinResolver {
 }
 
 impl Resolver for BuiltinResolver {
-    fn resolve<'js>(&mut self, _ctx: Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
         let full = if !name.starts_with('.') {
             name.to_string()
         } else {

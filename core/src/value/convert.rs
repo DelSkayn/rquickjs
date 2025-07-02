@@ -1,4 +1,4 @@
-//! Utilites for converting to and from javascript values.
+//! Utilities for converting to and from JavaScript values.
 
 use crate::{Atom, Ctx, Result, Value};
 
@@ -22,9 +22,6 @@ mod into;
 /// assert_eq!(ctx.eval::<Coerced<String>, _>("({})")?.0, "[object Object]");
 ///
 /// // Coercion to integer
-/// assert!(ctx.eval::<i32, _>("123.5").is_err());
-/// assert_eq!(ctx.eval::<Coerced<i32>, _>("123.5")?.0, 123);
-///
 /// assert!(ctx.eval::<i32, _>("`123`").is_err());
 /// assert_eq!(ctx.eval::<Coerced<i32>, _>("`123`")?.0, 123);
 ///
@@ -42,13 +39,13 @@ mod into;
 #[repr(transparent)]
 pub struct Coerced<T>(pub T);
 
-/// For converting javascript values to rust values
+/// For converting JavaScript values to Rust values
 ///
 /// This trait automatically converts any value which can be
 /// represented as an object, like [`Array`](crate::Array)
 /// to one if it is required.
 pub trait FromJs<'js>: Sized {
-    fn from_js(ctx: Ctx<'js>, value: Value<'js>) -> Result<Self>;
+    fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self>;
 }
 
 /// Trait for converting values from atoms.
@@ -60,24 +57,24 @@ pub trait FromAtom<'js>: Sized {
 pub trait FromIteratorJs<'js, A>: Sized {
     type Item;
 
-    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    fn from_iter_js<T>(ctx: &Ctx<'js>, iter: T) -> Result<Self>
     where
         T: IntoIterator<Item = A>;
 }
 
-/// For converting rust values to javascript values
+/// For converting Rust values to JavaScript values
 pub trait IntoJs<'js> {
-    fn into_js(self, ctx: Ctx<'js>) -> Result<Value<'js>>;
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>>;
 }
 
 /// Trait for converting values to atoms.
 pub trait IntoAtom<'js> {
-    fn into_atom(self, ctx: Ctx<'js>) -> Result<Atom<'js>>;
+    fn into_atom(self, ctx: &Ctx<'js>) -> Result<Atom<'js>>;
 }
 
 /// The Rust's [`Iterator`] trait extension which works with [`Ctx`]
 pub trait IteratorJs<'js, A> {
-    fn collect_js<B>(self, ctx: Ctx<'js>) -> Result<B>
+    fn collect_js<B>(self, ctx: &Ctx<'js>) -> Result<B>
     where
         B: FromIteratorJs<'js, A>;
 }
@@ -86,10 +83,14 @@ impl<'js, T, A> IteratorJs<'js, A> for T
 where
     T: Iterator<Item = A>,
 {
-    fn collect_js<B>(self, ctx: Ctx<'js>) -> Result<B>
+    fn collect_js<B>(self, ctx: &Ctx<'js>) -> Result<B>
     where
         B: FromIteratorJs<'js, A>,
     {
         B::from_iter_js(ctx, self)
     }
 }
+
+/// A helper type for turning a tuple into a JavaScript array.
+/// Implements [`IntoJs`] and [`FromJs`] for tuples of various lengths
+pub struct List<T>(pub T);

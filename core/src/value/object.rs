@@ -1,71 +1,21 @@
 //! Module for types dealing with JS objects.
 
 use crate::{
-    convert::FromIteratorJs, qjs, Array, Atom, Ctx, Error, FromAtom, FromJs, Function, IntoAtom,
-    IntoJs, Result, Value,
+    convert::FromIteratorJs, qjs, Array, Atom, Ctx, FromAtom, FromJs, IntoAtom, IntoJs, Result,
+    Value,
 };
-use std::{
-    iter::{DoubleEndedIterator, ExactSizeIterator, FusedIterator, IntoIterator, Iterator},
-    marker::PhantomData,
-    mem,
-};
+use core::{iter::FusedIterator, marker::PhantomData, mem};
 
-#[cfg(feature = "properties")]
 mod property;
-#[cfg(feature = "properties")]
-pub use property::{Accessor, AsProperty, Property};
+pub use property::{Accessor, AsProperty, Property, PropertyFlags};
 
-/// The helper trait to define objects
-pub trait ObjectDef {
-    /// Initialize object contents
-    ///
-    /// You should set fields with specific values using [Object::set] method.
-    fn init<'js>(ctx: Ctx<'js>, object: &Object<'js>) -> Result<()>;
-}
-
-macro_rules! object_def_impls {
-    ($($($t:ident)*,)*) => {
-        $(
-            impl<$($t),*> ObjectDef for ($($t,)*)
-            where
-                $($t: ObjectDef,)*
-            {
-                fn init<'js>(_ctx: Ctx<'js>, _object: &Object<'js>) -> Result<()> {
-                    $($t::init(_ctx, _object)?;)*
-                    Ok(())
-                }
-            }
-        )*
-    };
-}
-
-object_def_impls! {
-    ,
-    A,
-    A B,
-    A B C,
-    A B C D,
-    A B C D E,
-    A B C D E F,
-    A B C D E F G,
-    A B C D E F G H,
-    A B C D E F G H I,
-    A B C D E F G H I J,
-    A B C D E F G H I J K,
-    A B C D E F G H I J K L,
-    A B C D E F G H I J K L M,
-    A B C D E F G H I J K L M N,
-    A B C D E F G H I J K L M N O,
-    A B C D E F G H I J K L M N O P,
-}
-
-/// Rust representation of a javascript object.
-#[derive(Debug, PartialEq, Clone)]
+/// Rust representation of a JavaScript object.
+#[derive(Debug, PartialEq, Clone, Hash, Eq)]
 #[repr(transparent)]
 pub struct Object<'js>(pub(crate) Value<'js>);
 
 impl<'js> Object<'js> {
-    /// Create a new javascript object
+    /// Create a new JavaScript object
     pub fn new(ctx: Ctx<'js>) -> Result<Self> {
         Ok(unsafe {
             let val = qjs::JS_NewObject(ctx.as_ptr());
@@ -74,40 +24,22 @@ impl<'js> Object<'js> {
         })
     }
 
-    /// Initialize an object using `ObjectDef`
-    pub fn init_def<T>(&self) -> Result<()>
-    where
-        T: ObjectDef,
-    {
-        T::init(self.0.ctx, self)
-    }
-
-    /// Create an object using `ObjectDef`
-    pub fn new_def<T>(ctx: Ctx<'js>) -> Result<Self>
-    where
-        T: ObjectDef,
-    {
-        let obj = Self::new(ctx)?;
-        T::init(ctx, &obj)?;
-        Ok(obj)
-    }
-
     /// Get a new value
     pub fn get<K: IntoAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
-        let atom = k.into_atom(self.0.ctx)?;
-        V::from_js(self.0.ctx, unsafe {
+        let atom = k.into_atom(self.ctx())?;
+        V::from_js(self.ctx(), unsafe {
             let val = qjs::JS_GetProperty(self.0.ctx.as_ptr(), self.0.as_js_value(), atom.atom);
             let val = self.0.ctx.handle_exception(val)?;
-            Value::from_js_value(self.0.ctx, val)
+            Value::from_js_value(self.0.ctx.clone(), val)
         })
     }
 
-    /// check wether the object contains a certain key.
+    /// check whether the object contains a certain key.
     pub fn contains_key<K>(&self, k: K) -> Result<bool>
     where
         K: IntoAtom<'js>,
     {
-        let atom = k.into_atom(self.0.ctx)?;
+        let atom = k.into_atom(self.ctx())?;
         unsafe {
             let res = qjs::JS_HasProperty(self.0.ctx.as_ptr(), self.0.as_js_value(), atom.atom);
             if res < 0 {
@@ -119,8 +51,8 @@ impl<'js> Object<'js> {
 
     /// Set a member of an object to a certain value
     pub fn set<K: IntoAtom<'js>, V: IntoJs<'js>>(&self, key: K, value: V) -> Result<()> {
-        let atom = key.into_atom(self.0.ctx)?;
-        let val = value.into_js(self.0.ctx)?;
+        let atom = key.into_atom(self.ctx())?;
+        let val = value.into_js(self.ctx())?;
         unsafe {
             if qjs::JS_SetProperty(
                 self.0.ctx.as_ptr(),
@@ -137,7 +69,7 @@ impl<'js> Object<'js> {
 
     /// Remove a member of an object
     pub fn remove<K: IntoAtom<'js>>(&self, key: K) -> Result<()> {
-        let atom = key.into_atom(self.0.ctx)?;
+        let atom = key.into_atom(self.ctx())?;
         unsafe {
             if qjs::JS_DeleteProperty(
                 self.0.ctx.as_ptr(),
@@ -207,25 +139,28 @@ impl<'js> Object<'js> {
     }
 
     /// Get an object prototype
-    pub fn get_prototype(&self) -> Result<Object<'js>> {
-        Ok(unsafe {
+    ///
+    /// Objects can have no prototype, in this case this function will return null.
+    pub fn get_prototype(&self) -> Option<Object<'js>> {
+        unsafe {
             let proto = qjs::JS_GetPrototype(self.0.ctx.as_ptr(), self.0.as_js_value());
             if qjs::JS_IsNull(proto) {
-                return Err(Error::Unknown);
+                None
             } else {
-                Object::from_js_value(self.0.ctx, proto)
+                Some(Object::from_js_value(self.0.ctx.clone(), proto))
             }
-        })
+        }
     }
 
     /// Set an object prototype
-    pub fn set_prototype(&self, proto: &Object<'js>) -> Result<()> {
+    ///
+    /// If called with None the function will set the prototype of the object to null.
+    ///
+    /// This function will error if setting the prototype causes a cycle in the prototype chain.
+    pub fn set_prototype(&self, proto: Option<&Object<'js>>) -> Result<()> {
+        let proto = proto.map(|x| x.as_js_value()).unwrap_or(qjs::JS_NULL);
         unsafe {
-            if 1 != qjs::JS_SetPrototype(
-                self.0.ctx.as_ptr(),
-                self.0.as_js_value(),
-                proto.0.as_js_value(),
-            ) {
+            if 1 != qjs::JS_SetPrototype(self.0.ctx.as_ptr(), self.0.as_js_value(), proto) {
                 Err(self.0.ctx.raise_exception())
             } else {
                 Ok(())
@@ -245,19 +180,10 @@ impl<'js> Object<'js> {
         }
     }
 
-    /// Convert into a function
-    pub fn into_function(self) -> Option<Function<'js>> {
-        if self.is_function() {
-            Some(Function(self.0))
-        } else {
-            None
-        }
-    }
-
     /// Convert into an array
     pub fn into_array(self) -> Option<Array<'js>> {
         if self.is_array() {
-            Some(Array(self.0))
+            Some(Array(self))
         } else {
             None
         }
@@ -322,7 +248,7 @@ struct IterState<'js> {
 
 impl<'js> IterState<'js> {
     fn new(obj: &Value<'js>, flags: qjs::c_int) -> Result<Self> {
-        let ctx = obj.ctx;
+        let ctx = obj.ctx();
 
         let mut enums = mem::MaybeUninit::uninit();
         let mut count = mem::MaybeUninit::uninit();
@@ -344,7 +270,7 @@ impl<'js> IterState<'js> {
         };
 
         Ok(Self {
-            ctx,
+            ctx: ctx.clone(),
             enums,
             count,
             index: 0,
@@ -372,7 +298,7 @@ impl<'js> Iterator for IterState<'js> {
         if self.index < self.count {
             let elem = unsafe { &*self.enums.offset(self.index as _) };
             self.index += 1;
-            let atom = unsafe { Atom::from_atom_val(self.ctx, elem.atom) };
+            let atom = unsafe { Atom::from_atom_val(self.ctx.clone(), elem.atom) };
             Some(atom)
         } else {
             None
@@ -390,7 +316,7 @@ impl<'js> DoubleEndedIterator for IterState<'js> {
         if self.index < self.count {
             self.count -= 1;
             let elem = unsafe { &*self.enums.offset(self.count as _) };
-            let atom = unsafe { Atom::from_atom_val(self.ctx, elem.atom) };
+            let atom = unsafe { Atom::from_atom_val(self.ctx.clone(), elem.atom) };
             Some(atom)
         } else {
             None
@@ -665,11 +591,11 @@ where
 {
     type Item = (Atom<'js>, Value<'js>);
 
-    fn from_iter_js<T>(ctx: Ctx<'js>, iter: T) -> Result<Self>
+    fn from_iter_js<T>(ctx: &Ctx<'js>, iter: T) -> Result<Self>
     where
         T: IntoIterator<Item = (K, V)>,
     {
-        let object = Object::new(ctx)?;
+        let object = Object::new(ctx.clone())?;
         for (key, value) in iter {
             let key = key.into_atom(ctx)?;
             let value = value.into_js(ctx)?;
@@ -681,7 +607,7 @@ where
 
 #[cfg(test)]
 mod test {
-    use crate::{prelude::*, *};
+    use crate::*;
 
     #[test]
     fn from_javascript() {
@@ -815,14 +741,14 @@ mod test {
             let pairs = val.into_iter().collect::<Result<Vec<_>>>().unwrap();
             assert_eq!(pairs.len(), 4);
             assert_eq!(pairs[0].0.clone().to_string().unwrap(), "123");
-            assert_eq!(i32::from_js(ctx, pairs[0].1.clone()).unwrap(), 123);
+            assert_eq!(i32::from_js(&ctx, pairs[0].1.clone()).unwrap(), 123);
             assert_eq!(pairs[1].0.clone().to_string().unwrap(), "str");
-            assert_eq!(StdString::from_js(ctx, pairs[1].1.clone()).unwrap(), "abc");
+            assert_eq!(StdString::from_js(&ctx, pairs[1].1.clone()).unwrap(), "abc");
             assert_eq!(pairs[2].0.clone().to_string().unwrap(), "arr");
-            assert_eq!(Array::from_js(ctx, pairs[2].1.clone()).unwrap().len(), 0);
+            assert_eq!(Array::from_js(&ctx, pairs[2].1.clone()).unwrap().len(), 0);
             assert_eq!(pairs[3].0.clone().to_string().unwrap(), "");
             assert_eq!(
-                Undefined::from_js(ctx, pairs[3].1.clone()).unwrap(),
+                Undefined::from_js(&ctx, pairs[3].1.clone()).unwrap(),
                 Undefined
             );
         })
@@ -859,18 +785,18 @@ mod test {
             let object = [("a", "bc"), ("$_", ""), ("", "xyz")]
                 .iter()
                 .cloned()
-                .collect_js::<Object>(ctx)
+                .collect_js::<Object>(&ctx)
                 .unwrap();
             assert_eq!(
-                StdString::from_js(ctx, object.get("a").unwrap()).unwrap(),
+                StdString::from_js(&ctx, object.get("a").unwrap()).unwrap(),
                 "bc"
             );
             assert_eq!(
-                StdString::from_js(ctx, object.get("$_").unwrap()).unwrap(),
+                StdString::from_js(&ctx, object.get("$_").unwrap()).unwrap(),
                 ""
             );
             assert_eq!(
-                StdString::from_js(ctx, object.get("").unwrap()).unwrap(),
+                StdString::from_js(&ctx, object.get("").unwrap()).unwrap(),
                 "xyz"
             );
         })

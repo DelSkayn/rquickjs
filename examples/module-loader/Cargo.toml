@@ -1,6 +1,6 @@
 [package]
 name = "module-loader"
-version = "0.1.0"
+version = "0.9.0"
 authors = ["K. <kayo@illumium.org>"]
 edition = "2018"
 publish = false
@@ -8,7 +8,7 @@ publish = false
 [dependencies.rquickjs]
 path = "../.."
 default-features = false
-features = ["exports", "futures", "rust-alloc", "loader", "dyn-load"]
+features = ["futures", "rust-alloc", "loader", "dyn-load"]
 
 [features]
 default = ["macro"]
