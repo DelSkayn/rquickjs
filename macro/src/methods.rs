@@ -203,7 +203,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
     let proto_ident = format_ident!("_proto");
     let function_apply_proto = functions
         .iter()
-        .filter(|&func| (!func.config.r#static))
+        .filter(|&func| !func.config.r#static)
         .map(|func| {
             func.expand_apply_to_object(&prefix, &self_ty, &proto_ident, config.rename_all)
         });
