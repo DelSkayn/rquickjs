@@ -800,8 +800,52 @@ unsafe extern "C" {
     pub fn JS_NewError(ctx: *mut JSContext) -> JSValue;
 }
 unsafe extern "C" {
+    pub fn JS_NewInternalError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewPlainError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewRangeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewReferenceError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewSyntaxError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewTypeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_ThrowInternalError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
+}
+unsafe extern "C" {
     pub fn JS_ThrowPlainError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
     -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
+    -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_ThrowReferenceError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_ThrowSyntaxError(
@@ -812,24 +856,6 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
-}
-unsafe extern "C" {
-    pub fn JS_ThrowReferenceError(
-        ctx: *mut JSContext,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> JSValue;
-}
-unsafe extern "C" {
-    pub fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
-    -> JSValue;
-}
-unsafe extern "C" {
-    pub fn JS_ThrowInternalError(
-        ctx: *mut JSContext,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_ThrowOutOfMemory(ctx: *mut JSContext) -> JSValue;
