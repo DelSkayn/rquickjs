@@ -28,6 +28,7 @@ fn download_wasi_sdk() -> PathBuf {
     if !archive_path.try_exists().unwrap() {
         let file_suffix = match (env::consts::OS, env::consts::ARCH) {
             ("linux", "x86") | ("linux", "x86_64") => "x86_64-linux",
+            ("linux", "aarch64") => "arm64-linux",
             ("macos", "x86") | ("macos", "x86_64") => "x86_64-macos",
             ("macos", "aarch64") => "arm64-macos",
             ("windows", "x86") | ("windows", "x86_64") => "x86_64-windows",
