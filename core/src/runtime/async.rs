@@ -13,14 +13,14 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use async_lock::Mutex;
 
 use super::{
-    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker, opaque::Opaque, raw::RawRuntime,
-    schedular::SchedularPoll, spawner::DriveFuture,
+    opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
+    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
 use crate::{
-    Ctx, Exception, Result, context::AsyncContext, result::AsyncJobException, util::ManualPoll,
+    context::AsyncContext, result::AsyncJobException, util::ManualPoll, Ctx, Exception, Result,
 };
 #[cfg(feature = "parallel")]
 use crate::{
@@ -325,7 +325,7 @@ impl AsyncRuntime {
                 match pending {
                     Err(e) => {
                         // SAFETY: Runtime is already locked so creating a context is safe.
-                        let ctx = unsafe { Ctx::from_ptr(e.0.0.ctx().as_ptr()) };
+                        let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx().as_ptr()) };
                         let err = ctx.catch();
                         if let Some(_x) = err.clone().into_object().and_then(Exception::from_object)
                         {
