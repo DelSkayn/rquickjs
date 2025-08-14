@@ -11,7 +11,7 @@ use core::{
 };
 
 #[cfg(feature = "std")]
-use std::{fs, path::Path};
+use std::{fs, path::Path, string::String as StdString};
 
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
@@ -35,6 +35,9 @@ pub struct EvalOptions {
     pub backtrace_barrier: bool,
     /// Support top-level-await.
     pub promise: bool,
+    /// Filename. Ignored when calling eval_file_*.
+    #[cfg(feature = "std")]
+    pub filename: Option<StdString>,
 }
 
 impl EvalOptions {
@@ -68,6 +71,8 @@ impl Default for EvalOptions {
             strict: true,
             backtrace_barrier: false,
             promise: false,
+            #[cfg(feature = "std")]
+            filename: None,
         }
     }
 }
@@ -177,6 +182,16 @@ impl<'js> Ctx<'js> {
         source: S,
         options: EvalOptions,
     ) -> Result<V> {
+        #[cfg(feature = "std")]
+        let file_name = {
+            if let Some(filename) = &options.filename {
+                &CString::new(filename.clone())?
+            } else {
+                c"eval_script"
+            }
+        };
+
+        #[cfg(not(feature = "std"))]
         let file_name = c"eval_script";
 
         V::from_js(self, unsafe {
