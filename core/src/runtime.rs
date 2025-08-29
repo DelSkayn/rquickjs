@@ -11,6 +11,8 @@ mod r#async;
 pub(crate) mod schedular;
 #[cfg(feature = "futures")]
 mod spawner;
+#[cfg(feature = "futures")]
+pub use spawner::DriveFuture;
 
 use alloc::boxed::Box;
 pub use base::{Runtime, WeakRuntime};
