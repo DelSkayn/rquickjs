@@ -3,9 +3,8 @@ use super::{
     owner::{ContextOwner, DropContext},
     ContextBuilder, Intrinsic,
 };
-use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
-use alloc::boxed::Box;
-use core::{future::Future, mem, pin::Pin, ptr::NonNull};
+use crate::{context::r#async::future::CallbackFuture, markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
+use core::{mem, ptr::NonNull};
 
 mod future;
 
@@ -81,9 +80,15 @@ macro_rules! async_with{
             /// rquickjs objects are send so the future will never be send.
             /// Since we acquire a lock before running the future and nothing can escape the closure
             /// and future it is safe to recast the future as send.
+            #[cfg(not(feature = "parallel"))]
+            unsafe fn uplift<'a,'b,R>(f: core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'a>>) -> core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'b>>{
+                core::mem::transmute(f)
+            }
+            #[cfg(feature = "parallel")]
             unsafe fn uplift<'a,'b,R>(f: core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'a>>) -> core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'b + Send>>{
                 core::mem::transmute(f)
             }
+
             unsafe{ uplift(fut) }
         })
     };
@@ -202,7 +207,7 @@ impl AsyncContext {
     /// future.
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
     where
-        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
+        F: for<'js> FnOnce(Ctx<'js>) -> CallbackFuture<'js, R>
             + ParallelSend,
         R: ParallelSend,
     {
