@@ -112,6 +112,32 @@ pub(crate) unsafe extern "C" fn exotic_set_property(
     (ptr.as_ref().v_table.set_property)(ptr, ctx, obj, atom, receiver, value, flags)
 }
 
+/// FFI exotic has_property function for classes with exotic behavior.
+pub(crate) unsafe extern "C" fn exotic_has_property(
+    ctx: *mut qjs::JSContext,
+    obj: qjs::JSValueConst,
+    atom: qjs::JSAtom,
+) -> qjs::c_int {
+    let rt = qjs::JS_GetRuntime(ctx);
+    let id = Opaque::from_runtime_ptr(rt).get_exotic_id();
+    let ptr = qjs::JS_GetOpaque(obj, id);
+    let ptr = NonNull::new(ptr).unwrap().cast::<ClassCell<()>>();
+    (ptr.as_ref().v_table.has_property)(ptr, ctx, obj, atom)
+}
+
+/// FFI exotic delete_property function for classes with exotic behavior.
+pub(crate) unsafe extern "C" fn exotic_delete_property(
+    ctx: *mut qjs::JSContext,
+    obj: qjs::JSValueConst,
+    prop: qjs::JSAtom,
+) -> qjs::c_int {
+    let rt = qjs::JS_GetRuntime(ctx);
+    let id = Opaque::from_runtime_ptr(rt).get_exotic_id();
+    let ptr = qjs::JS_GetOpaque(obj, id);
+    let ptr = NonNull::new(ptr).unwrap().cast::<ClassCell<()>>();
+    (ptr.as_ref().v_table.delete_property)(ptr, ctx, obj, prop)
+}
+
 pub(crate) type FinalizerFunc = unsafe fn(this: NonNull<ClassCell<()>>);
 pub(crate) type TraceFunc =
     for<'a> unsafe fn(this: NonNull<ClassCell<()>>, tracer: Tracer<'a, 'static>);
@@ -143,6 +169,20 @@ pub(crate) type SetPropertyFunc = for<'a> unsafe fn(
     flags: qjs::c_int,
 ) -> qjs::c_int;
 
+pub(crate) type HasPropertyFunc = for<'a> unsafe fn(
+    this_ptr: NonNull<ClassCell<()>>,
+    ctx: *mut qjs::JSContext,
+    obj: qjs::JSValueConst,
+    atom: qjs::JSAtom,
+) -> qjs::c_int;
+
+pub(crate) type DeletePropertyFunc = for<'a> unsafe fn(
+    this_ptr: NonNull<ClassCell<()>>,
+    ctx: *mut qjs::JSContext,
+    obj: qjs::JSValueConst,
+    prop: qjs::JSAtom,
+) -> qjs::c_int;
+
 pub(crate) type TypeIdFn = fn() -> TypeId;
 
 pub(crate) struct VTable {
@@ -152,6 +192,8 @@ pub(crate) struct VTable {
     call: CallFunc,
     get_property: GetPropertyFunc,
     set_property: SetPropertyFunc,
+    has_property: HasPropertyFunc,
+    delete_property: DeletePropertyFunc,
 }
 
 impl VTable {
@@ -237,6 +279,50 @@ impl VTable {
         }))
     }
 
+    unsafe fn has_property_impl<'js, C: JsClass<'js>>(
+        this_ptr: NonNull<ClassCell<()>>,
+        ctx: *mut qjs::JSContext,
+        obj: qjs::JSValueConst,
+        atom: qjs::JSAtom,
+    ) -> qjs::c_int {
+        let this_ptr = this_ptr.cast::<ClassCell<JsCell<C>>>();
+        let ctx = Ctx::from_ptr(ctx);
+        let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
+        let obj = Value::from_js_value_const(ctx.clone(), obj);
+
+        ctx.handle_panic_exotic(AssertUnwindSafe(|| {
+            match C::exotic_has_property(&this_ptr.as_ref().data, &ctx, atom, obj) {
+                Ok(v) => if v { 1 } else { 0 },
+                Err(e) => {
+                    e.throw(&ctx);
+                    -1
+                }
+            }
+        }))
+    }
+
+    unsafe fn delete_property_impl<'js, C: JsClass<'js>>(
+        this_ptr: NonNull<ClassCell<()>>,
+        ctx: *mut qjs::JSContext,
+        obj: qjs::JSValueConst,
+        atom: qjs::JSAtom,
+    ) -> qjs::c_int {
+        let this_ptr = this_ptr.cast::<ClassCell<JsCell<C>>>();
+        let ctx = Ctx::from_ptr(ctx);
+        let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
+        let obj = Value::from_js_value_const(ctx.clone(), obj);
+
+        ctx.handle_panic_exotic(AssertUnwindSafe(|| {
+            match C::exotic_delete_property(&this_ptr.as_ref().data, &ctx, atom, obj) {
+                Ok(v) => if v { 1 } else { 0 },
+                Err(e) => {
+                    e.throw(&ctx);
+                    -1
+                }
+            }
+        }))
+    }
+
     pub fn get<'js, C: JsClass<'js>>() -> &'static VTable {
         trait HasVTable {
             const VTABLE: VTable;
@@ -250,6 +336,8 @@ impl VTable {
                 call: VTable::call_impl::<C>,
                 get_property: VTable::get_property_impl::<C>,
                 set_property: VTable::set_property_impl::<C>,
+                has_property: VTable::has_property_impl::<C>,
+                delete_property: VTable::delete_property_impl::<C>,
             };
         }
         &<C as HasVTable>::VTABLE
