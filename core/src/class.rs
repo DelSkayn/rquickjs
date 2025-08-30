@@ -1,10 +1,7 @@
 //! JavaScript classes defined from Rust.
 
 use crate::{
-    function::Params,
-    qjs::{self},
-    value::Constructor,
-    Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
+    function::Params, qjs::{self}, value::Constructor, Atom, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value
 };
 use alloc::boxed::Box;
 use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
@@ -30,6 +27,9 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// Is this class a function.
     const CALLABLE: bool = false;
 
+    /// Is this class exotic (e.g. will exotic_* methods be called with it)
+    const EXOTIC: bool = false;
+
     /// Can the type be mutated while a JavaScript value.
     ///
     /// This should either be [`Readable`] or [`Writable`].
@@ -48,6 +48,36 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     fn call<'a>(this: &JsCell<'js, Self>, params: Params<'a, 'js>) -> Result<Value<'js>> {
         let _ = this;
         Ok(Value::new_undefined(params.ctx().clone()))
+    }
+
+    /// The function which will be called if a get property is performed on an object with this class
+    fn exotic_get_property<'a>(this: &JsCell<'js, Self>, ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>, _receiver: Value<'js>) -> Result<Value<'js>> {
+        let _ = this;
+        Ok(Value::new_undefined(ctx.clone()))
+    }
+
+    /// The function which will be called if a set property is performed on an object with this class
+    /// 
+    /// Not yet implemented.
+    fn exotic_set_property<'a>(this: &JsCell<'js, Self>, _params: Params<'a, 'js>) -> Result<bool> {
+        let _ = this;
+        Ok(false)
+    }
+
+    /// The function which will be called if a delete property is performed on an object with this class
+    /// 
+    /// Not yet implemented.
+    fn exotic_delete_property<'a>(this: &JsCell<'js, Self>, _params: Params<'a, 'js>) -> Result<bool> {
+        let _ = this;
+        Ok(false)
+    }
+
+    /// The function which will be called if has property or similar is called on an object with this class
+    /// 
+    /// Not yet implemented.
+    fn exotic_has_property<'a>(this: &JsCell<'js, Self>, _params: Params<'a, 'js>) -> Result<bool> {
+        let _ = this;
+        Ok(false)
     }
 }
 
@@ -97,6 +127,8 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         let id = unsafe {
             if C::CALLABLE {
                 ctx.get_opaque().get_callable_id()
+            } else if C::EXOTIC {
+                ctx.get_opaque().get_exotic_id()
             } else {
                 ctx.get_opaque().get_class_id()
             }
@@ -122,6 +154,8 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         let id = unsafe {
             if C::CALLABLE {
                 proto.ctx().get_opaque().get_callable_id()
+            } else if C::EXOTIC {
+                proto.ctx().get_opaque().get_exotic_id()
             } else {
                 proto.ctx().get_opaque().get_class_id()
             }
@@ -228,6 +262,8 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         let id = unsafe {
             if C::CALLABLE {
                 self.ctx.get_opaque().get_callable_id()
+            } else if C::EXOTIC {
+                self.ctx.get_opaque().get_exotic_id()
             } else {
                 self.ctx.get_opaque().get_class_id()
             }
@@ -282,6 +318,8 @@ impl<'js> Object<'js> {
         let id = unsafe {
             if C::CALLABLE {
                 self.ctx.get_opaque().get_callable_id()
+            } else if C::EXOTIC {
+                self.ctx.get_opaque().get_exotic_id()
             } else {
                 self.ctx.get_opaque().get_class_id()
             }
@@ -672,6 +710,73 @@ mod test {
             ctx.globals()
                 .get::<_, Class<DebugPrinter<String>>>("b")
                 .unwrap();
+        })
+    }
+
+    #[test]
+    fn exotic() {
+        pub struct Exotic {
+            pub i: i32,
+        }
+
+        impl<'js> Trace<'js> for Exotic {
+            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        unsafe impl<'js> JsLifetime<'js> for Exotic {
+            type Changed<'to> = Exotic;
+        }
+
+        impl<'js> JsClass<'js> for Exotic {
+            const NAME: &'static str = "Exotic";
+
+            type Mutable = Writable;
+
+            const EXOTIC: bool = true;
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
+                Ok(Some(crate::Object::new(ctx.clone())?))
+            }
+
+            fn constructor(
+                _ctx: &crate::Ctx<'js>,
+            ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
+                Ok(None)
+            }
+
+            fn exotic_get_property<'a>(
+                this: &crate::class::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _obj: crate::Value<'js>,
+                _receiver: crate::Value<'js>,
+            ) -> crate::Result<crate::Value<'js>> {
+                if atom.to_string()? == "hello" {
+                    assert!(this.borrow().i == 0);
+                    Ok("world".into_js(ctx)?)
+                } else {
+                    Ok(crate::Value::new_null(ctx.clone()))
+                }
+            }
+        }
+
+        test_with(|ctx| {
+            let exotic = Class::<Exotic>::instance(ctx.clone(), Exotic { i: 0 }).unwrap();
+            ctx.globals().set("exotic", exotic).unwrap();
+
+            let v = ctx
+                .eval::<String, _>(
+                    r"
+                if(exotic.foo !== null) {
+                    throw new Error('foo should be null');
+                }
+                exotic.hello
+            ",
+                )
+                .catch(&ctx)
+                .unwrap();
+
+            assert_eq!(v, "world");
         })
     }
 }
