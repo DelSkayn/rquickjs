@@ -65,11 +65,11 @@ pub(crate) struct Opaque<'js> {
 impl<'js> Opaque<'js> {
     pub fn new() -> Self {
         let exotic_methods = Box::into_raw(Box::new(qjs::JSClassExoticMethods {
-            get_own_property: None,
-            get_own_property_names: None,
-            delete_property: None, // TODO: Implement
+            get_own_property: None, // TODO: Implement
+            get_own_property_names: None, // TODO: Implement
+            delete_property: Some(crate::class::ffi::exotic_delete_property),
             define_own_property: None, // TODO: Implement
-            has_property: None, // TODO: Implement
+            has_property: Some(crate::class::ffi::exotic_has_property),
             set_property: Some(crate::class::ffi::exotic_set_property),
             get_property: Some(crate::class::ffi::exotic_get_property),
         }));

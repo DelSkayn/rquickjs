@@ -57,25 +57,19 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     }
 
     /// The function which will be called if a set property is performed on an object with this class
-    /// 
-    /// Not yet implemented.
     fn exotic_set_property<'a>(this: &JsCell<'js, Self>, _ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>, _receiver: Value<'js>, _value: Value<'js>) -> Result<bool> {
         let _ = this;
         Ok(false)
     }
 
     /// The function which will be called if a delete property is performed on an object with this class
-    /// 
-    /// Not yet implemented.
-    fn exotic_delete_property<'a>(this: &JsCell<'js, Self>, _params: Params<'a, 'js>) -> Result<bool> {
+    fn exotic_delete_property<'a>(this: &JsCell<'js, Self>, _ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>) -> Result<bool> {
         let _ = this;
         Ok(false)
     }
 
     /// The function which will be called if has property or similar is called on an object with this class
-    /// 
-    /// Not yet implemented.
-    fn exotic_has_property<'a>(this: &JsCell<'js, Self>, _params: Params<'a, 'js>) -> Result<bool> {
+    fn exotic_has_property<'a>(this: &JsCell<'js, Self>, _ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>) -> Result<bool> {
         let _ = this;
         Ok(false)
     }
@@ -754,6 +748,11 @@ mod test {
                 if atom.to_string()? == "hello" {
                     assert!(this.borrow().i == 42);
                     Ok("world".into_js(ctx)?)
+                } else if atom.to_string()? == "toString" {
+                    Ok(Function::new(ctx.clone(), || {
+                        let f = "class Exotic { [native code] }";
+                        Ok::<&'static str, crate::Error>(f)
+                    })?.into_value())
                 } else {
                     Ok(crate::Value::new_null(ctx.clone()))
                 }
@@ -772,11 +771,33 @@ mod test {
                 let err_val = crate::String::from_str(ctx.clone(), "Properties are read-only")?.into_value();
                 Err(ctx.throw(err_val))
             }
+
+            fn exotic_has_property<'a>(this: &super::JsCell<'js, Self>, _ctx: &crate::Ctx<'js>, atom: crate::Atom<'js>, _obj: crate::Value<'js>) -> crate::Result<bool> {
+                let _ = this;
+                println!("Got atom: {}", atom.to_string()?);
+                if atom.to_string()? == "hello" || atom.to_string()? == "i" || atom.to_string()? == "toString" {
+                    return Ok(true);
+                }
+            
+                Ok(false)
+            }
+
+            fn exotic_delete_property<'a>(_this: &super::JsCell<'js, Self>, ctx: &crate::Ctx<'js>, _atom: crate::Atom<'js>, _obj: crate::Value<'js>) -> crate::Result<bool> {
+                let err_val = crate::String::from_str(ctx.clone(), "Properties cannot be deleted")?.into_value();
+                Err(ctx.throw(err_val))
+            }
         }
 
         test_with(|ctx| {
             let exotic = Class::<Exotic>::instance(ctx.clone(), Exotic { i: 0 }).unwrap();
             ctx.globals().set("exotic", exotic).unwrap();
+            ctx.globals().set("assert", Function::new(ctx.clone(), |ctx: crate::Ctx<'_>, cond: bool, msg: String| {
+                if !cond {
+                    let err_val = crate::String::from_str(ctx.clone(), &msg)?.into_value();
+                    return Err(ctx.throw(err_val));
+                }
+                Ok(())
+            })).unwrap();
 
             let v = ctx
                 .eval::<String, _>(
@@ -798,6 +819,19 @@ mod test {
                 if (exotic.hello === 42) {
                     throw new Error('i should be 42');
                 }
+                assert(exotic?.toString() === 'class Exotic { [native code] }', `exotic.toString() should be 'class Exotic { [native code] }' but is ${exotic?.toString()}`);
+                assert('i' in exotic, 'i should be in exotic');
+                assert('hello' in exotic, 'hello should be in exotic');
+                assert(!('foo' in exotic), 'foo should not be in exotic');
+
+                try {
+                    delete exotic.i;
+                } catch(e) {
+                    if (e?.toString() !== 'Properties cannot be deleted') {
+                        throw new Error('wrong error message: ' + e?.toString());
+                    }
+                }
+
                 exotic.hello
             ",
                 )
