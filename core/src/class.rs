@@ -402,6 +402,7 @@ impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
 
 #[cfg(test)]
 mod test {
+    use core::sync::atomic::AtomicI32;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -412,7 +413,8 @@ mod test {
         function::This,
         test_with,
         value::Constructor,
-        CatchResultExt, Class, Context, FromJs, Function, IntoJs, JsLifetime, Object, Runtime,
+        CatchResultExt, Class, Context, FromIteratorJs, FromJs, Function, IntoJs, JsLifetime,
+        Object, Runtime,
     };
 
     /// Test circular references.
@@ -735,6 +737,116 @@ mod test {
 
     #[test]
     fn exotic() {
+        pub struct ExoticIterator {
+            curr_state: Arc<AtomicI32>,
+        }
+
+        impl<'js> Trace<'js> for ExoticIterator {
+            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        unsafe impl<'js> JsLifetime<'js> for ExoticIterator {
+            type Changed<'to> = ExoticIterator;
+        }
+
+        impl<'js> JsClass<'js> for ExoticIterator {
+            const NAME: &'static str = "ExoticIterator";
+
+            type Mutable = Readable;
+
+            const EXOTIC: bool = true;
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
+                Ok(Some(crate::Object::new(ctx.clone())?))
+            }
+
+            fn constructor(
+                _ctx: &crate::Ctx<'js>,
+            ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
+                Ok(None)
+            }
+
+            fn exotic_get_property<'a>(
+                this: &crate::class::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _obj: crate::Value<'js>,
+                _receiver: crate::Value<'js>,
+            ) -> crate::Result<crate::Value<'js>> {
+                println!("Get property [iter]: {}", atom.to_string()?);
+                if atom.to_string()? == "next" {
+                    let state = this.borrow().curr_state.clone();
+                    Ok(Function::new(ctx.clone(), move |ctx: crate::Ctx<'js>| {
+                        // A really awful iterator thats implemented as a handwritten state machine
+                        //
+                        // Do not use this in production
+                        if state.load(Ordering::SeqCst) <= 1 {
+                            state.store(2, Ordering::SeqCst);
+
+                            let val = crate::Object::from_iter_js(
+                                &ctx,
+                                [
+                                    ("done", false.into_js(&ctx)?),
+                                    ("value", vec!["hello", "1292"].into_js(&ctx)?),
+                                ],
+                            )?
+                            .into_value();
+
+                            return Ok::<crate::Value<'_>, crate::Error>(val);
+                        } else if state.load(Ordering::SeqCst) == 2 {
+                            state.fetch_add(1, Ordering::SeqCst);
+
+                            let val = crate::Object::from_iter_js(
+                                &ctx,
+                                [
+                                    ("done", false.into_js(&ctx)?),
+                                    (
+                                        "value",
+                                        vec!["i".into_js(&ctx)?, 43.into_js(&ctx)?]
+                                            .into_js(&ctx)?,
+                                    ),
+                                ],
+                            )?
+                            .into_value();
+
+                            return Ok(val);
+                        } else {
+                            state.fetch_add(1, Ordering::SeqCst);
+
+                            let val = crate::Object::from_iter_js(
+                                &ctx,
+                                [
+                                    ("done", true.into_js(&ctx)?),
+                                    ("value", crate::Value::new_undefined(ctx.clone())),
+                                ],
+                            )?
+                            .into_value();
+
+                            return Ok(val);
+                        }
+                    })?
+                    .into_value())
+                } else {
+                    Ok(crate::Value::new_undefined(ctx.clone()))
+                }
+            }
+
+            fn exotic_has_property<'a>(
+                this: &super::JsCell<'js, Self>,
+                _ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _obj: crate::Value<'js>,
+            ) -> crate::Result<bool> {
+                let _ = this;
+                if atom.to_string()? == "next" {
+                    return Ok(true);
+                }
+
+                Ok(false)
+            }
+        }
+
+        #[derive(Clone)]
         pub struct Exotic {
             pub i: i32,
         }
@@ -771,6 +883,11 @@ mod test {
                 _obj: crate::Value<'js>,
                 _receiver: crate::Value<'js>,
             ) -> crate::Result<crate::Value<'js>> {
+                let symbol_iterator = crate::Atom::from_predefined(
+                    ctx.clone(),
+                    crate::atom::PredefinedAtom::SymbolIterator,
+                );
+                println!("Get property: {}", atom.to_string()?);
                 if atom.to_string()? == "hello" {
                     assert!(this.borrow().i == 42);
                     Ok("world".into_js(ctx)?)
@@ -778,6 +895,19 @@ mod test {
                     Ok(Function::new(ctx.clone(), || {
                         let f = "class Exotic { [native code] }";
                         Ok::<&'static str, crate::Error>(f)
+                    })?
+                    .into_value())
+                } else if atom == symbol_iterator {
+                    println!("Getting iterator");
+                    let exotic = Class::<ExoticIterator>::instance(
+                        ctx.clone(),
+                        ExoticIterator {
+                            curr_state: Arc::default(),
+                        },
+                    )?;
+                    println!("Returning ExoticIterator");
+                    Ok(Function::new(ctx.clone(), move || {
+                        Ok::<crate::Value<'_>, crate::Error>(exotic.clone().into_value())
                     })?
                     .into_value())
                 } else {
@@ -890,6 +1020,16 @@ mod test {
                         throw new Error('wrong error message: ' + e?.toString());
                     }
                 }
+
+                let resp = []
+                for (let [objKey, value] of exotic) {
+                    if (objKey !== 'i' && objKey !== 'hello') {
+                        throw new Error('only i and hello should be enumerable, got ' + objKey);
+                    }
+                    resp.push(`${objKey}:${value}`);
+                }
+
+                assert(resp.toString() === 'hello:1292,i:43', `${resp.toString()} with length ${resp.length} should be [] as properties are not enumerable`);
 
                 exotic.hello
             ",
