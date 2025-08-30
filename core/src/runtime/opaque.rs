@@ -11,8 +11,7 @@ use alloc::boxed::Box;
 use core::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
-    marker::PhantomData,
-    ptr,
+    marker::PhantomData, ptr,
 };
 
 #[cfg(feature = "std")]
@@ -48,6 +47,8 @@ pub(crate) struct Opaque<'js> {
     class_id: qjs::JSClassID,
     /// The class id for rust classes which can be called.
     callable_class_id: qjs::JSClassID,
+    /// The class id for exotic classes
+    exotic_class_id: qjs::JSClassID,
 
     prototypes: UnsafeCell<HashMap<TypeId, Option<Object<'js>>>>,
 
@@ -56,11 +57,23 @@ pub(crate) struct Opaque<'js> {
     #[cfg(feature = "futures")]
     spawner: Option<UnsafeCell<Spawner>>,
 
+    exotic_methods: *mut qjs::JSClassExoticMethods,
+
     _marker: PhantomData<&'js ()>,
 }
 
 impl<'js> Opaque<'js> {
     pub fn new() -> Self {
+        let exotic_methods = Box::into_raw(Box::new(qjs::JSClassExoticMethods {
+            get_own_property: None,
+            get_own_property_names: None,
+            delete_property: None, // TODO: Implement
+            define_own_property: None, // TODO: Implement
+            has_property: None, // TODO: Implement
+            set_property: None, // TODO: Implement
+            get_property: Some(crate::class::ffi::exotic_get_property),
+        }));
+
         Opaque {
             panic: Cell::new(None),
 
@@ -72,6 +85,7 @@ impl<'js> Opaque<'js> {
 
             class_id: qjs::JS_INVALID_CLASS_ID,
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
+            exotic_class_id: qjs::JS_INVALID_CLASS_ID,
 
             prototypes: UnsafeCell::new(HashMap::new()),
 
@@ -81,6 +95,8 @@ impl<'js> Opaque<'js> {
 
             #[cfg(feature = "futures")]
             spawner: None,
+
+            exotic_methods,
         }
     }
 
@@ -94,13 +110,14 @@ impl<'js> Opaque<'js> {
     pub unsafe fn initialize(&mut self, rt: *mut qjs::JSRuntime) -> Result<(), Error> {
         qjs::JS_NewClassID(rt, (&mut self.class_id) as *mut qjs::JSClassID);
         qjs::JS_NewClassID(rt, (&mut self.callable_class_id) as *mut qjs::JSClassID);
+        qjs::JS_NewClassID(rt, (&mut self.exotic_class_id) as *mut qjs::JSClassID);
 
         let class_def = qjs::JSClassDef {
             class_name: c"RustClass".as_ptr().cast(),
             finalizer: Some(class::ffi::class_finalizer),
             gc_mark: Some(class::ffi::class_trace),
             call: None,
-            exotic: ptr::null_mut(),
+            exotic: std::ptr::null_mut(),
         };
 
         if 0 != qjs::JS_NewClass(rt, self.class_id, &class_def) {
@@ -116,6 +133,18 @@ impl<'js> Opaque<'js> {
         };
 
         if 0 != qjs::JS_NewClass(rt, self.callable_class_id, &class_def) {
+            return Err(Error::Unknown);
+        }
+
+        let class_def = qjs::JSClassDef {
+            class_name: c"RustExotic".as_ptr().cast(),
+            finalizer: Some(class::ffi::exotic_class_finalizer),
+            gc_mark: Some(class::ffi::exotic_class_trace),
+            call: None,
+            exotic: self.exotic_methods,
+        };
+
+        if 0 != qjs::JS_NewClass(rt, self.exotic_class_id, &class_def) {
             return Err(Error::Unknown);
         }
 
@@ -235,6 +264,10 @@ impl<'js> Opaque<'js> {
         self.callable_class_id
     }
 
+    pub fn get_exotic_id(&self) -> qjs::JSClassID {
+        self.exotic_class_id
+    }
+
     pub fn get_or_insert_prototype<C: JsClass<'js>>(
         &self,
         ctx: &Ctx<'js>,
@@ -263,6 +296,7 @@ impl<'js> Opaque<'js> {
         self.prototypes.get_mut().clear();
         #[cfg(feature = "futures")]
         self.spawner.take();
-        self.userdata.clear()
+        self.userdata.clear();
+        unsafe { drop(Box::from_raw(self.exotic_methods)) };
     }
 }
