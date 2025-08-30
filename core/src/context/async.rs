@@ -3,7 +3,10 @@ use super::{
     owner::{ContextOwner, DropContext},
     ContextBuilder, Intrinsic,
 };
-use crate::{context::r#async::future::CallbackFuture, markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
+use crate::{
+    context::r#async::future::CallbackFuture, markers::ParallelSend, qjs, runtime::AsyncRuntime,
+    Ctx, Error, Result,
+};
 use core::{mem, ptr::NonNull};
 
 mod future;
@@ -207,8 +210,7 @@ impl AsyncContext {
     /// future.
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
     where
-        F: for<'js> FnOnce(Ctx<'js>) -> CallbackFuture<'js, R>
-            + ParallelSend,
+        F: for<'js> FnOnce(Ctx<'js>) -> CallbackFuture<'js, R> + ParallelSend,
         R: ParallelSend,
     {
         WithFuture::new(self, f)

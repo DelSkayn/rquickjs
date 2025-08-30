@@ -49,7 +49,7 @@ enum WithFutureState<'a, F, R> {
 #[cfg(not(feature = "parallel"))]
 pub type CallbackFuture<'js, R> = Pin<Box<dyn Future<Output = R> + 'js>>;
 #[cfg(feature = "parallel")]
-pub type CallbackFuture<'js, R> = Pin<Box<dyn Future<Output = R> + 'js + Send>>;    
+pub type CallbackFuture<'js, R> = Pin<Box<dyn Future<Output = R> + 'js + Send>>;
 
 impl<'a, F, R> WithFuture<'a, F, R>
 where
