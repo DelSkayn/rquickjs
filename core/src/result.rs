@@ -689,6 +689,20 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    pub(crate) fn handle_panic_exotic<F>(&self, f: F) -> qjs::c_int
+    where
+        F: FnOnce() -> qjs::c_int + UnwindSafe,
+    {
+        match crate::util::catch_unwind(f) {
+            Ok(x) => x,
+            Err(e) => unsafe {
+                self.get_opaque().set_panic(e);
+                qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0));
+                -1
+            },
+        }
+    }
+
     /// Handle possible exceptions in [`JSValue`]'s and turn them into errors
     /// Will return the [`JSValue`] if it is not an exception
     ///

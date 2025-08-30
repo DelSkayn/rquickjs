@@ -70,7 +70,7 @@ impl<'js> Opaque<'js> {
             delete_property: None, // TODO: Implement
             define_own_property: None, // TODO: Implement
             has_property: None, // TODO: Implement
-            set_property: None, // TODO: Implement
+            set_property: Some(crate::class::ffi::exotic_set_property),
             get_property: Some(crate::class::ffi::exotic_get_property),
         }));
 
