@@ -59,7 +59,7 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// The function which will be called if a set property is performed on an object with this class
     /// 
     /// Not yet implemented.
-    fn exotic_set_property<'a>(this: &JsCell<'js, Self>, _params: Params<'a, 'js>) -> Result<bool> {
+    fn exotic_set_property<'a>(this: &JsCell<'js, Self>, _ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>, _receiver: Value<'js>, _value: Value<'js>) -> Result<bool> {
         let _ = this;
         Ok(false)
     }
@@ -752,11 +752,25 @@ mod test {
                 _receiver: crate::Value<'js>,
             ) -> crate::Result<crate::Value<'js>> {
                 if atom.to_string()? == "hello" {
-                    assert!(this.borrow().i == 0);
+                    assert!(this.borrow().i == 42);
                     Ok("world".into_js(ctx)?)
                 } else {
                     Ok(crate::Value::new_null(ctx.clone()))
                 }
+            }
+
+            fn exotic_set_property<'a>(this: &super::JsCell<'js, Self>, ctx: &crate::Ctx<'js>, atom: crate::Atom<'js>, _obj: crate::Value<'js>, _receiver: crate::Value<'js>, _value: crate::Value<'js>) -> crate::Result<bool> {
+                let _ = this;
+                if atom.to_string()? == "i" {
+                    let Some(new_i) = _value.as_int() else {
+                        let err_val = crate::String::from_str(ctx.clone(), "i must be an integer")?.into_value();
+                        return Err(ctx.throw(err_val));
+                    };
+                    this.borrow_mut().i = new_i;
+                    return Ok(true);
+                }
+                let err_val = crate::String::from_str(ctx.clone(), "Properties are read-only")?.into_value();
+                Err(ctx.throw(err_val))
             }
         }
 
@@ -769,6 +783,20 @@ mod test {
                     r"
                 if(exotic.foo !== null) {
                     throw new Error('foo should be null');
+                }
+                try {
+                    exotic.foo = 1
+                } catch(e) {
+                    if (e?.toString() !== 'Properties are read-only') {
+                        throw new Error('wrong error message: ' + e?.toString());
+                    }
+                }
+                if (exotic.foo !== null) {
+                    throw new Error('foo should be null');
+                }
+                exotic.i = 42;
+                if (exotic.hello === 42) {
+                    throw new Error('i should be 42');
                 }
                 exotic.hello
             ",

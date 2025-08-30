@@ -82,7 +82,7 @@ pub(crate) unsafe extern "C" fn call(
     (ptr.as_ref().v_table.call)(ptr, ctx, function, this, argc, argv, flags)
 }
 
-/// FFI exotic get_own_property function for classes with exotic behavior.
+/// FFI exotic get_property function for classes with exotic behavior.
 pub(crate) unsafe extern "C" fn exotic_get_property(
     ctx: *mut qjs::JSContext,
     obj: qjs::JSValueConst,
@@ -94,6 +94,22 @@ pub(crate) unsafe extern "C" fn exotic_get_property(
     let ptr = qjs::JS_GetOpaque(obj, id);
     let ptr = NonNull::new(ptr).unwrap().cast::<ClassCell<()>>();
     (ptr.as_ref().v_table.get_property)(ptr, ctx, obj, atom, receiver)
+}
+
+/// FFI exotic set_property function for classes with exotic behavior.
+pub(crate) unsafe extern "C" fn exotic_set_property(
+    ctx: *mut qjs::JSContext,
+    obj: qjs::JSValueConst,
+    atom: qjs::JSAtom,
+    value: qjs::JSValue,
+    receiver: qjs::JSValueConst,
+    flags: qjs::c_int,
+) -> qjs::c_int {
+    let rt = qjs::JS_GetRuntime(ctx);
+    let id = Opaque::from_runtime_ptr(rt).get_exotic_id();
+    let ptr = qjs::JS_GetOpaque(obj, id);
+    let ptr = NonNull::new(ptr).unwrap().cast::<ClassCell<()>>();
+    (ptr.as_ref().v_table.set_property)(ptr, ctx, obj, atom, receiver, value, flags)
 }
 
 pub(crate) type FinalizerFunc = unsafe fn(this: NonNull<ClassCell<()>>);
@@ -117,6 +133,16 @@ pub(crate) type GetPropertyFunc = for<'a> unsafe fn(
     receiver: qjs::JSValueConst,
 ) -> qjs::JSValue;
 
+pub(crate) type SetPropertyFunc = for<'a> unsafe fn(
+    this_ptr: NonNull<ClassCell<()>>,
+    ctx: *mut qjs::JSContext,
+    obj: qjs::JSValueConst,
+    atom: qjs::JSAtom,
+    receiver: qjs::JSValueConst,
+    value: qjs::JSValue,
+    flags: qjs::c_int,
+) -> qjs::c_int;
+
 pub(crate) type TypeIdFn = fn() -> TypeId;
 
 pub(crate) struct VTable {
@@ -125,6 +151,7 @@ pub(crate) struct VTable {
     trace: TraceFunc,
     call: CallFunc,
     get_property: GetPropertyFunc,
+    set_property: SetPropertyFunc,
 }
 
 impl VTable {
@@ -183,6 +210,33 @@ impl VTable {
         }))
     }
 
+    unsafe fn set_property_impl<'js, C: JsClass<'js>>(
+        this_ptr: NonNull<ClassCell<()>>,
+        ctx: *mut qjs::JSContext,
+        obj: qjs::JSValueConst,
+        atom: qjs::JSAtom,
+        receiver: qjs::JSValueConst,
+        value: qjs::JSValue,
+        _flags: qjs::c_int,
+    ) -> qjs::c_int {
+        let this_ptr = this_ptr.cast::<ClassCell<JsCell<C>>>();
+        let ctx = Ctx::from_ptr(ctx);
+        let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
+        let obj = Value::from_js_value_const(ctx.clone(), obj);
+        let receiver = Value::from_js_value_const(ctx.clone(), receiver);
+        let value = Value::from_js_value(ctx.clone(), value);
+
+        ctx.handle_panic_exotic(AssertUnwindSafe(|| {
+            match C::exotic_set_property(&this_ptr.as_ref().data, &ctx, atom, obj, receiver, value) {
+                Ok(v) => if v { 1 } else { 0 },
+                Err(e) => {
+                    e.throw(&ctx);
+                    -1
+                }
+            }
+        }))
+    }
+
     pub fn get<'js, C: JsClass<'js>>() -> &'static VTable {
         trait HasVTable {
             const VTABLE: VTable;
@@ -195,6 +249,7 @@ impl VTable {
                 trace: VTable::trace_impl::<C>,
                 call: VTable::call_impl::<C>,
                 get_property: VTable::get_property_impl::<C>,
+                set_property: VTable::set_property_impl::<C>,
             };
         }
         &<C as HasVTable>::VTABLE
