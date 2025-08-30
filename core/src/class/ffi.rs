@@ -269,8 +269,15 @@ impl VTable {
         let value = Value::from_js_value(ctx.clone(), value);
 
         ctx.handle_panic_exotic(AssertUnwindSafe(|| {
-            match C::exotic_set_property(&this_ptr.as_ref().data, &ctx, atom, obj, receiver, value) {
-                Ok(v) => if v { 1 } else { 0 },
+            match C::exotic_set_property(&this_ptr.as_ref().data, &ctx, atom, obj, receiver, value)
+            {
+                Ok(v) => {
+                    if v {
+                        1
+                    } else {
+                        0
+                    }
+                }
                 Err(e) => {
                     e.throw(&ctx);
                     -1
@@ -292,7 +299,13 @@ impl VTable {
 
         ctx.handle_panic_exotic(AssertUnwindSafe(|| {
             match C::exotic_has_property(&this_ptr.as_ref().data, &ctx, atom, obj) {
-                Ok(v) => if v { 1 } else { 0 },
+                Ok(v) => {
+                    if v {
+                        1
+                    } else {
+                        0
+                    }
+                }
                 Err(e) => {
                     e.throw(&ctx);
                     -1
@@ -314,7 +327,13 @@ impl VTable {
 
         ctx.handle_panic_exotic(AssertUnwindSafe(|| {
             match C::exotic_delete_property(&this_ptr.as_ref().data, &ctx, atom, obj) {
-                Ok(v) => if v { 1 } else { 0 },
+                Ok(v) => {
+                    if v {
+                        1
+                    } else {
+                        0
+                    }
+                }
                 Err(e) => {
                     e.throw(&ctx);
                     -1

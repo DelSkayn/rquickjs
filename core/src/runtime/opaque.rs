@@ -11,7 +11,8 @@ use alloc::boxed::Box;
 use core::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
-    marker::PhantomData, ptr,
+    marker::PhantomData,
+    ptr,
 };
 
 #[cfg(feature = "std")]
@@ -65,7 +66,7 @@ pub(crate) struct Opaque<'js> {
 impl<'js> Opaque<'js> {
     pub fn new() -> Self {
         let exotic_methods = Box::into_raw(Box::new(qjs::JSClassExoticMethods {
-            get_own_property: None, // TODO: Implement
+            get_own_property: None,       // TODO: Implement
             get_own_property_names: None, // TODO: Implement
             delete_property: Some(crate::class::ffi::exotic_delete_property),
             define_own_property: None, // TODO: Implement

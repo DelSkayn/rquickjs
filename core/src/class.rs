@@ -1,7 +1,10 @@
 //! JavaScript classes defined from Rust.
 
 use crate::{
-    function::Params, qjs::{self}, value::Constructor, Atom, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value
+    function::Params,
+    qjs::{self},
+    value::Constructor,
+    Atom, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
 use alloc::boxed::Box;
 use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
@@ -51,25 +54,48 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     }
 
     /// The function which will be called if a get property is performed on an object with this class
-    fn exotic_get_property<'a>(this: &JsCell<'js, Self>, ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>, _receiver: Value<'js>) -> Result<Value<'js>> {
+    fn exotic_get_property<'a>(
+        this: &JsCell<'js, Self>,
+        ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+        _obj: Value<'js>,
+        _receiver: Value<'js>,
+    ) -> Result<Value<'js>> {
         let _ = this;
         Ok(Value::new_undefined(ctx.clone()))
     }
 
     /// The function which will be called if a set property is performed on an object with this class
-    fn exotic_set_property<'a>(this: &JsCell<'js, Self>, _ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>, _receiver: Value<'js>, _value: Value<'js>) -> Result<bool> {
+    fn exotic_set_property<'a>(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+        _obj: Value<'js>,
+        _receiver: Value<'js>,
+        _value: Value<'js>,
+    ) -> Result<bool> {
         let _ = this;
         Ok(false)
     }
 
     /// The function which will be called if a delete property is performed on an object with this class
-    fn exotic_delete_property<'a>(this: &JsCell<'js, Self>, _ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>) -> Result<bool> {
+    fn exotic_delete_property<'a>(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+        _obj: Value<'js>,
+    ) -> Result<bool> {
         let _ = this;
         Ok(false)
     }
 
     /// The function which will be called if has property or similar is called on an object with this class
-    fn exotic_has_property<'a>(this: &JsCell<'js, Self>, _ctx: &Ctx<'js>, _atom: Atom<'js>, _obj: Value<'js>) -> Result<bool> {
+    fn exotic_has_property<'a>(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+        _obj: Value<'js>,
+    ) -> Result<bool> {
         let _ = this;
         Ok(false)
     }
@@ -752,38 +778,62 @@ mod test {
                     Ok(Function::new(ctx.clone(), || {
                         let f = "class Exotic { [native code] }";
                         Ok::<&'static str, crate::Error>(f)
-                    })?.into_value())
+                    })?
+                    .into_value())
                 } else {
                     Ok(crate::Value::new_null(ctx.clone()))
                 }
             }
 
-            fn exotic_set_property<'a>(this: &super::JsCell<'js, Self>, ctx: &crate::Ctx<'js>, atom: crate::Atom<'js>, _obj: crate::Value<'js>, _receiver: crate::Value<'js>, _value: crate::Value<'js>) -> crate::Result<bool> {
+            fn exotic_set_property<'a>(
+                this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _obj: crate::Value<'js>,
+                _receiver: crate::Value<'js>,
+                _value: crate::Value<'js>,
+            ) -> crate::Result<bool> {
                 let _ = this;
                 if atom.to_string()? == "i" {
                     let Some(new_i) = _value.as_int() else {
-                        let err_val = crate::String::from_str(ctx.clone(), "i must be an integer")?.into_value();
+                        let err_val = crate::String::from_str(ctx.clone(), "i must be an integer")?
+                            .into_value();
                         return Err(ctx.throw(err_val));
                     };
                     this.borrow_mut().i = new_i;
                     return Ok(true);
                 }
-                let err_val = crate::String::from_str(ctx.clone(), "Properties are read-only")?.into_value();
+                let err_val =
+                    crate::String::from_str(ctx.clone(), "Properties are read-only")?.into_value();
                 Err(ctx.throw(err_val))
             }
 
-            fn exotic_has_property<'a>(this: &super::JsCell<'js, Self>, _ctx: &crate::Ctx<'js>, atom: crate::Atom<'js>, _obj: crate::Value<'js>) -> crate::Result<bool> {
+            fn exotic_has_property<'a>(
+                this: &super::JsCell<'js, Self>,
+                _ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _obj: crate::Value<'js>,
+            ) -> crate::Result<bool> {
                 let _ = this;
                 println!("Got atom: {}", atom.to_string()?);
-                if atom.to_string()? == "hello" || atom.to_string()? == "i" || atom.to_string()? == "toString" {
+                if atom.to_string()? == "hello"
+                    || atom.to_string()? == "i"
+                    || atom.to_string()? == "toString"
+                {
                     return Ok(true);
                 }
-            
+
                 Ok(false)
             }
 
-            fn exotic_delete_property<'a>(_this: &super::JsCell<'js, Self>, ctx: &crate::Ctx<'js>, _atom: crate::Atom<'js>, _obj: crate::Value<'js>) -> crate::Result<bool> {
-                let err_val = crate::String::from_str(ctx.clone(), "Properties cannot be deleted")?.into_value();
+            fn exotic_delete_property<'a>(
+                _this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                _atom: crate::Atom<'js>,
+                _obj: crate::Value<'js>,
+            ) -> crate::Result<bool> {
+                let err_val = crate::String::from_str(ctx.clone(), "Properties cannot be deleted")?
+                    .into_value();
                 Err(ctx.throw(err_val))
             }
         }
@@ -791,13 +841,22 @@ mod test {
         test_with(|ctx| {
             let exotic = Class::<Exotic>::instance(ctx.clone(), Exotic { i: 0 }).unwrap();
             ctx.globals().set("exotic", exotic).unwrap();
-            ctx.globals().set("assert", Function::new(ctx.clone(), |ctx: crate::Ctx<'_>, cond: bool, msg: String| {
-                if !cond {
-                    let err_val = crate::String::from_str(ctx.clone(), &msg)?.into_value();
-                    return Err(ctx.throw(err_val));
-                }
-                Ok(())
-            })).unwrap();
+            ctx.globals()
+                .set(
+                    "assert",
+                    Function::new(
+                        ctx.clone(),
+                        |ctx: crate::Ctx<'_>, cond: bool, msg: String| {
+                            if !cond {
+                                let err_val =
+                                    crate::String::from_str(ctx.clone(), &msg)?.into_value();
+                                return Err(ctx.throw(err_val));
+                            }
+                            Ok(())
+                        },
+                    ),
+                )
+                .unwrap();
 
             let v = ctx
                 .eval::<String, _>(
