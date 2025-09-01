@@ -362,6 +362,9 @@ unsafe extern "C" {
     pub fn JS_AddPerformance(ctx: *mut JSContext);
 }
 unsafe extern "C" {
+    pub fn JS_AddIntrinsicDOMException(ctx: *mut JSContext);
+}
+unsafe extern "C" {
     pub fn JS_IsEqual(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
@@ -799,8 +802,52 @@ unsafe extern "C" {
     pub fn JS_NewError(ctx: *mut JSContext) -> JSValue;
 }
 unsafe extern "C" {
+    pub fn JS_NewInternalError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewPlainError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewRangeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewReferenceError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewSyntaxError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewTypeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_ThrowInternalError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
+}
+unsafe extern "C" {
     pub fn JS_ThrowPlainError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
     -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
+    -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_ThrowReferenceError(
+        ctx: *mut JSContext,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_ThrowSyntaxError(
@@ -813,19 +860,9 @@ unsafe extern "C" {
     pub fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
 }
 unsafe extern "C" {
-    pub fn JS_ThrowReferenceError(
+    pub fn JS_ThrowDOMException(
         ctx: *mut JSContext,
-        fmt: *const ::core::ffi::c_char,
-        ...
-    ) -> JSValue;
-}
-unsafe extern "C" {
-    pub fn JS_ThrowRangeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...)
-    -> JSValue;
-}
-unsafe extern "C" {
-    pub fn JS_ThrowInternalError(
-        ctx: *mut JSContext,
+        name: *const ::core::ffi::c_char,
         fmt: *const ::core::ffi::c_char,
         ...
     ) -> JSValue;
@@ -1313,7 +1350,7 @@ pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64: JSTypedArrayEnum = 8;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16: JSTypedArrayEnum = 9;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32: JSTypedArrayEnum = 10;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64: JSTypedArrayEnum = 11;
-pub type JSTypedArrayEnum = ::core::ffi::c_int;
+pub type JSTypedArrayEnum = ::core::ffi::c_uint;
 unsafe extern "C" {
     pub fn JS_NewTypedArray(
         ctx: *mut JSContext,
@@ -1388,7 +1425,7 @@ unsafe extern "C" {
 pub const JSPromiseStateEnum_JS_PROMISE_PENDING: JSPromiseStateEnum = 0;
 pub const JSPromiseStateEnum_JS_PROMISE_FULFILLED: JSPromiseStateEnum = 1;
 pub const JSPromiseStateEnum_JS_PROMISE_REJECTED: JSPromiseStateEnum = 2;
-pub type JSPromiseStateEnum = ::core::ffi::c_int;
+pub type JSPromiseStateEnum = ::core::ffi::c_uint;
 unsafe extern "C" {
     pub fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
 }
@@ -1412,7 +1449,7 @@ pub const JSPromiseHookType_JS_PROMISE_HOOK_INIT: JSPromiseHookType = 0;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_BEFORE: JSPromiseHookType = 1;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_AFTER: JSPromiseHookType = 2;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE: JSPromiseHookType = 3;
-pub type JSPromiseHookType = ::core::ffi::c_int;
+pub type JSPromiseHookType = ::core::ffi::c_uint;
 pub type JSPromiseHook = ::core::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,
@@ -1604,7 +1641,7 @@ pub const JSCFunctionEnum_JS_CFUNC_setter: JSCFunctionEnum = 9;
 pub const JSCFunctionEnum_JS_CFUNC_getter_magic: JSCFunctionEnum = 10;
 pub const JSCFunctionEnum_JS_CFUNC_setter_magic: JSCFunctionEnum = 11;
 pub const JSCFunctionEnum_JS_CFUNC_iterator_next: JSCFunctionEnum = 12;
-pub type JSCFunctionEnum = ::core::ffi::c_int;
+pub type JSCFunctionEnum = ::core::ffi::c_uint;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSCFunctionType {
@@ -2128,20 +2165,21 @@ pub const JS_ATOM_SyntaxError: _bindgen_ty_2 = 206;
 pub const JS_ATOM_TypeError: _bindgen_ty_2 = 207;
 pub const JS_ATOM_URIError: _bindgen_ty_2 = 208;
 pub const JS_ATOM_InternalError: _bindgen_ty_2 = 209;
-pub const JS_ATOM_CallSite: _bindgen_ty_2 = 210;
-pub const JS_ATOM_Private_brand: _bindgen_ty_2 = 211;
-pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_2 = 212;
-pub const JS_ATOM_Symbol_iterator: _bindgen_ty_2 = 213;
-pub const JS_ATOM_Symbol_match: _bindgen_ty_2 = 214;
-pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_2 = 215;
-pub const JS_ATOM_Symbol_replace: _bindgen_ty_2 = 216;
-pub const JS_ATOM_Symbol_search: _bindgen_ty_2 = 217;
-pub const JS_ATOM_Symbol_split: _bindgen_ty_2 = 218;
-pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_2 = 219;
-pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_2 = 220;
-pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_2 = 221;
-pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 222;
-pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 223;
-pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 224;
-pub const JS_ATOM_END: _bindgen_ty_2 = 225;
-pub type _bindgen_ty_2 = ::core::ffi::c_int;
+pub const JS_ATOM_DOMException: _bindgen_ty_2 = 210;
+pub const JS_ATOM_CallSite: _bindgen_ty_2 = 211;
+pub const JS_ATOM_Private_brand: _bindgen_ty_2 = 212;
+pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_2 = 213;
+pub const JS_ATOM_Symbol_iterator: _bindgen_ty_2 = 214;
+pub const JS_ATOM_Symbol_match: _bindgen_ty_2 = 215;
+pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_2 = 216;
+pub const JS_ATOM_Symbol_replace: _bindgen_ty_2 = 217;
+pub const JS_ATOM_Symbol_search: _bindgen_ty_2 = 218;
+pub const JS_ATOM_Symbol_split: _bindgen_ty_2 = 219;
+pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_2 = 220;
+pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_2 = 221;
+pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_2 = 222;
+pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 223;
+pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 224;
+pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 225;
+pub const JS_ATOM_END: _bindgen_ty_2 = 226;
+pub type _bindgen_ty_2 = ::core::ffi::c_uint;
