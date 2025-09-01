@@ -332,6 +332,9 @@ unsafe extern "C" {
     pub fn JS_AddPerformance(ctx: *mut JSContext);
 }
 unsafe extern "C" {
+    pub fn JS_AddIntrinsicDOMException(ctx: *mut JSContext);
+}
+unsafe extern "C" {
     pub fn JS_IsEqual(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
@@ -824,6 +827,14 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_ThrowTypeError(ctx: *mut JSContext, fmt: *const ::core::ffi::c_char, ...) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_ThrowDOMException(
+        ctx: *mut JSContext,
+        name: *const ::core::ffi::c_char,
+        fmt: *const ::core::ffi::c_char,
+        ...
+    ) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_ThrowOutOfMemory(ctx: *mut JSContext) -> JSValue;
@@ -2123,20 +2134,21 @@ pub const JS_ATOM_SyntaxError: _bindgen_ty_4 = 206;
 pub const JS_ATOM_TypeError: _bindgen_ty_4 = 207;
 pub const JS_ATOM_URIError: _bindgen_ty_4 = 208;
 pub const JS_ATOM_InternalError: _bindgen_ty_4 = 209;
-pub const JS_ATOM_CallSite: _bindgen_ty_4 = 210;
-pub const JS_ATOM_Private_brand: _bindgen_ty_4 = 211;
-pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_4 = 212;
-pub const JS_ATOM_Symbol_iterator: _bindgen_ty_4 = 213;
-pub const JS_ATOM_Symbol_match: _bindgen_ty_4 = 214;
-pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_4 = 215;
-pub const JS_ATOM_Symbol_replace: _bindgen_ty_4 = 216;
-pub const JS_ATOM_Symbol_search: _bindgen_ty_4 = 217;
-pub const JS_ATOM_Symbol_split: _bindgen_ty_4 = 218;
-pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_4 = 219;
-pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_4 = 220;
-pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_4 = 221;
-pub const JS_ATOM_Symbol_species: _bindgen_ty_4 = 222;
-pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_4 = 223;
-pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_4 = 224;
-pub const JS_ATOM_END: _bindgen_ty_4 = 225;
+pub const JS_ATOM_DOMException: _bindgen_ty_4 = 210;
+pub const JS_ATOM_CallSite: _bindgen_ty_4 = 211;
+pub const JS_ATOM_Private_brand: _bindgen_ty_4 = 212;
+pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_4 = 213;
+pub const JS_ATOM_Symbol_iterator: _bindgen_ty_4 = 214;
+pub const JS_ATOM_Symbol_match: _bindgen_ty_4 = 215;
+pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_4 = 216;
+pub const JS_ATOM_Symbol_replace: _bindgen_ty_4 = 217;
+pub const JS_ATOM_Symbol_search: _bindgen_ty_4 = 218;
+pub const JS_ATOM_Symbol_split: _bindgen_ty_4 = 219;
+pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_4 = 220;
+pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_4 = 221;
+pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_4 = 222;
+pub const JS_ATOM_Symbol_species: _bindgen_ty_4 = 223;
+pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_4 = 224;
+pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_4 = 225;
+pub const JS_ATOM_END: _bindgen_ty_4 = 226;
 pub type _bindgen_ty_4 = ::core::ffi::c_uint;
