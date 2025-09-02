@@ -15,7 +15,7 @@ features = ["full-async", "doc-cfg"]
 
 [dependencies]
 rquickjs-sys = { workspace = true }
-hashbrown = { version = "0.15" }
+hashbrown = { version = "0.16" }
 phf = { version = "0.12", optional = true }
 indexmap = { version = "2", optional = true }
 either = { version = "1", optional = true }
