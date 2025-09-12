@@ -23,10 +23,10 @@ members = [
 ]
 
 [workspace.dependencies]
-rquickjs-core = { version = "0.9.0", path = "core" }
-rquickjs-macro = { version = "0.9.0", path = "macro" }
-rquickjs-sys = { version = "0.9.0", path = "sys" }
-rquickjs = { version = "0.9.0", path = "./" }
+rquickjs-core = { version = "0.9.0", path = "core", default-features = false }
+rquickjs-macro = { version = "0.9.0", path = "macro", default-features = false }
+rquickjs-sys = { version = "0.9.0", path = "sys", default-features = false }
+rquickjs = { version = "0.9.0", path = "./", default-features = false }
 
 [dependencies]
 indexmap-rs = { package = "indexmap", version = "2", optional = true }
@@ -36,10 +36,11 @@ rquickjs-macro = { workspace = true, optional = true }
 
 
 [features]
-default = []
+default = ["std"]
 
 # Almost all features excluding "parallel" and support for async runtimes
 full = [
+    "std",
     "chrono",
     "loader",
     "dyn-load",
@@ -49,8 +50,17 @@ full = [
     "phf",
 ]
 
+# A version of full designed for wasm32-wasip1 and wasm32-wasip2 (simply excludes dyn-load)
+full-wasi = ["std", "chrono", "loader", "either", "indexmap", "macro", "phf"]
+
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
+
+# A version of full-async designed for wasm32-wasip1 and wasm32-wasip2
+full-async-wasi = ["full-wasi", "futures"]
+
+# Enable use of the rust standard library
+std = ["rquickjs-core/std"]
 
 # Chrono support.
 chrono = ["rquickjs-core/chrono"]
@@ -80,7 +90,6 @@ dyn-load = ["rquickjs-core/dyn-load"]
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
 rust-alloc = ["rquickjs-core/rust-alloc"]
-
 
 
 # Enable helper macros
@@ -122,7 +131,7 @@ properties = ["rquickjs-core/properties"]
 
 
 [dev-dependencies]
-trybuild = "1.0.82"
+trybuild = "1"
 
 [package.metadata.docs.rs]
 features = ["full-async", "parallel", "doc-cfg"]

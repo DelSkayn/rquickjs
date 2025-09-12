@@ -355,7 +355,6 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> Re
 
     for (f, function_config) in _functions {
         let ident = function_config.function.carry_name(&f.sig.ident);
-        let name = format!("{}", f.sig.ident);
         let js_name = function_config
             .function
             .js_name(&f.sig.ident, module.config.rename_types);
@@ -363,7 +362,7 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> Re
         let mod_name = module.name.clone();
 
         module.export(
-            name,
+            js_name.clone(),
             f.sig.ident.span(),
             quote! {
                 _exports.export(#js_name,#mod_name::#ident)?;

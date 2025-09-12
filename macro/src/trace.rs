@@ -145,7 +145,7 @@ pub(crate) fn expand(input: DeriveInput) -> Result<TokenStream> {
                         let names = f
                             .iter()
                             .enumerate()
-                            .filter(|&(_idx, f)| (!f.config.skip_trace))
+                            .filter(|&(_idx, f)| !f.config.skip_trace)
                             .map(|(idx, _f)| {
                                 let ident = format_ident!("tmp_{idx}");
                                 Some(ident)

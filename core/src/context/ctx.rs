@@ -1,14 +1,17 @@
 #[cfg(feature = "futures")]
-use std::future::Future;
-use std::{
+use core::future::Future;
+
+use alloc::{boxed::Box, ffi::CString, vec::Vec};
+use core::{
     any::Any,
-    ffi::{CStr, CString},
-    fs,
+    ffi::CStr,
     mem::{self, MaybeUninit},
-    path::Path,
     ptr::NonNull,
     result::Result as StdResult,
 };
+
+#[cfg(feature = "std")]
+use std::{fs, path::Path};
 
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
@@ -174,7 +177,7 @@ impl<'js> Ctx<'js> {
         source: S,
         options: EvalOptions,
     ) -> Result<V> {
-        let file_name = CStr::from_bytes_with_nul(b"eval_script\0").unwrap();
+        let file_name = c"eval_script";
 
         V::from_js(self, unsafe {
             let val = self.eval_raw(source, file_name, options.to_flag())?;
@@ -182,11 +185,13 @@ impl<'js> Ctx<'js> {
         })
     }
 
+    #[cfg(feature = "std")]
     /// Evaluate a script directly from a file.
     pub fn eval_file<V: FromJs<'js>, P: AsRef<Path>>(&self, path: P) -> Result<V> {
         self.eval_file_with_options(path, Default::default())
     }
 
+    #[cfg(feature = "std")]
     pub fn eval_file_with_options<V: FromJs<'js>, P: AsRef<Path>>(
         &self,
         path: P,
@@ -424,9 +429,10 @@ impl<'js> Ctx<'js> {
     /// name.
     /// Otherwise it will return none.
     pub fn script_or_module_name(&self, stack_level: isize) -> Option<Atom<'js>> {
-        let stack_level = std::os::raw::c_int::try_from(stack_level).unwrap();
+        let stack_level = core::ffi::c_int::try_from(stack_level).unwrap();
         let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
-        if qjs::__JS_ATOM_NULL as u32 == atom {
+        #[allow(clippy::useless_conversion)] //needed for multi platform binding support
+        if qjs::__JS_ATOM_NULL == atom.try_into().unwrap() {
             unsafe { qjs::JS_FreeAtom(self.as_ptr(), atom) };
             return None;
         }

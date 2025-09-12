@@ -14,47 +14,28 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable
           components: rustfmt
-      - name: Cargo cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-rust_stable-${{ hashFiles('**/Cargo.lock') }}
       - name: Format
         run: cargo fmt --all -- --check
 
   doc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: nightly
           components: rust-docs
-      - name: Cargo cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build cache
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-build-rust_nightly-doc-${{ hashFiles('**/Cargo.lock') }}
       - name: Documentation
         env:
           DOCS_RS: 1
@@ -72,25 +53,13 @@ jobs:
     permissions:
       checks: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: nightly
           components: clippy
-      - name: Cargo cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-rust_nightly-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build cache
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-build-rust_nightly-check-${{ hashFiles('**/Cargo.lock') }}
       - name: Cargo clippy
         run: cargo clippy --all --all-targets --features full-async,bindgen
 
@@ -104,11 +73,11 @@ jobs:
         msrv: [1.81.0] # 'home' crate requires 1.81.0
     name: ubuntu / ${{ matrix.msrv }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - name: Install ${{ matrix.msrv }}
-        uses: dtolnay/rust-toolchain@master
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.msrv }}
       - name: cargo +${{ matrix.msrv }} check
@@ -117,12 +86,13 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     name: ubuntu / stable / coverage
+    if: github.actor != 'dependabot[bot]'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - name: Install stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: llvm-tools-preview
       - name: cargo install cargo-llvm-cov
@@ -135,7 +105,7 @@ jobs:
       - name: Record Rust version
         run: echo "RUST=$(rustc --version)" >> "$GITHUB_ENV"
       - name: Upload to codecov.io
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           fail_ci_if_error: true
           token: ${{ secrets.CODECOV_TOKEN }}
@@ -143,14 +113,15 @@ jobs:
 
   sanitizer:
     runs-on: ubuntu-latest
-    name: ubuntu / nightly / sanitizer 
+    name: ubuntu / nightly / sanitizer
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - name: Install stable
-        uses: dtolnay/rust-toolchain@nightly
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
+          toolchain: nightly
           components: rust-src
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
@@ -246,14 +217,12 @@ jobs:
             os: ubuntu-latest
             rust: stable
             target: wasm32-wasip1
-            features: full-async
-            no-build: true
+            features: full-async-wasi
           - task: bindings
             os: ubuntu-latest
             rust: nightly
             target: wasm32-wasip2
-            features: full-async
-            no-build: true
+            features: full-async-wasi
 
           # Test features
           - task: features
@@ -295,7 +264,7 @@ jobs:
             features: full-async
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           submodules: true
       - name: Setup cross linux toolchain
@@ -359,16 +328,14 @@ jobs:
             qemu-utils \
             qemu-user
 
-            curl --retry 5 https://musl.cc/aarch64-linux-musl-cross.tgz | tar xzf -
-            sudo mv aarch64-linux-musl-cross /musl
+            curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/aarch64-unknown-linux-musl.tar.xz | tar xJf -
+            sudo mv aarch64-unknown-linux-musl /musl
 
-            echo "CC_aarch64_unknown_linux_musl=aarch64-linux-musl-gcc" >> $GITHUB_ENV
-            echo "CXX_aarch64_unknown_linux_musl=aarch64-linux-musl-g++" >> $GITHUB_ENV
-            echo "AR_aarch64_unknown_linux_musl=aarch64-linux-musl-ar" >> $GITHUB_ENV
-            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-musl-gcc" >> $GITHUB_ENV
+            echo "CC_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
+            echo "CXX_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
+            echo "AR_aarch64_unknown_linux_musl=aarch64-unknown-linux-musl-ar" >> $GITHUB_ENV
+            echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
             echo "CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-aarch64" >> $GITHUB_ENV
-
-            sudo ln -s /usr/aarch64-linux-gnu/lib/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1
 
             mkdir -p ~/.cargo/
             echo "[target.aarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
@@ -386,16 +353,22 @@ jobs:
             gcc-14-loongarch64-linux-gnu \
             g++-14-loongarch64-linux-gnu \
             clang \
-            qemu-user
+            qemu-user \
+            qemu-system-arm \
+            qemu-efi-aarch64 \
+            qemu-utils \
+            qemu-user-static
 
           curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
           sudo mv loongarch64-unknown-linux-musl /musl
+
+          ls -al /usr/loongarch64-linux-gnu
 
           echo "CC_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
           echo "CXX_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
           echo "AR_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-ar" >> $GITHUB_ENV
           echo "CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_MUSL_LINKER=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
-          echo "CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-loongarch64" >> $GITHUB_ENV
+          echo "CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-loongarch64 -L /musl/loongarch64-unknown-linux-musl/sysroot" >> $GITHUB_ENV
 
           echo "CC_loongarch64_unknown_linux_gnu=loongarch64-linux-gnu-gcc-14" >> $GITHUB_ENV
           echo "CXX_loongarch64_unknown_linux_gnu=loongarch64-linux-gnu-g++-14" >> $GITHUB_ENV
@@ -405,11 +378,14 @@ jobs:
 
           mkdir -p ~/.cargo/
           echo "[target.loongarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
-          echo 'rustflags = ["-C", "target-feature=+crt-static", "-C", "link-self-contained=yes", "-C", "linker=rust-lld"]' >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "target-feature=+crt-static", "-C", "link-self-contained=yes", "-C", "linker=loongarch64-unknown-linux-musl-gcc"]' >> ~/.cargo/config.toml
           echo "[target.loongarch64-unknown-linux-gnu]" >> ~/.cargo/config.toml
           echo 'rustflags = ["-C", "linker=loongarch64-linux-gnu-gcc-14"]' >> ~/.cargo/config.toml
 
           echo "/musl/bin" >> $GITHUB_PATH
+      - name: Setup wasmtime for wasm32-wasip1 and wasm32-wasip2
+        if: matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2'
+        uses: bytecodealliance/actions/wasmtime/setup@v1
       - name: Setup msys2 toolchains
         if: startsWith(matrix.os, 'windows') && endsWith(matrix.target, '-gnu')
         uses: msys2/setup-msys2@v2
@@ -429,32 +405,18 @@ jobs:
           echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
           # echo "HOST_CC=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: ${{ matrix.rust }}
-          targets: ${{ matrix.target }}
-          components: rustfmt
-      - name: Cargo cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-          key: ${{ runner.os }}-cargo-rust_${{ matrix.rust }}-${{ hashFiles('**/Cargo.lock') }}
-      - name: Build cache
-        if: |
-          runner.os != 'macOS'
-        uses: actions/cache@v4
-        with:
-          path: target
-          key: ${{ runner.os }}-build-rust_${{ matrix.rust }}-target_${{ matrix.target }}-opt_${{ matrix.optimization }}-${{ hashFiles('**/Cargo.lock') }}
+          target: ${{ matrix.target }}
+          components: rustfmt rust-src
       - name: Update deps
         run: cargo update
       - name: Build sys
         env:
           RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
+          BUILD_TARGET: ${{ matrix.target }}
         run: |
-          cargo clean
           cargo build ${{ matrix.optimization && '--release' || '' }} --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging
           cat sys/src/bindings/${{ matrix.target }}.rs
       - name: Upload bindings
@@ -468,6 +430,7 @@ jobs:
         if: ${{ !matrix.no-build }}
         env:
           BUILD_TARGET: ${{ matrix.target }}
+          TARGET: ${{ matrix.target }}
         run: |
           cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
@@ -475,7 +438,8 @@ jobs:
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
-        run: cargo test ${{ matrix.optimization && '--release' || '' }} --all --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+        run: |
+          ${{ matrix.target == 'wasm32-wasip1' && 'CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime' || '' }} ${{ matrix.target == 'wasm32-wasip2' && 'CARGO_TARGET_WASM32_WASIP2_RUNNER=wasmtime' || '' }} cargo test ${{ matrix.optimization && '--release' || '' }} --all ${{ (matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2') && '--exclude module-loader' || ''  }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
   update-bindings:
     if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
@@ -483,9 +447,9 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Download bindings
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           pattern: bindings-*
           path: sys/src/bindings

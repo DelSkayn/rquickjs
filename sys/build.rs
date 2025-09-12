@@ -1,3 +1,4 @@
+#![allow(clippy::uninlined_format_args)]
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -27,6 +28,7 @@ fn download_wasi_sdk() -> PathBuf {
     if !archive_path.try_exists().unwrap() {
         let file_suffix = match (env::consts::OS, env::consts::ARCH) {
             ("linux", "x86") | ("linux", "x86_64") => "x86_64-linux",
+            ("linux", "aarch64") => "arm64-linux",
             ("macos", "x86") | ("macos", "x86_64") => "x86_64-macos",
             ("macos", "aarch64") => "arm64-macos",
             ("windows", "x86") | ("windows", "x86_64") => "x86_64-windows",
@@ -109,7 +111,6 @@ fn main() {
         "dump-read-object",
     ];
 
-    println!("cargo:rerun-if-changed=build.rs");
     for feature in &features {
         println!("cargo:rerun-if-env-changed={}", feature_to_cargo(feature));
     }
@@ -121,7 +122,8 @@ fn main() {
     let out_dir = Path::new(&out_dir);
 
     let header_files = [
-        "libbf.h",
+        "builtin-array-fromasync.h",
+        "xsum.h",
         "libregexp-opcode.h",
         "libregexp.h",
         "libunicode-table.h",
@@ -139,7 +141,7 @@ fn main() {
         "libunicode.c",
         "cutils.c",
         "quickjs.c",
-        "libbf.c",
+        "xsum.c",
     ];
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
@@ -182,9 +184,12 @@ fn main() {
 
     if target_os == "windows" {
         if target_env == "msvc" {
-            env::set_var("CFLAGS", "/std:c11 /experimental:c11atomics");
+            env::set_var(
+                "CFLAGS",
+                "/DWIN32_LEAN_AND_MEAN /std:c11 /experimental:c11atomics",
+            );
         } else {
-            env::set_var("CFLAGS", "-std=c11");
+            env::set_var("CFLAGS", "-DWIN32_LEAN_AND_MEAN -std=c11");
         }
     }
 
@@ -332,6 +337,7 @@ where
     }
 
     let mut builder = bindgen_rs::Builder::default()
+        .use_core()
         .detect_include_paths(true)
         .clang_arg("-xc")
         .clang_arg("-v")

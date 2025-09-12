@@ -4,8 +4,10 @@
 #![allow(clippy::unreadable_literal)]
 #![allow(clippy::missing_safety_doc)]
 #![allow(clippy::upper_case_acronyms)]
+#![allow(clippy::uninlined_format_args)]
+#![no_std]
 
-use std::ptr;
+use ::core::ptr;
 
 /// Common error message for converting between C `size_t` and Rust `usize`;
 pub const SIZE_T_ERROR: &str =

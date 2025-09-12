@@ -1,11 +1,14 @@
 //! QuickJS runtime related types.
 
-use super::{opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, RejectionTracker};
+use super::{
+    opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+};
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
 use crate::{result::JobException, Context, Mut, Ref, Result, Weak};
-use std::{ffi::CString, ptr::NonNull, result::Result as StdResult};
+use alloc::{ffi::CString, vec::Vec};
+use core::{ptr::NonNull, result::Result as StdResult};
 
 /// A weak handle to the runtime.
 ///
@@ -59,6 +62,14 @@ impl Runtime {
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
         WeakRuntime(Ref::downgrade(&self.inner))
+    }
+
+    /// Set a closure which is called when a promise is created, resolved, or chained.
+    #[inline]
+    pub fn set_promise_hook(&self, tracker: Option<PromiseHook>) {
+        unsafe {
+            self.inner.lock().set_promise_hook(tracker);
+        }
     }
 
     /// Set a closure which is called when a Promise is rejected.

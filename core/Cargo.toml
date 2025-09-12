@@ -15,37 +15,49 @@ features = ["full-async", "doc-cfg"]
 
 [dependencies]
 rquickjs-sys = { workspace = true }
-phf = { version = "0.11", optional = true }
+hashbrown = { version = "0.16" }
+phf = { version = "0.13", optional = true }
 indexmap = { version = "2", optional = true }
 either = { version = "1", optional = true }
-async-lock = { version = "3", optional = true }
+async-lock = { version = "3", optional = true, default-features = false }
 chrono = { version = "0.4", optional = true }
 dlopen = { version = "0.1", optional = true }
-relative-path = { version = "1.9", optional = true }
-
+relative-path = { version = "2.0", optional = true, default-features = false, features = [
+    "alloc",
+] }
 
 [dev-dependencies]
-futures-rs = { package = "futures", version = "0.3"}
-tokio = { version = "1.0", default-features = false, features = ["rt", "rt-multi-thread", "time", "macros", "sync"] }
+futures-rs = { package = "futures", version = "0.3" }
+tokio = { version = "1", default-features = false, features = [
+    "rt",
+    "time",
+    "macros",
+    "sync",
+] }
 rquickjs.path = "../"
 approx = "0.5"
-trybuild = "1.0.23"
+trybuild = "1"
 
 [features]
-default = []
+default = ["std"]
+
+std = ["relative-path?/std"]
 
 # Almost all features excluding "parallel" and support for async runtimes
-full = ["chrono", "loader", "dyn-load", "either", "indexmap"]
+full = ["std", "chrono", "loader", "dyn-load", "either", "indexmap"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]
+
+# Enable conversion of chrono types to/from JS
+chrono = ["dep:chrono"]
 
 # Use bindgen to generate bindings at compile-type
 # otherwise bundled bindings will be used
 bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
-parallel = []
+parallel = ["std", "tokio/rt-multi-thread"]
 
 # Enable user-defined module loader support
 loader = ["relative-path"]
@@ -92,5 +104,3 @@ properties = []
 classes = []
 array-buffer = []
 allocator = []
-
-
