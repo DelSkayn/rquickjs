@@ -389,6 +389,8 @@ pub enum PredefinedAtom {
     URIError = qjs::JS_ATOM_URIError as u32,
     /// "InternalError"
     InternalError = qjs::JS_ATOM_InternalError as u32,
+    /// "DOMException"
+    DOMException = qjs::JS_ATOM_DOMException as u32,
     /// "Symbol.asyncIterator"
     SymbolAsyncIterator = qjs::JS_ATOM_Symbol_asyncIterator as u32,
     /// "Symbol.iterator"
@@ -626,6 +628,7 @@ impl PredefinedAtom {
             PredefinedAtom::TypeError => "TypeError",
             PredefinedAtom::URIError => "URIError",
             PredefinedAtom::InternalError => "InternalError",
+            PredefinedAtom::DOMException => "DOMException",
             PredefinedAtom::SymbolAsyncIterator => "Symbol.asyncIterator",
             PredefinedAtom::SymbolIterator => "Symbol.iterator",
             PredefinedAtom::SymbolMatch => "Symbol.match",
@@ -839,6 +842,7 @@ mod test {
             PredefinedAtom::TypeError,
             PredefinedAtom::URIError,
             PredefinedAtom::InternalError,
+            PredefinedAtom::DOMException,
             PredefinedAtom::SymbolAsyncIterator,
             PredefinedAtom::SymbolIterator,
             PredefinedAtom::SymbolMatch,
