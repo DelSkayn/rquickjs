@@ -207,6 +207,26 @@ impl<'js> Exception<'js> {
         Error::Exception
     }
 
+    /// Throws a new DOMException
+    pub fn throw_dom(ctx: &Ctx<'js>, message: &str) -> Error {
+        // generate C string inline.
+        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
+        // here is fine.
+        let mut buffer = core::mem::MaybeUninit::<[u8; 256]>::uninit();
+        let str = truncate_str(255, message.as_bytes());
+        unsafe {
+            core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
+            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
+            let res = qjs::JS_ThrowDOMException(
+                ctx.as_ptr(),
+                ERROR_FORMAT_STR.as_ptr(),
+                buffer.as_ptr().cast::<*mut u8>(),
+            );
+            debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
+        }
+        Error::Exception
+    }
+
     /// Sets the exception as the current error an returns `Error::Exception`
     pub fn throw(self) -> Error {
         let ctx = self.ctx().clone();
