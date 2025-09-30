@@ -123,7 +123,7 @@ fn main() {
 
     let header_files = [
         "builtin-array-fromasync.h",
-        "xsum.h",
+        "dtoa.h",
         "libregexp-opcode.h",
         "libregexp.h",
         "libunicode-table.h",
@@ -141,7 +141,7 @@ fn main() {
         "libunicode.c",
         "cutils.c",
         "quickjs.c",
-        "xsum.c",
+        "dtoa.c",
     ];
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
