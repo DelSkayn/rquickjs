@@ -21,7 +21,7 @@ indexmap = { version = "2", optional = true }
 either = { version = "1", optional = true }
 async-lock = { version = "3", optional = true, default-features = false }
 chrono = { version = "0.4", optional = true }
-dlopen = { version = "0.1", optional = true }
+dlopen2 = { version = "0.8", optional = true }
 relative-path = { version = "2.0", optional = true, default-features = false, features = [
     "alloc",
 ] }
@@ -63,7 +63,7 @@ parallel = ["std", "tokio/rt-multi-thread"]
 loader = ["relative-path"]
 
 # Enable native module loading support
-dyn-load = ["loader", "dlopen"]
+dyn-load = ["loader", "dlopen2"]
 
 # Use Rust global allocator by default
 # otherwise libc allocator will be used
