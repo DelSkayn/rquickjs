@@ -1,9 +1,9 @@
 error[E0597]: `var` does not live long enough
-  --> tests/async_compile_fail/captured_variable_spawn.rs:8:19
+Error:   --> tests/async_compile_fail/captured_variable_spawn.rs:8:19
    |
-7  |     let mut var = 1u32;
+ 7 |     let mut var = 1u32;
    |         ------- binding `var` declared here
-8  |     let var_ref = &mut var;
+ 8 |     let var_ref = &mut var;
    |                   ^^^^^^^^ borrowed value does not live long enough
 ...
 13 |         ctx.globals().set("t",func).unwrap();
