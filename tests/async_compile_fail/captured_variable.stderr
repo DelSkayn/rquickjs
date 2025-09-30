@@ -1,5 +1,5 @@
 error[E0597]: `var` does not live long enough
-Error:   --> tests/async_compile_fail/captured_variable.rs:9:23
+  --> tests/async_compile_fail/captured_variable.rs:9:23
    |
  7 |     let fut = {
    |         --- borrow later stored here

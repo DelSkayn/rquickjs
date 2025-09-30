@@ -1,5 +1,5 @@
 error[E0597]: `var` does not live long enough
-Error:   --> tests/async_compile_fail/captured_variable_func.rs:8:19
+  --> tests/async_compile_fail/captured_variable_func.rs:8:19
    |
  7 |       let mut var = 1u32;
    |           ------- binding `var` declared here
