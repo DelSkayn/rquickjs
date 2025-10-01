@@ -193,7 +193,7 @@ impl<'js> Exception<'js> {
         unsafe {
             let res = qjs::JS_ThrowDOMException(
                 ctx.as_ptr(),
-                name.as_ptr().cast::<i8>(),
+                name.as_ptr().cast(),
                 ERROR_FORMAT_STR.as_ptr(),
                 message.as_ptr(),
             );
