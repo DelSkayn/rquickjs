@@ -22,7 +22,7 @@ pub use predefined::PredefinedAtom;
 #[derive(Debug)]
 pub struct Atom<'js> {
     pub(crate) atom: qjs::JSAtom,
-    ctx: Ctx<'js>,
+    pub(crate) ctx: Ctx<'js>,
 }
 
 impl<'js> PartialEq for Atom<'js> {
