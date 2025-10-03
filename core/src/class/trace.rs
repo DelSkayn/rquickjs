@@ -1,5 +1,5 @@
 use super::JsClass;
-use crate::{markers::Invariant, qjs, Class, Ctx, Module, Value};
+use crate::{markers::Invariant, qjs, Atom, Class, Ctx, Module, Value};
 use core::marker::PhantomData;
 
 #[cfg(feature = "either")]
@@ -99,6 +99,12 @@ where
         if let Some(inner) = &self {
             inner.trace(tracer);
         }
+    }
+}
+
+impl<'js> Trace<'js> for Atom<'js> {
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        tracer.mark_ctx(&self.ctx);
     }
 }
 
@@ -210,7 +216,6 @@ trace_impls! {
     f32,f64,
     bool,char,
     alloc::string::String,
-    crate::Atom<'js>,
 }
 
 trace_impls! {
