@@ -10,7 +10,7 @@ use super::Loader;
 #[derive(Debug)]
 pub struct NativeLoader {
     extensions: Vec<String>,
-    libs: Vec<dlopen::raw::Library>,
+    libs: Vec<dlopen2::raw::Library>,
 }
 
 impl NativeLoader {
@@ -49,7 +49,7 @@ impl Default for NativeLoader {
 
 impl Loader for NativeLoader {
     fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
-        use dlopen::raw::Library;
+        use dlopen2::raw::Library;
 
         if !check_extensions(path, &self.extensions) {
             return Err(Error::new_loading(path));
