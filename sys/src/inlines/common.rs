@@ -29,7 +29,7 @@ pub unsafe fn JS_IsInt(v: JSValue) -> bool {
 #[inline]
 pub unsafe fn JS_IsBigInt(v: JSValue) -> bool {
     let tag = JS_VALUE_GET_TAG(v);
-    tag == JS_TAG_BIG_INT
+    tag == JS_TAG_BIG_INT || tag == JS_TAG_SHORT_BIG_INT
 }
 
 #[inline]
