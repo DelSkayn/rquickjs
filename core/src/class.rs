@@ -54,7 +54,7 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     }
 
     /// The function which will be called if a get property is performed on an object with this class
-    fn exotic_get_property<'a>(
+    fn exotic_get_property(
         this: &JsCell<'js, Self>,
         ctx: &Ctx<'js>,
         _atom: Atom<'js>,
@@ -66,7 +66,7 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     }
 
     /// The function which will be called if a set property is performed on an object with this class
-    fn exotic_set_property<'a>(
+    fn exotic_set_property(
         this: &JsCell<'js, Self>,
         _ctx: &Ctx<'js>,
         _atom: Atom<'js>,
@@ -79,7 +79,7 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     }
 
     /// The function which will be called if a delete property is performed on an object with this class
-    fn exotic_delete_property<'a>(
+    fn exotic_delete_property(
         this: &JsCell<'js, Self>,
         _ctx: &Ctx<'js>,
         _atom: Atom<'js>,
@@ -90,7 +90,7 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     }
 
     /// The function which will be called if has property or similar is called on an object with this class
-    fn exotic_has_property<'a>(
+    fn exotic_has_property(
         this: &JsCell<'js, Self>,
         _ctx: &Ctx<'js>,
         _atom: Atom<'js>,
@@ -766,7 +766,7 @@ mod test {
                 Ok(None)
             }
 
-            fn exotic_get_property<'a>(
+            fn exotic_get_property(
                 this: &crate::class::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
@@ -831,7 +831,7 @@ mod test {
                 }
             }
 
-            fn exotic_has_property<'a>(
+            fn exotic_has_property(
                 this: &super::JsCell<'js, Self>,
                 _ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
@@ -876,7 +876,7 @@ mod test {
                 Ok(None)
             }
 
-            fn exotic_get_property<'a>(
+            fn exotic_get_property(
                 this: &crate::class::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
@@ -915,7 +915,7 @@ mod test {
                 }
             }
 
-            fn exotic_set_property<'a>(
+            fn exotic_set_property(
                 this: &super::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
@@ -938,7 +938,7 @@ mod test {
                 Err(ctx.throw(err_val))
             }
 
-            fn exotic_has_property<'a>(
+            fn exotic_has_property(
                 this: &super::JsCell<'js, Self>,
                 _ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
@@ -956,7 +956,7 @@ mod test {
                 Ok(false)
             }
 
-            fn exotic_delete_property<'a>(
+            fn exotic_delete_property(
                 _this: &super::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 _atom: crate::Atom<'js>,
