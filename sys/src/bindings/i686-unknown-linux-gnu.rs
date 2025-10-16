@@ -1730,6 +1730,17 @@ unsafe extern "C" {
     ) -> JSValue;
 }
 unsafe extern "C" {
+    pub fn JS_NewCFunctionData2(
+        ctx: *mut JSContext,
+        func: JSCFunctionData,
+        name: *const ::core::ffi::c_char,
+        length: ::core::ffi::c_int,
+        magic: ::core::ffi::c_int,
+        data_len: ::core::ffi::c_int,
+        data: *mut JSValue,
+    ) -> JSValue;
+}
+unsafe extern "C" {
     pub fn JS_SetConstructor(ctx: *mut JSContext, func_obj: JSValue, proto: JSValue);
 }
 #[repr(C)]
