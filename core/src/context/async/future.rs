@@ -38,14 +38,22 @@ enum WithFutureState<'a, F, R> {
         closure: F,
     },
     FutureCreated {
+        #[cfg(not(feature = "parallel"))]
+        future: Pin<Box<dyn Future<Output = R> + 'a>>,
+        #[cfg(feature = "parallel")]
         future: Pin<Box<dyn Future<Output = R> + 'a + Send>>,
     },
     Done,
 }
 
+#[cfg(not(feature = "parallel"))]
+pub type CallbackFuture<'js, R> = Pin<Box<dyn Future<Output = R> + 'js>>;
+#[cfg(feature = "parallel")]
+pub type CallbackFuture<'js, R> = Pin<Box<dyn Future<Output = R> + 'js + Send>>;
+
 impl<'a, F, R> WithFuture<'a, F, R>
 where
-    F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>> + ParallelSend,
+    F: for<'js> FnOnce(Ctx<'js>) -> CallbackFuture<'js, R> + ParallelSend,
     R: ParallelSend,
 {
     pub fn new(context: &'a AsyncContext, f: F) -> Self {
@@ -59,7 +67,7 @@ where
 
 impl<'a, F, R> Future for WithFuture<'a, F, R>
 where
-    F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>> + ParallelSend,
+    F: for<'js> FnOnce(Ctx<'js>) -> CallbackFuture<'js, R> + ParallelSend,
     R: ParallelSend + 'static,
 {
     type Output = R;
