@@ -43,7 +43,7 @@ pub struct WriteOptions {
 }
 
 impl WriteOptions {
-    fn to_flag(&self) -> i32 {
+    pub fn to_flag(&self) -> i32 {
         let mut flag = qjs::JS_WRITE_OBJ_BYTECODE;
 
         let should_swap = match &self.endianness {
@@ -68,7 +68,7 @@ impl WriteOptions {
             flag |= qjs::JS_WRITE_OBJ_STRIP_SOURCE;
         }
 
-        if self.strip_source {
+        if self.strip_debug {
             flag |= qjs::JS_WRITE_OBJ_STRIP_DEBUG;
         }
 
