@@ -32,6 +32,7 @@ fn download_wasi_sdk() -> PathBuf {
             ("macos", "x86") | ("macos", "x86_64") => "x86_64-macos",
             ("macos", "aarch64") => "arm64-macos",
             ("windows", "x86") | ("windows", "x86_64") => "x86_64-windows",
+            ("windows", "aarch64") => "arm64-windows",
             other => panic!("Unsupported platform tuple {:?}", other),
         };
 
