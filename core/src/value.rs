@@ -379,7 +379,7 @@ impl<'js> Value<'js> {
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
-        (unsafe { qjs::JS_IsError(self.ctx.as_ptr(), self.value) } as i32) != 0
+        (unsafe { qjs::JS_IsError(self.value) } as i32) != 0
     }
 
     /// Check if the value is a BigInt

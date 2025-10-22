@@ -784,10 +784,10 @@ unsafe extern "C" {
     pub fn JS_HasException(ctx: *mut JSContext) -> bool;
 }
 unsafe extern "C" {
-    pub fn JS_IsError(ctx: *mut JSContext, val: JSValue) -> bool;
+    pub fn JS_IsError(val: JSValue) -> bool;
 }
 unsafe extern "C" {
-    pub fn JS_IsUncatchableError(ctx: *mut JSContext, val: JSValue) -> bool;
+    pub fn JS_IsUncatchableError(val: JSValue) -> bool;
 }
 unsafe extern "C" {
     pub fn JS_SetUncatchableError(ctx: *mut JSContext, val: JSValue);
@@ -1754,6 +1754,17 @@ unsafe extern "C" {
     pub fn JS_NewCFunctionData(
         ctx: *mut JSContext,
         func: JSCFunctionData,
+        length: ::core::ffi::c_int,
+        magic: ::core::ffi::c_int,
+        data_len: ::core::ffi::c_int,
+        data: *mut JSValue,
+    ) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewCFunctionData2(
+        ctx: *mut JSContext,
+        func: JSCFunctionData,
+        name: *const ::core::ffi::c_char,
         length: ::core::ffi::c_int,
         magic: ::core::ffi::c_int,
         data_len: ::core::ffi::c_int,

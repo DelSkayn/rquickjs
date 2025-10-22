@@ -31,3 +31,4 @@ copy_bindings x86_64-apple-darwin aarch64-apple-darwin
 
 # Copy bindings for targets with same size_t as c_ulonglong
 copy_bindings x86_64-pc-windows-gnu x86_64-pc-windows-msvc 
+copy_bindings x86_64-pc-windows-gnu aarch64-pc-windows-msvc 
