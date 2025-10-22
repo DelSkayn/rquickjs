@@ -93,6 +93,9 @@ dump-module-resolve = ["rquickjs-sys/dump-module-resolve"]
 dump-promise = ["rquickjs-sys/dump-promise"]
 dump-read-object = ["rquickjs-sys/dump-read-object"]
 
+# Disable QuickJS for faster performance
+disable-assertions = ["rquickjs-sys/disable-assertions"]
+
 # Enable compilation tests
 compile-tests = []
 
