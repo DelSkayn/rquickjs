@@ -110,6 +110,7 @@ fn main() {
         "dump-module-resolve",
         "dump-promise",
         "dump-read-object",
+        "disable-assertions",
     ];
 
     for feature in &features {
