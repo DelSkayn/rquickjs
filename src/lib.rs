@@ -60,6 +60,8 @@
 //!
 //! - `phf` enables using Perfect Hash Function for builtin modules lookup
 //!
+//! - `disable-assertions` compiles QuickJS with assertions stripped out.
+//!
 //! ## Extra types
 //!
 //! This crate has support for conversion of many Rust types like [`Option`],

@@ -250,6 +250,11 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: parallel
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: disable-assertions
 
           # Test channels
           - task: channels
