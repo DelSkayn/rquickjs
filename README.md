@@ -87,6 +87,7 @@ See below for a list of supported platforms.
 | x86_64-pc-windows-gnu          |          ✅          |     ✅     |            ✅            |
 | i686-pc-windows-gnu            |          ✅          |     ✅     |            ✅            |
 | x86_64-pc-windows-msvc         |          ✅          |     ✅     |     ❌ experimental!     |
+| aarch64-pc-windows-msvc        |          ✅          |     ❌     |     ❌ experimental!     |
 | x86_64-apple-darwin            |          ✅          |     ✅     |            ✅            |
 | aarch64-apple-darwin           |          ✅          |     ❌     |            ✅            |
 | wasm32-wasip1                  |          ✅          |     ✅     |            ✅            |

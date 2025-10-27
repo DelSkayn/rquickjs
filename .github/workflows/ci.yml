@@ -178,6 +178,11 @@ jobs:
             rust: stable
             target: x86_64-pc-windows-msvc
             features: full-async
+          - task: bindings
+            os: windows-11-arm
+            rust: stable
+            target: aarch64-pc-windows-msvc
+            features: full-async
           - task: test
             os: windows-latest
             rust: stable
@@ -245,6 +250,11 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: parallel
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: disable-assertions
 
           # Test channels
           - task: channels
