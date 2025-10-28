@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - master
+      - update-bindings
   pull_request:
 
 # Only run on the latest ref
