@@ -767,6 +767,9 @@ unsafe extern "C" {
     pub fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: JSClassID) -> bool;
 }
 unsafe extern "C" {
+    pub fn JS_GetClassName(rt: *mut JSRuntime, class_id: JSClassID) -> JSAtom;
+}
+unsafe extern "C" {
     pub fn JS_NewNumber(ctx: *mut JSContext, d: f64) -> JSValue;
 }
 unsafe extern "C" {
