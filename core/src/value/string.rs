@@ -100,6 +100,46 @@ impl<'js> Drop for CString<'js> {
         unsafe { qjs::JS_FreeCString(self.ctx.as_ptr(), self.ptr.as_ptr()) };
     }
 }
+impl<'js> AsRef<str> for CString<'js> {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+#[cfg(feature = "std")]
+impl<'js> AsRef<std::path::Path> for CString<'js> {
+    fn as_ref(&self) -> &std::path::Path {
+        std::path::Path::new(self.as_str())
+    }
+}
+impl<'js> core::ops::Deref for CString<'js> {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+#[cfg(feature = "std")]
+impl<'js> AsRef<std::ffi::OsStr> for CString<'js> {
+    fn as_ref(&self) -> &std::ffi::OsStr {
+        self.as_str().as_ref()
+    }
+}
+impl<'js> AsRef<[u8]> for CString<'js> {
+    fn as_ref(&self) -> &[u8] {
+        self.as_str().as_ref()
+    }
+}
+impl<'js> PartialEq for CString<'js> {
+    fn eq(&self, other: &Self) -> bool {
+        PartialEq::eq(self.as_str(), other.as_str())
+    }
+}
+impl<'js> Eq for CString<'js> {}
+impl<'js> core::hash::Hash for CString<'js> {
+    fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
+        core::hash::Hash::hash(self.as_str(), state)
+    }
+}
 
 #[cfg(test)]
 mod test {
