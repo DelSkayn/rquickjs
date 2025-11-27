@@ -30,7 +30,7 @@ pub mod iterable;
 pub mod typed_array;
 
 pub use array_buffer::ArrayBuffer;
-pub use iterable::Iterable;
+pub use iterable::{Iterable, JsIterator};
 pub use typed_array::TypedArray;
 
 /// Any JavaScript value
