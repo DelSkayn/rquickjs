@@ -381,15 +381,11 @@ mod test {
     fn js_iter_map_entries() {
         test_with(|ctx| {
             // Map.entries() returns [key, value] pairs
-            let iter: JsIterator<Array> = ctx
-                .eval("new Map([['a', 1], ['b', 2]]).entries()")
-                .unwrap();
+            let iter: JsIterator<Array> =
+                ctx.eval("new Map([['a', 1], ['b', 2]]).entries()").unwrap();
             let entries: Vec<Array> = iter.filter_map(|r| r.ok()).collect();
             assert_eq!(entries.len(), 2);
-            assert_eq!(
-                entries[0].get::<alloc::string::String>(0).unwrap(),
-                "a"
-            );
+            assert_eq!(entries[0].get::<alloc::string::String>(0).unwrap(), "a");
             assert_eq!(entries[0].get::<i32>(1).unwrap(), 1);
         });
     }
