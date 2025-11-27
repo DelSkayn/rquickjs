@@ -351,9 +351,9 @@ mod test {
     #[test]
     fn js_iter_floats() {
         test_with(|ctx| {
-            let iter: JsIterator<f64> = ctx.eval("[1.5, 2.7, 3.14]").unwrap();
+            let iter: JsIterator<f64> = ctx.eval("[1.5, 2.7, 3.54]").unwrap();
             let values: Vec<f64> = iter.filter_map(|r| r.ok()).collect();
-            assert_eq!(values, vec![1.5, 2.7, 3.14]);
+            assert_eq!(values, vec![1.5, 2.7, 3.54]);
         });
     }
 
