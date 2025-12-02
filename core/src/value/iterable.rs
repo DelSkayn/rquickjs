@@ -1,11 +1,12 @@
 //! JavaScript iterable types from Rust iterators.
 
+use crate::safe_ref::Mut;
 use crate::{
     atom::PredefinedAtom,
     function::{MutFn, This},
     Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
 };
-use core::{cell::RefCell, iter::FusedIterator, marker::PhantomData};
+use core::{iter::FusedIterator, marker::PhantomData};
 
 /// Converts a Rust iterator into a JavaScript iterable object.
 ///
@@ -45,20 +46,20 @@ where
     T: IntoJs<'js> + 'js,
 {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
-        let iter = RefCell::new(Some(self.0.into_iter()));
+        let iter = Mut::new(Some(self.0.into_iter()));
 
         let iterator_fn = Function::new(
             ctx.clone(),
             MutFn::new(move |ctx: Ctx<'js>| -> Result<Object<'js>> {
                 let iter_obj = Object::new(ctx.clone())?;
-                let iter_taken = iter.borrow_mut().take();
+                let iter_taken = iter.lock().take();
 
-                let state = RefCell::new(iter_taken);
+                let state = Mut::new(iter_taken);
                 let next_fn = Function::new(
                     ctx.clone(),
                     MutFn::new(move |ctx: Ctx<'js>| -> Result<Object<'js>> {
                         let result = Object::new(ctx.clone())?;
-                        let mut state_ref = state.borrow_mut();
+                        let mut state_ref = state.lock();
 
                         if let Some(ref mut it) = *state_ref {
                             if let Some(value) = it.next() {
