@@ -2,14 +2,14 @@ name: Publish
 on:
   push:
     tags:
-      - "v[0-9]+.[0-9]+.[0-9]+*"
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
 
 jobs:
   publish:
     if: github.repository == 'DelSkayn/rquickjs' || github.repository == 'katyo/rquickjs'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Setup Rust
@@ -20,5 +20,4 @@ jobs:
         uses: katyo/publish-crates@v2
         with:
           registry-token: ${{ secrets.CRATES_TOKEN }}
-          no-verify: true
-          #dry-run: true
+          no-verify: false # otherwise the dependencies are not sorted

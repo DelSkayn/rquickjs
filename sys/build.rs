@@ -32,6 +32,7 @@ fn download_wasi_sdk() -> PathBuf {
             ("macos", "x86") | ("macos", "x86_64") => "x86_64-macos",
             ("macos", "aarch64") => "arm64-macos",
             ("windows", "x86") | ("windows", "x86_64") => "x86_64-windows",
+            ("windows", "aarch64") => "arm64-windows",
             other => panic!("Unsupported platform tuple {:?}", other),
         };
 
@@ -109,6 +110,7 @@ fn main() {
         "dump-module-resolve",
         "dump-promise",
         "dump-read-object",
+        "disable-assertions",
     ];
 
     for feature in &features {
@@ -145,6 +147,9 @@ fn main() {
     ];
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
+
+    #[cfg(feature = "disable-assertions")]
+    defines.push(("NDEBUG".into(), None));
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();

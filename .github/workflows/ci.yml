@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - master
+      - update-bindings
   pull_request:
 
 # Only run on the latest ref
@@ -14,7 +15,7 @@ jobs:
   format:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Setup Rust
@@ -28,7 +29,7 @@ jobs:
   doc:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Setup Rust
@@ -41,7 +42,7 @@ jobs:
           DOCS_RS: 1
         run: cargo doc --no-deps --features full-async,parallel,doc-cfg,bindgen
       - name: Upload docs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: docs
           path: |
@@ -53,7 +54,7 @@ jobs:
     permissions:
       checks: write
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - uses: actions-rust-lang/setup-rust-toolchain@v1
@@ -70,10 +71,10 @@ jobs:
     # https://docs.github.com/en/actions/learn-github-actions/contexts#context-availability
     strategy:
       matrix:
-        msrv: [1.81.0] # 'home' crate requires 1.81.0
+        msrv: [1.82.0] # 'indexmap' crate requires 1.82.0
     name: ubuntu / ${{ matrix.msrv }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install ${{ matrix.msrv }}
@@ -88,7 +89,7 @@ jobs:
     name: ubuntu / stable / coverage
     if: github.actor != 'dependabot[bot]'
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install stable
@@ -115,7 +116,7 @@ jobs:
     runs-on: ubuntu-latest
     name: ubuntu / nightly / sanitizer
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Install stable
@@ -177,6 +178,11 @@ jobs:
             os: windows-latest
             rust: stable
             target: x86_64-pc-windows-msvc
+            features: full-async
+          - task: bindings
+            os: windows-11-arm
+            rust: stable
+            target: aarch64-pc-windows-msvc
             features: full-async
           - task: test
             os: windows-latest
@@ -245,6 +251,11 @@ jobs:
             rust: stable
             target: x86_64-unknown-linux-gnu
             features: parallel
+          - task: features
+            os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            features: disable-assertions
 
           # Test channels
           - task: channels
@@ -264,7 +275,7 @@ jobs:
             features: full-async
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
         with:
           submodules: true
       - name: Setup cross linux toolchain
@@ -421,7 +432,7 @@ jobs:
           cat sys/src/bindings/${{ matrix.target }}.rs
       - name: Upload bindings
         if: matrix.task == 'bindings'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: bindings-${{ matrix.target }}
           path: sys/src/bindings/${{ matrix.target }}.rs
@@ -447,9 +458,9 @@ jobs:
       - test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - name: Download bindings
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           pattern: bindings-*
           path: sys/src/bindings

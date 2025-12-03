@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-cli"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["K. <kayo@illumium.org>"]
 edition = "2018"
 publish = false

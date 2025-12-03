@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-sys"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>"]
 edition = "2021"
 license = "MIT"
@@ -43,3 +43,6 @@ dump-shapes = []
 dump-module-resolve = []
 dump-promise = []
 dump-read-object = []
+
+# Disable QuickJS assertions for better performance
+disable-assertions = []

@@ -1,9 +1,9 @@
 [package]
 name = "rquickjs"
-version = "0.9.0"
+version = "0.10.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
-rust-version = "1.81"
+rust-version = "1.82"
 license = "MIT"
 readme = "README.md"
 description = "High level bindings to the QuickJS JavaScript engine"
@@ -14,19 +14,19 @@ repository = "https://github.com/DelSkayn/rquickjs.git"
 
 [workspace]
 members = [
-    "sys",
-    "core",
-    "macro",
-    "examples/native-module",
-    "examples/module-loader",
-    "examples/rquickjs-cli",
+  "sys",
+  "core",
+  "macro",
+  "examples/native-module",
+  "examples/module-loader",
+  "examples/rquickjs-cli",
 ]
 
 [workspace.dependencies]
-rquickjs-core = { version = "0.9.0", path = "core", default-features = false }
-rquickjs-macro = { version = "0.9.0", path = "macro", default-features = false }
-rquickjs-sys = { version = "0.9.0", path = "sys", default-features = false }
-rquickjs = { version = "0.9.0", path = "./", default-features = false }
+rquickjs-core = { version = "0.10.0", path = "core", default-features = false }
+rquickjs-macro = { version = "0.10.0", path = "macro", default-features = false }
+rquickjs-sys = { version = "0.10.0", path = "sys", default-features = false }
+rquickjs = { version = "0.10.0", path = "./", default-features = false }
 
 [dependencies]
 indexmap-rs = { package = "indexmap", version = "2", optional = true }
@@ -40,14 +40,14 @@ default = ["std"]
 
 # Almost all features excluding "parallel" and support for async runtimes
 full = [
-    "std",
-    "chrono",
-    "loader",
-    "dyn-load",
-    "either",
-    "indexmap",
-    "macro",
-    "phf",
+  "std",
+  "chrono",
+  "loader",
+  "dyn-load",
+  "either",
+  "indexmap",
+  "macro",
+  "phf",
 ]
 
 # A version of full designed for wasm32-wasip1 and wasm32-wasip2 (simply excludes dyn-load)
@@ -116,6 +116,9 @@ dump-shapes = ["rquickjs-core/dump-shapes"]
 dump-module-resolve = ["rquickjs-core/dump-module-resolve"]
 dump-promise = ["rquickjs-core/dump-promise"]
 dump-read-object = ["rquickjs-core/dump-read-object"]
+
+# Disable QuickJS assertions for faster performance
+disable-assertions = ["rquickjs-core/disable-assertions"]
 
 # Enable compilation tests
 compile-tests = ["rquickjs-core/compile-tests"]

@@ -16,13 +16,14 @@ build_target x86_64-unknown-linux-gnu    # c_ulong representative
 build_target x86_64-apple-darwin         # __darwin_size_t representative  
 build_target x86_64-pc-windows-gnu      # c_ulonglong representative
 build_target i686-unknown-linux-gnu      # c_uint (unique)
+build_target wasm32-wasip1
 
 # Copy bindings for targets with same size_t as c_ulong
 copy_bindings x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 copy_bindings x86_64-unknown-linux-gnu aarch64-unknown-linux-musl
 copy_bindings x86_64-unknown-linux-gnu loongarch64-unknown-linux-gnu
 copy_bindings x86_64-unknown-linux-gnu loongarch64-unknown-linux-musl
-copy_bindings x86_64-unknown-linux-gnu wasm32-wasip1
+copy_bindings wasm32-wasip1 wasm32-wasip1
 copy_bindings x86_64-unknown-linux-gnu wasm32-wasip2
 copy_bindings x86_64-unknown-linux-gnu x86_64-unknown-linux-musl
 
@@ -31,3 +32,4 @@ copy_bindings x86_64-apple-darwin aarch64-apple-darwin
 
 # Copy bindings for targets with same size_t as c_ulonglong
 copy_bindings x86_64-pc-windows-gnu x86_64-pc-windows-msvc 
+copy_bindings x86_64-pc-windows-gnu aarch64-pc-windows-msvc 
