@@ -68,6 +68,11 @@ pub enum Error {
     DuplicateExports,
     /// Tried to export a entry which was not previously declared.
     InvalidExport,
+    /// Tried to use or create an invalid class.
+    InvalidClass {
+        class: &'static str,
+        message: StdString,
+    },
     /// Found a string with a internal null byte while converting
     /// to C string.
     InvalidString(NulError),
@@ -364,6 +369,12 @@ impl Display for Error {
             }
             Error::InvalidExport => {
                 "Tried to export a value which was not previously declared".fmt(f)?
+            }
+            Error::InvalidClass { class, message } => {
+                "Invalid class '".fmt(f)?;
+                class.fmt(f)?;
+                "': ".fmt(f)?;
+                message.fmt(f)?;
             }
             Error::InvalidString(error) => {
                 "String contained internal null bytes: ".fmt(f)?;
