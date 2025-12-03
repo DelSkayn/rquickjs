@@ -1,6 +1,7 @@
 //! QuickJS runtime related types.
 
 mod base;
+mod exotic;
 pub(crate) mod opaque;
 pub(crate) mod raw;
 mod userdata;

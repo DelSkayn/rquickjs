@@ -4,6 +4,7 @@ use crate::{
 };
 
 use super::{
+    exotic::ExoticMethodsHolder,
     userdata::{UserDataGuard, UserDataMap},
     InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
 };
@@ -58,23 +59,13 @@ pub(crate) struct Opaque<'js> {
     #[cfg(feature = "futures")]
     spawner: Option<UnsafeCell<Spawner>>,
 
-    exotic_methods: *mut qjs::JSClassExoticMethods,
+    exotic_methods: ExoticMethodsHolder,
 
     _marker: PhantomData<&'js ()>,
 }
 
 impl<'js> Opaque<'js> {
     pub fn new() -> Self {
-        let exotic_methods = Box::into_raw(Box::new(qjs::JSClassExoticMethods {
-            get_own_property: None,       // TODO: Implement
-            get_own_property_names: None, // TODO: Implement
-            delete_property: Some(crate::class::ffi::exotic_delete_property),
-            define_own_property: None, // TODO: Implement
-            has_property: Some(crate::class::ffi::exotic_has_property),
-            set_property: Some(crate::class::ffi::exotic_set_property),
-            get_property: Some(crate::class::ffi::exotic_get_property),
-        }));
-
         Opaque {
             panic: Cell::new(None),
 
@@ -97,7 +88,7 @@ impl<'js> Opaque<'js> {
             #[cfg(feature = "futures")]
             spawner: None,
 
-            exotic_methods,
+            exotic_methods: ExoticMethodsHolder::new(),
         }
     }
 
@@ -118,7 +109,7 @@ impl<'js> Opaque<'js> {
             finalizer: Some(class::ffi::class_finalizer),
             gc_mark: Some(class::ffi::class_trace),
             call: None,
-            exotic: std::ptr::null_mut(),
+            exotic: ptr::null_mut(),
         };
 
         if 0 != qjs::JS_NewClass(rt, self.class_id, &class_def) {
@@ -142,7 +133,7 @@ impl<'js> Opaque<'js> {
             finalizer: Some(class::ffi::exotic_class_finalizer),
             gc_mark: Some(class::ffi::exotic_class_trace),
             call: None,
-            exotic: self.exotic_methods,
+            exotic: self.exotic_methods.as_ptr(),
         };
 
         if 0 != qjs::JS_NewClass(rt, self.exotic_class_id, &class_def) {
@@ -298,6 +289,5 @@ impl<'js> Opaque<'js> {
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();
-        unsafe { drop(Box::from_raw(self.exotic_methods)) };
     }
 }
