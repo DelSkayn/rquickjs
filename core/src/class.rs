@@ -7,6 +7,7 @@ use crate::{
     Atom, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
 use alloc::boxed::Box;
+use alloc::string::ToString as _;
 use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
 mod cell;
@@ -144,15 +145,7 @@ impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
 impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Create a class from a Rust object.
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
-        let id = unsafe {
-            if C::CALLABLE {
-                ctx.get_opaque().get_callable_id()
-            } else if C::EXOTIC {
-                ctx.get_opaque().get_exotic_id()
-            } else {
-                ctx.get_opaque().get_class_id()
-            }
-        };
+        let id = unsafe { class_id::<C>(&ctx)? };
 
         let prototype = Self::prototype(&ctx)?;
 
@@ -171,15 +164,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Create a class from a Rust object with a given prototype.
     pub fn instance_proto(value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
-        let id = unsafe {
-            if C::CALLABLE {
-                proto.ctx().get_opaque().get_callable_id()
-            } else if C::EXOTIC {
-                proto.ctx().get_opaque().get_exotic_id()
-            } else {
-                proto.ctx().get_opaque().get_class_id()
-            }
-        };
+        let id = unsafe { class_id::<C>(proto.ctx())? };
 
         let val = unsafe {
             proto.ctx.handle_exception(qjs::JS_NewObjectProtoClass(
@@ -279,15 +264,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// returns a pointer to the class object.
     #[inline]
     pub(crate) fn get_class_ptr(&self) -> NonNull<ClassCell<JsCell<'js, C>>> {
-        let id = unsafe {
-            if C::CALLABLE {
-                self.ctx.get_opaque().get_callable_id()
-            } else if C::EXOTIC {
-                self.ctx.get_opaque().get_exotic_id()
-            } else {
-                self.ctx.get_opaque().get_class_id()
-            }
-        };
+        let id = unsafe { class_id::<C>(&self.ctx).expect("invalid class") };
 
         let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0 .0.as_js_value(), id) };
 
@@ -335,14 +312,8 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 impl<'js> Object<'js> {
     /// Returns if the object is of a certain Rust class.
     pub fn instance_of<C: JsClass<'js>>(&self) -> bool {
-        let id = unsafe {
-            if C::CALLABLE {
-                self.ctx.get_opaque().get_callable_id()
-            } else if C::EXOTIC {
-                self.ctx.get_opaque().get_exotic_id()
-            } else {
-                self.ctx.get_opaque().get_class_id()
-            }
+        let Ok(id) = (unsafe { class_id::<C>(&self.ctx) }) else {
+            return false;
         };
 
         // This checks if the class is of the right class id.
@@ -397,6 +368,21 @@ impl<'js, C: JsClass<'js>> FromJs<'js> for Class<'js, C> {
 impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
     fn into_js(self, _ctx: &Ctx<'js>) -> Result<Value<'js>> {
         Ok(self.0 .0)
+    }
+}
+
+unsafe fn class_id<'js, C: JsClass<'js>>(ctx: &Ctx<'js>) -> Result<qjs::JSClassID> {
+    if C::CALLABLE && C::EXOTIC {
+        Err(Error::InvalidClass {
+            class: C::NAME,
+            message: "a class cannot be both callable and exotic".to_string(),
+        })
+    } else if C::CALLABLE {
+        Ok(ctx.get_opaque().get_callable_id())
+    } else if C::EXOTIC {
+        Ok(ctx.get_opaque().get_exotic_id())
+    } else {
+        Ok(ctx.get_opaque().get_class_id())
     }
 }
 
@@ -792,7 +778,7 @@ mod test {
                             )?
                             .into_value();
 
-                            return Ok::<crate::Value<'_>, crate::Error>(val);
+                            Ok::<crate::Value<'_>, crate::Error>(val)
                         } else if state.load(Ordering::SeqCst) == 2 {
                             state.fetch_add(1, Ordering::SeqCst);
 
@@ -809,7 +795,7 @@ mod test {
                             )?
                             .into_value();
 
-                            return Ok(val);
+                            Ok(val)
                         } else {
                             state.fetch_add(1, Ordering::SeqCst);
 
@@ -822,7 +808,7 @@ mod test {
                             )?
                             .into_value();
 
-                            return Ok(val);
+                            Ok(val)
                         }
                     })?
                     .into_value())
