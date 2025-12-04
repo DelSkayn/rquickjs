@@ -235,18 +235,17 @@ impl VTable {
     unsafe fn get_property_impl<'js, C: JsClass<'js>>(
         this_ptr: NonNull<ClassCell<()>>,
         ctx: *mut qjs::JSContext,
-        obj: qjs::JSValueConst,
+        _obj: qjs::JSValueConst,
         atom: qjs::JSAtom,
         receiver: qjs::JSValueConst,
     ) -> qjs::JSValue {
         let this_ptr = this_ptr.cast::<ClassCell<JsCell<C>>>();
         let ctx = Ctx::from_ptr(ctx);
         let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
-        let obj = Value::from_js_value_const(ctx.clone(), obj);
         let receiver = Value::from_js_value_const(ctx.clone(), receiver);
 
         ctx.handle_panic(AssertUnwindSafe(|| {
-            C::exotic_get_property(&this_ptr.as_ref().data, &ctx, atom, obj, receiver)
+            C::exotic_get_property(&this_ptr.as_ref().data, &ctx, atom, receiver)
                 .map(Value::into_js_value)
                 .unwrap_or_else(|e| e.throw(&ctx))
         }))
@@ -255,7 +254,7 @@ impl VTable {
     unsafe fn set_property_impl<'js, C: JsClass<'js>>(
         this_ptr: NonNull<ClassCell<()>>,
         ctx: *mut qjs::JSContext,
-        obj: qjs::JSValueConst,
+        _obj: qjs::JSValueConst,
         atom: qjs::JSAtom,
         receiver: qjs::JSValueConst,
         value: qjs::JSValue,
@@ -264,13 +263,11 @@ impl VTable {
         let this_ptr = this_ptr.cast::<ClassCell<JsCell<C>>>();
         let ctx = Ctx::from_ptr(ctx);
         let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
-        let obj = Value::from_js_value_const(ctx.clone(), obj);
         let receiver = Value::from_js_value_const(ctx.clone(), receiver);
         let value = Value::from_js_value(ctx.clone(), value);
 
         ctx.handle_panic_exotic(AssertUnwindSafe(|| {
-            match C::exotic_set_property(&this_ptr.as_ref().data, &ctx, atom, obj, receiver, value)
-            {
+            match C::exotic_set_property(&this_ptr.as_ref().data, &ctx, atom, receiver, value) {
                 Ok(v) => {
                     if v {
                         1
@@ -289,16 +286,15 @@ impl VTable {
     unsafe fn has_property_impl<'js, C: JsClass<'js>>(
         this_ptr: NonNull<ClassCell<()>>,
         ctx: *mut qjs::JSContext,
-        obj: qjs::JSValueConst,
+        _obj: qjs::JSValueConst,
         atom: qjs::JSAtom,
     ) -> qjs::c_int {
         let this_ptr = this_ptr.cast::<ClassCell<JsCell<C>>>();
         let ctx = Ctx::from_ptr(ctx);
         let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
-        let obj = Value::from_js_value_const(ctx.clone(), obj);
 
         ctx.handle_panic_exotic(AssertUnwindSafe(|| {
-            match C::exotic_has_property(&this_ptr.as_ref().data, &ctx, atom, obj) {
+            match C::exotic_has_property(&this_ptr.as_ref().data, &ctx, atom) {
                 Ok(v) => {
                     if v {
                         1
@@ -317,16 +313,15 @@ impl VTable {
     unsafe fn delete_property_impl<'js, C: JsClass<'js>>(
         this_ptr: NonNull<ClassCell<()>>,
         ctx: *mut qjs::JSContext,
-        obj: qjs::JSValueConst,
+        _obj: qjs::JSValueConst,
         atom: qjs::JSAtom,
     ) -> qjs::c_int {
         let this_ptr = this_ptr.cast::<ClassCell<JsCell<C>>>();
         let ctx = Ctx::from_ptr(ctx);
         let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
-        let obj = Value::from_js_value_const(ctx.clone(), obj);
 
         ctx.handle_panic_exotic(AssertUnwindSafe(|| {
-            match C::exotic_delete_property(&this_ptr.as_ref().data, &ctx, atom, obj) {
+            match C::exotic_delete_property(&this_ptr.as_ref().data, &ctx, atom) {
                 Ok(v) => {
                     if v {
                         1

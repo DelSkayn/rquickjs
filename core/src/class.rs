@@ -59,7 +59,6 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
         this: &JsCell<'js, Self>,
         ctx: &Ctx<'js>,
         _atom: Atom<'js>,
-        _obj: Value<'js>,
         _receiver: Value<'js>,
     ) -> Result<Value<'js>> {
         let _ = this;
@@ -71,7 +70,6 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
         this: &JsCell<'js, Self>,
         _ctx: &Ctx<'js>,
         _atom: Atom<'js>,
-        _obj: Value<'js>,
         _receiver: Value<'js>,
         _value: Value<'js>,
     ) -> Result<bool> {
@@ -84,7 +82,6 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
         this: &JsCell<'js, Self>,
         _ctx: &Ctx<'js>,
         _atom: Atom<'js>,
-        _obj: Value<'js>,
     ) -> Result<bool> {
         let _ = this;
         Ok(false)
@@ -95,7 +92,6 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
         this: &JsCell<'js, Self>,
         _ctx: &Ctx<'js>,
         _atom: Atom<'js>,
-        _obj: Value<'js>,
     ) -> Result<bool> {
         let _ = this;
         Ok(false)
@@ -756,7 +752,6 @@ mod test {
                 this: &crate::class::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
-                _obj: crate::Value<'js>,
                 _receiver: crate::Value<'js>,
             ) -> crate::Result<crate::Value<'js>> {
                 println!("Get property [iter]: {}", atom.to_string()?);
@@ -821,7 +816,6 @@ mod test {
                 this: &super::JsCell<'js, Self>,
                 _ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
-                _obj: crate::Value<'js>,
             ) -> crate::Result<bool> {
                 let _ = this;
                 if atom.to_string()? == "next" {
@@ -866,7 +860,6 @@ mod test {
                 this: &crate::class::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
-                _obj: crate::Value<'js>,
                 _receiver: crate::Value<'js>,
             ) -> crate::Result<crate::Value<'js>> {
                 let symbol_iterator = crate::Atom::from_predefined(
@@ -905,7 +898,6 @@ mod test {
                 this: &super::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
-                _obj: crate::Value<'js>,
                 _receiver: crate::Value<'js>,
                 _value: crate::Value<'js>,
             ) -> crate::Result<bool> {
@@ -928,7 +920,6 @@ mod test {
                 this: &super::JsCell<'js, Self>,
                 _ctx: &crate::Ctx<'js>,
                 atom: crate::Atom<'js>,
-                _obj: crate::Value<'js>,
             ) -> crate::Result<bool> {
                 let _ = this;
                 println!("Got atom: {}", atom.to_string()?);
@@ -946,7 +937,6 @@ mod test {
                 _this: &super::JsCell<'js, Self>,
                 ctx: &crate::Ctx<'js>,
                 _atom: crate::Atom<'js>,
-                _obj: crate::Value<'js>,
             ) -> crate::Result<bool> {
                 let err_val = crate::String::from_str(ctx.clone(), "Properties cannot be deleted")?
                     .into_value();
