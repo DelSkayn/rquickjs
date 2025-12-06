@@ -181,6 +181,16 @@ pub type JSCFunctionData = ::core::option::Option<
         func_data: *mut JSValue,
     ) -> JSValue,
 >;
+pub type JSCClosure = ::core::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: ::core::ffi::c_int,
+        argv: *mut JSValue,
+        magic: ::core::ffi::c_int,
+        opaque: *mut ::core::ffi::c_void,
+    ) -> JSValue,
+>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSMallocFunctions {
@@ -560,6 +570,9 @@ unsafe extern "C" {
     pub fn JS_DupAtom(ctx: *mut JSContext, v: JSAtom) -> JSAtom;
 }
 unsafe extern "C" {
+    pub fn JS_DupAtomRT(rt: *mut JSRuntime, v: JSAtom) -> JSAtom;
+}
+unsafe extern "C" {
     pub fn JS_FreeAtom(ctx: *mut JSContext, v: JSAtom);
 }
 unsafe extern "C" {
@@ -764,6 +777,9 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: JSClassID) -> bool;
+}
+unsafe extern "C" {
+    pub fn JS_GetClassName(rt: *mut JSRuntime, class_id: JSClassID) -> JSAtom;
 }
 unsafe extern "C" {
     pub fn JS_NewNumber(ctx: *mut JSContext, d: f64) -> JSValue;
@@ -1028,6 +1044,9 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_GetProxyHandler(ctx: *mut JSContext, proxy: JSValue) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewProxy(ctx: *mut JSContext, target: JSValue, handler: JSValue) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_NewDate(ctx: *mut JSContext, epoch_ms: f64) -> JSValue;
@@ -1350,7 +1369,7 @@ pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64: JSTypedArrayEnum = 8;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16: JSTypedArrayEnum = 9;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32: JSTypedArrayEnum = 10;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64: JSTypedArrayEnum = 11;
-pub type JSTypedArrayEnum = ::core::ffi::c_uint;
+pub type JSTypedArrayEnum = ::core::ffi::c_int;
 unsafe extern "C" {
     pub fn JS_NewTypedArray(
         ctx: *mut JSContext,
@@ -1425,7 +1444,7 @@ unsafe extern "C" {
 pub const JSPromiseStateEnum_JS_PROMISE_PENDING: JSPromiseStateEnum = 0;
 pub const JSPromiseStateEnum_JS_PROMISE_FULFILLED: JSPromiseStateEnum = 1;
 pub const JSPromiseStateEnum_JS_PROMISE_REJECTED: JSPromiseStateEnum = 2;
-pub type JSPromiseStateEnum = ::core::ffi::c_uint;
+pub type JSPromiseStateEnum = ::core::ffi::c_int;
 unsafe extern "C" {
     pub fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
 }
@@ -1449,7 +1468,7 @@ pub const JSPromiseHookType_JS_PROMISE_HOOK_INIT: JSPromiseHookType = 0;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_BEFORE: JSPromiseHookType = 1;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_AFTER: JSPromiseHookType = 2;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE: JSPromiseHookType = 3;
-pub type JSPromiseHookType = ::core::ffi::c_uint;
+pub type JSPromiseHookType = ::core::ffi::c_int;
 pub type JSPromiseHook = ::core::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,
@@ -1641,7 +1660,7 @@ pub const JSCFunctionEnum_JS_CFUNC_setter: JSCFunctionEnum = 9;
 pub const JSCFunctionEnum_JS_CFUNC_getter_magic: JSCFunctionEnum = 10;
 pub const JSCFunctionEnum_JS_CFUNC_setter_magic: JSCFunctionEnum = 11;
 pub const JSCFunctionEnum_JS_CFUNC_iterator_next: JSCFunctionEnum = 12;
-pub type JSCFunctionEnum = ::core::ffi::c_uint;
+pub type JSCFunctionEnum = ::core::ffi::c_int;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSCFunctionType {
@@ -1769,6 +1788,19 @@ unsafe extern "C" {
         magic: ::core::ffi::c_int,
         data_len: ::core::ffi::c_int,
         data: *mut JSValue,
+    ) -> JSValue;
+}
+pub type JSCClosureFinalizerFunc =
+    ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>;
+unsafe extern "C" {
+    pub fn JS_NewCClosure(
+        ctx: *mut JSContext,
+        func: JSCClosure,
+        name: *const ::core::ffi::c_char,
+        opaque_finalize: JSCClosureFinalizerFunc,
+        length: ::core::ffi::c_int,
+        magic: ::core::ffi::c_int,
+        opaque: *mut ::core::ffi::c_void,
     ) -> JSValue;
 }
 unsafe extern "C" {
@@ -2194,4 +2226,4 @@ pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 224;
 pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 225;
 pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 226;
 pub const JS_ATOM_END: _bindgen_ty_2 = 227;
-pub type _bindgen_ty_2 = ::core::ffi::c_uint;
+pub type _bindgen_ty_2 = ::core::ffi::c_int;
