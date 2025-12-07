@@ -1,6 +1,6 @@
 //! Task queue for spawned futures - optimized for both parallel and non-parallel modes
 
-use alloc::{boxed::Box, collections::VecDeque};
+use alloc::{boxed::Box, collections::VecDeque, vec::Vec};
 use core::{
     future::Future,
     pin::Pin,
@@ -8,7 +8,7 @@ use core::{
 };
 
 #[cfg(feature = "parallel")]
-use std::sync::Mutex;
+use parking_lot::Mutex;
 
 #[cfg(not(feature = "parallel"))]
 use core::cell::UnsafeCell;
@@ -23,8 +23,6 @@ pub enum TaskPoll {
 
 type BoxedTask = Pin<Box<dyn Future<Output = ()>>>;
 
-/// For parallel mode: uses std::sync::Mutex for the task queue
-/// Futures don't need Send - they're only polled while holding the runtime lock
 #[cfg(feature = "parallel")]
 pub struct TaskQueue {
     inner: Mutex<TaskQueueInner>,
@@ -59,16 +57,15 @@ impl TaskQueue {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.inner.lock().unwrap().tasks.is_empty()
+        self.inner.lock().tasks.is_empty()
     }
 
-    /// Push a task
     /// # Safety
     /// Caller must ensure future lifetime is valid
     pub unsafe fn push<F: Future<Output = ()>>(&self, future: F) {
         let future: BoxedTask =
             core::mem::transmute(Box::pin(future) as Pin<Box<dyn Future<Output = ()> + '_>>);
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         inner.tasks.push_back(future);
         if let Some(w) = inner.waker.take() {
             w.wake();
@@ -76,42 +73,44 @@ impl TaskQueue {
     }
 
     pub fn listen(&self, waker: Waker) {
-        self.inner.lock().unwrap().waker = Some(waker);
+        self.inner.lock().waker = Some(waker);
     }
 
-    /// Poll tasks - caller must hold runtime lock for JS execution safety
+    /// Poll tasks - optimized to minimize lock contention
     pub fn poll(&self, cx: &mut Context) -> TaskPoll {
-        let mut inner = self.inner.lock().unwrap();
-
-        if inner.tasks.is_empty() {
-            return TaskPoll::Empty;
-        }
+        // Take all tasks out in one lock acquisition
+        let mut batch: Vec<BoxedTask> = {
+            let mut inner = self.inner.lock();
+            if inner.tasks.is_empty() {
+                return TaskPoll::Empty;
+            }
+            inner.tasks.drain(..).collect()
+        };
 
         let mut made_progress = false;
-        let count = inner.tasks.len();
+        let mut pending = Vec::new();
 
-        for _ in 0..count {
-            let Some(mut task) = inner.tasks.pop_front() else {
-                break;
-            };
-
-            // Drop lock while polling to avoid deadlock if task spawns more tasks
-            drop(inner);
-            let result = task.as_mut().poll(cx);
-            inner = self.inner.lock().unwrap();
-
-            match result {
+        // Poll all tasks without holding the lock
+        for mut task in batch.drain(..) {
+            match task.as_mut().poll(cx) {
                 Poll::Ready(()) => made_progress = true,
-                Poll::Pending => inner.tasks.push_back(task),
+                Poll::Pending => pending.push(task),
             }
         }
 
-        if inner.tasks.is_empty() {
-            if made_progress {
-                TaskPoll::Done
-            } else {
-                TaskPoll::Empty
+        // Put pending tasks back in one lock acquisition
+        if !pending.is_empty() {
+            let mut inner = self.inner.lock();
+            for task in pending.into_iter().rev() {
+                inner.tasks.push_front(task);
             }
+        }
+
+        // Check if new tasks were spawned during polling
+        let has_tasks = !self.inner.lock().tasks.is_empty();
+
+        if !has_tasks {
+            if made_progress { TaskPoll::Done } else { TaskPoll::Empty }
         } else if made_progress {
             TaskPoll::Progress
         } else {
@@ -167,9 +166,7 @@ impl TaskQueue {
         let count = inner.tasks.len();
 
         for _ in 0..count {
-            let Some(mut task) = inner.tasks.pop_front() else {
-                break;
-            };
+            let Some(mut task) = inner.tasks.pop_front() else { break };
 
             match task.as_mut().poll(cx) {
                 Poll::Ready(()) => made_progress = true,
@@ -178,11 +175,7 @@ impl TaskQueue {
         }
 
         if inner.tasks.is_empty() {
-            if made_progress {
-                TaskPoll::Done
-            } else {
-                TaskPoll::Empty
-            }
+            if made_progress { TaskPoll::Done } else { TaskPoll::Empty }
         } else if made_progress {
             TaskPoll::Progress
         } else {
@@ -197,8 +190,6 @@ impl Default for TaskQueue {
     }
 }
 
-// Safety: TaskQueue is only accessed while holding the runtime lock
-// The Mutex is just for protecting the queue structure, not for cross-thread access
 #[cfg(feature = "parallel")]
 unsafe impl Send for TaskQueue {}
 #[cfg(feature = "parallel")]

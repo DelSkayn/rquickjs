@@ -20,6 +20,7 @@ phf = { version = "0.13", optional = true }
 indexmap = { version = "2", optional = true }
 either = { version = "1", optional = true }
 async-lock = { version = "3", optional = true, default-features = false }
+parking_lot = { version = "0.12", optional = true }
 chrono = { version = "0.4", optional = true }
 dlopen2 = { version = "0.8", optional = true }
 relative-path = { version = "2.0", optional = true, default-features = false, features = [
@@ -57,7 +58,7 @@ chrono = ["dep:chrono"]
 bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
-parallel = ["std", "tokio/rt-multi-thread"]
+parallel = ["std", "tokio/rt-multi-thread", "parking_lot"]
 
 # Enable user-defined module loader support
 loader = ["relative-path"]
