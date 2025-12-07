@@ -359,6 +359,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///
 ///     ctx.with(|ctx| {
 ///         let cls = Class::instance(ctx.clone(), TestClass { value: 42 }).unwrap();
+///         ctx.globals().set("my_class", cls.clone()).unwrap();
 ///         let value = ctx.eval::<u32, _>(r#"my_class.value"#).unwrap();
 ///         println!("value: {}", value);
 ///         assert_eq!(value, 42);
