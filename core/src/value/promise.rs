@@ -516,4 +516,27 @@ mod test {
             assert!(DID_EXECUTE.load(Ordering::SeqCst));
         })
     }
+
+    #[cfg(feature = "futures")]
+    #[tokio::test]
+    async fn promise_from_javascript_proxy() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        async_with!(ctx => |ctx| {
+            let val: Promise = ctx
+                .eval(
+                    r#"new Proxy(
+                    new Promise((resolve) => { resolve(42) }),
+                    {
+                        get: (target, property) => {
+                            var value = target[property];
+                            return typeof value == 'function' ? value.bind(target) : value;
+                        }
+                    })"#,
+                )
+                .unwrap();
+            assert_eq!(val.into_future::<i32>().await.unwrap(), 42);
+        });
+    }
 }

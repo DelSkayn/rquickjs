@@ -801,4 +801,14 @@ mod test {
             );
         })
     }
+
+    #[test]
+    fn from_javascript_proxy() {
+        test_with(|ctx| {
+            let val: Object = ctx
+                .eval(r#"new Proxy({ a: 1 }, { get: (target, property) => target[property] })"#)
+                .unwrap();
+            assert_eq!(val.get::<_, i32>("a").unwrap(), 1);
+        });
+    }
 }

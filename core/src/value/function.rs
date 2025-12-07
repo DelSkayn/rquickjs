@@ -817,4 +817,46 @@ mod test {
             assert_eq!(n, 3);
         });
     }
+
+    #[test]
+    fn js_fn_from_proxy() {
+        test_with(|ctx| {
+            let val: Function = ctx
+                .eval(
+                    r#"new Proxy(
+                        () => 1,
+                        {
+                            get: (target) => {
+                                return target();
+                            },
+                        }
+                    )"#,
+                )
+                .unwrap();
+            assert_eq!(val.call::<_, i32>(()).unwrap(), 1);
+        });
+    }
+
+    #[test]
+    fn js_constructor_from_proxy() {
+        test_with(|ctx| {
+            let val: Constructor = ctx
+                .eval(
+                    r#"new Proxy(
+                        function MyConstructor(input) {
+                            this.a = input;
+                        },
+                        {
+                            construct: (target, args) => {
+                                return new target(...args);
+                            },
+                        }
+                    )"#,
+                )
+                .unwrap();
+            let obj: Object = val.construct((42_i32,)).unwrap();
+            let a: i32 = obj.get("a").unwrap();
+            assert_eq!(a, 42);
+        });
+    }
 }

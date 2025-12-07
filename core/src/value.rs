@@ -489,7 +489,10 @@ macro_rules! type_impls {
                     Float => matches!(self, Int),
                     Object => matches!(self, Array | Function | Constructor | Exception | Promise | Proxy),
                     Array => matches!(self, Proxy),
-                    Function => matches!(self, Constructor),
+                    Function => matches!(self, Constructor | Proxy),
+                    Constructor => matches!(self, Proxy),
+                    Exception => matches!(self, Proxy),
+                    Promise => matches!(self, Proxy),
                     _ => false
                 }
             }
