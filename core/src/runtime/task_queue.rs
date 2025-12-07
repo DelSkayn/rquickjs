@@ -1,5 +1,8 @@
 //! Task queue for spawned futures - optimized for both parallel and non-parallel modes
 
+#[cfg(not(feature = "parallel"))]
+use alloc::{boxed::Box, collections::VecDeque};
+#[cfg(feature = "parallel")]
 use alloc::{boxed::Box, collections::VecDeque, vec::Vec};
 use core::{
     future::Future,
@@ -110,7 +113,11 @@ impl TaskQueue {
         let has_tasks = !self.inner.lock().tasks.is_empty();
 
         if !has_tasks {
-            if made_progress { TaskPoll::Done } else { TaskPoll::Empty }
+            if made_progress {
+                TaskPoll::Done
+            } else {
+                TaskPoll::Empty
+            }
         } else if made_progress {
             TaskPoll::Progress
         } else {
@@ -166,7 +173,9 @@ impl TaskQueue {
         let count = inner.tasks.len();
 
         for _ in 0..count {
-            let Some(mut task) = inner.tasks.pop_front() else { break };
+            let Some(mut task) = inner.tasks.pop_front() else {
+                break;
+            };
 
             match task.as_mut().poll(cx) {
                 Poll::Ready(()) => made_progress = true,
@@ -175,7 +184,11 @@ impl TaskQueue {
         }
 
         if inner.tasks.is_empty() {
-            if made_progress { TaskPoll::Done } else { TaskPoll::Empty }
+            if made_progress {
+                TaskPoll::Done
+            } else {
+                TaskPoll::Empty
+            }
         } else if made_progress {
             TaskPoll::Progress
         } else {
