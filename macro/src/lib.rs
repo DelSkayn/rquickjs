@@ -333,7 +333,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///
 /// # Example
 /// ```
-/// use rquickjs::{class::Trace, JsLifetime, Context, Runtime};
+/// use rquickjs::{class::Trace, JsLifetime, Context, Runtime, Atom, Class};
 ///
 /// #[derive(Trace, JsLifetime)]
 /// #[rquickjs::class(exotic)]
@@ -359,7 +359,7 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///
 ///     ctx.with(|ctx| {
 ///         let cls = Class::instance(ctx.clone(), TestClass { value: 42 }).unwrap();
-///         let value = ctx.eval::<u32, _>(r#"my_class.value"#)?;
+///         let value = ctx.eval::<u32, _>(r#"my_class.value"#).unwrap();
 ///         println!("value: {}", value);
 ///         assert_eq!(value, 42);
 ///     })
