@@ -356,57 +356,49 @@ impl<'js> Value<'js> {
         if unsafe { qjs::JS_IsArray(self.value) } {
             return true;
         }
-
-        // If the value is a proxy, we need to recursively check if the
-        // target is an array. The first check avoids an unnecessary clone
-        // if the value is not a proxy.
-        if !self.is_proxy() {
-            return false;
-        }
-
-        let mut value = self.clone();
-        loop {
-            let Some(proxy) = value.into_proxy() else {
-                return false;
-            };
-            let Ok(target) = proxy.target() else {
-                return false;
-            };
-            if target.is_array() {
-                return true;
-            }
-            value = target.into_value();
-        }
+        self.is_proxy_of(Type::Array)
     }
 
     /// Check if the value is a function
     #[inline]
     pub fn is_function(&self) -> bool {
-        (unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) } as i32) != 0
+        if unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) } {
+            return true;
+        }
+        self.is_proxy_of(Type::Function)
     }
 
     /// Check if the value is a constructor function
     #[inline]
     pub fn is_constructor(&self) -> bool {
-        (unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) } as i32) != 0
+        if unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) } {
+            return true;
+        }
+        self.is_proxy_of(Type::Constructor)
     }
 
     /// Check if the value is a promise.
     #[inline]
     pub fn is_promise(&self) -> bool {
-        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as core::ffi::c_int) >= 0
+        if unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as core::ffi::c_int >= 0 {
+            return true;
+        }
+        self.is_proxy_of(Type::Promise)
     }
 
     /// Check if the value is an exception
     #[inline]
     pub fn is_exception(&self) -> bool {
-        unsafe { qjs::JS_IsException(self.value) }
+        if unsafe { qjs::JS_IsException(self.value) } {
+            return true;
+        }
+        self.is_proxy_of(Type::Exception)
     }
 
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
-        (unsafe { qjs::JS_IsError(self.value) } as i32) != 0
+        unsafe { qjs::JS_IsError(self.value) }
     }
 
     /// Check if the value is a BigInt
@@ -488,11 +480,7 @@ macro_rules! type_impls {
                 match other{
                     Float => matches!(self, Int),
                     Object => matches!(self, Array | Function | Constructor | Exception | Promise | Proxy),
-                    Array => matches!(self, Proxy),
-                    Function => matches!(self, Constructor | Proxy),
-                    Constructor => matches!(self, Proxy),
-                    Exception => matches!(self, Proxy),
-                    Promise => matches!(self, Proxy),
+                    Function => matches!(self, Constructor),
                     _ => false
                 }
             }
@@ -543,6 +531,30 @@ macro_rules! type_impls {
             pub fn type_name(&self) -> &'static str {
                 self.type_of().as_str()
             }
+
+            /// Checks recursively if the value is a proxy of a
+            /// certain type
+            pub fn is_proxy_of(&self, r#type: Type) -> bool {
+                if !self.is_proxy() {
+                    return false;
+                }
+                let mut value = self.clone();
+                loop {
+                    // Must use ref here otherwise we will enter an infinite loop
+                    // if using other methods.
+                    let proxy = unsafe { value.ref_proxy() };
+                    let Ok(target) = proxy.target() else {
+                        return false;
+                    };
+                    if target.type_of() == r#type {
+                        return true;
+                    }
+                    if !target.is_proxy() {
+                        return false;
+                    }
+                    value = target.into_value();
+                }
+            }
         }
     };
 
@@ -550,7 +562,7 @@ macro_rules! type_impls {
     (@cond Constructor $self:expr) => { $self.is_constructor() };
     (@cond Function $self:expr) => { $self.is_function() };
     (@cond Promise $self:expr) => { $self.is_promise() };
-    (@cond Exception $self:expr) => { $self.is_error() };
+    (@cond Exception $self:expr) => { $self.is_error() || $self.is_exception() };
     (@cond Proxy $self:expr) => { $self.is_proxy() };
     (@cond $type:ident $self:expr) => { true };
 }
@@ -564,13 +576,13 @@ type_impls! {
     Float: float => JS_TAG_FLOAT64,
     String: string => JS_TAG_STRING,
     Symbol: symbol => JS_TAG_SYMBOL,
-    Proxy: proxy => JS_TAG_OBJECT,
     Array: array => JS_TAG_OBJECT,
     Constructor: constructor => JS_TAG_OBJECT,
     Function: function => JS_TAG_OBJECT,
     Promise: promise => JS_TAG_OBJECT,
     Exception: exception => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
+    Proxy: proxy => JS_TAG_OBJECT, // MUST be the last of tag object
     Module: module => JS_TAG_MODULE,
     BigInt: big_int => JS_TAG_BIG_INT | JS_TAG_SHORT_BIG_INT,
 }
