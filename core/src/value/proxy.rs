@@ -1,6 +1,6 @@
 //! Module for types dealing with JS proxies.
 
-use crate::{qjs, value::Constructor, Ctx, IntoJs, Object, Result};
+use crate::{qjs, Ctx, IntoJs, Object, Result};
 
 mod handler;
 pub use handler::{ProxyHandler, ProxyProperty, ProxyReceiver, ProxyTarget};
@@ -17,9 +17,13 @@ impl<'js> Proxy<'js> {
         target: impl IntoJs<'js>,
         handler: ProxyHandler<'js>,
     ) -> Result<Self> {
-        // Until we have https://github.com/quickjs-ng/quickjs/issues/1261
-        let constructor: Constructor = ctx.globals().get("Proxy")?;
-        let proxy = constructor.construct((target, handler))?;
+        let proxy = unsafe {
+            let target = target.into_js(&ctx)?;
+            let handler = handler.0;
+            let value = qjs::JS_NewProxy(ctx.as_ptr(), target.as_js_value(), handler.as_js_value());
+            let value = ctx.handle_exception(value)?;
+            Object::from_js_value(ctx, value)
+        };
         Ok(Self(proxy))
     }
 
@@ -46,7 +50,9 @@ impl<'js> Proxy<'js> {
 mod test {
     use crate::{
         class::{JsClass, Readable, Trace, Tracer},
-        test_with, Class, Error, Function, JsLifetime, Value,
+        test_with,
+        value::Constructor,
+        Class, Error, Function, JsLifetime, Value,
     };
 
     use super::*;
