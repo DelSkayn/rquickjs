@@ -91,8 +91,7 @@ macro_rules! async_with{
 
 impl DropContext for AsyncRuntime {
     unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>) {
-        //TODO
-        let guard = match self.inner.try_lock() {
+        let guard = match self.try_lock() {
             Some(x) => x,
             None => {
                 #[cfg(not(feature = "parallel"))]
@@ -100,10 +99,6 @@ impl DropContext for AsyncRuntime {
                     let p =
                         unsafe { &mut *(ctx.as_ptr() as *mut crate::context::ctx::RefCountHeader) };
                     if p.ref_count <= 1 {
-                        // Lock was poisoned, this should only happen on a panic.
-                        // We should still free the context.
-                        // TODO see if there is a way to recover from a panic which could cause the
-                        // following assertion to trigger
                         #[cfg(feature = "std")]
                         assert!(std::thread::panicking());
                     }
@@ -121,7 +116,6 @@ impl DropContext for AsyncRuntime {
         };
         guard.runtime.update_stack_top();
         unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
     }
 }
@@ -145,17 +139,13 @@ impl AsyncContext {
     }
 
     /// Creates a base context with only the required functions registered.
-    /// If additional functions are required use [`AsyncContext::custom`],
-    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn base(runtime: &AsyncRuntime) -> Result<Self> {
         Self::custom::<intrinsic::None>(runtime).await
     }
 
     /// Creates a context with only the required intrinsics registered.
-    /// If additional functions are required use [`AsyncContext::custom`],
-    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
-        let guard = runtime.inner.lock().await;
+        let guard = runtime.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.runtime.rt.as_ptr()) })
             .ok_or(Error::Allocation)?;
         unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
@@ -168,14 +158,11 @@ impl AsyncContext {
     }
 
     /// Creates a context with all standard available intrinsics registered.
-    /// If precise control is required of which functions are available use
-    /// [`AsyncContext::custom`] or [`AsyncContext::builder`].
     pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
-        let guard = runtime.inner.lock().await;
+        let guard = runtime.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.runtime.rt.as_ptr()) })
             .ok_or(Error::Allocation)?;
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         guard.drop_pending();
         mem::drop(guard);
 
@@ -218,7 +205,7 @@ impl AsyncContext {
         F: for<'js> FnOnce(Ctx<'js>) -> R + ParallelSend,
         R: ParallelSend,
     {
-        let guard = self.0.rt().inner.lock().await;
+        let guard = self.0.rt().lock().await;
         guard.runtime.update_stack_top();
         let ctx = unsafe { Ctx::new_async(self) };
         let res = f(ctx);
