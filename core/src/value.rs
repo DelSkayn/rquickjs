@@ -353,7 +353,30 @@ impl<'js> Value<'js> {
     /// Check if the value is an array
     #[inline]
     pub fn is_array(&self) -> bool {
-        unsafe { qjs::JS_IsArray(self.value) }
+        if unsafe { qjs::JS_IsArray(self.value) } {
+            return true;
+        }
+
+        // If the value is a proxy, we need to recursively check if the
+        // target is an array. The first check avoids an unnecessary clone
+        // if the value is not a proxy.
+        if !self.is_proxy() {
+            return false;
+        }
+
+        let mut value = self.clone();
+        loop {
+            let Some(proxy) = value.into_proxy() else {
+                return false;
+            };
+            let Ok(target) = proxy.target() else {
+                return false;
+            };
+            if target.is_array() {
+                return true;
+            }
+            value = target.into_value();
+        }
     }
 
     /// Check if the value is a function
@@ -465,6 +488,7 @@ macro_rules! type_impls {
                 match other{
                     Float => matches!(self, Int),
                     Object => matches!(self, Array | Function | Constructor | Exception | Promise | Proxy),
+                    Array => matches!(self, Proxy),
                     Function => matches!(self, Constructor),
                     _ => false
                 }
@@ -537,12 +561,12 @@ type_impls! {
     Float: float => JS_TAG_FLOAT64,
     String: string => JS_TAG_STRING,
     Symbol: symbol => JS_TAG_SYMBOL,
+    Proxy: proxy => JS_TAG_OBJECT,
     Array: array => JS_TAG_OBJECT,
     Constructor: constructor => JS_TAG_OBJECT,
     Function: function => JS_TAG_OBJECT,
     Promise: promise => JS_TAG_OBJECT,
     Exception: exception => JS_TAG_OBJECT,
-    Proxy: proxy => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
     BigInt: big_int => JS_TAG_BIG_INT | JS_TAG_SHORT_BIG_INT,
