@@ -353,25 +353,37 @@ impl<'js> Value<'js> {
     /// Check if the value is an array
     #[inline]
     pub fn is_array(&self) -> bool {
-        unsafe { qjs::JS_IsArray(self.value) }
+        if unsafe { qjs::JS_IsArray(self.value) } {
+            return true;
+        }
+        self.is_proxy_of(Type::Array)
     }
 
     /// Check if the value is a function
     #[inline]
     pub fn is_function(&self) -> bool {
-        (unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) } as i32) != 0
+        if unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) } {
+            return true;
+        }
+        self.is_proxy_of(Type::Function)
     }
 
     /// Check if the value is a constructor function
     #[inline]
     pub fn is_constructor(&self) -> bool {
-        (unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) } as i32) != 0
+        if unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) } {
+            return true;
+        }
+        self.is_proxy_of(Type::Constructor)
     }
 
     /// Check if the value is a promise.
     #[inline]
     pub fn is_promise(&self) -> bool {
-        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as core::ffi::c_int) >= 0
+        if unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as core::ffi::c_int >= 0 {
+            return true;
+        }
+        self.is_proxy_of(Type::Promise)
     }
 
     /// Check if the value is an exception
@@ -383,7 +395,11 @@ impl<'js> Value<'js> {
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
-        (unsafe { qjs::JS_IsError(self.value) } as i32) != 0
+        if unsafe { qjs::JS_IsError(self.value) } {
+            return true;
+        }
+        // This feels wrong, but Type::Exception means Javascript Error
+        self.is_proxy_of(Type::Exception)
     }
 
     /// Check if the value is a BigInt
@@ -516,6 +532,30 @@ macro_rules! type_impls {
             pub fn type_name(&self) -> &'static str {
                 self.type_of().as_str()
             }
+
+            /// Checks recursively if the value is a proxy of a
+            /// certain type
+            pub fn is_proxy_of(&self, r#type: Type) -> bool {
+                if !self.is_proxy() {
+                    return false;
+                }
+                let mut value = self.clone();
+                loop {
+                    // Must use ref here otherwise we will enter an infinite loop
+                    // if using other methods.
+                    let proxy = unsafe { value.ref_proxy() };
+                    let Ok(target) = proxy.target() else {
+                        return false;
+                    };
+                    if target.type_of() == r#type {
+                        return true;
+                    }
+                    if !target.is_proxy() {
+                        return false;
+                    }
+                    value = target.into_value();
+                }
+            }
         }
     };
 
@@ -542,8 +582,8 @@ type_impls! {
     Function: function => JS_TAG_OBJECT,
     Promise: promise => JS_TAG_OBJECT,
     Exception: exception => JS_TAG_OBJECT,
-    Proxy: proxy => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
+    Proxy: proxy => JS_TAG_OBJECT, // MUST be the last of tag object
     Module: module => JS_TAG_MODULE,
     BigInt: big_int => JS_TAG_BIG_INT | JS_TAG_SHORT_BIG_INT,
 }

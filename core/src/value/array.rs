@@ -202,6 +202,65 @@ mod test {
     }
 
     #[test]
+    fn from_javascript_proxy() {
+        test_with(|ctx| {
+            let val: Array = ctx
+                .eval(
+                    r#"new Proxy(
+                        [1, 2, 3],
+                        {
+                            get: (target, property, receiver) => {
+                                if (property === "length") {
+                                    return target.length;
+                                }
+                                return target[property];
+                            },
+                        }
+                    )"#,
+                )
+                .unwrap();
+            assert_eq!(val.get::<i32>(0).unwrap(), 1);
+            assert_eq!(val.get::<i32>(1).unwrap(), 2);
+            assert_eq!(val.get::<i32>(2).unwrap(), 3);
+            assert_eq!(val.len(), 3);
+        });
+    }
+
+    #[test]
+    fn from_javascript_proxy_nested() {
+        test_with(|ctx| {
+            let val: Array = ctx
+                .eval(
+                    r#"
+                    new Proxy(
+                        new Proxy(
+                            [1, 2, 3],
+                            {
+                                get: (target, property, receiver) => {
+                                    if (property === "length") {
+                                        return target.length;
+                                    }
+                                    return target[property];
+                                },
+                            }
+                        ),
+                        {
+                            get: (target, property, receiver) => {
+                                if (property === "length") {
+                                    return target.length;
+                                }
+                                return target[property];
+                            },
+                        }
+                    )
+                    "#,
+                )
+                .unwrap();
+            assert_eq!(val.get::<i32>(0).unwrap(), 1);
+        });
+    }
+
+    #[test]
     fn into_object() {
         test_with(|ctx| {
             let val: Array = ctx

@@ -228,3 +228,24 @@ impl fmt::Display for Exception<'_> {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::*;
+
+    #[test]
+    fn from_javascript() {
+        test_with(|ctx| {
+            let val: Exception = ctx.eval(r#"new Error("test")"#).unwrap();
+            assert_eq!(val.message().unwrap(), "test");
+        });
+    }
+
+    #[test]
+    fn from_javascript_proxy() {
+        test_with(|ctx| {
+            let val: Exception = ctx.eval(r#"new Proxy(new Error("test"), { get: (target, property) => target[property] })"#).unwrap();
+            assert_eq!(val.message().unwrap(), "test");
+        });
+    }
+}
