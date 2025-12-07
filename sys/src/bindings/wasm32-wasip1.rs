@@ -151,6 +151,16 @@ pub type JSCFunctionData = ::core::option::Option<
         func_data: *mut JSValue,
     ) -> JSValue,
 >;
+pub type JSCClosure = ::core::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: ::core::ffi::c_int,
+        argv: *mut JSValue,
+        magic: ::core::ffi::c_int,
+        opaque: *mut ::core::ffi::c_void,
+    ) -> JSValue,
+>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSMallocFunctions {
@@ -530,6 +540,9 @@ unsafe extern "C" {
     pub fn JS_DupAtom(ctx: *mut JSContext, v: JSAtom) -> JSAtom;
 }
 unsafe extern "C" {
+    pub fn JS_DupAtomRT(rt: *mut JSRuntime, v: JSAtom) -> JSAtom;
+}
+unsafe extern "C" {
     pub fn JS_FreeAtom(ctx: *mut JSContext, v: JSAtom);
 }
 unsafe extern "C" {
@@ -733,6 +746,9 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: JSClassID) -> bool;
+}
+unsafe extern "C" {
+    pub fn JS_GetClassName(rt: *mut JSRuntime, class_id: JSClassID) -> JSAtom;
 }
 unsafe extern "C" {
     pub fn JS_NewNumber(ctx: *mut JSContext, d: f64) -> JSValue;
@@ -997,6 +1013,9 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_GetProxyHandler(ctx: *mut JSContext, proxy: JSValue) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewProxy(ctx: *mut JSContext, target: JSValue, handler: JSValue) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_NewDate(ctx: *mut JSContext, epoch_ms: f64) -> JSValue;
@@ -1738,6 +1757,19 @@ unsafe extern "C" {
         magic: ::core::ffi::c_int,
         data_len: ::core::ffi::c_int,
         data: *mut JSValue,
+    ) -> JSValue;
+}
+pub type JSCClosureFinalizerFunc =
+    ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>;
+unsafe extern "C" {
+    pub fn JS_NewCClosure(
+        ctx: *mut JSContext,
+        func: JSCClosure,
+        name: *const ::core::ffi::c_char,
+        opaque_finalize: JSCClosureFinalizerFunc,
+        length: ::core::ffi::c_int,
+        magic: ::core::ffi::c_int,
+        opaque: *mut ::core::ffi::c_void,
     ) -> JSValue;
 }
 unsafe extern "C" {
