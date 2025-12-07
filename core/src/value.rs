@@ -389,16 +389,17 @@ impl<'js> Value<'js> {
     /// Check if the value is an exception
     #[inline]
     pub fn is_exception(&self) -> bool {
-        if unsafe { qjs::JS_IsException(self.value) } {
-            return true;
-        }
-        self.is_proxy_of(Type::Exception)
+        unsafe { qjs::JS_IsException(self.value) }
     }
 
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
-        unsafe { qjs::JS_IsError(self.value) }
+        if unsafe { qjs::JS_IsError(self.value) } {
+            return true;
+        }
+        // This feels wrong, but Type::Exception means Javascript Error
+        self.is_proxy_of(Type::Exception)
     }
 
     /// Check if the value is a BigInt
@@ -562,7 +563,7 @@ macro_rules! type_impls {
     (@cond Constructor $self:expr) => { $self.is_constructor() };
     (@cond Function $self:expr) => { $self.is_function() };
     (@cond Promise $self:expr) => { $self.is_promise() };
-    (@cond Exception $self:expr) => { $self.is_error() || $self.is_exception() };
+    (@cond Exception $self:expr) => { $self.is_error() };
     (@cond Proxy $self:expr) => { $self.is_proxy() };
     (@cond $type:ident $self:expr) => { true };
 }
