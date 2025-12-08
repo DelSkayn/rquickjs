@@ -925,6 +925,9 @@ unsafe extern "C" {
     pub fn JS_FreeCString(ctx: *mut JSContext, ptr: *const ::core::ffi::c_char);
 }
 unsafe extern "C" {
+    pub fn JS_FreeCStringRT(rt: *mut JSRuntime, ptr: *const ::core::ffi::c_char);
+}
+unsafe extern "C" {
     pub fn JS_NewObjectProtoClass(
         ctx: *mut JSContext,
         proto: JSValue,
@@ -1410,10 +1413,11 @@ unsafe extern "C" {
         sf: *const JSSharedArrayBufferFunctions,
     );
 }
+pub const JSPromiseStateEnum_JS_PROMISE_NOT_A_PROMISE: JSPromiseStateEnum = -1;
 pub const JSPromiseStateEnum_JS_PROMISE_PENDING: JSPromiseStateEnum = 0;
 pub const JSPromiseStateEnum_JS_PROMISE_FULFILLED: JSPromiseStateEnum = 1;
 pub const JSPromiseStateEnum_JS_PROMISE_REJECTED: JSPromiseStateEnum = 2;
-pub type JSPromiseStateEnum = ::core::ffi::c_uint;
+pub type JSPromiseStateEnum = ::core::ffi::c_int;
 unsafe extern "C" {
     pub fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
 }
