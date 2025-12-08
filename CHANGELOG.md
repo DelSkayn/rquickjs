@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `Proxy` object #[#570](https://github.com/DelSkayn/rquickjs/pull/570)
 - Allow setting filename as an eval option #[#536](https://github.com/DelSkayn/rquickjs/pull/536)
 - Add Iterable allow JS to iterate over Rust iterator #[#564](https://github.com/DelSkayn/rquickjs/pull/564)
 - Add JsIterator to iterate over Javascript Iterator #[#564](https://github.com/DelSkayn/rquickjs/pull/564)

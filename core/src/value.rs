@@ -10,6 +10,7 @@ pub mod function;
 pub mod module;
 pub mod object;
 pub mod promise;
+pub mod proxy;
 mod string;
 mod symbol;
 
@@ -22,6 +23,7 @@ pub use function::{Constructor, Function};
 pub use module::{Module, WriteOptions, WriteOptionsEndianness};
 pub use object::{Filter, Object};
 pub use promise::Promise;
+pub use proxy::Proxy;
 pub use string::{CString, String};
 pub use symbol::Symbol;
 
@@ -99,7 +101,7 @@ impl<'js> fmt::Debug for Value<'js> {
                 unsafe { self.ref_string() }.to_string().fmt(f)?;
                 write!(f, ")")?;
             }
-            Symbol | Object | Array | Function | Constructor | Promise => {
+            Symbol | Object | Array | Function | Constructor | Promise | Proxy => {
                 write!(f, "(")?;
                 unsafe { self.get_ptr() }.fmt(f)?;
                 write!(f, ")")?;
@@ -390,6 +392,12 @@ impl<'js> Value<'js> {
         unsafe { qjs::JS_IsBigInt(self.value) }
     }
 
+    /// Check if the value is a proxy
+    #[inline]
+    pub fn is_proxy(&self) -> bool {
+        unsafe { qjs::JS_IsProxy(self.value) }
+    }
+
     /// Reference as value
     #[inline]
     pub fn as_value(&self) -> &Self {
@@ -456,7 +464,7 @@ macro_rules! type_impls {
                 }
                 match other{
                     Float => matches!(self, Int),
-                    Object => matches!(self, Array | Function | Constructor | Exception | Promise),
+                    Object => matches!(self, Array | Function | Constructor | Exception | Promise | Proxy),
                     Function => matches!(self, Constructor),
                     _ => false
                 }
@@ -516,6 +524,7 @@ macro_rules! type_impls {
     (@cond Function $self:expr) => { $self.is_function() };
     (@cond Promise $self:expr) => { $self.is_promise() };
     (@cond Exception $self:expr) => { $self.is_error() };
+    (@cond Proxy $self:expr) => { $self.is_proxy() };
     (@cond $type:ident $self:expr) => { true };
 }
 
@@ -533,6 +542,7 @@ type_impls! {
     Function: function => JS_TAG_OBJECT,
     Promise: promise => JS_TAG_OBJECT,
     Exception: exception => JS_TAG_OBJECT,
+    Proxy: proxy => JS_TAG_OBJECT,
     Object: object => JS_TAG_OBJECT,
     Module: module => JS_TAG_MODULE,
     BigInt: big_int => JS_TAG_BIG_INT | JS_TAG_SHORT_BIG_INT,
@@ -729,6 +739,7 @@ sub_types! {
     Array->Object->Value as_array ref_array into_array try_into_array from_array,
     Exception->Object->Value as_exception ref_exception into_exception try_into_exception from_exception,
     BigInt->Value as_big_int ref_big_int into_big_int try_into_big_int from_big_int,
+    Proxy->Object->Value as_proxy ref_proxy into_proxy try_into_proxy from_proxy,
 }
 
 macro_rules! void_types {
