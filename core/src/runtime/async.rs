@@ -73,6 +73,8 @@ impl Drop for InnerRuntime {
 unsafe impl Send for InnerRuntime {}
 
 /// A weak handle to the async runtime.
+///
+/// Holding onto this struct does not prevent the runtime from being dropped.
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncWeakRuntime {
@@ -111,12 +113,19 @@ unsafe impl Sync for AsyncWeakRuntime {}
 
 impl AsyncRuntime {
     /// Create a new runtime.
+    ///
+    /// Will generally only fail if not enough memory was available.
+    ///
+    /// # Features
+    /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Result<Self> {
         Self::new_inner(unsafe { RawRuntime::new(Opaque::with_spawner()) }?)
     }
 
     /// Create a new runtime using specified allocator.
+    ///
+    /// Will generally only fail if not enough memory was available.
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new_with_alloc<A: Allocator + 'static>(allocator: A) -> Result<Self> {
         Self::new_inner(unsafe {
@@ -172,7 +181,7 @@ impl AsyncRuntime {
         self.inner.try_borrow_mut().ok()
     }
 
-    /// Set promise rejection tracker.
+    /// Set a closure which is called when a promise is rejected.
     pub async fn set_host_promise_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
         unsafe {
             self.lock()
@@ -182,12 +191,15 @@ impl AsyncRuntime {
         }
     }
 
-    /// Set promise hook.
+    /// Set a closure which is called when a promise is created, resolved, or chained.
     pub async fn set_promise_hook(&self, tracker: Option<PromiseHook>) {
         unsafe { self.lock().await.runtime.set_promise_hook(tracker) }
     }
 
-    /// Set interrupt handler.
+    /// Set a closure which is regularly called by the engine when it is executing code.
+    ///
+    /// If the provided closure returns `true` the interpreter will raise an uncatchable
+    /// exception and return control flow to the caller.
     pub async fn set_interrupt_handler(&self, handler: Option<InterruptHandler>) {
         unsafe { self.lock().await.runtime.set_interrupt_handler(handler) }
     }
@@ -209,22 +221,34 @@ impl AsyncRuntime {
         Ok(())
     }
 
-    /// Set memory limit (0 = unlimited).
+    /// Set a limit on the max amount of memory the runtime will use.
+    ///
+    /// Setting the limit to 0 is equivalent to unlimited memory.
+    ///
+    /// Note that is a Noop when a custom allocator is being used,
+    /// as is the case for the `"rust-alloc"` or `"allocator"` features.
     pub async fn set_memory_limit(&self, limit: usize) {
         unsafe { self.lock().await.runtime.set_memory_limit(limit) }
     }
 
-    /// Set max stack size (default: 256KB).
+    /// Set a limit on the max size of stack the runtime will use.
+    ///
+    /// The default values is 256x1024 bytes.
     pub async fn set_max_stack_size(&self, limit: usize) {
         unsafe { self.lock().await.runtime.set_max_stack_size(limit) }
     }
 
-    /// Set GC threshold.
+    /// Set a memory threshold for garbage collection.
     pub async fn set_gc_threshold(&self, threshold: usize) {
         unsafe { self.lock().await.runtime.set_gc_threshold(threshold) }
     }
 
-    /// Run garbage collection.
+    /// Manually run the garbage collection.
+    ///
+    /// Most QuickJS values are reference counted and
+    /// will automatically free themselves when they have no more
+    /// references. The garbage collector is only for collecting
+    /// cyclic references.
     pub async fn run_gc(&self) {
         let mut lock = self.lock().await;
         lock.drop_pending();
@@ -237,12 +261,16 @@ impl AsyncRuntime {
     }
 
     /// Test for pending jobs.
+    ///
+    /// Returns true when at least one job is pending.
     pub async fn is_job_pending(&self) -> bool {
         let lock = self.lock().await;
         lock.runtime.is_job_pending() || !lock.runtime.get_opaque().spawner_is_empty()
     }
 
     /// Execute first pending job.
+    ///
+    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.lock().await;
         lock.runtime.update_stack_top();
@@ -305,7 +333,10 @@ impl AsyncRuntime {
         .await
     }
 
-    /// Drive spawned tasks in background.
+    /// Returns a future that completes when the runtime is dropped.
+    ///
+    /// If the future is polled it will drive futures spawned inside the runtime completing them
+    /// even if runtime is currently not in use.
     pub fn drive(&self) -> DriveFuture {
         DriveFuture::new(self.weak())
     }
