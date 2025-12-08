@@ -459,7 +459,7 @@ impl<'js> Ctx<'js> {
         use core::task::{Context, Waker};
 
         let waker = Waker::noop();
-        let mut cx = Context::from_waker(&waker);
+        let mut cx = Context::from_waker(waker);
 
         loop {
             match promise.state() {

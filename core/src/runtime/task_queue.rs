@@ -138,6 +138,7 @@ impl TaskQueue {
     }
 
     #[inline]
+    #[allow(clippy::mut_from_ref)]
     fn inner(&self) -> &mut TaskQueueInner {
         unsafe { &mut *self.inner.get() }
     }
