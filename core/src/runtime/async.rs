@@ -22,7 +22,7 @@ use crate::allocator::Allocator;
 use crate::loader::{Loader, Resolver};
 #[cfg(feature = "parallel")]
 use crate::qjs;
-use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Exception, Result};
+use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Result};
 
 // Type aliases for lock abstraction
 #[cfg(feature = "parallel")]
@@ -308,8 +308,10 @@ impl AsyncRuntime {
                         #[cfg(feature = "std")]
                         {
                             use std::println;
-                            if let Some(ex) =
-                                err.clone().into_object().and_then(Exception::from_object)
+                            if let Some(ex) = err
+                                .clone()
+                                .into_object()
+                                .and_then(crate::Exception::from_object)
                             {
                                 println!("error executing job: {}", ex);
                             } else {
