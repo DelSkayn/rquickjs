@@ -139,11 +139,17 @@ impl AsyncContext {
     }
 
     /// Creates a base context with only the required functions registered.
+    ///
+    /// If additional functions are required use [`AsyncContext::custom`],
+    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn base(runtime: &AsyncRuntime) -> Result<Self> {
         Self::custom::<intrinsic::None>(runtime).await
     }
 
     /// Creates a context with only the required intrinsics registered.
+    ///
+    /// If additional functions are required use [`AsyncContext::custom`],
+    /// [`AsyncContext::builder`] or [`AsyncContext::full`].
     pub async fn custom<I: Intrinsic>(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContextRaw(guard.runtime.rt.as_ptr()) })
@@ -158,6 +164,9 @@ impl AsyncContext {
     }
 
     /// Creates a context with all standard available intrinsics registered.
+    ///
+    /// If precise control is required of which functions are available use
+    /// [`AsyncContext::custom`] or [`AsyncContext::builder`].
     pub async fn full(runtime: &AsyncRuntime) -> Result<Self> {
         let guard = runtime.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.runtime.rt.as_ptr()) })
