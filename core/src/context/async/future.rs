@@ -72,9 +72,8 @@ where
 
             let mut made_progress = false;
 
-            match lock.runtime.get_opaque().poll(cx) {
-                TaskPoll::Progress => made_progress = true,
-                _ => {}
+            if lock.runtime.get_opaque().poll(cx) == TaskPoll::Progress {
+                made_progress = true;
             }
 
             loop {
