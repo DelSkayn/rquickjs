@@ -466,7 +466,7 @@ jobs:
           path: sys/src/bindings
           merge-multiple: true
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           base: ${{ github.head_ref }}
           commit-message: Updated bindings
