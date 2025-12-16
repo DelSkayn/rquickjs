@@ -359,19 +359,19 @@ impl<'js> Value<'js> {
     /// Check if the value is a function
     #[inline]
     pub fn is_function(&self) -> bool {
-        (unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) } as i32) != 0
+        unsafe { qjs::JS_IsFunction(self.ctx.as_ptr(), self.value) }
     }
 
     /// Check if the value is a constructor function
     #[inline]
     pub fn is_constructor(&self) -> bool {
-        (unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) } as i32) != 0
+        unsafe { qjs::JS_IsConstructor(self.ctx.as_ptr(), self.value) }
     }
 
     /// Check if the value is a promise.
     #[inline]
     pub fn is_promise(&self) -> bool {
-        (unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) } as core::ffi::c_int) >= 0
+        unsafe { qjs::JS_PromiseState(self.ctx.as_ptr(), self.value) >= 0 }
     }
 
     /// Check if the value is an exception
@@ -383,7 +383,7 @@ impl<'js> Value<'js> {
     /// Check if the value is an error
     #[inline]
     pub fn is_error(&self) -> bool {
-        (unsafe { qjs::JS_IsError(self.value) } as i32) != 0
+        unsafe { qjs::JS_IsError(self.value) }
     }
 
     /// Check if the value is a BigInt

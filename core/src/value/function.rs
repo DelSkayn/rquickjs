@@ -162,7 +162,7 @@ impl<'js> Function<'js> {
 
     /// Returns whether this function is an constructor.
     pub fn is_constructor(&self) -> bool {
-        ((unsafe { qjs::JS_IsConstructor(self.ctx().as_ptr(), self.0.as_js_value()) }) as i32) != 0
+        unsafe { qjs::JS_IsConstructor(self.ctx().as_ptr(), self.0.as_js_value()) }
     }
 
     /// Set whether this function is a constructor or not.
