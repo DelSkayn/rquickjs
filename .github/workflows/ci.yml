@@ -42,7 +42,7 @@ jobs:
           DOCS_RS: 1
         run: cargo doc --no-deps --features full-async,parallel,doc-cfg,bindgen
       - name: Upload docs
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: docs
           path: |
@@ -432,7 +432,7 @@ jobs:
           cat sys/src/bindings/${{ matrix.target }}.rs
       - name: Upload bindings
         if: matrix.task == 'bindings'
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: bindings-${{ matrix.target }}
           path: sys/src/bindings/${{ matrix.target }}.rs
@@ -466,7 +466,7 @@ jobs:
           path: sys/src/bindings
           merge-multiple: true
       - name: Create pull request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           base: ${{ github.head_ref }}
           commit-message: Updated bindings
