@@ -460,7 +460,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Download bindings
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: bindings-*
           path: sys/src/bindings
