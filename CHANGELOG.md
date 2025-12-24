@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## [0.11.0] - 2025-12-16
+
 ### Added
 
 - Added `Proxy` object #[#570](https://github.com/DelSkayn/rquickjs/pull/570)
