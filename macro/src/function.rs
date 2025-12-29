@@ -289,7 +289,7 @@ impl JsParams {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum ParamKind {
+pub enum ParamKind {
     Value,
     Borrow,
     BorrowMut,
@@ -297,10 +297,10 @@ pub(crate) enum ParamKind {
 
 #[derive(Debug, Clone)]
 pub(crate) struct JsParam {
-    kind: ParamKind,
-    number: usize,
-    tokens: TokenStream,
-    is_this: bool,
+    pub kind: ParamKind,
+    pub number: usize,
+    pub tokens: TokenStream,
+    pub is_this: bool,
 }
 
 impl JsParam {

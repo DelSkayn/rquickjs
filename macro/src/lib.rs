@@ -23,6 +23,7 @@ mod attrs;
 mod class;
 mod common;
 mod embed;
+mod exotic;
 mod fields;
 mod function;
 mod js_lifetime;
@@ -46,6 +47,7 @@ mod trace;
 /// | `rename`     | String    | Changes the name of the implemented class on the JavaScript side.                                                                                                                       |
 /// | `rename_all` | Casing    | Converts the case of all the fields of this struct which have implement accessors. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
 /// | `frozen`     | Flag      | Changes the class implementation to only allow borrowing immutably.  Trying to borrow mutably will result in an error.                                                                  |
+/// | `exotic`     | Flag      | Changes the class implementation to support exotic methods. Must be used in combination with the macro [`macro@exotic`].                                                                |
 ///
 /// # Field options
 ///
@@ -302,6 +304,79 @@ pub fn methods(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
         item => Error::new(
             item.span(),
             "#[methods] macro can only be used on impl blocks",
+        )
+        .into_compile_error()
+        .into(),
+    }
+}
+
+/// An attribute for implementing exotic methods for a class.
+///
+/// This attribute can be added to a impl block which implements methods for a type which uses the
+/// [`macro@class`] attribute to derive [`JsClass`](rquickjs_core::class::JsClass) with the `exotic`
+///
+/// # Limitations
+/// Due to limitations in the Rust type system this attribute can be used on only one impl block
+/// per type.
+///
+/// # Item options
+///
+/// Each item of the impl block must be tagged with an attribute to specify the exotic method it implements.
+/// These attributes are all in the form of `#[qjs(option)]`.
+///
+/// | **Option** | **Value** | **Description** |
+/// |------------|-----------|-----------------|
+/// | `get`      | Flag      | Makes this method the [[Get]] exotic method |
+/// | `set`      | Flag      | Makes this method the [[Set]] exotic method |
+/// | `delete`   | Flag      | Makes this method the [[Delete]] exotic method |
+/// | `has`      | Flag      | Makes this method the [[HasProperty]] exotic method |
+///
+/// # Example
+/// ```
+/// use rquickjs::{class::Trace, JsLifetime, Context, Runtime, Atom, Class};
+///
+/// #[derive(Trace, JsLifetime)]
+/// #[rquickjs::class(exotic)]
+/// pub struct TestClass {
+///     value: u32,
+/// }
+///
+/// #[rquickjs::exotic]
+/// impl TestClass {
+///     #[qjs(get)]
+///     pub fn value(&self, atom: Atom<'_>) -> Option<u32> {
+///         if atom.to_string().unwrap() == "value" {
+///             Some(self.value)
+///         } else {
+///             None
+///         }
+///     }
+/// }
+///
+/// fn main() {
+///     let rt = Runtime::new().unwrap();
+///     let ctx = Context::full(&rt).unwrap();
+///
+///     ctx.with(|ctx| {
+///         let cls = Class::instance(ctx.clone(), TestClass { value: 42 }).unwrap();
+///         ctx.globals().set("my_class", cls.clone()).unwrap();
+///         let value = ctx.eval::<u32, _>(r#"my_class.value"#).unwrap();
+///         println!("value: {}", value);
+///         assert_eq!(value, 42);
+///     })
+/// }
+/// ```
+#[proc_macro_attribute]
+pub fn exotic(_attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
+    let item = parse_macro_input!(item as Item);
+    match item {
+        Item::Impl(item) => match exotic::expand(item) {
+            Ok(x) => x.into(),
+            Err(e) => e.into_compile_error().into(),
+        },
+        item => Error::new(
+            item.span(),
+            "#[exotic] macro can only be used on impl blocks",
         )
         .into_compile_error()
         .into(),

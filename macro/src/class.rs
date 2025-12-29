@@ -17,6 +17,7 @@ use crate::{
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ClassConfig {
     pub frozen: bool,
+    pub exotic: bool,
     pub crate_: Option<String>,
     pub rename: Option<String>,
     pub rename_all: Option<Case>,
@@ -24,6 +25,7 @@ pub(crate) struct ClassConfig {
 
 pub(crate) enum ClassOption {
     Frozen(FlagOption<kw::frozen>),
+    Exotic(FlagOption<kw::exotic>),
     Crate(ValueOption<Token![crate], LitStr>),
     Rename(ValueOption<kw::rename, LitStr>),
     RenameAll(ValueOption<kw::rename_all, Case>),
@@ -33,6 +35,8 @@ impl Parse for ClassOption {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(kw::frozen) {
             input.parse().map(Self::Frozen)
+        } else if input.peek(kw::exotic) {
+            input.parse().map(Self::Exotic)
         } else if input.peek(Token![crate]) {
             input.parse().map(Self::Crate)
         } else if input.peek(kw::rename) {
@@ -50,6 +54,9 @@ impl ClassConfig {
         match option {
             ClassOption::Frozen(ref x) => {
                 self.frozen = x.is_true();
+            }
+            ClassOption::Exotic(ref x) => {
+                self.exotic = x.is_true();
             }
             ClassOption::Crate(ref x) => {
                 self.crate_ = Some(x.value.value());
@@ -345,6 +352,53 @@ impl Class {
         let mutability = self.mutability();
         let props = self.expand_props(&crate_name);
         let reexpand = self.reexpand();
+        let exotic_const = if self.config().exotic {
+            quote! { const EXOTIC: bool = true; }
+        } else {
+            TokenStream::new()
+        };
+
+        let exotic_methods = if self.config().exotic {
+            let exotic_module = format_ident!("__impl_exotic_{}__", self.ident());
+            quote! {
+                fn exotic_get_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                    receiver: #crate_name::Value<'js>,
+                ) -> #crate_name::Result<#crate_name::Value<'js>> {
+                    #exotic_module::ExoticImpl::exotic_get_property(this, ctx, atom, receiver)
+                }
+
+                fn exotic_set_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                    receiver: #crate_name::Value<'js>,
+                    value: #crate_name::Value<'js>,
+                ) -> #crate_name::Result<bool> {
+                    #exotic_module::ExoticImpl::exotic_set_property(this, ctx, atom, receiver, value)
+                }
+
+                fn exotic_delete_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                ) -> #crate_name::Result<bool> {
+                    #exotic_module::ExoticImpl::exotic_delete_property(this, ctx, atom)
+                }
+
+                fn exotic_has_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                ) -> #crate_name::Result<bool> {
+                    #exotic_module::ExoticImpl::exotic_has_property(this, ctx, atom)
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
 
         let res = quote! {
             #reexpand
@@ -357,6 +411,8 @@ impl Class {
                     const NAME: &'static str = #javascript_name;
 
                     type Mutable = #crate_name::class::#mutability;
+
+                    #exotic_const
 
                     fn prototype(ctx: &#crate_name::Ctx<'js>) -> #crate_name::Result<Option<#crate_name::Object<'js>>>{
                         use #crate_name::class::impl_::MethodImplementor;
@@ -374,6 +430,8 @@ impl Class {
                         let implementor = #crate_name::class::impl_::ConstructorCreate::<Self>::new();
                         (&implementor).create_constructor(ctx)
                     }
+
+                    #exotic_methods
                 }
 
                 impl #generics_with_lifetimes #crate_name::IntoJs<'js> for #class_name #generics{
