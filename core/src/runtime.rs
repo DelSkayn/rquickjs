@@ -8,9 +8,9 @@ mod userdata;
 #[cfg(feature = "futures")]
 mod r#async;
 #[cfg(feature = "futures")]
-pub(crate) mod schedular;
-#[cfg(feature = "futures")]
 mod spawner;
+#[cfg(feature = "futures")]
+pub(crate) mod task_queue;
 #[cfg(feature = "futures")]
 pub use spawner::DriveFuture;
 
@@ -18,8 +18,6 @@ use alloc::boxed::Box;
 pub use base::{Runtime, WeakRuntime};
 pub use userdata::{UserDataError, UserDataGuard};
 
-#[cfg(feature = "futures")]
-pub(crate) use r#async::InnerRuntime;
 #[cfg(feature = "futures")]
 pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
 
