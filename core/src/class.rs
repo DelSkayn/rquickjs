@@ -12,7 +12,8 @@ use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 mod cell;
 mod trace;
 
-pub(crate) mod ffi;
+#[doc(hidden)]
+pub mod ffi;
 
 pub use cell::{
     Borrow, BorrowMut, JsCell, Mutability, OwnedBorrow, OwnedBorrowMut, Readable, Writable,
@@ -21,6 +22,7 @@ use ffi::{ClassCell, VTable};
 pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
+pub mod inherits;
 
 /// The trait which allows Rust types to be used from JavaScript.
 pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
@@ -34,6 +36,11 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     ///
     /// This should either be [`Readable`] or [`Writable`].
     type Mutable: Mutability;
+
+    /// Returns the parent class vtable if this class extends another class.
+    fn parent_vtable() -> Option<&'static VTable> {
+        None
+    }
 
     /// Returns the class prototype,
     fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
@@ -149,9 +156,18 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
         unsafe { ctx.get_opaque().get_or_insert_prototype::<C>(ctx) }
     }
 
-    /// Create a constructor for the current class using its definition.
+    /// Returns the constructor for the current class using its definition.
+    ///
+    /// Returns `None` if the class is not yet registered or if the class doesn't have a constructor.
+    pub fn constructor(ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>> {
+        unsafe { ctx.get_opaque().get_or_insert_constructor::<C>(ctx) }
+    }
+
+    /// Returns the constructor for the current class using its definition.
+    ///
+    /// Returns `None` if the class is not yet registered or if the class doesn't have a constructor.
     pub fn create_constructor(ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>> {
-        C::constructor(ctx)
+        Self::constructor(ctx)
     }
 
     /// Defines the predefined constructor of this class, if there is one, onto the given object.

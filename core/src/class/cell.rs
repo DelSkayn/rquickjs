@@ -102,6 +102,7 @@ unsafe impl Mutability for Readable {
 /// When a class has `Writable` as it Mutable type you can borrow it both mutability and immutable.
 pub enum Writable {}
 
+#[repr(C)]
 pub struct WritableCell<T> {
     count: Cell<usize>,
     value: UnsafeCell<T>,
@@ -203,6 +204,7 @@ unsafe impl Mutability for Writable {
 /// A cell type for Rust classes passed to JavaScript.
 ///
 /// Implements [`RefCell`](std::cell::RefCell)-like borrow checking.
+#[repr(transparent)]
 pub struct JsCell<'js, T: JsClass<'js>> {
     pub(crate) cell: <T::Mutable as Mutability>::Cell<T>,
 }
