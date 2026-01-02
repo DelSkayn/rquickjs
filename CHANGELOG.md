@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- Add inheritance support for Rust classes #[#587](https://github.com/DelSkayn/rquickjs/pull/587)
+
+
 ## [0.11.0] - 2025-12-16
 
 ### Added
@@ -16,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add Iterable allow JS to iterate over Rust iterator #[#564](https://github.com/DelSkayn/rquickjs/pull/564)
 - Add JsIterator to iterate over Javascript Iterator #[#564](https://github.com/DelSkayn/rquickjs/pull/564)
 - Add more trait implementations like AsRef for CString #[#558](https://github.com/DelSkayn/rquickjs/pull/558)
+
 
 ### Changed
 
