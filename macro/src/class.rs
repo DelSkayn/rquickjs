@@ -20,7 +20,7 @@ pub(crate) struct ClassConfig {
     pub crate_: Option<String>,
     pub rename: Option<String>,
     pub rename_all: Option<Case>,
-    pub extends: Option<syn::Type>,
+    pub extends: Option<Box<syn::Type>>,
 }
 
 pub(crate) enum ClassOption {
@@ -28,7 +28,7 @@ pub(crate) enum ClassOption {
     Crate(ValueOption<Token![crate], LitStr>),
     Rename(ValueOption<kw::rename, LitStr>),
     RenameAll(ValueOption<kw::rename_all, Case>),
-    Extends(ValueOption<kw::extends, syn::Type>),
+    Extends(ValueOption<kw::extends, Box<syn::Type>>),
 }
 
 impl Parse for ClassOption {
