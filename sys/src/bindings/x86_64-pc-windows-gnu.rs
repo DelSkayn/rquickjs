@@ -933,7 +933,7 @@ unsafe extern "C" {
     ) -> JSValue;
 }
 unsafe extern "C" {
-    pub fn JS_NewTwoByteString(ctx: *mut JSContext, buf: *const u16, len: size_t) -> JSValue;
+    pub fn JS_NewStringUTF16(ctx: *mut JSContext, buf: *const u16, len: size_t) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_NewAtomString(ctx: *mut JSContext, str_: *const ::core::ffi::c_char) -> JSValue;
@@ -953,10 +953,23 @@ unsafe extern "C" {
     ) -> *const ::core::ffi::c_char;
 }
 unsafe extern "C" {
+    pub fn JS_ToCStringLenUTF16(
+        ctx: *mut JSContext,
+        plen: *mut size_t,
+        val1: JSValue,
+    ) -> *const u16;
+}
+unsafe extern "C" {
     pub fn JS_FreeCString(ctx: *mut JSContext, ptr: *const ::core::ffi::c_char);
 }
 unsafe extern "C" {
     pub fn JS_FreeCStringRT(rt: *mut JSRuntime, ptr: *const ::core::ffi::c_char);
+}
+unsafe extern "C" {
+    pub fn JS_FreeCStringUTF16(ctx: *mut JSContext, ptr: *const u16);
+}
+unsafe extern "C" {
+    pub fn JS_FreeCStringRT_UTF16(rt: *mut JSRuntime, ptr: *const u16);
 }
 unsafe extern "C" {
     pub fn JS_NewObjectProtoClass(
