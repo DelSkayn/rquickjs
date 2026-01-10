@@ -2002,6 +2002,100 @@ unsafe extern "C" {
 unsafe extern "C" {
     pub fn js_std_cmd(cmd: ::core::ffi::c_int, ...) -> usize;
 }
+unsafe extern "C" {
+    pub fn js_init_module_std(
+        ctx: *mut JSContext,
+        module_name: *const ::core::ffi::c_char,
+    ) -> *mut JSModuleDef;
+}
+unsafe extern "C" {
+    pub fn js_init_module_os(
+        ctx: *mut JSContext,
+        module_name: *const ::core::ffi::c_char,
+    ) -> *mut JSModuleDef;
+}
+unsafe extern "C" {
+    pub fn js_init_module_bjson(
+        ctx: *mut JSContext,
+        module_name: *const ::core::ffi::c_char,
+    ) -> *mut JSModuleDef;
+}
+unsafe extern "C" {
+    pub fn js_std_add_helpers(
+        ctx: *mut JSContext,
+        argc: ::core::ffi::c_int,
+        argv: *mut *mut ::core::ffi::c_char,
+    );
+}
+unsafe extern "C" {
+    pub fn js_std_loop(ctx: *mut JSContext) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn js_std_await(ctx: *mut JSContext, obj: JSValue) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn js_std_init_handlers(rt: *mut JSRuntime);
+}
+unsafe extern "C" {
+    pub fn js_std_free_handlers(rt: *mut JSRuntime);
+}
+unsafe extern "C" {
+    pub fn js_std_dump_error(ctx: *mut JSContext);
+}
+unsafe extern "C" {
+    pub fn js_load_file(
+        ctx: *mut JSContext,
+        pbuf_len: *mut usize,
+        filename: *const ::core::ffi::c_char,
+    ) -> *mut u8;
+}
+unsafe extern "C" {
+    pub fn js_module_set_import_meta(
+        ctx: *mut JSContext,
+        func_val: JSValue,
+        use_realpath: bool,
+        is_main: bool,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn js_module_loader(
+        ctx: *mut JSContext,
+        module_name: *const ::core::ffi::c_char,
+        opaque: *mut ::core::ffi::c_void,
+    ) -> *mut JSModuleDef;
+}
+unsafe extern "C" {
+    pub fn js_std_eval_binary(
+        ctx: *mut JSContext,
+        buf: *const u8,
+        buf_len: usize,
+        flags: ::core::ffi::c_int,
+    );
+}
+unsafe extern "C" {
+    pub fn js_std_promise_rejection_tracker(
+        ctx: *mut JSContext,
+        promise: JSValue,
+        reason: JSValue,
+        is_handled: bool,
+        opaque: *mut ::core::ffi::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn js_std_set_worker_new_runtime_func(
+        func: ::core::option::Option<
+            unsafe extern "C" fn() -> *mut JSRuntime
+        >,
+    );
+}
+
+unsafe extern "C" {
+    pub fn js_std_set_worker_new_context_func(
+        func: ::core::option::Option<
+            unsafe extern "C" fn(rt: *mut JSRuntime) -> *mut JSContext
+        >,
+    );
+}
 pub const __JS_ATOM_NULL: _bindgen_ty_2 = 0;
 pub const JS_ATOM_null: _bindgen_ty_2 = 1;
 pub const JS_ATOM_false: _bindgen_ty_2 = 2;

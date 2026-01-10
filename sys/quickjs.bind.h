@@ -2,6 +2,7 @@
 // the static atoms.
 
 #include "quickjs.h"
+#include "quickjs-libc.h"
 
 #if !defined(EMSCRIPTEN) && !defined(_MSC_VER)
 #define CONFIG_ATOMICS

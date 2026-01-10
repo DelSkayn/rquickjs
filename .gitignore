@@ -3,3 +3,4 @@ target
 .gdb_history
 Cargo.lock
 .DS_Store
+.idea

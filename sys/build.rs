@@ -135,6 +135,7 @@ fn main() {
         "quickjs-opcode.h",
         "quickjs-c-atomics.h",
         "quickjs.h",
+        "quickjs-libc.h",
         "cutils.h",
     ];
 
@@ -143,6 +144,7 @@ fn main() {
         "libunicode.c",
         "cutils.c",
         "quickjs.c",
+        "quickjs-libc.c",
         "dtoa.c",
     ];
 

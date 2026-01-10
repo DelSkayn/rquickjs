@@ -510,6 +510,33 @@ mod test {
     use crate::{CatchResultExt, JsLifetime};
 
     #[test]
+    fn test_add_std_helpers() {
+        use crate::{Context, Runtime};
+        use rquickjs::qjs;
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+
+        ctx.with(|ctx| {
+            unsafe { qjs::js_std_add_helpers(ctx.as_ptr(), 0, core::ptr::null_mut()); }
+            let script_str = r#"
+                print("Hello from QuickJS");
+                console.log("Hello from QuickJS");
+            "#;
+            if let Err(e) = ctx.eval::<(), _>(script_str).catch(&ctx) {
+                panic!("{}", e);
+            }
+
+            let print_type: String = ctx.eval("typeof print").unwrap();
+            assert_eq!(print_type, "function");
+
+            let console_log_type: String = ctx.eval("typeof console.log").unwrap();
+            assert_eq!(console_log_type, "function");
+        });
+    }
+
+
+    #[test]
     fn exports() {
         use crate::{context::intrinsic, Context, Function, Module, Promise, Runtime};
 
