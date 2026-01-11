@@ -125,6 +125,9 @@ fn main() {
 
     let header_files = [
         "builtin-array-fromasync.h",
+        "builtin-iterator-zip-keyed.h",
+        "builtin-iterator-zip.h",
+        "cutils.h",
         "dtoa.h",
         "libregexp-opcode.h",
         "libregexp.h",
