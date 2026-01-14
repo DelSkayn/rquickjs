@@ -22,7 +22,7 @@ use std::collections::{hash_map::Entry, HashMap};
 use hashbrown::{hash_map::Entry, HashMap};
 
 #[cfg(feature = "futures")]
-use super::{schedular::SchedularPoll, spawner::Spawner};
+use super::task_queue::{TaskPoll, TaskQueue};
 
 #[cfg(feature = "futures")]
 use core::{
@@ -54,7 +54,7 @@ pub(crate) struct Opaque<'js> {
     userdata: UserDataMap,
 
     #[cfg(feature = "futures")]
-    spawner: Option<UnsafeCell<Spawner>>,
+    queue: Option<UnsafeCell<TaskQueue>>,
 
     _marker: PhantomData<&'js ()>,
 }
@@ -80,14 +80,14 @@ impl<'js> Opaque<'js> {
             _marker: PhantomData,
 
             #[cfg(feature = "futures")]
-            spawner: None,
+            queue: None,
         }
     }
 
     #[cfg(feature = "futures")]
     pub fn with_spawner() -> Self {
         let mut this = Opaque::new();
-        this.spawner = Some(UnsafeCell::new(Spawner::new()));
+        this.queue = Some(UnsafeCell::new(TaskQueue::new()));
         this
     }
 
@@ -127,8 +127,8 @@ impl<'js> Opaque<'js> {
     }
 
     #[cfg(feature = "futures")]
-    fn spawner(&self) -> &UnsafeCell<Spawner> {
-        self.spawner
+    fn queue(&self) -> &UnsafeCell<TaskQueue> {
+        self.queue
             .as_ref()
             .expect("tried to use async function in non async runtime")
     }
@@ -138,22 +138,22 @@ impl<'js> Opaque<'js> {
     where
         F: Future<Output = ()>,
     {
-        (*self.spawner().get()).push(f)
+        (*self.queue().get()).push(f)
     }
 
     #[cfg(feature = "futures")]
     pub fn listen(&self, wake: Waker) {
-        unsafe { (*self.spawner().get()).listen(wake) };
+        unsafe { (*self.queue().get()).listen(wake) };
     }
 
     #[cfg(feature = "futures")]
     pub fn spawner_is_empty(&self) -> bool {
-        unsafe { (*self.spawner().get()).is_empty() }
+        unsafe { (*self.queue().get()).is_empty() }
     }
 
     #[cfg(feature = "futures")]
-    pub fn poll(&self, cx: &mut Context) -> SchedularPoll {
-        unsafe { (*self.spawner().get()).poll(cx) }
+    pub fn poll(&self, cx: &mut Context) -> TaskPoll {
+        unsafe { (*self.queue().get()).poll(cx) }
     }
 
     pub fn insert_userdata<U>(&self, data: U) -> Result<Option<Box<U>>, UserDataError<U>>
@@ -262,7 +262,7 @@ impl<'js> Opaque<'js> {
         self.panic.take();
         self.prototypes.get_mut().clear();
         #[cfg(feature = "futures")]
-        self.spawner.take();
+        self.queue.take();
         self.userdata.clear()
     }
 }
