@@ -188,8 +188,13 @@ impl<L> Loader for Compile<L>
 where
     L: Loader,
 {
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
-        let module = self.inner.load(ctx, path)?;
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        path: &str,
+        attributes: crate::loader::ImportAttributes<'js>,
+    ) -> Result<Module<'js>> {
+        let module = self.inner.load(ctx, path, attributes)?;
         let data = module.write(WriteOptions::default())?;
         self.data.lock().bytecodes.push((path.into(), data));
         Ok(module)

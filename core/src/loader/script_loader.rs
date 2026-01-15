@@ -39,7 +39,12 @@ impl Default for ScriptLoader {
 
 #[cfg(feature = "std")]
 impl Loader for ScriptLoader {
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        path: &str,
+        _attributes: crate::loader::ImportAttributes<'js>,
+    ) -> Result<Module<'js>> {
         if !check_extensions(path, &self.extensions) {
             return Err(Error::new_loading(path));
         }

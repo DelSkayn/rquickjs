@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use core::{ffi::CStr, ptr};
 
-use crate::{module::Declared, qjs, Ctx, Module, Result};
+use crate::{module::Declared, qjs, Ctx, Module, Object, Result, Value};
 
 mod builtin_loader;
 mod builtin_resolver;
@@ -64,11 +64,19 @@ pub trait Resolver {
     fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String>;
 }
 
+/// Import attributes from statements like `import x from "y" with { type: "json" }`
+pub type ImportAttributes<'js> = Option<Object<'js>>;
+
 /// Module loader interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
 pub trait Loader {
-    /// Load module by name
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js, Declared>>;
+    /// Load module by name with import attributes
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        name: &str,
+        attributes: ImportAttributes<'js>,
+    ) -> Result<Module<'js, Declared>>;
 }
 
 struct LoaderOpaque {
@@ -100,10 +108,11 @@ impl LoaderHolder {
 
     pub(crate) fn set_to_runtime(&self, rt: *mut qjs::JSRuntime) {
         unsafe {
-            qjs::JS_SetModuleLoaderFunc(
+            qjs::JS_SetModuleLoaderFunc2(
                 rt,
                 Some(Self::normalize_raw),
                 Some(Self::load_raw),
+                None, // No attribute validation
                 self.0 as _,
             );
         }
@@ -147,22 +156,34 @@ impl LoaderHolder {
         opaque: &mut LoaderOpaque,
         ctx: &Ctx<'js>,
         name: &CStr,
+        attributes: qjs::JSValue,
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
 
-        Ok(opaque.loader.load(ctx, name)?.as_ptr())
+        // Convert JSValue to Option<Object<'js>>
+        let attrs = {
+            let val = Value::from_js_value_const(ctx.clone(), attributes);
+            if val.is_undefined() || val.is_null() {
+                None
+            } else {
+                Some(Object(val))
+            }
+        };
+
+        Ok(opaque.loader.load(ctx, name, attrs)?.as_ptr())
     }
 
     unsafe extern "C" fn load_raw(
         ctx: *mut qjs::JSContext,
         name: *const qjs::c_char,
         opaque: *mut qjs::c_void,
+        attributes: qjs::JSValue,
     ) -> *mut qjs::JSModuleDef {
         let ctx = Ctx::from_ptr(ctx);
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::load(loader, &ctx, name).unwrap_or_else(|error| {
+        Self::load(loader, &ctx, name, attributes).unwrap_or_else(|error| {
             error.throw(&ctx);
             ptr::null_mut()
         })
@@ -214,11 +235,16 @@ macro_rules! loader_impls {
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn load<'js>(&mut self, _ctx: &Ctx<'js>, name: &str) -> Result<Module<'js, Declared>> {
+                fn load<'js>(
+                    &mut self,
+                    _ctx: &Ctx<'js>,
+                    name: &str,
+                    _attributes: $crate::loader::ImportAttributes<'js>,
+                ) -> Result<Module<'js, Declared>> {
                     let mut messages = alloc::vec::Vec::<alloc::string::String>::new();
                     let ($($t,)*) = self;
                     $(
-                        match $t.load(_ctx, name) {
+                        match $t.load(_ctx, name, _attributes.clone()) {
                             // Still could try the next loader
                             Err($crate::Error::Loading { message, .. }) => {
                                 message.map(|message| messages.push(message));
@@ -263,7 +289,12 @@ mod test {
     struct TestLoader;
 
     impl Loader for TestLoader {
-        fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+        fn load<'js>(
+            &mut self,
+            ctx: &Ctx<'js>,
+            name: &str,
+            _attributes: super::ImportAttributes<'js>,
+        ) -> Result<Module<'js>> {
             if name == "test" {
                 Module::declare(
                     ctx.clone(),
