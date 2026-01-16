@@ -65,7 +65,20 @@ pub trait Resolver {
 }
 
 /// Import attributes from statements like `import x from "y" with { type: "json" }`
-pub type ImportAttributes<'js> = Option<Object<'js>>;
+#[derive(Clone, Debug)]
+pub struct ImportAttributes<'js>(Object<'js>);
+
+impl<'js> ImportAttributes<'js> {
+    /// Get an attribute value by key
+    pub fn get(&self, key: &str) -> Result<Option<String>> {
+        self.0.get(key)
+    }
+
+    /// Get the `type` attribute (shorthand for `get("type")`)
+    pub fn get_type(&self) -> Result<Option<String>> {
+        self.get("type")
+    }
+}
 
 /// Module loader interface
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
@@ -75,7 +88,7 @@ pub trait Loader {
         &mut self,
         ctx: &Ctx<'js>,
         name: &str,
-        attributes: ImportAttributes<'js>,
+        attributes: Option<ImportAttributes<'js>>,
     ) -> Result<Module<'js, Declared>>;
 }
 
@@ -160,13 +173,13 @@ impl LoaderHolder {
     ) -> Result<*mut qjs::JSModuleDef> {
         let name = name.to_str()?;
 
-        // Convert JSValue to Option<Object<'js>>
+        // Convert JSValue to Option<ImportAttributes<'js>>
         let attrs = {
             let val = Value::from_js_value_const(ctx.clone(), attributes);
             if val.is_undefined() || val.is_null() {
                 None
             } else {
-                Some(Object(val))
+                Some(ImportAttributes(Object(val)))
             }
         };
 
@@ -239,7 +252,7 @@ macro_rules! loader_impls {
                     &mut self,
                     _ctx: &Ctx<'js>,
                     name: &str,
-                    _attributes: $crate::loader::ImportAttributes<'js>,
+                    _attributes: Option<$crate::loader::ImportAttributes<'js>>,
                 ) -> Result<Module<'js, Declared>> {
                     let mut messages = alloc::vec::Vec::<alloc::string::String>::new();
                     let ($($t,)*) = self;
@@ -266,6 +279,8 @@ loader_impls!(A B C D E F G H);
 
 #[cfg(test)]
 mod test {
+    use std::sync::{Arc, Mutex};
+
     use crate::{CatchResultExt, Context, Ctx, Error, Module, Result, Runtime};
 
     use super::{Loader, Resolver};
@@ -293,7 +308,7 @@ mod test {
             &mut self,
             ctx: &Ctx<'js>,
             name: &str,
-            _attributes: super::ImportAttributes<'js>,
+            _attributes: Option<super::ImportAttributes<'js>>,
         ) -> Result<Module<'js>> {
             if name == "test" {
                 Module::declare(
@@ -350,5 +365,194 @@ mod test {
             .catch(&ctx)
             .expect("Unable to resolve");
         })
+    }
+
+    struct AttributeCapturingLoader {
+        captured_type: Arc<Mutex<Option<String>>>,
+    }
+
+    impl Loader for AttributeCapturingLoader {
+        fn load<'js>(
+            &mut self,
+            ctx: &Ctx<'js>,
+            name: &str,
+            attributes: Option<super::ImportAttributes<'js>>,
+        ) -> Result<Module<'js>> {
+            if let Some(attrs) = &attributes {
+                if let Ok(type_val) = attrs.get("type") {
+                    *self.captured_type.lock().unwrap() = type_val;
+                }
+            }
+
+            if name == "data" {
+                Module::declare(ctx.clone(), name, "export default { value: 42 };")
+            } else {
+                Err(Error::new_loading_message(name, "module not found"))
+            }
+        }
+    }
+
+    struct IdentityResolver;
+
+    impl Resolver for IdentityResolver {
+        fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, _base: &str, name: &str) -> Result<String> {
+            Ok(name.into())
+        }
+    }
+
+    #[test]
+    fn import_attributes_passed_to_loader() {
+        let captured_type = Arc::new(Mutex::new(None));
+        let loader = AttributeCapturingLoader {
+            captured_type: captured_type.clone(),
+        };
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(IdentityResolver, loader);
+
+        ctx.with(|ctx| {
+            Module::evaluate(
+                ctx,
+                "test",
+                r#"
+                    import data from "data" with { type: "json" };
+                    export default data;
+                "#,
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
+        });
+
+        assert_eq!(*captured_type.lock().unwrap(), Some("json".to_string()));
+    }
+
+    #[test]
+    fn import_attributes_none_when_not_provided() {
+        let captured_type = Arc::new(Mutex::new(Some("initial".to_string())));
+        let loader = AttributeCapturingLoader {
+            captured_type: captured_type.clone(),
+        };
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(IdentityResolver, loader);
+
+        ctx.with(|ctx| {
+            Module::evaluate(
+                ctx,
+                "test",
+                r#"
+                    import data from "data";
+                    export default data;
+                "#,
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
+        });
+
+        assert_eq!(*captured_type.lock().unwrap(), Some("initial".to_string()));
+    }
+
+    struct TypeAwareLoader;
+
+    impl Loader for TypeAwareLoader {
+        fn load<'js>(
+            &mut self,
+            ctx: &Ctx<'js>,
+            name: &str,
+            attributes: Option<super::ImportAttributes<'js>>,
+        ) -> Result<Module<'js>> {
+            let module_type = if let Some(attrs) = &attributes {
+                attrs.get_type()?
+            } else {
+                None
+            };
+
+            match (name, module_type.as_deref()) {
+                ("config", Some("json")) => {
+                    Module::declare(ctx.clone(), name, r#"export default {"format": "json"};"#)
+                }
+                ("config", Some("text")) => {
+                    Module::declare(ctx.clone(), name, r#"export default "plain text";"#)
+                }
+                ("config", None) => Err(Error::new_loading_message(
+                    name,
+                    "config requires a type attribute",
+                )),
+                _ => Err(Error::new_loading_message(name, "unknown module")),
+            }
+        }
+    }
+
+    #[test]
+    fn import_attributes_json_type() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(IdentityResolver, TypeAwareLoader);
+
+        ctx.with(|ctx| {
+            Module::evaluate(
+                ctx,
+                "test_json",
+                r#"
+                    import config from "config" with { type: "json" };
+                    if (config.format !== "json") {
+                        throw new Error("Expected format to be json");
+                    }
+                "#,
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
+        });
+    }
+
+    #[test]
+    fn import_attributes_text_type() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(IdentityResolver, TypeAwareLoader);
+
+        ctx.with(|ctx| {
+            Module::evaluate(
+                ctx,
+                "test_text",
+                r#"
+                    import config from "config" with { type: "text" };
+                    if (config !== "plain text") {
+                        throw new Error("Expected plain text");
+                    }
+                "#,
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
+        });
+    }
+
+    #[test]
+    #[should_panic(expected = "Error loading module")]
+    fn import_attributes_missing_required() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(IdentityResolver, TypeAwareLoader);
+
+        ctx.with(|ctx| {
+            Module::evaluate(
+                ctx.clone(),
+                "test_missing",
+                r#"
+                    import config from "config";
+                "#,
+            )
+            .catch(&ctx)
+            .unwrap()
+            .finish::<()>()
+            .catch(&ctx)
+            .expect("missing type attribute");
+        });
     }
 }

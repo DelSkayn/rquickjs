@@ -37,7 +37,7 @@ impl Loader for BuiltinLoader {
         &mut self,
         ctx: &Ctx<'js>,
         path: &str,
-        _attributes: crate::loader::ImportAttributes<'js>,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
     ) -> Result<Module<'js, Declared>> {
         match self.modules.remove(path) {
             Some(source) => Module::declare(ctx.clone(), path, source),

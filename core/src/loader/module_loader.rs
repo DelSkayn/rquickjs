@@ -42,7 +42,7 @@ impl Loader for ModuleLoader {
         &mut self,
         ctx: &Ctx<'js>,
         path: &str,
-        _attributes: crate::loader::ImportAttributes<'js>,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
     ) -> Result<Module<'js>> {
         let load = self
             .modules

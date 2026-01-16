@@ -72,7 +72,7 @@ where
         &mut self,
         ctx: &Ctx<'js>,
         name: &str,
-        _attributes: crate::loader::ImportAttributes<'js>,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
     ) -> Result<Module<'js>> {
         if let Some((_, x)) = self.iter().find(|(module_name, _)| *module_name == name) {
             let module = unsafe { Module::load(ctx.clone(), x.get_bytecode())? };
@@ -91,7 +91,7 @@ where
         &mut self,
         ctx: &Ctx<'js>,
         name: &str,
-        _attributes: crate::loader::ImportAttributes<'js>,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
     ) -> Result<Module<'js>> {
         if let Some(x) = self.get(name) {
             let module = unsafe { Module::load(ctx.clone(), x.get_bytecode())? };

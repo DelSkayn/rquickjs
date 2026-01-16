@@ -52,7 +52,7 @@ impl Loader for NativeLoader {
         &mut self,
         ctx: &Ctx<'js>,
         path: &str,
-        _attributes: crate::loader::ImportAttributes<'js>,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
     ) -> Result<Module<'js>> {
         use dlopen2::raw::Library;
 

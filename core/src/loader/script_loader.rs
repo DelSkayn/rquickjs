@@ -43,7 +43,7 @@ impl Loader for ScriptLoader {
         &mut self,
         ctx: &Ctx<'js>,
         path: &str,
-        _attributes: crate::loader::ImportAttributes<'js>,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
     ) -> Result<Module<'js>> {
         if !check_extensions(path, &self.extensions) {
             return Err(Error::new_loading(path));

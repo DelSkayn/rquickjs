@@ -192,7 +192,7 @@ where
         &mut self,
         ctx: &Ctx<'js>,
         path: &str,
-        attributes: crate::loader::ImportAttributes<'js>,
+        attributes: Option<crate::loader::ImportAttributes<'js>>,
     ) -> Result<Module<'js>> {
         let module = self.inner.load(ctx, path, attributes)?;
         let data = module.write(WriteOptions::default())?;
