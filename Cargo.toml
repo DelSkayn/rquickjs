@@ -20,6 +20,7 @@ members = [
   "examples/native-module",
   "examples/module-loader",
   "examples/rquickjs-cli",
+  "examples/class-methods",
 ]
 
 [workspace.dependencies]

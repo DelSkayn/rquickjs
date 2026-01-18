@@ -1,0 +1,15 @@
+[package]
+name = "class-methods"
+version = "0.11.0"
+authors = ["Emile Fugulin <code@efugulin.com>"]
+edition = "2018"
+publish = false
+
+[dependencies.rquickjs]
+path = "../.."
+default-features = false
+features = []
+
+[features]
+default = ["macro"]
+macro = ["rquickjs/macro"]
