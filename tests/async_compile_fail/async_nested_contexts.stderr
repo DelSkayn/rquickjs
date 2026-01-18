@@ -13,6 +13,10 @@ error: lifetime may not live long enough
 13 | |                     ctx_1.globals().set("t", ctx_2.globals());
 14 | |                 })
    | |_________________^ returning this value requires that `'1` must outlive `'2`
+   |
+   = note: requirement occurs because of the type `Ctx<'_>`, which makes the generic argument `'_` invariant
+   = note: the struct `Ctx<'js>` is invariant over the parameter `'js`
+   = help: see <https://doc.rust-lang.org/nomicon/subtyping.html> for more information about variance
 
 error: lifetime may not live long enough
   --> tests/async_compile_fail/async_nested_contexts.rs:10:43
