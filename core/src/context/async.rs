@@ -47,7 +47,7 @@ use future::WithFuture;
 ///
 ///     let delay = Function::new(ctx.clone(),Async(delay))
 ///         .unwrap()
-///         .with_name("print")
+///         .with_name("delay")
 ///         .unwrap();
 ///
 ///     let global = ctx.globals();
@@ -181,6 +181,39 @@ impl AsyncContext {
     }
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use rquickjs::{prelude::*, Function, async_with, AsyncRuntime, AsyncContext, Result};
+    /// # use std::time::Duration;
+    /// # async fn run(){
+    /// # let rt = AsyncRuntime::new().unwrap();
+    ///
+    /// // In order for futures to convert to JavaScript promises they need to return `Result`.
+    /// async fn delay<'js>(amount: f64, cb: Function<'js>) -> Result<()> {
+    ///     tokio::time::sleep(Duration::from_secs_f64(amount)).await;
+    ///     cb.call::<(), ()>(());
+    ///     Ok(())
+    /// }
+    ///
+    /// let ctx = AsyncContext::full(&rt).await.unwrap();
+    /// ctx.async_with(async |ctx|{
+    ///
+    ///     let delay = Function::new(ctx.clone(),Async(delay))
+    ///         .unwrap()
+    ///         .with_name("delay")
+    ///         .unwrap();
+    ///
+    ///     let global = ctx.globals();
+    ///     global.set("delay",delay).unwrap();
+    ///     ctx.eval::<(),_>(r#"
+    ///         delay(1,() => {
+    ///             // do something
+    ///         })
+    ///     "#).unwrap();
+    /// }).await;
+    /// ```
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
     where
         F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend,

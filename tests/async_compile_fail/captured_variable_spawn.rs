@@ -1,4 +1,4 @@
-use rquickjs::{async_with, prelude::*, AsyncContext, AsyncRuntime};
+use rquickjs::{prelude::*, AsyncContext, AsyncRuntime};
 
 pub async fn test() {
     let rt = AsyncRuntime::new().unwrap();

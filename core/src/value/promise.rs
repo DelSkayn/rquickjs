@@ -364,8 +364,7 @@ mod test {
     use super::Promise;
     #[cfg(feature = "futures")]
     use crate::{
-        async_with, function::Async, promise::Promised, AsyncContext, AsyncRuntime, CaughtError,
-        Result,
+        function::Async, promise::Promised, AsyncContext, AsyncRuntime, CaughtError, Result,
     };
     use crate::{
         function::Func, prelude::This, promise::PromiseState, CatchResultExt, Context, Function,

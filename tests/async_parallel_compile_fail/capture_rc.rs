@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use rquickjs::{async_with, AsyncContext, AsyncRuntime};
+use rquickjs::{AsyncContext, AsyncRuntime};
 
 pub async fn test() {
     let rt = AsyncRuntime::new().unwrap();
