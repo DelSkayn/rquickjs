@@ -5,9 +5,9 @@ pub async fn test() {
     let ctx_1 = AsyncContext::full(&rt).await.unwrap();
     let ctx_2 = AsyncContext::full(&rt).await.unwrap();
     ctx_1
-        .async_with(|ctx_1| {
+        .async_with(async |ctx_1| {
             ctx_2
-                .async_with(|ctx_2| {
+                .async_with(async |ctx_2| {
                     // It is disallowed to use multiple ctx object together from different with closures.
                     // Lifetime on ctx should be unique.
                     ctx_1.globals().set("t", ctx_2.globals());

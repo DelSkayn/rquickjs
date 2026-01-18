@@ -213,6 +213,7 @@ impl AsyncContext {
     ///         })
     ///     "#).unwrap();
     /// }).await;
+    /// # }
     /// ```
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
     where

@@ -38,10 +38,7 @@ enum WithFutureState<'a, F, R> {
         closure: F,
     },
     FutureCreated {
-        #[cfg(not(feature = "parallel"))]
         future: Pin<Box<dyn Future<Output = R> + 'a>>,
-        #[cfg(feature = "parallel")]
-        future: Pin<Box<dyn Future<Output = R> + 'a + Send>>,
     },
     Done,
 }

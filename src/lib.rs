@@ -65,7 +65,7 @@
 //! ## Extra types
 //!
 //! This crate has support for conversion of many Rust types like [`Option`],
-//! [`Result`](std::result::Result), [`Vec`] and other collections. In addition an extra types
+//! [`Result`](::core::result::Result), [`Vec`] and other collections. In addition an extra types
 //! support can be enabled via features:
 //!
 //! - `either` adds [`FromJs`]/[`IntoJs`] implementations for [`Either`](`either::Either`)
