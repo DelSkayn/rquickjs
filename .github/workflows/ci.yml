@@ -134,6 +134,23 @@ jobs:
       - name: Run tests with memory sanitizer
         run: CC=clang RUSTFLAGS=-Zsanitizer=memory cargo test --tests --workspace -Zbuild-std --target x86_64-unknown-linux-gnu --locked --no-default-features --features full-async,bindgen
 
+  examples:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+      - name: Run examples
+        run: |
+          for package in $(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.manifest_path | contains("/examples/")) | .name'); do
+            echo "Running example: $package"
+            cargo run -p "$package"
+          done
+
   test:
     needs:
       - format
