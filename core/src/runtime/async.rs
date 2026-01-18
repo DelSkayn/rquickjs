@@ -413,7 +413,7 @@ mod test {
     use self::context::EvalOptions;
 
     async_test_case!(basic => (_rt,ctx){
-        async_with!(&ctx => |ctx|{
+        ctx.async_with(async |ctx|{
             let res: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(res,2i32);
         }).await;
@@ -425,7 +425,7 @@ mod test {
         let a_ref = &mut a;
 
 
-        async_with!(&ctx => |ctx|{
+        ctx.async_with(async |ctx|{
             tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
             ctx.globals().set("foo","bar").unwrap();
             *a_ref += 1;
@@ -447,7 +447,7 @@ mod test {
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
 
-        async_with!(&ctx => |ctx|{
+        ctx.async_with(async |ctx|{
             ctx.spawn(async move {
                 tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
@@ -466,7 +466,7 @@ mod test {
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
 
-        async_with!(&ctx => |ctx|{
+        ctx.async_with(async |ctx|{
             ctx.spawn(async move {
                 tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
@@ -484,7 +484,7 @@ mod test {
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
 
-        async_with!(&ctx => |ctx|{
+        ctx.async_with(async |ctx|{
             ctx.spawn(async move {
                 tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
@@ -499,7 +499,7 @@ mod test {
     async_test_case!(recursive_spawn => (rt,ctx){
         use tokio::sync::oneshot;
 
-        async_with!(&ctx => |ctx|{
+        ctx.async_with(async |ctx|{
             let ctx_clone = ctx.clone();
             let (tx,rx) = oneshot::channel::<()>();
             let (tx2,rx2) = oneshot::channel::<()>();
@@ -568,7 +568,7 @@ mod test {
         }
 
 
-        async_with!(ctx => |ctx|{
+        ctx.async_with(async |ctx|{
 
             let res: Result<Promise> = (|| {
                 let globals = ctx.globals();

@@ -7,7 +7,7 @@ pub async fn test() {
     let fut = {
         let mut var = 1u32;
         let var_ref = &mut var;
-        async_with!(ctx => |_ctx|{
+        ctx.async_with(|_ctx| {
             *var_ref += 1;
         })
     };

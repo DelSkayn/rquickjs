@@ -6,11 +6,11 @@ pub async fn test() {
 
     let mut var = 1u32;
     let var_ref = &mut var;
-    async_with!(ctx => |ctx|{
-        let func = Func::from(MutFn::from(move ||{
+    ctx.async_with(async |ctx| {
+        let func = Func::from(MutFn::from(move || {
             *var_ref += 1;
         }));
-        ctx.globals().set("t",func).unwrap();
+        ctx.globals().set("t", func).unwrap();
     })
     .await
 }

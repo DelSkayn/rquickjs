@@ -384,8 +384,10 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        async_with!(ctx => |ctx| {
-            ctx.globals().set("setTimeout",Func::from(Async(set_timeout))).unwrap();
+        ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set("setTimeout", Func::from(Async(set_timeout)))
+                .unwrap();
 
             let func = ctx
                 .eval::<Function, _>(
@@ -438,22 +440,32 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        async_with!(ctx => |ctx| {
+        ctx.async_with(async |ctx| {
             let promised = Promised::from(async {
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 42
             });
 
-            let function = ctx.eval::<Function,_>(r"
+            let function = ctx
+                .eval::<Function, _>(
+                    r"
                 (async function(v){
                     let val = await v;
                     if(val !== 42){
                         throw new Error('not correct value')
                     }
                 })
-            ").catch(&ctx).unwrap();
+            ",
+                )
+                .catch(&ctx)
+                .unwrap();
 
-            function.call::<_,Promise>((promised,)).unwrap().into_future::<()>().await.unwrap();
+            function
+                .call::<_, Promise>((promised,))
+                .unwrap()
+                .into_future::<()>()
+                .await
+                .unwrap();
 
             let ctx_clone = ctx.clone();
             let promised = Promised::from(async move {
@@ -461,7 +473,9 @@ mod test {
                 Result::<()>::Err(Exception::throw_message(&ctx_clone, "some_message"))
             });
 
-            let function = ctx.eval::<Function,_>(r"
+            let function = ctx
+                .eval::<Function, _>(
+                    r"
                 (async function(v){
                     try{
                         await v;
@@ -473,12 +487,17 @@ mod test {
                     }
                     throw new Error('no error thrown')
                 })
-            ")
+            ",
+                )
                 .catch(&ctx)
                 .unwrap();
 
-
-            function.call::<_,Promise>((promised,)).unwrap().into_future::<()>().await.unwrap()
+            function
+                .call::<_, Promise>((promised,))
+                .unwrap()
+                .into_future::<()>()
+                .await
+                .unwrap()
         })
         .await
     }

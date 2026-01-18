@@ -9,9 +9,9 @@ pub async fn test() {
     let fut = {
         let mut var = Rc::new(1);
         let var_c = var.clone();
-        async_with!(ctx => |_ctx|{
+        ctx.async_with(|_ctx| {
             // you should not be able to move non send types into the closure.
-            assert_eq!(*var_c,1);
+            assert_eq!(*var_c, 1);
         })
     };
     fut.await;

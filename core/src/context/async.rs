@@ -4,14 +4,18 @@ use super::{
     ContextBuilder, Intrinsic,
 };
 use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
-use alloc::boxed::Box;
-use core::{future::Future, mem, pin::Pin, ptr::NonNull};
+use core::{mem, ptr::NonNull};
 
 mod future;
 
 use future::WithFuture;
 
 /// A macro for safely using an asynchronous context while capturing the environment.
+///  
+///  This macro was used to work around the lack of async closures, with the stabilization of async
+///  closures this macro is now deprecated.
+///  
+///  Use the [`AsyncContext::async_with`] function instead.
 ///
 /// # Usage
 /// ```
@@ -64,27 +68,11 @@ use future::WithFuture;
 /// ```
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[macro_export]
+#[deprecated]
 macro_rules! async_with{
     ($context:expr => |$ctx:ident| { $($t:tt)* }) => {
-        $crate::AsyncContext::async_with(&$context,|$ctx| {
-            let fut = $crate::alloc::boxed::Box::pin(async move {
-                $($t)*
-            });
-            /// SAFETY: While rquickjs objects have a 'js lifetime attached to them,
-            /// they actually life much longer an the lifetime is just for checking
-            /// if they belong to the correct context.
-            /// By requiring that everything is moved into the closure outside
-            /// environments still can't life shorter than the closure.
-            /// This allows use to recast the future to a higher lifetime without problems.
-            /// Second, the future will always acquire a lock before running. The closure
-            /// enforces that everything moved into the future is send, but non of the
-            /// rquickjs objects are send so the future will never be send.
-            /// Since we acquire a lock before running the future and nothing can escape the closure
-            /// and future it is safe to recast the future as send.
-            unsafe fn uplift<'a,'b,R>(f: core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'a>>) -> core::pin::Pin<$crate::alloc::boxed::Box<dyn core::future::Future<Output = R> + 'b + Send>>{
-                core::mem::transmute(f)
-            }
-            unsafe{ uplift(fut) }
+        $crate::AsyncContext::async_with(&$context,async |$ctx| {
+            $($t)*
         })
     };
 }
@@ -193,17 +181,9 @@ impl AsyncContext {
     }
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
-    ///
-    /// This function is rather limited in what environment it can capture. If you need to borrow
-    /// the environment in the closure use the [`async_with!`] macro.
-    ///
-    /// Unfortunately it is currently impossible to have closures return a generic future which has a higher
-    /// rank trait bound lifetime. So, to allow closures to work, the closure must return a boxed
-    /// future.
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
     where
-        F: for<'js> FnOnce(Ctx<'js>) -> Pin<Box<dyn Future<Output = R> + 'js + Send>>
-            + ParallelSend,
+        F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend,
         R: ParallelSend,
     {
         WithFuture::new(self, f)
@@ -212,7 +192,7 @@ impl AsyncContext {
     /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
     /// This closure can't return a future, if you need to await JavaScript promises prefer the
-    /// [`async_with!`] macro.
+    /// [`async_with`] function.
     pub async fn with<F, R>(&self, f: F) -> R
     where
         F: for<'js> FnOnce(Ctx<'js>) -> R + ParallelSend,
@@ -244,7 +224,7 @@ mod test {
     async fn base_asyc_context() {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
-        async_with!(&ctx => |ctx|{
+        ctx.async_with(async |ctx| {
             ctx.globals();
         })
         .await;
