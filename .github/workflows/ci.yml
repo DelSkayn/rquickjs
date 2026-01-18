@@ -145,11 +145,8 @@ jobs:
         with:
           toolchain: stable
       - name: Run examples
-        run: |
-          for package in $(cargo metadata --format-version 1 --no-deps | jq -r '.packages[] | select(.manifest_path | contains("/examples/")) | .name'); do
-            echo "Running example: $package"
-            cargo run -p "$package"
-          done
+        working-directory: examples
+        run: make run
 
   test:
     needs:

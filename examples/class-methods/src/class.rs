@@ -22,9 +22,9 @@ impl MyClass {
     }
 
     #[qjs(rename = PredefinedAtom::ToJSON)]
-    fn to_json(self, ctx: Ctx<'_>) -> Result<Value<'_>> {
+    fn to_json<'js>(&self, ctx: Ctx<'js>) -> Result<Value<'js>> {
         let obj = Object::new(ctx)?;
-        obj.set("data", self.data)?;
+        obj.set("data", &self.data)?;
         Ok(obj.into_value())
     }
 
@@ -35,7 +35,7 @@ impl MyClass {
     }
 
     #[qjs(rename = PredefinedAtom::SymbolToPrimitive)]
-    fn to_primitive(self, ctx: Ctx<'_>, hint: String) -> Result<Value<'_>> {
+    fn to_primitive<'js>(&self, ctx: Ctx<'js>, hint: String) -> Result<Value<'js>> {
         if hint == "string" {
             return Ok(rquickjs::String::from_str(ctx, &self.data)?.into_value());
         }
