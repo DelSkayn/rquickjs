@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Breaking Changes
+
+- Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)
+
 ## [0.11.0] - 2025-12-16
 
 ### Added
@@ -27,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fix wasm32 build #[548](https://github.com/DelSkayn/rquickjs/pull/548)
 
-### Deprecated 
+### Deprecated
 
 - Deprecated `async_with!` macro #[602](https://github.com/DelSkayn/rquickjs/pull/602)
 

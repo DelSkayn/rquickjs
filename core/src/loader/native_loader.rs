@@ -48,7 +48,12 @@ impl Default for NativeLoader {
 }
 
 impl Loader for NativeLoader {
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        path: &str,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
+    ) -> Result<Module<'js>> {
         use dlopen2::raw::Library;
 
         if !check_extensions(path, &self.extensions) {

@@ -38,7 +38,12 @@ impl ModuleLoader {
 }
 
 impl Loader for ModuleLoader {
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, path: &str) -> Result<Module<'js>> {
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        path: &str,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
+    ) -> Result<Module<'js>> {
         let load = self
             .modules
             .remove(path)
