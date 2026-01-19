@@ -1580,30 +1580,6 @@ unsafe extern "C" {
         opaque: *mut ::core::ffi::c_void,
     );
 }
-pub type JSModuleLoaderFunc2 = ::core::option::Option<
-    unsafe extern "C" fn(
-        ctx: *mut JSContext,
-        module_name: *const ::core::ffi::c_char,
-        opaque: *mut ::core::ffi::c_void,
-        attributes: JSValue,
-    ) -> *mut JSModuleDef,
->;
-pub type JSModuleCheckSupportedImportAttributes = ::core::option::Option<
-    unsafe extern "C" fn(
-        ctx: *mut JSContext,
-        opaque: *mut ::core::ffi::c_void,
-        attributes: JSValue,
-    ) -> ::core::ffi::c_int,
->;
-unsafe extern "C" {
-    pub fn JS_SetModuleLoaderFunc2(
-        rt: *mut JSRuntime,
-        module_normalize: JSModuleNormalizeFunc,
-        module_loader: JSModuleLoaderFunc2,
-        module_check_attrs: JSModuleCheckSupportedImportAttributes,
-        opaque: *mut ::core::ffi::c_void,
-    );
-}
 unsafe extern "C" {
     pub fn JS_SetModuleLoaderFunc2(
         rt: *mut JSRuntime,
