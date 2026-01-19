@@ -9,7 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)
+- Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)\
+
+### Changed
+
+- Updated `AsyncContext::async_with` to use async closure syntax #[602](https://github.com/DelSkayn/rquickjs/pull/602)
+
+### Deprecated
+
+- Deprecated `async_with!` macro #[602](https://github.com/DelSkayn/rquickjs/pull/602)
 
 ## [0.11.0] - 2025-12-16
 
@@ -25,15 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Bump MSRV to 1.85 #[#531](https://github.com/DelSkayn/rquickjs/pull/531)
 - Update quickjs-ng to #[be664ca](https://github.com/quickjs-ng/quickjs/commit/be664ca1ccd86cbadf8df7348b8e15e77a32a1ba) #[#566](https://github.com/DelSkayn/rquickjs/pull/566)
-- Updated `AsyncContext::async_with` to use async closure syntax #[602](https://github.com/DelSkayn/rquickjs/pull/602)
 
 ### Fixed
 
 - Fix wasm32 build #[548](https://github.com/DelSkayn/rquickjs/pull/548)
-
-### Deprecated
-
-- Deprecated `async_with!` macro #[602](https://github.com/DelSkayn/rquickjs/pull/602)
 
 ## [0.10.0] - 2025-10-24
 
