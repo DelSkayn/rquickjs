@@ -1,17 +1,14 @@
 [package]
-name = "native-module"
+name = "class-methods"
 version = "0.11.0"
-authors = ["K. <kayo@illumium.org>"]
+authors = ["Emile Fugulin <code@efugulin.com>"]
 edition = "2018"
 publish = false
-
-[lib]
-crate-type = ["cdylib"]
 
 [dependencies.rquickjs]
 path = "../.."
 default-features = false
-features = ["futures", "rust-alloc", "std"]
+features = []
 
 [features]
 default = ["macro"]

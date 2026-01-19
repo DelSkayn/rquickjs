@@ -21,6 +21,7 @@ members = [
   "examples/module-loader",
   "examples/import-attributes",
   "examples/rquickjs-cli",
+  "examples/class-methods",
 ]
 
 [workspace.dependencies]
