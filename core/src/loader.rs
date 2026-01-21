@@ -61,7 +61,13 @@ pub trait Resolver {
     /// })
     /// # }
     /// ```
-    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String>;
+    fn resolve<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        base: &str,
+        name: &str,
+        attributes: ImportAttributes<'js>,
+    ) -> Result<String>;
 }
 
 /// Import attributes from statements like `import x from "y" with { type: "json" }`
@@ -128,11 +134,12 @@ impl LoaderHolder {
         unsafe {
             qjs::JS_SetModuleLoaderFunc2(
                 rt,
-                Some(Self::normalize_raw),
+                None, // Use JS_SetModuleNormalizeFunc2 instead
                 Some(Self::load_raw),
                 None, // No attribute validation
                 self.0 as _,
             );
+            qjs::JS_SetModuleNormalizeFunc2(rt, Some(Self::normalize_raw));
         }
     }
 
@@ -142,11 +149,22 @@ impl LoaderHolder {
         ctx: &Ctx<'js>,
         base: &CStr,
         name: &CStr,
+        attributes: qjs::JSValue,
     ) -> Result<*mut qjs::c_char> {
         let base = base.to_str()?;
         let name = name.to_str()?;
 
-        let name = opaque.resolver.resolve(ctx, base, name)?;
+        // Convert JSValue to Option<Object<'js>>
+        let attrs = {
+            let val = unsafe { Value::from_js_value_const(ctx.clone(), attributes) };
+            if val.is_undefined() || val.is_null() {
+                None
+            } else {
+                Some(Object(val))
+            }
+        };
+
+        let name = opaque.resolver.resolve(ctx, base, name, attrs)?;
 
         // We should transfer ownership of this string to QuickJS
         Ok(unsafe { qjs::js_strndup(ctx.as_ptr(), name.as_ptr() as _, name.len() as _) })
@@ -156,6 +174,7 @@ impl LoaderHolder {
         ctx: *mut qjs::JSContext,
         base: *const qjs::c_char,
         name: *const qjs::c_char,
+        attributes: qjs::JSValue,
         opaque: *mut qjs::c_void,
     ) -> *mut qjs::c_char {
         let ctx = Ctx::from_ptr(ctx);
@@ -163,7 +182,7 @@ impl LoaderHolder {
         let name = CStr::from_ptr(name);
         let loader = &mut *(opaque as *mut LoaderOpaque);
 
-        Self::normalize(loader, &ctx, base, name).unwrap_or_else(|error| {
+        Self::normalize(loader, &ctx, base, name, attributes).unwrap_or_else(|error| {
             error.throw(&ctx);
             ptr::null_mut()
         })
@@ -226,11 +245,11 @@ macro_rules! loader_impls {
             {
                 #[allow(non_snake_case)]
                 #[allow(unused_mut)]
-                fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+                fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str, _attributes: ImportAttributes<'js>) -> Result<String> {
                     let mut messages = alloc::vec::Vec::<alloc::string::String>::new();
                     let ($($t,)*) = self;
                     $(
-                        match $t.resolve(_ctx, base, name) {
+                        match $t.resolve(_ctx, base, name, _attributes.clone()) {
                             // Still could try the next resolver
                             Err($crate::Error::Resolving { message, .. }) => {
                                 message.map(|message| messages.push(message));
@@ -288,12 +307,12 @@ mod test {
 
     use crate::{CatchResultExt, Context, Ctx, Error, Module, Result, Runtime};
 
-    use super::{Loader, Resolver};
+    use super::{ImportAttributes, Loader, Resolver};
 
     struct TestResolver;
 
     impl Resolver for TestResolver {
-        fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+        fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str, _attributes: ImportAttributes<'js>) -> Result<String> {
             if base == "loader" && name == "test" {
                 Ok(name.into())
             } else {

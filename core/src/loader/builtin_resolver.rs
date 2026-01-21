@@ -1,4 +1,4 @@
-use crate::{loader::Resolver, Ctx, Error, Result};
+use crate::{loader::{ImportAttributes, Resolver}, Ctx, Error, Result};
 use alloc::string::{String, ToString as _};
 #[cfg(not(feature = "std"))]
 use hashbrown::HashSet;
@@ -30,7 +30,7 @@ impl BuiltinResolver {
 }
 
 impl Resolver for BuiltinResolver {
-    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str, _attributes: ImportAttributes<'js>) -> Result<String> {
         let full = if !name.starts_with('.') {
             name.to_string()
         } else {

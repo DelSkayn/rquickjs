@@ -1,5 +1,5 @@
 use crate::{
-    loader::{util::resolve_simple, Loader, Resolver},
+    loader::{util::resolve_simple, ImportAttributes, Loader, Resolver},
     Ctx, Lock, Module, Mut, Ref, Result, WriteOptions,
 };
 use alloc::{string::String, vec::Vec};
@@ -176,8 +176,8 @@ impl<R> Resolver for Compile<R>
 where
     R: Resolver,
 {
-    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
-        self.inner.resolve(ctx, base, name).inspect(|path| {
+    fn resolve<'js>(&mut self, ctx: &Ctx<'js>, base: &str, name: &str, attributes: ImportAttributes<'js>) -> Result<String> {
+        self.inner.resolve(ctx, base, name, attributes).inspect(|path| {
             let name = resolve_simple(base, name);
             self.data.lock().modules.insert(path.clone(), name);
         })

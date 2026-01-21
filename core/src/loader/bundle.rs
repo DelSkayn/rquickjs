@@ -1,6 +1,6 @@
 //! Utilities for embedding JS modules.
 
-use super::{util::resolve_simple, Loader, Resolver};
+use super::{util::resolve_simple, ImportAttributes, Loader, Resolver};
 use crate::{Ctx, Error, Module, Result};
 use alloc::string::String;
 use core::ops::Deref;
@@ -42,7 +42,7 @@ impl<T> Deref for Bundle<T> {
 }
 
 impl<D> Resolver for Bundle<ScaBundleData<D>> {
-    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str, _attributes: ImportAttributes<'js>) -> Result<String> {
         let path = resolve_simple(base, name);
         if self.iter().any(|(name, _)| *name == path) {
             Ok(path)
@@ -54,7 +54,7 @@ impl<D> Resolver for Bundle<ScaBundleData<D>> {
 
 #[cfg(feature = "phf")]
 impl<D> Resolver for Bundle<PhfBundleData<D>> {
-    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str, _attributes: ImportAttributes<'js>) -> Result<String> {
         let path = resolve_simple(base, name);
         if self.contains_key(path.as_str()) {
             Ok(path)

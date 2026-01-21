@@ -1,4 +1,4 @@
-use crate::{loader::Resolver, Ctx, Error, Result};
+use crate::{loader::{ImportAttributes, Resolver}, Ctx, Error, Result};
 use alloc::{
     string::{String, ToString as _},
     vec,
@@ -124,7 +124,7 @@ impl Default for FileResolver {
 }
 
 impl Resolver for FileResolver {
-    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, base: &str, name: &str, _attributes: ImportAttributes<'js>) -> Result<String> {
         let path = if !name.starts_with('.') {
             self.paths.iter().find_map(|path| {
                 let path = path.join_normalized(name);
