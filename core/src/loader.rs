@@ -4,7 +4,7 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use core::{ffi::CStr, ptr};
 
-use crate::{module::Declared, qjs, Ctx, Module, Object, Result, Value};
+use crate::{module::Declared, object::ObjectKeysIter, qjs, Ctx, Module, Object, Result, Value};
 
 mod builtin_loader;
 mod builtin_resolver;
@@ -77,6 +77,11 @@ impl<'js> ImportAttributes<'js> {
     /// Get the `type` attribute (shorthand for `get("type")`)
     pub fn get_type(&self) -> Result<Option<String>> {
         self.get("type")
+    }
+
+    /// Get an iterator over the attribute keys
+    pub fn keys(&self) -> ObjectKeysIter<'js, String> {
+        self.0.keys()
     }
 }
 
@@ -554,5 +559,60 @@ mod test {
             .catch(&ctx)
             .expect("missing type attribute");
         });
+    }
+
+    struct KeysCapturingLoader {
+        captured_keys: Arc<Mutex<Vec<String>>>,
+    }
+
+    impl Loader for KeysCapturingLoader {
+        fn load<'js>(
+            &mut self,
+            ctx: &Ctx<'js>,
+            name: &str,
+            attributes: Option<super::ImportAttributes<'js>>,
+        ) -> Result<Module<'js>> {
+            if let Some(attrs) = &attributes {
+                let keys: Vec<String> = attrs.keys().collect::<Result<Vec<_>>>().unwrap();
+                *self.captured_keys.lock().unwrap() = keys;
+            }
+
+            if name == "data" {
+                Module::declare(ctx.clone(), name, "export default { value: 42 };")
+            } else {
+                Err(Error::new_loading_message(name, "module not found"))
+            }
+        }
+    }
+
+    #[test]
+    fn import_attributes_keys() {
+        let captured_keys = Arc::new(Mutex::new(Vec::new()));
+        let loader = KeysCapturingLoader {
+            captured_keys: captured_keys.clone(),
+        };
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        rt.set_loader(IdentityResolver, loader);
+
+        ctx.with(|ctx| {
+            Module::evaluate(
+                ctx,
+                "test",
+                r#"
+                    import data from "data" with { type: "json", encoding: "utf-8" };
+                    export default data;
+                "#,
+            )
+            .unwrap()
+            .finish::<()>()
+            .unwrap();
+        });
+
+        let keys = captured_keys.lock().unwrap();
+        assert_eq!(keys.len(), 2);
+        assert!(keys.contains(&"type".to_string()));
+        assert!(keys.contains(&"encoding".to_string()));
     }
 }
