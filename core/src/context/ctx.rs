@@ -147,6 +147,10 @@ impl<'js> Ctx<'js> {
         let src = source.into();
         let len = src.len();
         let src = CString::new(src)?;
+
+        #[cfg(feature = "parallel")]
+        qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx.as_ptr()));
+
         let val = qjs::JS_Eval(
             self.ctx.as_ptr(),
             src.as_ptr(),

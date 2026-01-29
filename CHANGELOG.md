@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Deprecated `async_with!` macro #[602](https://github.com/DelSkayn/rquickjs/pull/602)
 
+### Fixed
+
+- Fixed cross-thread stack overflow false positives in parallel mode by updating stack baseline before QuickJS C entry points
+
 ## [0.11.0] - 2025-12-16
 
 ### Added

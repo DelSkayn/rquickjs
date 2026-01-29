@@ -130,6 +130,9 @@ impl<'js> Args<'js> {
         R: FromJs<'js>,
     {
         let val = unsafe {
+            #[cfg(feature = "parallel")]
+            qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx.as_ptr()));
+
             let val = qjs::JS_Call(
                 self.ctx.as_ptr(),
                 func.as_js_value(),
@@ -168,6 +171,9 @@ impl<'js> Args<'js> {
     {
         let value = if unsafe { qjs::JS_VALUE_GET_TAG(self.this) != qjs::JS_TAG_UNDEFINED } {
             unsafe {
+                #[cfg(feature = "parallel")]
+                qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx.as_ptr()));
+
                 qjs::JS_CallConstructor2(
                     self.ctx.as_ptr(),
                     constructor.as_js_value(),
@@ -178,6 +184,9 @@ impl<'js> Args<'js> {
             }
         } else {
             unsafe {
+                #[cfg(feature = "parallel")]
+                qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx.as_ptr()));
+
                 qjs::JS_CallConstructor(
                     self.ctx.as_ptr(),
                     constructor.as_js_value(),
