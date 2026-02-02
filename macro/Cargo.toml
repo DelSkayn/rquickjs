@@ -21,7 +21,7 @@ quote = "1"
 ident_case = "1"
 fnv = "1"
 indexmap = "2"
-convert_case = "0.10"
+convert_case = "0.11"
 syn = { version = "2", features = ["full", "fold", "extra-traits", "visit"] }
 phf_shared = { version = "0.13", optional = true }
 phf_generator = { version = "0.13", optional = true }
