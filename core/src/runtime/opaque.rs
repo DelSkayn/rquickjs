@@ -26,10 +26,7 @@ use hashbrown::{hash_map::Entry, HashMap};
 use super::task_queue::{TaskPoll, TaskQueue};
 
 #[cfg(feature = "futures")]
-use core::{
-    future::Future,
-    task::{Context, Waker},
-};
+use core::{future::Future, task::Context};
 
 /// Opaque book keeping data for Rust.
 pub(crate) struct Opaque<'js> {
@@ -160,11 +157,6 @@ impl<'js> Opaque<'js> {
         F: Future<Output = ()>,
     {
         (*self.queue().get()).push(f)
-    }
-
-    #[cfg(feature = "futures")]
-    pub fn listen(&self, wake: Waker) {
-        unsafe { (*self.queue().get()).listen(wake) };
     }
 
     #[cfg(feature = "futures")]
