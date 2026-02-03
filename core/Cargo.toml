@@ -21,6 +21,7 @@ indexmap = { version = "2", optional = true }
 either = { version = "1", optional = true }
 async-lock = { version = "3", optional = true, default-features = false }
 parking_lot = { version = "0.12", optional = true }
+crossbeam-queue = { version = "0.3", optional = true }
 chrono = { version = "0.4", optional = true }
 dlopen2 = { version = "0.8", optional = true }
 relative-path = { version = "2.0", optional = true, default-features = false, features = [
@@ -74,7 +75,7 @@ rust-alloc = []
 
 
 # Enable interop between Rust futures and JS Promises
-futures = ["dep:async-lock"]
+futures = ["dep:async-lock", "dep:crossbeam-queue"]
 
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []

@@ -35,7 +35,6 @@ impl Future for DriveFuture {
         };
 
         lock.runtime.update_stack_top();
-        lock.runtime.get_opaque().listen(cx.waker().clone());
 
         loop {
             if let Ok(true) = lock.runtime.execute_pending_job() {

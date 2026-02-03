@@ -1,20 +1,19 @@
-//! Task queue for spawned futures - optimized for both parallel and non-parallel modes
+//! O(1) task queue with per-task wakers using stable arena pointers
 
-#[cfg(not(feature = "parallel"))]
-use alloc::{boxed::Box, collections::VecDeque};
-#[cfg(feature = "parallel")]
-use alloc::{boxed::Box, collections::VecDeque, vec::Vec};
+use alloc::{boxed::Box, vec::Vec};
 use core::{
     future::Future,
     pin::Pin,
-    task::{Context, Poll, Waker},
+    task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
+#[cfg(not(feature = "parallel"))]
+use core::cell::{Cell, UnsafeCell};
+
+#[cfg(feature = "parallel")]
+use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 #[cfg(feature = "parallel")]
 use parking_lot::Mutex;
-
-#[cfg(not(feature = "parallel"))]
-use core::cell::UnsafeCell;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskPoll {
@@ -25,172 +24,306 @@ pub enum TaskPoll {
 }
 
 type BoxedTask = Pin<Box<dyn Future<Output = ()>>>;
+const CHUNK: usize = 1024;
 
+#[cfg(not(feature = "parallel"))]
+type QueuedFlag = Cell<bool>;
 #[cfg(feature = "parallel")]
-pub struct TaskQueue {
-    inner: Mutex<TaskQueueInner>,
+type QueuedFlag = AtomicBool;
+
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn new_flag(val: bool) -> QueuedFlag {
+    Cell::new(val)
 }
 
 #[cfg(feature = "parallel")]
-struct TaskQueueInner {
-    tasks: VecDeque<BoxedTask>,
-    waker: Option<Waker>,
+#[inline]
+fn new_flag(val: bool) -> QueuedFlag {
+    AtomicBool::new(val)
 }
 
 #[cfg(not(feature = "parallel"))]
-pub struct TaskQueue {
-    inner: UnsafeCell<TaskQueueInner>,
-}
-
-#[cfg(not(feature = "parallel"))]
-struct TaskQueueInner {
-    tasks: VecDeque<BoxedTask>,
-    waker: Option<Waker>,
+#[inline]
+fn try_set_true(flag: &QueuedFlag) -> bool {
+    if !flag.get() {
+        flag.set(true);
+        true
+    } else {
+        false
+    }
 }
 
 #[cfg(feature = "parallel")]
+#[inline]
+fn try_set_true(flag: &QueuedFlag) -> bool {
+    flag.compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+        .is_ok()
+}
+
+#[cfg(feature = "parallel")]
+#[inline]
+fn set_flag(flag: &QueuedFlag, val: bool) {
+    flag.store(val, Ordering::Release)
+}
+
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn set_flag(flag: &QueuedFlag, val: bool) {
+    flag.set(val)
+}
+
+#[cfg(not(feature = "parallel"))]
+struct Storage<T>(UnsafeCell<T>);
+#[cfg(feature = "parallel")]
+struct Storage<T>(Mutex<T>);
+
+#[cfg(not(feature = "parallel"))]
+struct WakerStorage(core::cell::RefCell<Option<Waker>>);
+#[cfg(feature = "parallel")]
+struct WakerStorage(Mutex<Option<Waker>>);
+
+impl<T> Storage<T> {
+    #[cfg(not(feature = "parallel"))]
+    fn new(val: T) -> Self {
+        Self(UnsafeCell::new(val))
+    }
+    #[cfg(feature = "parallel")]
+    fn new(val: T) -> Self {
+        Self(Mutex::new(val))
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        f(unsafe { &mut *self.0.get() })
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
+        f(&mut self.0.lock())
+    }
+}
+
+impl WakerStorage {
+    #[cfg(not(feature = "parallel"))]
+    fn new(val: Option<Waker>) -> Self {
+        Self(core::cell::RefCell::new(val))
+    }
+    #[cfg(feature = "parallel")]
+    fn new(val: Option<Waker>) -> Self {
+        Self(Mutex::new(val))
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn take_clone(&self) -> Option<Waker> {
+        self.0.borrow().as_ref().map(|w| w.clone())
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn take_clone(&self) -> Option<Waker> {
+        self.0.lock().clone()
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn set(&self, val: Option<Waker>) {
+        *self.0.borrow_mut() = val;
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn set(&self, val: Option<Waker>) {
+        *self.0.lock() = val;
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn take(&self) -> Option<Waker> {
+        self.0.borrow_mut().take()
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn take(&self) -> Option<Waker> {
+        self.0.lock().take()
+    }
+}
+
+#[cfg(not(feature = "parallel"))]
+struct Counter(Cell<u32>);
+#[cfg(feature = "parallel")]
+struct Counter(AtomicU32);
+
+impl Counter {
+    #[cfg(not(feature = "parallel"))]
+    fn new(val: u32) -> Self {
+        Self(Cell::new(val))
+    }
+    #[cfg(feature = "parallel")]
+    fn new(val: u32) -> Self {
+        Self(AtomicU32::new(val))
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn get(&self) -> u32 {
+        self.0.get()
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn get(&self) -> u32 {
+        self.0.load(Ordering::Relaxed)
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn inc(&self) {
+        self.0.set(self.0.get() + 1)
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn inc(&self) {
+        self.0.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn dec(&self) {
+        self.0.set(self.0.get() - 1)
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn dec(&self) {
+        self.0.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
+struct Slot {
+    task: Option<BoxedTask>,
+    queued: QueuedFlag,
+    queue: *const TaskQueue,
+}
+
+pub struct TaskQueue {
+    chunks: Storage<Vec<Box<[Slot; CHUNK]>>>,
+    ready: Storage<Vec<*mut Slot>>,
+    free: Storage<Vec<*mut Slot>>,
+    len: Counter,
+    waker: WakerStorage,
+}
+
+unsafe fn waker_clone(p: *const ()) -> RawWaker {
+    RawWaker::new(p, &VTABLE)
+}
+
+unsafe fn waker_wake(p: *const ()) {
+    waker_wake_by_ref(p);
+}
+
+unsafe fn waker_wake_by_ref(p: *const ()) {
+    let slot = &*(p as *const Slot);
+    if slot.task.is_some() && try_set_true(&slot.queued) {
+        let queue = &*slot.queue;
+        queue.ready.with(|r| r.push(p as *mut Slot));
+        if let Some(w) = queue.waker.take_clone() {
+            w.wake_by_ref();
+        }
+    }
+}
+
+unsafe fn waker_drop(_: *const ()) {}
+
+static VTABLE: RawWakerVTable =
+    RawWakerVTable::new(waker_clone, waker_wake, waker_wake_by_ref, waker_drop);
+
 impl TaskQueue {
     pub fn new() -> Self {
         TaskQueue {
-            inner: Mutex::new(TaskQueueInner {
-                tasks: VecDeque::new(),
-                waker: None,
-            }),
-        }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.inner.lock().tasks.is_empty()
-    }
-
-    /// # Safety
-    /// Caller must ensure future lifetime is valid
-    pub unsafe fn push<F: Future<Output = ()>>(&self, future: F) {
-        let future: BoxedTask =
-            core::mem::transmute(Box::pin(future) as Pin<Box<dyn Future<Output = ()> + '_>>);
-        let mut inner = self.inner.lock();
-        inner.tasks.push_back(future);
-        if let Some(w) = inner.waker.take() {
-            w.wake();
-        }
-    }
-
-    pub fn listen(&self, waker: Waker) {
-        self.inner.lock().waker = Some(waker);
-    }
-
-    /// Poll tasks - optimized to minimize lock contention
-    pub fn poll(&self, cx: &mut Context) -> TaskPoll {
-        // Take all tasks out in one lock acquisition
-        let mut batch: Vec<BoxedTask> = {
-            let mut inner = self.inner.lock();
-            if inner.tasks.is_empty() {
-                return TaskPoll::Empty;
-            }
-            inner.tasks.drain(..).collect()
-        };
-
-        let mut made_progress = false;
-        let mut pending = Vec::new();
-
-        // Poll all tasks without holding the lock
-        for mut task in batch.drain(..) {
-            match task.as_mut().poll(cx) {
-                Poll::Ready(()) => made_progress = true,
-                Poll::Pending => pending.push(task),
-            }
-        }
-
-        // Put pending tasks back in one lock acquisition
-        if !pending.is_empty() {
-            let mut inner = self.inner.lock();
-            for task in pending.into_iter().rev() {
-                inner.tasks.push_front(task);
-            }
-        }
-
-        // Check if new tasks were spawned during polling
-        let has_tasks = !self.inner.lock().tasks.is_empty();
-
-        if !has_tasks {
-            if made_progress {
-                TaskPoll::Done
-            } else {
-                TaskPoll::Empty
-            }
-        } else if made_progress {
-            TaskPoll::Progress
-        } else {
-            TaskPoll::Pending
-        }
-    }
-}
-
-#[cfg(not(feature = "parallel"))]
-impl TaskQueue {
-    pub fn new() -> Self {
-        TaskQueue {
-            inner: UnsafeCell::new(TaskQueueInner {
-                tasks: VecDeque::new(),
-                waker: None,
-            }),
+            chunks: Storage::new(Vec::new()),
+            ready: Storage::new(Vec::new()),
+            free: Storage::new(Vec::new()),
+            len: Counter::new(0),
+            waker: WakerStorage::new(None),
         }
     }
 
     #[inline]
-    #[allow(clippy::mut_from_ref)]
-    fn inner(&self) -> &mut TaskQueueInner {
-        unsafe { &mut *self.inner.get() }
-    }
-
     pub fn is_empty(&self) -> bool {
-        self.inner().tasks.is_empty()
+        self.len.get() == 0
     }
 
-    /// # Safety
-    /// Caller must ensure future lifetime is valid
+    fn alloc_slot(&self) -> *mut Slot {
+        if let Some(ptr) = self.free.with(|f| f.pop()) {
+            return ptr;
+        }
+        self.chunks.with(|chunks| {
+            let chunk: Box<[Slot; CHUNK]> = Box::new(core::array::from_fn(|_| Slot {
+                task: None,
+                queued: new_flag(false),
+                queue: self,
+            }));
+            chunks.push(chunk);
+            let chunk = chunks.last_mut().unwrap();
+            let first = &mut chunk[0] as *mut Slot;
+            self.free.with(|free| {
+                for i in 1..CHUNK {
+                    free.push(&mut chunk[i]);
+                }
+            });
+            first
+        })
+    }
+
     pub unsafe fn push<F: Future<Output = ()>>(&self, future: F) {
         let future: BoxedTask =
             core::mem::transmute(Box::pin(future) as Pin<Box<dyn Future<Output = ()> + '_>>);
-        let inner = self.inner();
-        inner.tasks.push_back(future);
-        if let Some(w) = inner.waker.take() {
+        let slot_ptr = self.alloc_slot();
+        let slot = &mut *slot_ptr;
+        slot.task = Some(future);
+        set_flag(&slot.queued, true);
+        self.ready.with(|r| r.push(slot_ptr));
+        self.len.inc();
+        if let Some(w) = self.waker.take() {
             w.wake();
         }
     }
 
-    pub fn listen(&self, waker: Waker) {
-        self.inner().waker = Some(waker);
-    }
-
     pub fn poll(&self, cx: &mut Context) -> TaskPoll {
-        let inner = self.inner();
+        self.waker.set(Some(cx.waker().clone()));
 
-        if inner.tasks.is_empty() {
+        if self.is_empty() {
             return TaskPoll::Empty;
         }
 
-        let mut made_progress = false;
-        let count = inner.tasks.len();
+        let mut progress = false;
 
-        for _ in 0..count {
-            let Some(mut task) = inner.tasks.pop_front() else {
-                break;
+        loop {
+            let slot_ptr = match self.ready.with(|r| r.pop()) {
+                Some(p) => p,
+                None => break,
             };
-
-            match task.as_mut().poll(cx) {
-                Poll::Ready(()) => made_progress = true,
-                Poll::Pending => inner.tasks.push_back(task),
+            let slot = unsafe { &mut *slot_ptr };
+            set_flag(&slot.queued, false);
+            if slot.task.is_none() {
+                continue;
+            }
+            let task = slot.task.as_mut().unwrap();
+            let w = unsafe { Waker::from_raw(RawWaker::new(slot_ptr as *const (), &VTABLE)) };
+            if task.as_mut().poll(&mut Context::from_waker(&w)) == Poll::Ready(()) {
+                slot.task = None;
+                self.free.with(|f| f.push(slot_ptr));
+                self.len.dec();
+                progress = true;
             }
         }
 
-        if inner.tasks.is_empty() {
-            if made_progress {
+        if self.is_empty() {
+            if progress {
                 TaskPoll::Done
             } else {
                 TaskPoll::Empty
             }
-        } else if made_progress {
+        } else if progress {
             TaskPoll::Progress
         } else {
             TaskPoll::Pending
