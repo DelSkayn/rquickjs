@@ -362,6 +362,9 @@ impl<'js> Module<'js, Declared> {
     /// The return value of the promise is the JavaScript value undefined.
     pub fn eval(self) -> Result<(Module<'js, Evaluated>, Promise<'js>)> {
         let ret = unsafe {
+            #[cfg(feature = "parallel")]
+            qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx.as_ptr()));
+
             // JS_EvalFunction `free's` the module so we should dup first
             let v = qjs::JS_MKPTR(qjs::JS_TAG_MODULE, self.ptr.as_ptr().cast());
             qjs::JS_DupValue(self.ctx.as_ptr(), v);
