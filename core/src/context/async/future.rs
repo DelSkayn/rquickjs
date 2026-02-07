@@ -60,7 +60,7 @@ where
                 let ctx = unsafe { Ctx::new_async(this.context) };
                 Box::pin(closure(ctx))
             }
-            WithFutureState::Running { future } => future,
+            WithFutureState::FutureCreated { future } => future,
             WithFutureState::Done => panic!("WithFuture polled after completion"),
         };
 
@@ -85,7 +85,7 @@ where
             }
 
             if !made_progress {
-                this.state = WithFutureState::Running { future };
+                this.state = WithFutureState::FutureCreated { future };
                 return Poll::Pending;
             }
         }
