@@ -1,4 +1,4 @@
-//! O(1) task queue with per-task wakers using stable arena pointers
+//! Task queue with per-task wakers using stable arena pointers
 
 use alloc::{boxed::Box, vec::Vec};
 use core::{
@@ -8,7 +8,7 @@ use core::{
 };
 
 #[cfg(not(feature = "parallel"))]
-use core::cell::{Cell, UnsafeCell};
+use core::cell::{Cell, RefCell, UnsafeCell};
 
 #[cfg(feature = "parallel")]
 use core::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -20,7 +20,6 @@ pub enum TaskPoll {
     Empty,
     Pending,
     Progress,
-    Done,
 }
 
 type BoxedTask = Pin<Box<dyn Future<Output = ()>>>;
@@ -79,9 +78,14 @@ struct Storage<T>(UnsafeCell<T>);
 struct Storage<T>(Mutex<T>);
 
 #[cfg(not(feature = "parallel"))]
-struct WakerStorage(core::cell::RefCell<Option<Waker>>);
+struct WakerStorage(RefCell<Option<Waker>>);
 #[cfg(feature = "parallel")]
 struct WakerStorage(Mutex<Option<Waker>>);
+
+#[cfg(not(feature = "parallel"))]
+struct TaskStorage(RefCell<Option<BoxedTask>>);
+#[cfg(feature = "parallel")]
+struct TaskStorage(Mutex<Option<BoxedTask>>);
 
 impl<T> Storage<T> {
     #[cfg(not(feature = "parallel"))]
@@ -108,7 +112,7 @@ impl<T> Storage<T> {
 impl WakerStorage {
     #[cfg(not(feature = "parallel"))]
     fn new(val: Option<Waker>) -> Self {
-        Self(core::cell::RefCell::new(val))
+        Self(RefCell::new(val))
     }
     #[cfg(feature = "parallel")]
     fn new(val: Option<Waker>) -> Self {
@@ -118,7 +122,7 @@ impl WakerStorage {
     #[cfg(not(feature = "parallel"))]
     #[inline]
     fn take_clone(&self) -> Option<Waker> {
-        self.0.borrow().as_ref().map(|w| w.clone())
+        self.0.borrow().clone()
     }
     #[cfg(feature = "parallel")]
     #[inline]
@@ -149,6 +153,39 @@ impl WakerStorage {
     }
 }
 
+impl TaskStorage {
+    #[cfg(not(feature = "parallel"))]
+    fn new(val: Option<BoxedTask>) -> Self {
+        Self(RefCell::new(val))
+    }
+    #[cfg(feature = "parallel")]
+    fn new(val: Option<BoxedTask>) -> Self {
+        Self(Mutex::new(val))
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn set(&self, val: Option<BoxedTask>) {
+        *self.0.borrow_mut() = val;
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn set(&self, val: Option<BoxedTask>) {
+        *self.0.lock() = val;
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    #[inline]
+    fn with<R>(&self, f: impl FnOnce(&mut Option<BoxedTask>) -> R) -> R {
+        f(&mut self.0.borrow_mut())
+    }
+    #[cfg(feature = "parallel")]
+    #[inline]
+    fn with<R>(&self, f: impl FnOnce(&mut Option<BoxedTask>) -> R) -> R {
+        f(&mut self.0.lock())
+    }
+}
+
 #[cfg(not(feature = "parallel"))]
 struct Counter(Cell<u32>);
 #[cfg(feature = "parallel")]
@@ -172,35 +209,36 @@ impl Counter {
     #[cfg(feature = "parallel")]
     #[inline]
     fn get(&self) -> u32 {
-        self.0.load(Ordering::Relaxed)
+        self.0.load(Ordering::Acquire)
     }
 
     #[cfg(not(feature = "parallel"))]
     #[inline]
     fn inc(&self) {
-        self.0.set(self.0.get() + 1)
+        self.0.set(self.0.get().saturating_add(1))
     }
     #[cfg(feature = "parallel")]
     #[inline]
     fn inc(&self) {
-        self.0.fetch_add(1, Ordering::Relaxed);
+        self.0.fetch_add(1, Ordering::AcqRel);
     }
 
     #[cfg(not(feature = "parallel"))]
     #[inline]
     fn dec(&self) {
-        self.0.set(self.0.get() - 1)
+        self.0.set(self.0.get().saturating_sub(1))
     }
     #[cfg(feature = "parallel")]
     #[inline]
     fn dec(&self) {
-        self.0.fetch_sub(1, Ordering::Relaxed);
+        self.0.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
 struct Slot {
-    task: Option<BoxedTask>,
+    task: TaskStorage,
     queued: QueuedFlag,
+    active: QueuedFlag, // true while task exists (even during poll)
     queue: *const TaskQueue,
 }
 
@@ -220,9 +258,21 @@ unsafe fn waker_wake(p: *const ()) {
     waker_wake_by_ref(p);
 }
 
+#[cfg(not(feature = "parallel"))]
+#[inline]
+fn get_flag(flag: &QueuedFlag) -> bool {
+    flag.get()
+}
+
+#[cfg(feature = "parallel")]
+#[inline]
+fn get_flag(flag: &QueuedFlag) -> bool {
+    flag.load(Ordering::Acquire)
+}
+
 unsafe fn waker_wake_by_ref(p: *const ()) {
     let slot = &*(p as *const Slot);
-    if slot.task.is_some() && try_set_true(&slot.queued) {
+    if get_flag(&slot.active) && try_set_true(&slot.queued) {
         let queue = &*slot.queue;
         queue.ready.with(|r| r.push(p as *mut Slot));
         if let Some(w) = queue.waker.take_clone() {
@@ -258,8 +308,9 @@ impl TaskQueue {
         }
         self.chunks.with(|chunks| {
             let chunk: Box<[Slot; CHUNK]> = Box::new(core::array::from_fn(|_| Slot {
-                task: None,
+                task: TaskStorage::new(None),
                 queued: new_flag(false),
+                active: new_flag(false),
                 queue: self,
             }));
             chunks.push(chunk);
@@ -274,12 +325,15 @@ impl TaskQueue {
         })
     }
 
+    /// # Safety
+    /// The future must be valid for the lifetime of the task queue or until it completes.
     pub unsafe fn push<F: Future<Output = ()>>(&self, future: F) {
         let future: BoxedTask =
             core::mem::transmute(Box::pin(future) as Pin<Box<dyn Future<Output = ()> + '_>>);
         let slot_ptr = self.alloc_slot();
-        let slot = &mut *slot_ptr;
-        slot.task = Some(future);
+        let slot = &*slot_ptr;
+        slot.task.set(Some(future));
+        set_flag(&slot.active, true);
         set_flag(&slot.queued, true);
         self.ready.with(|r| r.push(slot_ptr));
         self.len.inc();
@@ -302,32 +356,49 @@ impl TaskQueue {
                 Some(p) => p,
                 None => break,
             };
-            let slot = unsafe { &mut *slot_ptr };
+            let slot = unsafe { &*slot_ptr };
             set_flag(&slot.queued, false);
-            if slot.task.is_none() {
-                continue;
-            }
-            let task = slot.task.as_mut().unwrap();
+
+            // Take task out to avoid holding lock during poll
+            let mut task = match slot.task.with(|t| t.take()) {
+                Some(t) => t,
+                None => continue,
+            };
+
             let w = unsafe { Waker::from_raw(RawWaker::new(slot_ptr as *const (), &VTABLE)) };
-            if task.as_mut().poll(&mut Context::from_waker(&w)) == Poll::Ready(()) {
-                slot.task = None;
+            let is_ready = task.as_mut().poll(&mut Context::from_waker(&w)) == Poll::Ready(());
+
+            if is_ready {
+                set_flag(&slot.active, false);
                 self.free.with(|f| f.push(slot_ptr));
                 self.len.dec();
                 progress = true;
+            } else {
+                // Put task back
+                slot.task.set(Some(task));
             }
         }
 
         if self.is_empty() {
-            if progress {
-                TaskPoll::Done
-            } else {
-                TaskPoll::Empty
-            }
+            TaskPoll::Empty
         } else if progress {
             TaskPoll::Progress
         } else {
             TaskPoll::Pending
         }
+    }
+}
+
+impl Drop for TaskQueue {
+    fn drop(&mut self) {
+        self.chunks.with(|chunks| {
+            for chunk in chunks.iter_mut() {
+                for slot in chunk.iter() {
+                    slot.task.set(None);
+                    set_flag(&slot.active, false);
+                }
+            }
+        });
     }
 }
 
