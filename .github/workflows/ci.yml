@@ -456,6 +456,7 @@ jobs:
         env:
           BUILD_TARGET: ${{ matrix.target }}
           TARGET: ${{ matrix.target }}
+          RUSTFLAGS: ${{ matrix.target == 'wasm32-wasip2' && '-Zcrate-attr=feature(wasip2)' || '' }}
         run: |
           cargo build ${{ matrix.optimization && '--release' || '' }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
       - name: Test
@@ -463,6 +464,7 @@ jobs:
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
+          RUSTFLAGS: ${{ matrix.target == 'wasm32-wasip2' && '-Zcrate-attr=feature(wasip2)' || '' }}
         run: |
           ${{ matrix.target == 'wasm32-wasip1' && 'CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime' || '' }} ${{ matrix.target == 'wasm32-wasip2' && 'CARGO_TARGET_WASM32_WASIP2_RUNNER=wasmtime' || '' }} cargo test ${{ matrix.optimization && '--release' || '' }} --all ${{ (matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2') && '--exclude module-loader' || ''  }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
