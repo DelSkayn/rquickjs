@@ -1,6 +1,6 @@
 //! Async polling benchmarks
 
-use rquickjs::{async_with, AsyncContext, AsyncRuntime};
+use rquickjs::{AsyncContext, AsyncRuntime};
 use std::time::Instant;
 
 async fn bench_spawned_futures(n: usize) {
@@ -33,7 +33,7 @@ async fn bench_js_promises(n: usize) {
 
     let start = Instant::now();
 
-    async_with!(ctx => |ctx| {
+    ctx.async_with(async |ctx| {
         let code = format!(
             r#"
             (async function run() {{
@@ -66,7 +66,7 @@ async fn bench_chained_promises(depth: usize) {
 
     let start = Instant::now();
 
-    async_with!(ctx => |ctx| {
+    ctx.async_with(async |ctx| {
         let code = format!(
             r#"
             (async function run() {{
