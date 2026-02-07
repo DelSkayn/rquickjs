@@ -47,7 +47,11 @@ async fn bench_js_promises(n: usize) {
             }})()
         "#
         );
-        ctx.eval::<rquickjs::Promise, _>(code).unwrap().into_future::<i32>().await.unwrap();
+        ctx.eval::<rquickjs::Promise, _>(code)
+            .unwrap()
+            .into_future::<i32>()
+            .await
+            .unwrap();
     })
     .await;
 
@@ -78,7 +82,11 @@ async fn bench_chained_promises(depth: usize) {
             }})()
         "#
         );
-        ctx.eval::<rquickjs::Promise, _>(code).unwrap().into_future::<i32>().await.unwrap();
+        ctx.eval::<rquickjs::Promise, _>(code)
+            .unwrap()
+            .into_future::<i32>()
+            .await
+            .unwrap();
     })
     .await;
 
