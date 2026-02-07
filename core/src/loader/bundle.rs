@@ -68,7 +68,12 @@ impl<D> Loader for Bundle<ScaBundleData<D>>
 where
     D: HasByteCode<'static>,
 {
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        name: &str,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
+    ) -> Result<Module<'js>> {
         if let Some((_, x)) = self.iter().find(|(module_name, _)| *module_name == name) {
             let module = unsafe { Module::load(ctx.clone(), x.get_bytecode())? };
             return Ok(module);
@@ -82,7 +87,12 @@ impl<D> Loader for Bundle<PhfBundleData<D>>
 where
     D: HasByteCode<'static>,
 {
-    fn load<'js>(&mut self, ctx: &Ctx<'js>, name: &str) -> Result<Module<'js>> {
+    fn load<'js>(
+        &mut self,
+        ctx: &Ctx<'js>,
+        name: &str,
+        _attributes: Option<crate::loader::ImportAttributes<'js>>,
+    ) -> Result<Module<'js>> {
         if let Some(x) = self.get(name) {
             let module = unsafe { Module::load(ctx.clone(), x.get_bytecode())? };
             return Ok(module);

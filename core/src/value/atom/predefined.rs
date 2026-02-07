@@ -403,6 +403,8 @@ pub enum PredefinedAtom {
     SymbolSearch = qjs::JS_ATOM_Symbol_search as u32,
     /// "Symbol.split"
     SymbolSplit = qjs::JS_ATOM_Symbol_split as u32,
+    /// "Symbol.toPrimitive"
+    SymbolToPrimitive = qjs::JS_ATOM_Symbol_toPrimitive as u32,
     /// "Symbol.toStringTag"
     SymbolToStringTag = qjs::JS_ATOM_Symbol_toStringTag as u32,
     /// "Symbol.isConcatSpreadable"
@@ -633,6 +635,7 @@ impl PredefinedAtom {
             PredefinedAtom::SymbolReplace => "Symbol.replace",
             PredefinedAtom::SymbolSearch => "Symbol.search",
             PredefinedAtom::SymbolSplit => "Symbol.split",
+            PredefinedAtom::SymbolToPrimitive => "Symbol.toPrimitive",
             PredefinedAtom::SymbolToStringTag => "Symbol.toStringTag",
             PredefinedAtom::SymbolIsConcatSpreadable => "Symbol.isConcatSpreadable",
             PredefinedAtom::SymbolHasInstance => "Symbol.hasInstance",

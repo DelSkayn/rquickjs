@@ -5,11 +5,13 @@ error[E0597]: `var` does not live long enough
    |           ------- binding `var` declared here
  8 |       let var_ref = &mut var;
    |                     ^^^^^^^^ borrowed value does not live long enough
- 9 |       async_with!(ctx => |ctx|{
-10 | /         ctx.spawn(async move {
+ 9 |       ctx.async_with(async |ctx| {
+   |  ________________________________-
+10 | |         ctx.spawn(async move {
 11 | |             *var_ref += 1;
 12 | |         })
-   | |__________- argument requires that `var` is borrowed for `'static`
-...
+13 | |     })
+   | |_____- returning this value requires that `var` is borrowed for `'static`
+14 |       .await
 15 |   }
    |   - `var` dropped here while still borrowed

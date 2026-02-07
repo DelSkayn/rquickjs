@@ -151,6 +151,16 @@ pub type JSCFunctionData = ::core::option::Option<
         func_data: *mut JSValue,
     ) -> JSValue,
 >;
+pub type JSCClosure = ::core::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        this_val: JSValue,
+        argc: ::core::ffi::c_int,
+        argv: *mut JSValue,
+        magic: ::core::ffi::c_int,
+        opaque: *mut ::core::ffi::c_void,
+    ) -> JSValue,
+>;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct JSMallocFunctions {
@@ -530,6 +540,9 @@ unsafe extern "C" {
     pub fn JS_DupAtom(ctx: *mut JSContext, v: JSAtom) -> JSAtom;
 }
 unsafe extern "C" {
+    pub fn JS_DupAtomRT(rt: *mut JSRuntime, v: JSAtom) -> JSAtom;
+}
+unsafe extern "C" {
     pub fn JS_FreeAtom(ctx: *mut JSContext, v: JSAtom);
 }
 unsafe extern "C" {
@@ -735,6 +748,9 @@ unsafe extern "C" {
     pub fn JS_IsRegisteredClass(rt: *mut JSRuntime, class_id: JSClassID) -> bool;
 }
 unsafe extern "C" {
+    pub fn JS_GetClassName(rt: *mut JSRuntime, class_id: JSClassID) -> JSAtom;
+}
+unsafe extern "C" {
     pub fn JS_NewNumber(ctx: *mut JSContext, d: f64) -> JSValue;
 }
 unsafe extern "C" {
@@ -886,7 +902,7 @@ unsafe extern "C" {
     ) -> JSValue;
 }
 unsafe extern "C" {
-    pub fn JS_NewTwoByteString(ctx: *mut JSContext, buf: *const u16, len: size_t) -> JSValue;
+    pub fn JS_NewStringUTF16(ctx: *mut JSContext, buf: *const u16, len: size_t) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_NewAtomString(ctx: *mut JSContext, str_: *const ::core::ffi::c_char) -> JSValue;
@@ -906,7 +922,23 @@ unsafe extern "C" {
     ) -> *const ::core::ffi::c_char;
 }
 unsafe extern "C" {
+    pub fn JS_ToCStringLenUTF16(
+        ctx: *mut JSContext,
+        plen: *mut size_t,
+        val1: JSValue,
+    ) -> *const u16;
+}
+unsafe extern "C" {
     pub fn JS_FreeCString(ctx: *mut JSContext, ptr: *const ::core::ffi::c_char);
+}
+unsafe extern "C" {
+    pub fn JS_FreeCStringRT(rt: *mut JSRuntime, ptr: *const ::core::ffi::c_char);
+}
+unsafe extern "C" {
+    pub fn JS_FreeCStringUTF16(ctx: *mut JSContext, ptr: *const u16);
+}
+unsafe extern "C" {
+    pub fn JS_FreeCStringRT_UTF16(rt: *mut JSRuntime, ptr: *const u16);
 }
 unsafe extern "C" {
     pub fn JS_NewObjectProtoClass(
@@ -997,6 +1029,9 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_GetProxyHandler(ctx: *mut JSContext, proxy: JSValue) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_NewProxy(ctx: *mut JSContext, target: JSValue, handler: JSValue) -> JSValue;
 }
 unsafe extern "C" {
     pub fn JS_NewDate(ctx: *mut JSContext, epoch_ms: f64) -> JSValue;
@@ -1391,10 +1426,11 @@ unsafe extern "C" {
         sf: *const JSSharedArrayBufferFunctions,
     );
 }
+pub const JSPromiseStateEnum_JS_PROMISE_NOT_A_PROMISE: JSPromiseStateEnum = -1;
 pub const JSPromiseStateEnum_JS_PROMISE_PENDING: JSPromiseStateEnum = 0;
 pub const JSPromiseStateEnum_JS_PROMISE_FULFILLED: JSPromiseStateEnum = 1;
 pub const JSPromiseStateEnum_JS_PROMISE_REJECTED: JSPromiseStateEnum = 2;
-pub type JSPromiseStateEnum = ::core::ffi::c_uint;
+pub type JSPromiseStateEnum = ::core::ffi::c_int;
 unsafe extern "C" {
     pub fn JS_NewPromiseCapability(ctx: *mut JSContext, resolving_funcs: *mut JSValue) -> JSValue;
 }
@@ -1490,11 +1526,35 @@ pub type JSModuleLoaderFunc = ::core::option::Option<
         opaque: *mut ::core::ffi::c_void,
     ) -> *mut JSModuleDef,
 >;
+pub type JSModuleLoaderFunc2 = ::core::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        module_name: *const ::core::ffi::c_char,
+        opaque: *mut ::core::ffi::c_void,
+        attributes: JSValue,
+    ) -> *mut JSModuleDef,
+>;
+pub type JSModuleCheckSupportedImportAttributes = ::core::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        opaque: *mut ::core::ffi::c_void,
+        attributes: JSValue,
+    ) -> ::core::ffi::c_int,
+>;
 unsafe extern "C" {
     pub fn JS_SetModuleLoaderFunc(
         rt: *mut JSRuntime,
         module_normalize: JSModuleNormalizeFunc,
         module_loader: JSModuleLoaderFunc,
+        opaque: *mut ::core::ffi::c_void,
+    );
+}
+unsafe extern "C" {
+    pub fn JS_SetModuleLoaderFunc2(
+        rt: *mut JSRuntime,
+        module_normalize: JSModuleNormalizeFunc,
+        module_loader: JSModuleLoaderFunc2,
+        module_check_attrs: JSModuleCheckSupportedImportAttributes,
         opaque: *mut ::core::ffi::c_void,
     );
 }
@@ -1506,6 +1566,16 @@ unsafe extern "C" {
 }
 unsafe extern "C" {
     pub fn JS_GetModuleNamespace(ctx: *mut JSContext, m: *mut JSModuleDef) -> JSValue;
+}
+unsafe extern "C" {
+    pub fn JS_SetModulePrivateValue(
+        ctx: *mut JSContext,
+        m: *mut JSModuleDef,
+        val: JSValue,
+    ) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn JS_GetModulePrivateValue(ctx: *mut JSContext, m: *mut JSModuleDef) -> JSValue;
 }
 pub type JSJobFunc = ::core::option::Option<
     unsafe extern "C" fn(
@@ -1738,6 +1808,19 @@ unsafe extern "C" {
         magic: ::core::ffi::c_int,
         data_len: ::core::ffi::c_int,
         data: *mut JSValue,
+    ) -> JSValue;
+}
+pub type JSCClosureFinalizerFunc =
+    ::core::option::Option<unsafe extern "C" fn(arg1: *mut ::core::ffi::c_void)>;
+unsafe extern "C" {
+    pub fn JS_NewCClosure(
+        ctx: *mut JSContext,
+        func: JSCClosure,
+        name: *const ::core::ffi::c_char,
+        opaque_finalize: JSCClosureFinalizerFunc,
+        length: ::core::ffi::c_int,
+        magic: ::core::ffi::c_int,
+        opaque: *mut ::core::ffi::c_void,
     ) -> JSValue;
 }
 unsafe extern "C" {
@@ -2083,84 +2166,86 @@ pub const JS_ATOM_timed_out: _bindgen_ty_4 = 144;
 pub const JS_ATOM_ok: _bindgen_ty_4 = 145;
 pub const JS_ATOM_toJSON: _bindgen_ty_4 = 146;
 pub const JS_ATOM_maxByteLength: _bindgen_ty_4 = 147;
-pub const JS_ATOM_Object: _bindgen_ty_4 = 148;
-pub const JS_ATOM_Array: _bindgen_ty_4 = 149;
-pub const JS_ATOM_Error: _bindgen_ty_4 = 150;
-pub const JS_ATOM_Number: _bindgen_ty_4 = 151;
-pub const JS_ATOM_String: _bindgen_ty_4 = 152;
-pub const JS_ATOM_Boolean: _bindgen_ty_4 = 153;
-pub const JS_ATOM_Symbol: _bindgen_ty_4 = 154;
-pub const JS_ATOM_Arguments: _bindgen_ty_4 = 155;
-pub const JS_ATOM_Math: _bindgen_ty_4 = 156;
-pub const JS_ATOM_JSON: _bindgen_ty_4 = 157;
-pub const JS_ATOM_Date: _bindgen_ty_4 = 158;
-pub const JS_ATOM_Function: _bindgen_ty_4 = 159;
-pub const JS_ATOM_GeneratorFunction: _bindgen_ty_4 = 160;
-pub const JS_ATOM_ForInIterator: _bindgen_ty_4 = 161;
-pub const JS_ATOM_RegExp: _bindgen_ty_4 = 162;
-pub const JS_ATOM_ArrayBuffer: _bindgen_ty_4 = 163;
-pub const JS_ATOM_SharedArrayBuffer: _bindgen_ty_4 = 164;
-pub const JS_ATOM_Uint8ClampedArray: _bindgen_ty_4 = 165;
-pub const JS_ATOM_Int8Array: _bindgen_ty_4 = 166;
-pub const JS_ATOM_Uint8Array: _bindgen_ty_4 = 167;
-pub const JS_ATOM_Int16Array: _bindgen_ty_4 = 168;
-pub const JS_ATOM_Uint16Array: _bindgen_ty_4 = 169;
-pub const JS_ATOM_Int32Array: _bindgen_ty_4 = 170;
-pub const JS_ATOM_Uint32Array: _bindgen_ty_4 = 171;
-pub const JS_ATOM_BigInt64Array: _bindgen_ty_4 = 172;
-pub const JS_ATOM_BigUint64Array: _bindgen_ty_4 = 173;
-pub const JS_ATOM_Float16Array: _bindgen_ty_4 = 174;
-pub const JS_ATOM_Float32Array: _bindgen_ty_4 = 175;
-pub const JS_ATOM_Float64Array: _bindgen_ty_4 = 176;
-pub const JS_ATOM_DataView: _bindgen_ty_4 = 177;
-pub const JS_ATOM_BigInt: _bindgen_ty_4 = 178;
-pub const JS_ATOM_WeakRef: _bindgen_ty_4 = 179;
-pub const JS_ATOM_FinalizationRegistry: _bindgen_ty_4 = 180;
-pub const JS_ATOM_Map: _bindgen_ty_4 = 181;
-pub const JS_ATOM_Set: _bindgen_ty_4 = 182;
-pub const JS_ATOM_WeakMap: _bindgen_ty_4 = 183;
-pub const JS_ATOM_WeakSet: _bindgen_ty_4 = 184;
-pub const JS_ATOM_Iterator: _bindgen_ty_4 = 185;
-pub const JS_ATOM_IteratorConcat: _bindgen_ty_4 = 186;
-pub const JS_ATOM_IteratorHelper: _bindgen_ty_4 = 187;
-pub const JS_ATOM_IteratorWrap: _bindgen_ty_4 = 188;
-pub const JS_ATOM_Map_Iterator: _bindgen_ty_4 = 189;
-pub const JS_ATOM_Set_Iterator: _bindgen_ty_4 = 190;
-pub const JS_ATOM_Array_Iterator: _bindgen_ty_4 = 191;
-pub const JS_ATOM_String_Iterator: _bindgen_ty_4 = 192;
-pub const JS_ATOM_RegExp_String_Iterator: _bindgen_ty_4 = 193;
-pub const JS_ATOM_Generator: _bindgen_ty_4 = 194;
-pub const JS_ATOM_Proxy: _bindgen_ty_4 = 195;
-pub const JS_ATOM_Promise: _bindgen_ty_4 = 196;
-pub const JS_ATOM_PromiseResolveFunction: _bindgen_ty_4 = 197;
-pub const JS_ATOM_PromiseRejectFunction: _bindgen_ty_4 = 198;
-pub const JS_ATOM_AsyncFunction: _bindgen_ty_4 = 199;
-pub const JS_ATOM_AsyncFunctionResolve: _bindgen_ty_4 = 200;
-pub const JS_ATOM_AsyncFunctionReject: _bindgen_ty_4 = 201;
-pub const JS_ATOM_AsyncGeneratorFunction: _bindgen_ty_4 = 202;
-pub const JS_ATOM_AsyncGenerator: _bindgen_ty_4 = 203;
-pub const JS_ATOM_EvalError: _bindgen_ty_4 = 204;
-pub const JS_ATOM_RangeError: _bindgen_ty_4 = 205;
-pub const JS_ATOM_ReferenceError: _bindgen_ty_4 = 206;
-pub const JS_ATOM_SyntaxError: _bindgen_ty_4 = 207;
-pub const JS_ATOM_TypeError: _bindgen_ty_4 = 208;
-pub const JS_ATOM_URIError: _bindgen_ty_4 = 209;
-pub const JS_ATOM_InternalError: _bindgen_ty_4 = 210;
-pub const JS_ATOM_DOMException: _bindgen_ty_4 = 211;
-pub const JS_ATOM_CallSite: _bindgen_ty_4 = 212;
-pub const JS_ATOM_Private_brand: _bindgen_ty_4 = 213;
-pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_4 = 214;
-pub const JS_ATOM_Symbol_iterator: _bindgen_ty_4 = 215;
-pub const JS_ATOM_Symbol_match: _bindgen_ty_4 = 216;
-pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_4 = 217;
-pub const JS_ATOM_Symbol_replace: _bindgen_ty_4 = 218;
-pub const JS_ATOM_Symbol_search: _bindgen_ty_4 = 219;
-pub const JS_ATOM_Symbol_split: _bindgen_ty_4 = 220;
-pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_4 = 221;
-pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_4 = 222;
-pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_4 = 223;
-pub const JS_ATOM_Symbol_species: _bindgen_ty_4 = 224;
-pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_4 = 225;
-pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_4 = 226;
-pub const JS_ATOM_END: _bindgen_ty_4 = 227;
+pub const JS_ATOM_zip: _bindgen_ty_4 = 148;
+pub const JS_ATOM_zipKeyed: _bindgen_ty_4 = 149;
+pub const JS_ATOM_Object: _bindgen_ty_4 = 150;
+pub const JS_ATOM_Array: _bindgen_ty_4 = 151;
+pub const JS_ATOM_Error: _bindgen_ty_4 = 152;
+pub const JS_ATOM_Number: _bindgen_ty_4 = 153;
+pub const JS_ATOM_String: _bindgen_ty_4 = 154;
+pub const JS_ATOM_Boolean: _bindgen_ty_4 = 155;
+pub const JS_ATOM_Symbol: _bindgen_ty_4 = 156;
+pub const JS_ATOM_Arguments: _bindgen_ty_4 = 157;
+pub const JS_ATOM_Math: _bindgen_ty_4 = 158;
+pub const JS_ATOM_JSON: _bindgen_ty_4 = 159;
+pub const JS_ATOM_Date: _bindgen_ty_4 = 160;
+pub const JS_ATOM_Function: _bindgen_ty_4 = 161;
+pub const JS_ATOM_GeneratorFunction: _bindgen_ty_4 = 162;
+pub const JS_ATOM_ForInIterator: _bindgen_ty_4 = 163;
+pub const JS_ATOM_RegExp: _bindgen_ty_4 = 164;
+pub const JS_ATOM_ArrayBuffer: _bindgen_ty_4 = 165;
+pub const JS_ATOM_SharedArrayBuffer: _bindgen_ty_4 = 166;
+pub const JS_ATOM_Uint8ClampedArray: _bindgen_ty_4 = 167;
+pub const JS_ATOM_Int8Array: _bindgen_ty_4 = 168;
+pub const JS_ATOM_Uint8Array: _bindgen_ty_4 = 169;
+pub const JS_ATOM_Int16Array: _bindgen_ty_4 = 170;
+pub const JS_ATOM_Uint16Array: _bindgen_ty_4 = 171;
+pub const JS_ATOM_Int32Array: _bindgen_ty_4 = 172;
+pub const JS_ATOM_Uint32Array: _bindgen_ty_4 = 173;
+pub const JS_ATOM_BigInt64Array: _bindgen_ty_4 = 174;
+pub const JS_ATOM_BigUint64Array: _bindgen_ty_4 = 175;
+pub const JS_ATOM_Float16Array: _bindgen_ty_4 = 176;
+pub const JS_ATOM_Float32Array: _bindgen_ty_4 = 177;
+pub const JS_ATOM_Float64Array: _bindgen_ty_4 = 178;
+pub const JS_ATOM_DataView: _bindgen_ty_4 = 179;
+pub const JS_ATOM_BigInt: _bindgen_ty_4 = 180;
+pub const JS_ATOM_WeakRef: _bindgen_ty_4 = 181;
+pub const JS_ATOM_FinalizationRegistry: _bindgen_ty_4 = 182;
+pub const JS_ATOM_Map: _bindgen_ty_4 = 183;
+pub const JS_ATOM_Set: _bindgen_ty_4 = 184;
+pub const JS_ATOM_WeakMap: _bindgen_ty_4 = 185;
+pub const JS_ATOM_WeakSet: _bindgen_ty_4 = 186;
+pub const JS_ATOM_Iterator: _bindgen_ty_4 = 187;
+pub const JS_ATOM_IteratorConcat: _bindgen_ty_4 = 188;
+pub const JS_ATOM_IteratorHelper: _bindgen_ty_4 = 189;
+pub const JS_ATOM_IteratorWrap: _bindgen_ty_4 = 190;
+pub const JS_ATOM_Map_Iterator: _bindgen_ty_4 = 191;
+pub const JS_ATOM_Set_Iterator: _bindgen_ty_4 = 192;
+pub const JS_ATOM_Array_Iterator: _bindgen_ty_4 = 193;
+pub const JS_ATOM_String_Iterator: _bindgen_ty_4 = 194;
+pub const JS_ATOM_RegExp_String_Iterator: _bindgen_ty_4 = 195;
+pub const JS_ATOM_Generator: _bindgen_ty_4 = 196;
+pub const JS_ATOM_Proxy: _bindgen_ty_4 = 197;
+pub const JS_ATOM_Promise: _bindgen_ty_4 = 198;
+pub const JS_ATOM_PromiseResolveFunction: _bindgen_ty_4 = 199;
+pub const JS_ATOM_PromiseRejectFunction: _bindgen_ty_4 = 200;
+pub const JS_ATOM_AsyncFunction: _bindgen_ty_4 = 201;
+pub const JS_ATOM_AsyncFunctionResolve: _bindgen_ty_4 = 202;
+pub const JS_ATOM_AsyncFunctionReject: _bindgen_ty_4 = 203;
+pub const JS_ATOM_AsyncGeneratorFunction: _bindgen_ty_4 = 204;
+pub const JS_ATOM_AsyncGenerator: _bindgen_ty_4 = 205;
+pub const JS_ATOM_EvalError: _bindgen_ty_4 = 206;
+pub const JS_ATOM_RangeError: _bindgen_ty_4 = 207;
+pub const JS_ATOM_ReferenceError: _bindgen_ty_4 = 208;
+pub const JS_ATOM_SyntaxError: _bindgen_ty_4 = 209;
+pub const JS_ATOM_TypeError: _bindgen_ty_4 = 210;
+pub const JS_ATOM_URIError: _bindgen_ty_4 = 211;
+pub const JS_ATOM_InternalError: _bindgen_ty_4 = 212;
+pub const JS_ATOM_DOMException: _bindgen_ty_4 = 213;
+pub const JS_ATOM_CallSite: _bindgen_ty_4 = 214;
+pub const JS_ATOM_Private_brand: _bindgen_ty_4 = 215;
+pub const JS_ATOM_Symbol_toPrimitive: _bindgen_ty_4 = 216;
+pub const JS_ATOM_Symbol_iterator: _bindgen_ty_4 = 217;
+pub const JS_ATOM_Symbol_match: _bindgen_ty_4 = 218;
+pub const JS_ATOM_Symbol_matchAll: _bindgen_ty_4 = 219;
+pub const JS_ATOM_Symbol_replace: _bindgen_ty_4 = 220;
+pub const JS_ATOM_Symbol_search: _bindgen_ty_4 = 221;
+pub const JS_ATOM_Symbol_split: _bindgen_ty_4 = 222;
+pub const JS_ATOM_Symbol_toStringTag: _bindgen_ty_4 = 223;
+pub const JS_ATOM_Symbol_isConcatSpreadable: _bindgen_ty_4 = 224;
+pub const JS_ATOM_Symbol_hasInstance: _bindgen_ty_4 = 225;
+pub const JS_ATOM_Symbol_species: _bindgen_ty_4 = 226;
+pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_4 = 227;
+pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_4 = 228;
+pub const JS_ATOM_END: _bindgen_ty_4 = 229;
 pub type _bindgen_ty_4 = ::core::ffi::c_uint;

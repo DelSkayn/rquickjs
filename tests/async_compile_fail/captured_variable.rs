@@ -1,4 +1,4 @@
-use rquickjs::{async_with, AsyncContext, AsyncRuntime};
+use rquickjs::{AsyncContext, AsyncRuntime};
 
 pub async fn test() {
     let rt = AsyncRuntime::new().unwrap();
@@ -7,7 +7,7 @@ pub async fn test() {
     let fut = {
         let mut var = 1u32;
         let var_ref = &mut var;
-        async_with!(ctx => |_ctx|{
+        ctx.async_with(async |_ctx| {
             *var_ref += 1;
         })
     };

@@ -1,9 +1,11 @@
 [package]
-name = "rquickjs-cli"
+name = "import-attributes"
 version = "0.11.0"
 authors = ["K. <kayo@illumium.org>"]
-edition = "2018"
+edition = "2021"
 publish = false
 
 [dependencies.rquickjs]
 path = "../.."
+default-features = false
+features = ["rust-alloc", "loader"]

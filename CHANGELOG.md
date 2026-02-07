@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Breaking Changes
+
+- Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)\
+
+### Changed
+
+- Updated `AsyncContext::async_with` to use async closure syntax #[602](https://github.com/DelSkayn/rquickjs/pull/602)
+
+### Deprecated
+
+- Deprecated `async_with!` macro #[602](https://github.com/DelSkayn/rquickjs/pull/602)
+
+### Fixed
+
+- Fixed cross-thread stack overflow false positives in parallel mode by updating stack baseline before QuickJS C entry points
+
+## [0.11.0] - 2025-12-16
+
+### Added
+
+- Added `Proxy` object #[#570](https://github.com/DelSkayn/rquickjs/pull/570)
+- Allow setting filename as an eval option #[#536](https://github.com/DelSkayn/rquickjs/pull/536)
+- Add Iterable allow JS to iterate over Rust iterator #[#564](https://github.com/DelSkayn/rquickjs/pull/564)
+- Add JsIterator to iterate over Javascript Iterator #[#564](https://github.com/DelSkayn/rquickjs/pull/564)
+- Add more trait implementations like AsRef for CString #[#558](https://github.com/DelSkayn/rquickjs/pull/558)
+
+### Changed
+
+- Bump MSRV to 1.85 #[#531](https://github.com/DelSkayn/rquickjs/pull/531)
+- Update quickjs-ng to #[be664ca](https://github.com/quickjs-ng/quickjs/commit/be664ca1ccd86cbadf8df7348b8e15e77a32a1ba) #[#566](https://github.com/DelSkayn/rquickjs/pull/566)
+
+### Fixed
+
+- Fix wasm32 build #[548](https://github.com/DelSkayn/rquickjs/pull/548)
+
 ## [0.10.0] - 2025-10-24
 
 ### Added

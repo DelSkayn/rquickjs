@@ -1,6 +1,6 @@
 [package]
 name = "rquickjs-core"
-version = "0.10.0"
+version = "0.11.0"
 authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
 edition = "2021"
 license = "MIT"
