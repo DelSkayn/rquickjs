@@ -351,11 +351,8 @@ impl TaskQueue {
 
         let mut progress = false;
 
-        loop {
-            let slot_ptr = match self.ready.with(|r| r.pop()) {
-                Some(p) => p,
-                None => break,
-            };
+        while let Some(p) = self.ready.with(|r| r.pop()) {
+            let slot_ptr = p;
             let slot = unsafe { &*slot_ptr };
             set_flag(&slot.queued, false);
 

@@ -430,10 +430,7 @@ impl<'js> Ctx<'js> {
 
         // Poll spawned futures
         let opaque = unsafe { self.get_opaque() };
-        match opaque.poll(cx) {
-            crate::runtime::task_queue::TaskPoll::Progress => did_work = true,
-            _ => {}
-        }
+        if opaque.poll(cx) == crate::runtime::task_queue::TaskPoll::Progress { did_work = true }
 
         did_work
     }
