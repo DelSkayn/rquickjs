@@ -37,7 +37,7 @@ rquickjs-core = { workspace = true }
 rquickjs-macro = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["full"] }
+futures = "0.3"
 trybuild = "1"
 
 [features]
