@@ -129,11 +129,7 @@ async fn bench_concurrent_spawns(n: usize) {
 }
 
 fn main() {
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async {
+    futures::executor::block_on(async {
             println!("=== Async Benchmarks ===\n");
 
             bench_spawned_futures(100_000).await;
