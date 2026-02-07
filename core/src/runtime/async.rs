@@ -324,7 +324,7 @@ impl AsyncRuntime {
             }
 
             match lock.runtime.get_opaque().poll(cx) {
-                TaskPoll::Empty | TaskPoll::Done => Poll::Ready(()),
+                TaskPoll::Empty => Poll::Ready(()),
                 TaskPoll::Progress => {
                     cx.waker().wake_by_ref();
                     Poll::Pending
