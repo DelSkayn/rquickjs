@@ -130,18 +130,18 @@ async fn bench_concurrent_spawns(n: usize) {
 
 fn main() {
     futures::executor::block_on(async {
-            println!("=== Async Benchmarks ===\n");
+        println!("=== Async Benchmarks ===\n");
 
-            bench_spawned_futures(100_000).await;
-            bench_spawned_futures(1_000_000).await;
+        bench_spawned_futures(100_000).await;
+        bench_spawned_futures(1_000_000).await;
 
-            bench_js_promises(10_000).await;
-            bench_js_promises(100_000).await;
+        bench_js_promises(10_000).await;
+        bench_js_promises(100_000).await;
 
-            bench_chained_promises(10_000).await;
-            bench_chained_promises(100_000).await;
+        bench_chained_promises(10_000).await;
+        bench_chained_promises(100_000).await;
 
-            bench_concurrent_spawns(100_000).await;
-            bench_concurrent_spawns(1_000_000).await;
-        });
+        bench_concurrent_spawns(100_000).await;
+        bench_concurrent_spawns(1_000_000).await;
+    });
 }
