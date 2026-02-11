@@ -463,6 +463,10 @@ jobs:
         timeout-minutes: 12
         env:
           RUST_BACKTRACE: full
+          # Limit test threads to 1 for loongarch64 targets to work around an intermittent
+          # QEMU user-mode emulation bug: "QEMU internal SIGSEGV {code=MAPERR, addr=0x20}"
+          # This is a race condition in QEMU's thread emulation, not a bug in rquickjs.
+          RUST_TEST_THREADS: ${{ startsWith(matrix.target, 'loongarch64') && '1' || '' }}
         run: |
           ${{ matrix.target == 'wasm32-wasip1' && 'CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime' || '' }} ${{ matrix.target == 'wasm32-wasip2' && 'CARGO_TARGET_WASM32_WASIP2_RUNNER=wasmtime' || '' }} cargo test ${{ matrix.optimization && '--release' || '' }} --all ${{ (matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2') && '--exclude module-loader' || ''  }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
