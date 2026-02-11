@@ -110,6 +110,7 @@ pub const JS_TAG_FIRST: _bindgen_ty_1 = -9;
 pub const JS_TAG_BIG_INT: _bindgen_ty_1 = -9;
 pub const JS_TAG_SYMBOL: _bindgen_ty_1 = -8;
 pub const JS_TAG_STRING: _bindgen_ty_1 = -7;
+pub const JS_TAG_STRING_ROPE: _bindgen_ty_1 = -6;
 pub const JS_TAG_MODULE: _bindgen_ty_1 = -3;
 pub const JS_TAG_FUNCTION_BYTECODE: _bindgen_ty_1 = -2;
 pub const JS_TAG_OBJECT: _bindgen_ty_1 = -1;
