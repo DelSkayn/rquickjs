@@ -1,5 +1,6 @@
 use crate::{
     class::{self, ffi::VTable, JsClass},
+    function::Constructor,
     qjs, Ctx, Error, JsLifetime, Object, Value,
 };
 
@@ -50,6 +51,7 @@ pub(crate) struct Opaque<'js> {
     callable_class_id: qjs::JSClassID,
 
     prototypes: UnsafeCell<HashMap<TypeId, Option<Object<'js>>>>,
+    constructors: UnsafeCell<HashMap<TypeId, Option<Constructor<'js>>>>,
 
     userdata: UserDataMap,
 
@@ -74,6 +76,7 @@ impl<'js> Opaque<'js> {
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
 
             prototypes: UnsafeCell::new(HashMap::new()),
+            constructors: UnsafeCell::new(HashMap::new()),
 
             userdata: UserDataMap::default(),
 
@@ -252,6 +255,23 @@ impl<'js> Opaque<'js> {
         }
     }
 
+    pub fn get_or_insert_constructor<C: JsClass<'js>>(
+        &self,
+        ctx: &Ctx<'js>,
+    ) -> Result<Option<Constructor<'js>>, Error> {
+        unsafe {
+            let vtable = VTable::get::<C>();
+            let id = vtable.id();
+            match (*self.constructors.get()).entry(id) {
+                Entry::Occupied(x) => Ok(x.get().clone()),
+                Entry::Vacant(x) => {
+                    let constructor = C::constructor(ctx)?;
+                    Ok(x.insert(constructor).clone())
+                }
+            }
+        }
+    }
+
     /// Cleans up all the internal state.
     ///
     /// Called before dropping the runtime to ensure that we drop everything before freeing the
@@ -261,6 +281,7 @@ impl<'js> Opaque<'js> {
         self.interrupt_handler.get_mut().take();
         self.panic.take();
         self.prototypes.get_mut().clear();
+        self.constructors.get_mut().clear();
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear()
