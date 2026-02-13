@@ -174,6 +174,29 @@ pub fn main() {
             if(!TestSubClass.getInnerObject(t2).test){
                 throw new Error(19)
             }
+
+            class JsSubClass extends TestClass {
+                constructor(obj, value, anotherValue) {
+                    super(obj, value, anotherValue);
+                    this.test = 44;
+                }
+            }
+            let js_sub_class = new JsSubClass({}, 1, 2);
+            if(!js_sub_class.test){
+                throw new Error(20)
+            }
+            if(js_sub_class.someValue !== 1){
+                throw new Error(21)
+            }
+            if(js_sub_class.anotherValue !== 2){
+                throw new Error(22)
+            }
+            if(!TestClass.getInnerObject(js_sub_class)){
+                throw new Error(23)
+            }
+            if(!(js_sub_class instanceof TestClass)){
+                throw new Error(24)
+            }
         "#,
         )
         .catch(&ctx)
