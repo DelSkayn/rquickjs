@@ -387,6 +387,28 @@ mod test {
     }
 
     #[test]
+    fn call_js_fn_with_null_args_and_return() {
+        let res: Vec<i8> = test_with(|ctx| {
+            let func: Function = ctx
+                .eval(
+                    r#"
+                  (a, b) => {
+                    if (a === null) a = -1;
+                    if (b === null) b = 0;
+                    return [a, b];
+                  }
+                "#,
+                )
+                .unwrap();
+            func.call((function::Null::<i8>(None), function::Null(Some(1))))
+                .unwrap()
+        });
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0], -1);
+        assert_eq!(res[1], 1);
+    }
+
+    #[test]
     fn call_js_fn_with_no_args_and_throw() {
         test_with(|ctx| {
             let f: Function = ctx
@@ -788,6 +810,33 @@ mod test {
         assert_eq!(res[2], 2);
         assert_eq!(res[3], 1);
         assert_eq!(res[4], 2);
+    }
+
+    #[test]
+    fn call_rust_fn_with_null_args() {
+        let res: Vec<i8> = test_with(|ctx| {
+            let func = Function::new(
+                ctx.clone(),
+                |arg1: function::Null<i8>, arg2: function::Null<i8>| {
+                    use std::iter::once;
+                    once(arg1)
+                        .chain(once(arg2))
+                        .map(|x| x.0.unwrap_or(-1))
+                        .collect::<Vec<_>>()
+                },
+            )
+            .unwrap();
+            ctx.globals().set("test_fn", func).unwrap();
+            ctx.eval(
+                r#"
+                  test_fn(null, 1)
+                "#,
+            )
+            .unwrap()
+        });
+        assert_eq!(res.len(), 2);
+        assert_eq!(res[0], -1);
+        assert_eq!(res[1], 1);
     }
 
     #[test]

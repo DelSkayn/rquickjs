@@ -1,5 +1,5 @@
 use crate::{
-    function::{Exhaustive, Flat, FuncArg, Opt, Rest, This},
+    function::{Exhaustive, Flat, FuncArg, Null, Opt, Rest, This},
     qjs, Ctx, FromJs, Result, Value,
 };
 use alloc::vec::Vec;
@@ -318,6 +318,22 @@ impl<'js, T: FromJs<'js>> FromParam<'js> for Rest<T> {
             res.push(T::from_js(params.ctx(), p)?);
         }
         Ok(Rest(res))
+    }
+}
+
+impl<'js, T: FromJs<'js>> FromParam<'js> for Null<T> {
+    fn param_requirement() -> ParamRequirement {
+        ParamRequirement::single()
+    }
+
+    fn from_param<'a>(params: &mut ParamsAccessor<'a, 'js>) -> Result<Self> {
+        let ctx = params.ctx().clone();
+        let p = params.arg();
+        if p.is_null() {
+            Ok(Null(None))
+        } else {
+            Ok(Null(Some(T::from_js(&ctx, p)?)))
+        }
     }
 }
 
