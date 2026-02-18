@@ -31,5 +31,9 @@ copy_bindings x86_64-unknown-linux-gnu x86_64-unknown-linux-musl
 copy_bindings x86_64-apple-darwin aarch64-apple-darwin
 
 # Copy bindings for targets with same size_t as c_ulonglong
-copy_bindings x86_64-pc-windows-gnu x86_64-pc-windows-msvc 
-copy_bindings x86_64-pc-windows-gnu aarch64-pc-windows-msvc 
+copy_bindings x86_64-pc-windows-gnu x86_64-pc-windows-msvc
+copy_bindings x86_64-pc-windows-gnu aarch64-pc-windows-msvc
+
+# Generate i686-pc-windows (c_uint, 8-byte aligned u64 — differs from i686-linux)
+build_target i686-pc-windows-gnu
+build_target i686-pc-windows-msvc
