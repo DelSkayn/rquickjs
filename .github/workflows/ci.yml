@@ -229,6 +229,12 @@ jobs:
             features: full-async
 
           - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: powerpc64-unknown-linux-gnu
+            features: full-async
+
+          - task: bindings
             os: ubuntu-24.04
             rust: nightly
             target: loongarch64-unknown-linux-musl
@@ -299,7 +305,7 @@ jobs:
         with:
           submodules: true
       - name: Setup cross linux toolchain
-        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'armv7') && !startsWith(matrix.target, 'loongarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
+        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'armv7') && !startsWith(matrix.target, 'loongarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl') && !startsWith(matrix.target, 'powerpc64')
         run: |
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
@@ -329,6 +335,21 @@ jobs:
           echo "AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar" >> $GITHUB_ENV
           echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
           echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_RUNNER=qemu-arm -L /usr/arm-linux-gnueabihf" >> $GITHUB_ENV
+
+      - name: Setup powerpc64 toolchain
+        if: startsWith(matrix.target, 'powerpc64') && endsWith(matrix.target, '-gnu')
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libc6-ppc64-cross \
+            libc6-dev-ppc64-cross \
+            gcc-powerpc64-linux-gnu \
+            qemu-user
+          echo "CC_powerpc64_unknown_linux_gnu=powerpc64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CXX_powerpc64_unknown_linux_gnu=powerpc64-linux-gnu-g++" >> $GITHUB_ENV
+          echo "AR_powerpc64_unknown_linux_gnu=powerpc64-linux-gnu-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_POWERPC64_UNKNOWN_LINUX_GNU_LINKER=powerpc64-linux-gnu-gcc" >> $GITHUB_ENV
+          echo "CARGO_TARGET_POWERPC64_UNKNOWN_LINUX_GNU_RUNNER=qemu-ppc64 -L /usr/powerpc64-linux-gnu" >> $GITHUB_ENV
 
       - name: Setup gnu aarch64
         if: startsWith(matrix.target, 'aarch64') && endsWith(matrix.target, '-gnu')
