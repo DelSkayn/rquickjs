@@ -223,6 +223,12 @@ jobs:
             features: full-async
 
           - task: bindings
+            os: ubuntu-latest
+            rust: stable
+            target: armv7-unknown-linux-gnueabihf
+            features: full-async
+
+          - task: bindings
             os: ubuntu-24.04
             rust: nightly
             target: loongarch64-unknown-linux-musl
@@ -293,7 +299,7 @@ jobs:
         with:
           submodules: true
       - name: Setup cross linux toolchain
-        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'loongarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
+        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'armv7') && !startsWith(matrix.target, 'loongarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl')
         run: |
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
@@ -308,6 +314,21 @@ jobs:
       - name: Setup musl-tools
         if: startsWith(matrix.target, 'x86_64-') && endsWith(matrix.target, '-musl')
         run: sudo apt-get update -y && sudo apt-get install -y musl-tools
+
+      - name: Setup armv7 toolchain
+        if: startsWith(matrix.target, 'armv7') && contains(matrix.target, '-linux-')
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libc6-armhf-cross \
+            libc6-dev-armhf-cross \
+            gcc-arm-linux-gnueabihf \
+            qemu-user
+          echo "CC_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
+          echo "CXX_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-g++" >> $GITHUB_ENV
+          echo "AR_armv7_unknown_linux_gnueabihf=arm-linux-gnueabihf-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_LINKER=arm-linux-gnueabihf-gcc" >> $GITHUB_ENV
+          echo "CARGO_TARGET_ARMV7_UNKNOWN_LINUX_GNUEABIHF_RUNNER=qemu-arm -L /usr/arm-linux-gnueabihf" >> $GITHUB_ENV
 
       - name: Setup gnu aarch64
         if: startsWith(matrix.target, 'aarch64') && endsWith(matrix.target, '-gnu')
