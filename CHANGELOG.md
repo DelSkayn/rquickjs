@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Add pre-generated bindings for `armv7-unknown-linux-gnueabihf`
+- Add pre-generated bindings for `powerpc64-unknown-linux-gnu`
 
 ### Fixed
 
