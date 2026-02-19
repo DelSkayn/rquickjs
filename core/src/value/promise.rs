@@ -190,6 +190,13 @@ where
             return Poll::Ready(x);
         }
 
+        // Check for pending exception (e.g., from interrupt handler).
+        // If there's a pending exception, the promise will never settle,
+        // so return the error instead of hanging forever.
+        if this.promise.ctx.has_exception() {
+            return Poll::Ready(Err(Error::Exception));
+        }
+
         if this.state.is_none() {
             let inner = Rc::new(RefCell::new(cx.waker().clone()));
             this.state = Some(inner.clone());
