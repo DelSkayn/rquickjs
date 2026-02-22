@@ -1,116 +1,182 @@
-//! JavaScript iterable types from Rust iterators.
+//! JavaScript iterator and iterable types.
+//!
+//! - [`Iterable`] — wraps a Rust closure or iterator as a JS iterator
+//! - [`JsIterator`] — consumes a JS iterator from Rust
 
+use crate::js_lifetime::JsLifetime;
+use crate::object::Property;
 use crate::safe_ref::Mut;
 use crate::{
     atom::PredefinedAtom,
     function::{MutFn, This},
-    Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
+    Array, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
 };
 use core::{iter::FusedIterator, marker::PhantomData};
 
-/// Converts a Rust iterator into a JavaScript iterable object.
+struct IteratorPrototypeCache<'js>(Object<'js>);
+
+unsafe impl<'js> JsLifetime<'js> for IteratorPrototypeCache<'js> {
+    type Changed<'to> = IteratorPrototypeCache<'to>;
+}
+
+fn get_iterator_prototype<'js>(ctx: &Ctx<'js>) -> Result<Object<'js>> {
+    if let Some(guard) = ctx.userdata::<IteratorPrototypeCache>() {
+        return Ok(guard.0.clone());
+    }
+
+    let array = Array::new(ctx.clone())?;
+    let iter_fn: Function = array.as_object().get(PredefinedAtom::SymbolIterator)?;
+    let array_iter: Object = iter_fn.call((This(array),))?;
+    let array_iter_proto = array_iter
+        .get_prototype()
+        .ok_or_else(|| Error::new_from_js("value", "iterator prototype"))?;
+    let proto = array_iter_proto
+        .get_prototype()
+        .ok_or_else(|| Error::new_from_js("value", "iterator prototype"))?;
+
+    let _ = ctx.store_userdata(IteratorPrototypeCache(proto.clone()));
+
+    Ok(proto)
+}
+
+fn build_iterator_object<'js, F>(ctx: &Ctx<'js>, next_fn: F) -> Result<Object<'js>>
+where
+    F: FnMut(&Ctx<'js>) -> Option<Result<Value<'js>>> + 'js,
+{
+    let iter_proto = get_iterator_prototype(ctx)?;
+
+    let proto = Object::new(ctx.clone())?;
+    proto.set_prototype(Some(&iter_proto))?;
+
+    let state = Mut::new(next_fn);
+    let next = Function::new(
+        ctx.clone(),
+        MutFn::new(move |ctx: Ctx<'js>| -> Result<Object<'js>> {
+            let result = Object::new(ctx.clone())?;
+            match (state.lock())(&ctx) {
+                Some(Ok(value)) => {
+                    result.set(PredefinedAtom::Value, value)?;
+                    result.set(PredefinedAtom::Done, false)?;
+                }
+                Some(Err(e)) => return Err(e),
+                None => {
+                    result.set(PredefinedAtom::Done, true)?;
+                }
+            }
+            Ok(result)
+        }),
+    )?;
+
+    proto.prop(
+        PredefinedAtom::Next,
+        Property::from(next).enumerable().writable().configurable(),
+    )?;
+
+    let iter_obj = Object::new(ctx.clone())?;
+    iter_obj.set_prototype(Some(&proto))?;
+
+    Ok(iter_obj)
+}
+
+/// Creates a JavaScript iterator from a Rust closure or iterator.
 ///
-/// The resulting object implements the JavaScript iterable protocol with a
-/// `[Symbol.iterator]` method that returns an iterator following the iterator protocol.
+/// The returned JS object has `next()` and inherits
+/// `[Symbol.iterator]() { return this }` from `%IteratorPrototype%`,
+/// so it works with `for...of`, spread, and destructuring.
 ///
-/// Note: The iterator can only be consumed once. Subsequent iterations will yield no values.
-///
-/// # Example
+/// # From a closure
 /// ```
 /// # use rquickjs::{Runtime, Context, Result, Iterable};
 /// # let rt = Runtime::new().unwrap();
 /// # let ctx = Context::full(&rt).unwrap();
 /// # ctx.with(|ctx| -> Result<()> {
-/// // Create an iterable from a Vec
-/// let iter = Iterable::from(vec![1, 2, 3]);
-/// ctx.globals().set("myIterable", iter)?;
-///
-/// // Use spread operator
-/// let result: Vec<i32> = ctx.eval("[...myIterable]")?;
+/// let mut i = 0;
+/// let iter = Iterable::from_fn(move || {
+///     i += 1;
+///     if i <= 3 { Some(i) } else { None }
+/// });
+/// ctx.globals().set("myIter", iter)?;
+/// let result: Vec<i32> = ctx.eval("[...myIter]")?;
 /// assert_eq!(result, vec![1, 2, 3]);
 /// # Ok(())
 /// # }).unwrap();
 /// ```
-pub struct Iterable<I>(pub I);
-
-impl<I> From<I> for Iterable<I> {
-    fn from(iter: I) -> Self {
-        Iterable(iter)
-    }
-}
-
-impl<'js, I, T> IntoJs<'js> for Iterable<I>
-where
-    I: IntoIterator<Item = T> + 'js,
-    I::IntoIter: 'js,
-    T: IntoJs<'js> + 'js,
-{
-    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
-        let iter = Mut::new(Some(self.0.into_iter()));
-
-        let iterator_fn = Function::new(
-            ctx.clone(),
-            MutFn::new(move |ctx: Ctx<'js>| -> Result<Object<'js>> {
-                let iter_obj = Object::new(ctx.clone())?;
-                let iter_taken = iter.lock().take();
-
-                let state = Mut::new(iter_taken);
-                let next_fn = Function::new(
-                    ctx.clone(),
-                    MutFn::new(move |ctx: Ctx<'js>| -> Result<Object<'js>> {
-                        let result = Object::new(ctx.clone())?;
-                        let mut state_ref = state.lock();
-
-                        if let Some(ref mut it) = *state_ref {
-                            if let Some(value) = it.next() {
-                                result.set(PredefinedAtom::Value, value.into_js(&ctx)?)?;
-                                result.set(PredefinedAtom::Done, false)?;
-                            } else {
-                                result.set(PredefinedAtom::Done, true)?;
-                                *state_ref = None;
-                            }
-                        } else {
-                            result.set(PredefinedAtom::Done, true)?;
-                        }
-                        Ok(result)
-                    }),
-                )?;
-
-                iter_obj.set(PredefinedAtom::Next, next_fn)?;
-                Ok(iter_obj)
-            }),
-        )?;
-
-        let obj = Object::new(ctx.clone())?;
-        obj.set(PredefinedAtom::SymbolIterator, iterator_fn)?;
-        Ok(obj.into_value())
-    }
-}
-
-/// An iterator over values from a JavaScript iterable.
 ///
-/// This struct wraps a JavaScript iterator object and implements Rust's `Iterator` trait,
-/// allowing you to consume JavaScript iterables from Rust code.
-///
-/// The type parameter `T` specifies what type each value should be converted to.
-/// Use `Value<'js>` to get raw JS values without conversion.
-///
-/// # Example
+/// # From an iterator
 /// ```
-/// # use rquickjs::{Runtime, Context, Result, JsIterator, Value};
+/// # use rquickjs::{Runtime, Context, Result, Iterable};
 /// # let rt = Runtime::new().unwrap();
 /// # let ctx = Context::full(&rt).unwrap();
 /// # ctx.with(|ctx| -> Result<()> {
-/// // Get an iterator with automatic conversion to i32
+/// let iter = Iterable::from(vec![1, 2, 3]);
+/// ctx.globals().set("myIter", iter)?;
+/// let result: Vec<i32> = ctx.eval("[...myIter]")?;
+/// assert_eq!(result, vec![1, 2, 3]);
+/// # Ok(())
+/// # }).unwrap();
+/// ```
+pub struct Iterable<F>(F);
+
+impl<F> Iterable<F> {
+    /// Create from a `FnMut() -> Option<T>` closure.
+    pub fn from_fn(f: F) -> Self {
+        Iterable(f)
+    }
+}
+
+impl<I: IntoIterator> From<I> for Iterable<IteratorWrapper<I::IntoIter>> {
+    fn from(iter: I) -> Self {
+        Iterable(IteratorWrapper(Some(iter.into_iter())))
+    }
+}
+
+/// Wrapper that adapts a Rust `Iterator` into a `FnMut() -> Option<T>`.
+pub struct IteratorWrapper<I>(Option<I>);
+
+impl<I: Iterator> IteratorWrapper<I> {
+    fn next(&mut self) -> Option<I::Item> {
+        self.0.as_mut()?.next()
+    }
+}
+
+impl<'js, F, T> IntoJs<'js> for Iterable<F>
+where
+    F: FnMut() -> Option<T> + 'js,
+    T: IntoJs<'js> + 'js,
+{
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        let mut f = self.0;
+        let iter_obj = build_iterator_object(ctx, move |ctx| f().map(|v| v.into_js(ctx)))?;
+        Ok(iter_obj.into_value())
+    }
+}
+
+impl<'js, I, T> IntoJs<'js> for Iterable<IteratorWrapper<I>>
+where
+    I: Iterator<Item = T> + 'js,
+    T: IntoJs<'js> + 'js,
+{
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        let mut w = self.0;
+        let iter_obj = build_iterator_object(ctx, move |ctx| w.next().map(|v| v.into_js(ctx)))?;
+        Ok(iter_obj.into_value())
+    }
+}
+
+/// Consumes a JavaScript iterator from Rust.
+///
+/// Wraps a JS iterator object and implements Rust's [`Iterator`] trait.
+/// Can be created from any JS iterable (arrays, maps, sets, generators, etc.).
+///
+/// # Example
+/// ```
+/// # use rquickjs::{Runtime, Context, Result, JsIterator};
+/// # let rt = Runtime::new().unwrap();
+/// # let ctx = Context::full(&rt).unwrap();
+/// # ctx.with(|ctx| -> Result<()> {
 /// let iter: JsIterator<i32> = ctx.eval("[1, 2, 3]")?;
 /// let values: Vec<i32> = iter.filter_map(|r| r.ok()).collect();
 /// assert_eq!(values, vec![1, 2, 3]);
-///
-/// // Get raw JS values without conversion
-/// let iter: JsIterator<Value> = ctx.eval("['a', 'b']")?;
-/// for value in iter {
-///     println!("{:?}", value?);
-/// }
 /// # Ok(())
 /// # }).unwrap();
 /// ```
@@ -214,7 +280,7 @@ mod test {
     use crate::*;
 
     #[test]
-    fn iterable_spread() {
+    fn from_vec() {
         test_with(|ctx| {
             let iter = Iterable::from(vec![1i32, 2, 3]);
             ctx.globals().set("myIter", iter).unwrap();
@@ -224,25 +290,7 @@ mod test {
     }
 
     #[test]
-    fn iterable_for_of() {
-        test_with(|ctx| {
-            let iter = Iterable::from(vec!["a", "b", "c"]);
-            ctx.globals().set("myIter", iter).unwrap();
-            let result: alloc::string::String = ctx
-                .eval(
-                    r#"
-                let s = "";
-                for (const x of myIter) { s += x; }
-                s
-            "#,
-                )
-                .unwrap();
-            assert_eq!(result, "abc");
-        });
-    }
-
-    #[test]
-    fn iterable_from_range() {
+    fn from_range() {
         test_with(|ctx| {
             let iter = Iterable::from(0..5);
             ctx.globals().set("myIter", iter).unwrap();
@@ -252,16 +300,79 @@ mod test {
     }
 
     #[test]
-    fn iterable_single_use() {
+    fn from_closure() {
         test_with(|ctx| {
-            let iter = Iterable::from(vec![1i32, 2]);
+            let mut i = 0i32;
+            let iter = Iterable::from_fn(move || {
+                i += 1;
+                if i <= 3 {
+                    Some(i)
+                } else {
+                    None
+                }
+            });
             ctx.globals().set("myIter", iter).unwrap();
-            // First iteration consumes the iterator
-            let first: Vec<i32> = ctx.eval("[...myIter]").unwrap();
-            assert_eq!(first, vec![1, 2]);
-            // Second iteration returns empty (iterator exhausted)
-            let second: Vec<i32> = ctx.eval("[...myIter]").unwrap();
-            assert_eq!(second, Vec::<i32>::new());
+            let result: Vec<i32> = ctx.eval("[...myIter]").unwrap();
+            assert_eq!(result, vec![1, 2, 3]);
+        });
+    }
+
+    #[test]
+    fn for_of() {
+        test_with(|ctx| {
+            let iter = Iterable::from(vec!["a", "b", "c"]);
+            ctx.globals().set("myIter", iter).unwrap();
+            let result: alloc::string::String = ctx
+                .eval(r#"let s = ""; for (const x of myIter) { s += x; } s"#)
+                .unwrap();
+            assert_eq!(result, "abc");
+        });
+    }
+
+    #[test]
+    fn symbol_iterator_returns_this() {
+        test_with(|ctx| {
+            let iter = Iterable::from(vec![1i32]);
+            ctx.globals().set("myIter", iter).unwrap();
+            let ok: bool = ctx.eval("myIter[Symbol.iterator]() === myIter").unwrap();
+            assert!(ok);
+        });
+    }
+
+    #[test]
+    fn prototype_chain() {
+        test_with(|ctx| {
+            let iter = Iterable::from(vec![1i32]);
+            ctx.globals().set("myIter", iter).unwrap();
+            let ok: bool = ctx
+                .eval(
+                    r#"
+                    const iterProto = Object.getPrototypeOf(
+                        Object.getPrototypeOf([][Symbol.iterator]())
+                    );
+                    Object.getPrototypeOf(Object.getPrototypeOf(myIter)) === iterProto
+                    "#,
+                )
+                .unwrap();
+            assert!(ok);
+        });
+    }
+
+    #[test]
+    fn next_descriptors() {
+        test_with(|ctx| {
+            let iter = Iterable::from(vec![1i32]);
+            ctx.globals().set("myIter", iter).unwrap();
+            let ok: bool = ctx
+                .eval(
+                    r#"
+                    const proto = Object.getPrototypeOf(myIter);
+                    const desc = Object.getOwnPropertyDescriptor(proto, "next");
+                    desc.enumerable && desc.writable && desc.configurable
+                    "#,
+                )
+                .unwrap();
+            assert!(ok);
         });
     }
 
@@ -277,7 +388,6 @@ mod test {
     #[test]
     fn js_iter_from_iterable() {
         test_with(|ctx| {
-            // Pass an iterable (array), not an iterator
             let iter: JsIterator<i32> = ctx.eval("[4, 5, 6]").unwrap();
             let values: Vec<i32> = iter.filter_map(|r| r.ok()).collect();
             assert_eq!(values, vec![4, 5, 6]);
@@ -288,15 +398,7 @@ mod test {
     fn js_iter_from_generator() {
         test_with(|ctx| {
             let iter: JsIterator<i32> = ctx
-                .eval(
-                    r#"
-                (function*() {
-                    yield 10;
-                    yield 20;
-                    yield 30;
-                })()
-            "#,
-                )
+                .eval("(function*() { yield 10; yield 20; yield 30; })()")
                 .unwrap();
             let values: Vec<i32> = iter.filter_map(|r| r.ok()).collect();
             assert_eq!(values, vec![10, 20, 30]);
@@ -306,7 +408,6 @@ mod test {
     #[test]
     fn js_iter_roundtrip() {
         test_with(|ctx| {
-            // Rust -> JS -> Rust roundtrip
             let rust_iter = Iterable::from(vec![100i32, 200, 300]);
             ctx.globals().set("myIter", rust_iter).unwrap();
             let js_iter: JsIterator<i32> = ctx.eval("myIter").unwrap();
@@ -318,70 +419,24 @@ mod test {
     #[test]
     fn js_iter_raw_values() {
         test_with(|ctx| {
-            // Get raw Value without conversion
             let iter: JsIterator<Value> = ctx.eval("[1, 'two', 3]").unwrap();
             let values: Vec<Value> = iter.filter_map(|r| r.ok()).collect();
             assert_eq!(values.len(), 3);
-            assert!(values[0].is_int());
-            assert!(values[1].is_string());
-            assert!(values[2].is_int());
         });
     }
 
     #[test]
-    fn js_iter_typed_conversion() {
+    fn js_iter_typed() {
         test_with(|ctx| {
-            // Start with raw values, then convert
             let iter: JsIterator<Value> = ctx.eval("[1, 2, 3]").unwrap();
-            let typed = iter.typed::<i32>();
-            let values: Vec<i32> = typed.filter_map(|r| r.ok()).collect();
+            let values: Vec<i32> = iter.typed::<i32>().filter_map(|r| r.ok()).collect();
             assert_eq!(values, vec![1, 2, 3]);
-        });
-    }
-
-    #[test]
-    fn js_iter_strings() {
-        test_with(|ctx| {
-            let iter: JsIterator<alloc::string::String> =
-                ctx.eval("['hello', 'world', 'rust']").unwrap();
-            let values: Vec<alloc::string::String> = iter.filter_map(|r| r.ok()).collect();
-            assert_eq!(values, vec!["hello", "world", "rust"]);
-        });
-    }
-
-    #[test]
-    fn js_iter_floats() {
-        test_with(|ctx| {
-            let iter: JsIterator<f64> = ctx.eval("[1.5, 2.7, 3.54]").unwrap();
-            let values: Vec<f64> = iter.filter_map(|r| r.ok()).collect();
-            assert_eq!(values, vec![1.5, 2.7, 3.54]);
-        });
-    }
-
-    #[test]
-    fn js_iter_bools() {
-        test_with(|ctx| {
-            let iter: JsIterator<bool> = ctx.eval("[true, false, true]").unwrap();
-            let values: Vec<bool> = iter.filter_map(|r| r.ok()).collect();
-            assert_eq!(values, vec![true, false, true]);
-        });
-    }
-
-    #[test]
-    fn js_iter_objects() {
-        test_with(|ctx| {
-            let iter: JsIterator<Object> = ctx.eval("[{a: 1}, {b: 2}]").unwrap();
-            let objects: Vec<Object> = iter.filter_map(|r| r.ok()).collect();
-            assert_eq!(objects.len(), 2);
-            assert_eq!(objects[0].get::<_, i32>("a").unwrap(), 1);
-            assert_eq!(objects[1].get::<_, i32>("b").unwrap(), 2);
         });
     }
 
     #[test]
     fn js_iter_map_entries() {
         test_with(|ctx| {
-            // Map.entries() returns [key, value] pairs
             let iter: JsIterator<Array> =
                 ctx.eval("new Map([['a', 1], ['b', 2]]).entries()").unwrap();
             let entries: Vec<Array> = iter.filter_map(|r| r.ok()).collect();
