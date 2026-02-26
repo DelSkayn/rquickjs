@@ -305,6 +305,8 @@ pub enum PredefinedAtom {
     GeneratorFunction = qjs::JS_ATOM_GeneratorFunction as u32,
     /// "ForInIterator"
     ForInIterator = qjs::JS_ATOM_ForInIterator as u32,
+    /// "Iterator"
+    Iterator = qjs::JS_ATOM_Iterator as u32,
     /// "RegExp"
     RegExp = qjs::JS_ATOM_RegExp as u32,
     /// "ArrayBuffer"
@@ -586,6 +588,7 @@ impl PredefinedAtom {
             PredefinedAtom::Function => "Function",
             PredefinedAtom::GeneratorFunction => "GeneratorFunction",
             PredefinedAtom::ForInIterator => "ForInIterator",
+            PredefinedAtom::Iterator => "Iterator",
             PredefinedAtom::RegExp => "RegExp",
             PredefinedAtom::ArrayBuffer => "ArrayBuffer",
             PredefinedAtom::SharedArrayBuffer => "SharedArrayBuffer",

@@ -9,7 +9,7 @@ use crate::safe_ref::Mut;
 use crate::{
     atom::PredefinedAtom,
     function::{MutFn, This},
-    Array, Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
+    Ctx, Error, FromJs, Function, IntoJs, Object, Result, Value,
 };
 use core::{iter::FusedIterator, marker::PhantomData};
 
@@ -24,15 +24,8 @@ fn get_iterator_prototype<'js>(ctx: &Ctx<'js>) -> Result<Object<'js>> {
         return Ok(guard.0.clone());
     }
 
-    let array = Array::new(ctx.clone())?;
-    let iter_fn: Function = array.as_object().get(PredefinedAtom::SymbolIterator)?;
-    let array_iter: Object = iter_fn.call((This(array),))?;
-    let array_iter_proto = array_iter
-        .get_prototype()
-        .ok_or_else(|| Error::new_from_js("value", "iterator prototype"))?;
-    let proto = array_iter_proto
-        .get_prototype()
-        .ok_or_else(|| Error::new_from_js("value", "iterator prototype"))?;
+    let iterator_ctor: Object = ctx.globals().get(PredefinedAtom::Iterator)?;
+    let proto: Object = iterator_ctor.get(PredefinedAtom::Prototype)?;
 
     let _ = ctx.store_userdata(IteratorPrototypeCache(proto.clone()));
 
@@ -115,12 +108,12 @@ where
 /// # Ok(())
 /// # }).unwrap();
 /// ```
-pub struct Iterable<F>(F);
+pub struct Iterable<F>(pub F);
 
-impl<F> Iterable<F> {
+impl<F> Iterable<ClosureWrapper<F>> {
     /// Create from a `FnMut() -> Option<T>` closure.
     pub fn from_fn(f: F) -> Self {
-        Iterable(f)
+        Iterable(ClosureWrapper(f))
     }
 }
 
@@ -130,35 +123,44 @@ impl<I: IntoIterator> From<I> for Iterable<IteratorWrapper<I::IntoIter>> {
     }
 }
 
-/// Wrapper that adapts a Rust `Iterator` into a `FnMut() -> Option<T>`.
+/// Trait for types that can produce optional values, used by [`Iterable`].
+///
+/// Implemented for `FnMut() -> Option<T>` and `Iterator<Item = T>`,
+/// allowing [`Iterable`] to wrap both closures and iterators uniformly.
+/// External users can implement this trait for custom iteration sources.
+pub trait IterableFn {
+    type Item;
+    fn call(&mut self) -> Option<Self::Item>;
+}
+
+/// Wrapper that adapts a `FnMut() -> Option<T>` closure into an [`IterableFn`].
+pub struct ClosureWrapper<F>(F);
+
+impl<T, F: FnMut() -> Option<T>> IterableFn for ClosureWrapper<F> {
+    type Item = T;
+    fn call(&mut self) -> Option<T> {
+        (self.0)()
+    }
+}
+
+/// Wrapper that adapts a Rust `Iterator` into an [`IterableFn`].
 pub struct IteratorWrapper<I>(Option<I>);
 
-impl<I: Iterator> IteratorWrapper<I> {
-    fn next(&mut self) -> Option<I::Item> {
+impl<I: Iterator> IterableFn for IteratorWrapper<I> {
+    type Item = I::Item;
+    fn call(&mut self) -> Option<I::Item> {
         self.0.as_mut()?.next()
     }
 }
 
-impl<'js, F, T> IntoJs<'js> for Iterable<F>
+impl<'js, F> IntoJs<'js> for Iterable<F>
 where
-    F: FnMut() -> Option<T> + 'js,
-    T: IntoJs<'js> + 'js,
+    F: IterableFn + 'js,
+    F::Item: IntoJs<'js> + 'js,
 {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         let mut f = self.0;
-        let iter_obj = build_iterator_object(ctx, move |ctx| f().map(|v| v.into_js(ctx)))?;
-        Ok(iter_obj.into_value())
-    }
-}
-
-impl<'js, I, T> IntoJs<'js> for Iterable<IteratorWrapper<I>>
-where
-    I: Iterator<Item = T> + 'js,
-    T: IntoJs<'js> + 'js,
-{
-    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
-        let mut w = self.0;
-        let iter_obj = build_iterator_object(ctx, move |ctx| w.next().map(|v| v.into_js(ctx)))?;
+        let iter_obj = build_iterator_object(ctx, move |ctx| f.call().map(|v| v.into_js(ctx)))?;
         Ok(iter_obj.into_value())
     }
 }
@@ -452,6 +454,46 @@ mod test {
             let iter: JsIterator<i32> = ctx.eval("new Set([1, 2, 3])").unwrap();
             let values: Vec<i32> = iter.filter_map(|r| r.ok()).collect();
             assert_eq!(values, vec![1, 2, 3]);
+        });
+    }
+
+    #[test]
+    fn custom_iterable_fn() {
+        struct Counter(i32);
+
+        impl IterableFn for Counter {
+            type Item = i32;
+            fn call(&mut self) -> Option<i32> {
+                self.0 += 1;
+                (self.0 <= 3).then_some(self.0)
+            }
+        }
+
+        test_with(|ctx| {
+            let iter = Iterable(Counter(0));
+            ctx.globals().set("myIter", iter).unwrap();
+            let result: Vec<i32> = ctx.eval("[...myIter]").unwrap();
+            assert_eq!(result, vec![1, 2, 3]);
+        });
+    }
+
+    #[test]
+    fn custom_iterator_as_iterable_fn() {
+        struct Doubles(i32);
+
+        impl Iterator for Doubles {
+            type Item = i32;
+            fn next(&mut self) -> Option<i32> {
+                self.0 += 1;
+                (self.0 <= 3).then_some(self.0 * 2)
+            }
+        }
+
+        test_with(|ctx| {
+            let iter = Iterable::from(Doubles(0));
+            ctx.globals().set("myIter", iter).unwrap();
+            let result: Vec<i32> = ctx.eval("[...myIter]").unwrap();
+            assert_eq!(result, vec![2, 4, 6]);
         });
     }
 }
