@@ -140,13 +140,7 @@ fn main() {
         "quickjs.h",
     ];
 
-    let source_files = [
-        "libregexp.c",
-        "libunicode.c",
-        "cutils.c",
-        "quickjs.c",
-        "dtoa.c",
-    ];
+    let source_files = ["libregexp.c", "libunicode.c", "quickjs.c", "dtoa.c"];
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
