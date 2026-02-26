@@ -17,6 +17,8 @@ build_target x86_64-apple-darwin         # __darwin_size_t representative
 build_target x86_64-pc-windows-gnu      # c_ulonglong representative
 build_target i686-unknown-linux-gnu      # c_uint (unique)
 build_target wasm32-wasip1
+build_target armv7-unknown-linux-gnueabihf
+build_target powerpc64-unknown-linux-gnu
 
 # Copy bindings for targets with same size_t as c_ulong
 copy_bindings x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
