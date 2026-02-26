@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed cross-thread stack overflow false positives in parallel mode by updating stack baseline before QuickJS C entry points
+- Fixed iterators to use correct IteratorPrototype chain
 
 ## [0.11.0] - 2025-12-16
 
