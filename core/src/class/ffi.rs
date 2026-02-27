@@ -75,12 +75,15 @@ pub(crate) type CallFunc = for<'a> unsafe fn(
 ) -> qjs::JSValue;
 
 pub(crate) type TypeIdFn = fn() -> TypeId;
+pub(crate) type ParentFn = fn() -> Option<&'static VTable>;
 
-pub(crate) struct VTable {
+#[doc(hidden)]
+pub struct VTable {
     id_fn: TypeIdFn,
     finalizer: FinalizerFunc,
     trace: TraceFunc,
     call: CallFunc,
+    parent: ParentFn,
 }
 
 impl VTable {
@@ -130,6 +133,7 @@ impl VTable {
                 finalizer: VTable::finalizer_impl::<'js, C>,
                 trace: VTable::trace_impl::<C>,
                 call: VTable::call_impl::<C>,
+                parent: C::parent_vtable,
             };
         }
         &<C as HasVTable>::VTABLE
@@ -140,7 +144,23 @@ impl VTable {
     }
 
     pub fn is_of_class<'js, C: JsClass<'js>>(&self) -> bool {
-        (self.id_fn)() == TypeId::of::<C::Changed<'static>>()
+        let target_id = TypeId::of::<C::Changed<'static>>();
+
+        // Check this class first
+        if (self.id_fn)() == target_id {
+            return true;
+        }
+
+        // Traverse the parent chain
+        let mut current = (self.parent)();
+        while let Some(parent_vtable) = current {
+            if (parent_vtable.id_fn)() == target_id {
+                return true;
+            }
+            current = (parent_vtable.parent)();
+        }
+
+        false
     }
 }
 

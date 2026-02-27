@@ -20,6 +20,7 @@ pub(crate) struct ClassConfig {
     pub crate_: Option<String>,
     pub rename: Option<String>,
     pub rename_all: Option<Case>,
+    pub extends: Option<Box<syn::Type>>,
 }
 
 pub(crate) enum ClassOption {
@@ -27,6 +28,7 @@ pub(crate) enum ClassOption {
     Crate(ValueOption<Token![crate], LitStr>),
     Rename(ValueOption<kw::rename, LitStr>),
     RenameAll(ValueOption<kw::rename_all, Case>),
+    Extends(ValueOption<kw::extends, Box<syn::Type>>),
 }
 
 impl Parse for ClassOption {
@@ -39,6 +41,8 @@ impl Parse for ClassOption {
             input.parse().map(Self::Rename)
         } else if input.peek(kw::rename_all) {
             input.parse().map(Self::RenameAll)
+        } else if input.peek(kw::extends) {
+            input.parse().map(Self::Extends)
         } else {
             Err(syn::Error::new(input.span(), "invalid class attribute"))
         }
@@ -59,6 +63,9 @@ impl ClassConfig {
             }
             ClassOption::RenameAll(ref x) => {
                 self.rename_all = Some(x.value);
+            }
+            ClassOption::Extends(ref x) => {
+                self.extends = Some(x.value.clone());
             }
         }
     }
@@ -281,7 +288,7 @@ impl Class {
         }
     }
 
-    // Aeexpand the original definition with the attributes removed..
+    // Reexpand the original definition with the attributes removed.
     pub fn reexpand(&self) -> TokenStream {
         match self {
             Class::Enum {
@@ -299,6 +306,7 @@ impl Class {
                 }
             }
             Class::Struct {
+                config,
                 attrs,
                 vis,
                 struct_token,
@@ -325,8 +333,16 @@ impl Class {
                     Fields::Unit => TokenStream::new(),
                 };
 
+                // Add #[repr(C)] when extends is specified for memory layout compatibility
+                let repr_c = if config.extends.is_some() {
+                    quote! { #[repr(C)] }
+                } else {
+                    TokenStream::new()
+                };
+
                 quote! {
                     #(#attrs)*
+                    #repr_c
                     #vis #struct_token #ident #generics #fields
                 }
             }
@@ -346,6 +362,83 @@ impl Class {
         let props = self.expand_props(&crate_name);
         let reexpand = self.reexpand();
 
+        // Generate prototype and constructor setup based on whether we have a parent class
+        let (parent_proto_impl, parent_constructor_impl) = if let Some(ref parent_ty) =
+            self.config().extends
+        {
+            let proto_setup = quote! {
+                // Set up prototype chain: our prototype's prototype is the parent's prototype
+                if let Some(parent_proto) = #crate_name::class::Class::<#parent_ty>::prototype(ctx)? {
+                    proto.set_prototype(Some(&parent_proto))?;
+                }
+            };
+
+            let constructor_setup = quote! {
+                // Set up constructor chain for static properties/methods
+                // The child constructor's __proto__ should be the parent constructor
+                if let Some(ref parent_constructor) = #crate_name::class::Class::<#parent_ty>::create_constructor(ctx)? {
+                    if let Some(ref child_constructor) = constructor {
+                        let parent_func: &#crate_name::Object = parent_constructor.as_inner();
+                        child_constructor.set_prototype(Some(parent_func))?;
+                    }
+                }
+            };
+
+            (proto_setup, constructor_setup)
+        } else {
+            (TokenStream::new(), TokenStream::new())
+        };
+
+        // Generate parent_vtable_fn and HasParent implementation if extends is specified
+        let (parent_vtable_fn, inheritance_impls) = if let Some(ref parent_ty) =
+            self.config().extends
+        {
+            // Determine the first field accessor
+            let first_field_accessor = match &self {
+                Class::Struct { fields, .. } => match fields {
+                    Fields::Named(fields) => {
+                        let field_name = fields.first().and_then(|f| f.ident.as_ref());
+                        if let Some(name) = field_name {
+                            quote! { &self.#name }
+                        } else {
+                            quote! { &self.0 }
+                        }
+                    }
+                    Fields::Unnamed(_) => quote! { &self.0 },
+                    Fields::Unit => {
+                        return Err(Error::new(self.ident().span(), "extends requires the struct to have at least one field of the parent type"));
+                    }
+                },
+                Class::Enum { .. } => {
+                    return Err(Error::new(
+                        self.ident().span(),
+                        "extends is not supported for enums",
+                    ));
+                }
+            };
+
+            let vtable_fn = quote! {
+                fn parent_vtable() -> Option<&'static #crate_name::class::ffi::VTable> {
+                    Some(#crate_name::class::ffi::VTable::get::<#parent_ty>())
+                }
+            };
+
+            let has_parent = quote! {
+                impl #generics_with_lifetimes #crate_name::class::inherits::HasParent<'js> for #class_name #generics
+                {
+                    type Parent = #parent_ty;
+
+                    fn as_parent(&self) -> &Self::Parent {
+                        #first_field_accessor
+                    }
+                }
+            };
+
+            (vtable_fn, has_parent)
+        } else {
+            (TokenStream::new(), TokenStream::new())
+        };
+
         let res = quote! {
             #reexpand
 
@@ -358,6 +451,8 @@ impl Class {
 
                     type Mutable = #crate_name::class::#mutability;
 
+                    #parent_vtable_fn
+
                     fn prototype(ctx: &#crate_name::Ctx<'js>) -> #crate_name::Result<Option<#crate_name::Object<'js>>>{
                         use #crate_name::class::impl_::MethodImplementor;
 
@@ -365,6 +460,9 @@ impl Class {
                         #props
                         let implementor = #crate_name::class::impl_::MethodImpl::<Self>::new();
                         (&implementor).implement(&proto)?;
+
+                        #parent_proto_impl
+
                         Ok(Some(proto))
                     }
 
@@ -372,9 +470,15 @@ impl Class {
                         use #crate_name::class::impl_::ConstructorCreator;
 
                         let implementor = #crate_name::class::impl_::ConstructorCreate::<Self>::new();
-                        (&implementor).create_constructor(ctx)
+                        let constructor = (&implementor).create_constructor(ctx)?;
+
+                        #parent_constructor_impl
+
+                        Ok(constructor)
                     }
                 }
+
+                #inheritance_impls
 
                 impl #generics_with_lifetimes #crate_name::IntoJs<'js> for #class_name #generics{
                     fn into_js(self,ctx: &#crate_name::Ctx<'js>) -> #crate_name::Result<#crate_name::Value<'js>>{

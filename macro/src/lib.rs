@@ -46,6 +46,7 @@ mod trace;
 /// | `rename`     | String    | Changes the name of the implemented class on the JavaScript side.                                                                                                                       |
 /// | `rename_all` | Casing    | Converts the case of all the fields of this struct which have implement accessors. Can be one of `lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`,`snake_case`, or `SCREAMING_SNAKE` |
 /// | `frozen`     | Flag      | Changes the class implementation to only allow borrowing immutably.  Trying to borrow mutably will result in an error.                                                                  |
+/// | `extends`    | Type      | Specifies the parent class of this class. When extending is enabled, the struct's first field must be of the parent type.                                                               |
 ///
 /// # Field options
 ///
@@ -88,6 +89,14 @@ mod trace;
 ///     another_value: u32,
 /// }
 ///
+/// #[derive(Trace, JsLifetime)]
+/// #[rquickjs::class(rename_all = "camelCase", extends = TestClass<'js>)]
+/// pub struct TestSubClass<'js> {
+///     super_: TestClass<'js>,
+///     #[qjs(get, set)]
+///     sub_value: u32,
+/// }
+///
 /// pub fn main() {
 ///     let rt = Runtime::new().unwrap();
 ///     let ctx = Context::full(&rt).unwrap();
@@ -103,13 +112,32 @@ mod trace;
 ///             },
 ///         )
 ///         .unwrap();
+///        let sub_cls = Class::instance(
+///            ctx.clone(),
+///            TestSubClass {
+///                super_: TestClass {
+///                    inner_object: Object::new(ctx.clone()).unwrap(),
+///                    some_value: 1,
+///                    another_value: 2,
+///                },
+///                sub_value: 3,
+///            },
+///        )
+///        .unwrap();
 ///         /// Pass it to JavaScript
 ///         ctx.globals().set("t", cls.clone()).unwrap();
+///         ctx.globals().set("t2", sub_cls.clone()).unwrap();
 ///         ctx.eval::<(), _>(
 ///             r#"
 ///             // use the actual value.
 ///             if(t.someValue !== 1){
 ///                 throw new Error(1)
+///             }
+///             if(t2.someValue !== 1){
+///                 throw new Error(2)
+///             }
+///             if(t2.subValue !== 3){
+///                 throw new Error(3)
 ///             }"#
 ///         ).unwrap();
 ///     })
