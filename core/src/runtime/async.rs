@@ -1,32 +1,50 @@
-use alloc::{
-    ffi::CString,
-    sync::{Arc, Weak},
-    vec::Vec,
-};
+use alloc::{ffi::CString, vec::Vec};
 use core::{ptr::NonNull, result::Result as StdResult, task::Poll};
-#[cfg(feature = "std")]
-use std::println;
 
+#[cfg(feature = "parallel")]
+use alloc::sync::Arc;
+#[cfg(feature = "parallel")]
+use async_lock::Mutex;
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Receiver, Sender};
 
-use async_lock::Mutex;
+#[cfg(not(feature = "parallel"))]
+use alloc::rc::Rc;
+#[cfg(not(feature = "parallel"))]
+use core::cell::RefCell;
 
 use super::{
-    opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
-    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    opaque::Opaque, raw::RawRuntime, spawner::DriveFuture, task_queue::TaskPoll, InterruptHandler,
+    MemoryUsage, PromiseHook, RejectionTracker,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{
-    context::AsyncContext, result::AsyncJobException, util::ManualPoll, Ctx, Exception, Result,
-};
 #[cfg(feature = "parallel")]
-use crate::{
-    qjs,
-    util::{AssertSendFuture, AssertSyncFuture},
-};
+use crate::qjs;
+use crate::{context::AsyncContext, result::AsyncJobException, Ctx, Result};
+
+// Type aliases for lock abstraction
+#[cfg(feature = "parallel")]
+pub(crate) type RuntimeLock<T> = Mutex<T>;
+#[cfg(not(feature = "parallel"))]
+pub(crate) type RuntimeLock<T> = RefCell<T>;
+
+#[cfg(feature = "parallel")]
+pub(crate) type RuntimeRef<T> = Arc<T>;
+#[cfg(not(feature = "parallel"))]
+pub(crate) type RuntimeRef<T> = Rc<T>;
+
+#[cfg(feature = "parallel")]
+pub(crate) type RuntimeWeak<T> = alloc::sync::Weak<T>;
+#[cfg(not(feature = "parallel"))]
+pub(crate) type RuntimeWeak<T> = alloc::rc::Weak<T>;
+
+// Guard type aliases
+#[cfg(feature = "parallel")]
+pub(crate) type RuntimeGuard<'a, T> = async_lock::MutexGuard<'a, T>;
+#[cfg(not(feature = "parallel"))]
+pub(crate) type RuntimeGuard<'a, T> = core::cell::RefMut<'a, T>;
 
 #[derive(Debug)]
 pub(crate) struct InnerRuntime {
@@ -36,6 +54,7 @@ pub(crate) struct InnerRuntime {
 }
 
 impl InnerRuntime {
+    #[inline]
     pub fn drop_pending(&self) {
         #[cfg(feature = "parallel")]
         while let Ok(x) = self.drop_recv.try_recv() {
@@ -59,9 +78,9 @@ unsafe impl Send for InnerRuntime {}
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncWeakRuntime {
-    inner: Weak<Mutex<InnerRuntime>>,
+    pub(crate) inner: RuntimeWeak<RuntimeLock<InnerRuntime>>,
     #[cfg(feature = "parallel")]
-    drop_send: Sender<NonNull<qjs::JSContext>>,
+    pub(crate) drop_send: Sender<NonNull<qjs::JSContext>>,
 }
 
 impl AsyncWeakRuntime {
@@ -78,22 +97,15 @@ impl AsyncWeakRuntime {
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[derive(Clone)]
 pub struct AsyncRuntime {
-    // use Arc instead of Ref so we can use OwnedLock
-    pub(crate) inner: Arc<Mutex<InnerRuntime>>,
+    pub(crate) inner: RuntimeRef<RuntimeLock<InnerRuntime>>,
     #[cfg(feature = "parallel")]
     pub(crate) drop_send: Sender<NonNull<qjs::JSContext>>,
 }
 
-// Since all functions which use runtime are behind a mutex
-// sending the runtime to other threads should be fine.
 #[cfg(feature = "parallel")]
 unsafe impl Send for AsyncRuntime {}
 #[cfg(feature = "parallel")]
 unsafe impl Send for AsyncWeakRuntime {}
-
-// Since a global lock needs to be locked for safe use
-// using runtime in a sync way should be safe as
-// simultaneous accesses is synchronized behind a lock.
 #[cfg(feature = "parallel")]
 unsafe impl Sync for AsyncRuntime {}
 #[cfg(feature = "parallel")]
@@ -106,43 +118,27 @@ impl AsyncRuntime {
     ///
     /// # Features
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
-    // Annoying false positive clippy lint
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Result<Self> {
-        let opaque = Opaque::with_spawner();
-        let runtime = unsafe { RawRuntime::new(opaque) }?;
-
-        #[cfg(feature = "parallel")]
-        let (drop_send, drop_recv) = mpsc::channel();
-
-        Ok(Self {
-            inner: Arc::new(Mutex::new(InnerRuntime {
-                runtime,
-                #[cfg(feature = "parallel")]
-                drop_recv,
-            })),
-            #[cfg(feature = "parallel")]
-            drop_send,
-        })
+        Self::new_inner(unsafe { RawRuntime::new(Opaque::with_spawner()) }?)
     }
 
-    /// Create a new runtime using specified allocator
+    /// Create a new runtime using specified allocator.
     ///
     /// Will generally only fail if not enough memory was available.
-    // Annoying false positive clippy lint
     #[allow(clippy::arc_with_non_send_sync)]
-    pub fn new_with_alloc<A>(allocator: A) -> Result<Self>
-    where
-        A: Allocator + 'static,
-    {
-        let opaque = Opaque::with_spawner();
-        let runtime = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }?;
+    pub fn new_with_alloc<A: Allocator + 'static>(allocator: A) -> Result<Self> {
+        Self::new_inner(unsafe {
+            RawRuntime::new_with_allocator(Opaque::with_spawner(), allocator)
+        }?)
+    }
 
+    fn new_inner(runtime: RawRuntime) -> Result<Self> {
         #[cfg(feature = "parallel")]
         let (drop_send, drop_recv) = mpsc::channel();
 
         Ok(Self {
-            inner: Arc::new(Mutex::new(InnerRuntime {
+            inner: RuntimeRef::new(RuntimeLock::new(InnerRuntime {
                 runtime,
                 #[cfg(feature = "parallel")]
                 drop_recv,
@@ -152,68 +148,76 @@ impl AsyncRuntime {
         })
     }
 
-    /// Get weak ref to runtime
+    /// Get weak ref to runtime.
     pub fn weak(&self) -> AsyncWeakRuntime {
         AsyncWeakRuntime {
+            #[cfg(feature = "parallel")]
             inner: Arc::downgrade(&self.inner),
+            #[cfg(not(feature = "parallel"))]
+            inner: Rc::downgrade(&self.inner),
             #[cfg(feature = "parallel")]
             drop_send: self.drop_send.clone(),
         }
     }
 
-    /// Set a closure which is called when a Promise is rejected.
-    #[inline]
+    // Lock helpers - zero-cost for non-parallel
+    #[cfg(feature = "parallel")]
+    pub(crate) async fn lock(&self) -> RuntimeGuard<'_, InnerRuntime> {
+        self.inner.lock().await
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub(crate) async fn lock(&self) -> RuntimeGuard<'_, InnerRuntime> {
+        self.inner.borrow_mut()
+    }
+
+    #[cfg(feature = "parallel")]
+    pub(crate) fn try_lock(&self) -> Option<RuntimeGuard<'_, InnerRuntime>> {
+        self.inner.try_lock()
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    pub(crate) fn try_lock(&self) -> Option<RuntimeGuard<'_, InnerRuntime>> {
+        self.inner.try_borrow_mut().ok()
+    }
+
+    /// Set a closure which is called when a promise is rejected.
     pub async fn set_host_promise_rejection_tracker(&self, tracker: Option<RejectionTracker>) {
         unsafe {
-            self.inner
-                .lock()
+            self.lock()
                 .await
                 .runtime
-                .set_host_promise_rejection_tracker(tracker);
+                .set_host_promise_rejection_tracker(tracker)
         }
     }
 
     /// Set a closure which is called when a promise is created, resolved, or chained.
-    #[inline]
     pub async fn set_promise_hook(&self, tracker: Option<PromiseHook>) {
-        unsafe {
-            self.inner.lock().await.runtime.set_promise_hook(tracker);
-        }
+        unsafe { self.lock().await.runtime.set_promise_hook(tracker) }
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.
-    /// If the provided closure returns `true` the interpreter will raise and uncatchable
+    ///
+    /// If the provided closure returns `true` the interpreter will raise an uncatchable
     /// exception and return control flow to the caller.
-    #[inline]
     pub async fn set_interrupt_handler(&self, handler: Option<InterruptHandler>) {
-        unsafe {
-            self.inner
-                .lock()
-                .await
-                .runtime
-                .set_interrupt_handler(handler);
-        }
+        unsafe { self.lock().await.runtime.set_interrupt_handler(handler) }
     }
 
-    /// Set the module loader
+    /// Set the module loader.
     #[cfg(feature = "loader")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "loader")))]
-    pub async fn set_loader<R, L>(&self, resolver: R, loader: L)
-    where
-        R: Resolver + 'static,
-        L: Loader + 'static,
-    {
-        unsafe {
-            self.inner.lock().await.runtime.set_loader(resolver, loader);
-        }
+    pub async fn set_loader<R: Resolver + 'static, L: Loader + 'static>(
+        &self,
+        resolver: R,
+        loader: L,
+    ) {
+        unsafe { self.lock().await.runtime.set_loader(resolver, loader) }
     }
 
-    /// Set the info of the runtime
+    /// Set the info of the runtime.
     pub async fn set_info<S: Into<Vec<u8>>>(&self, info: S) -> Result<()> {
-        let string = CString::new(info)?;
-        unsafe {
-            self.inner.lock().await.runtime.set_info(string);
-        }
+        unsafe { self.lock().await.runtime.set_info(CString::new(info)?) };
         Ok(())
     }
 
@@ -222,27 +226,21 @@ impl AsyncRuntime {
     /// Setting the limit to 0 is equivalent to unlimited memory.
     ///
     /// Note that is a Noop when a custom allocator is being used,
-    /// as is the case for the "rust-alloc" or "allocator" features.
+    /// as is the case for the `"rust-alloc"` or `"allocator"` features.
     pub async fn set_memory_limit(&self, limit: usize) {
-        unsafe {
-            self.inner.lock().await.runtime.set_memory_limit(limit);
-        }
+        unsafe { self.lock().await.runtime.set_memory_limit(limit) }
     }
 
     /// Set a limit on the max size of stack the runtime will use.
     ///
     /// The default values is 256x1024 bytes.
     pub async fn set_max_stack_size(&self, limit: usize) {
-        unsafe {
-            self.inner.lock().await.runtime.set_max_stack_size(limit);
-        }
+        unsafe { self.lock().await.runtime.set_max_stack_size(limit) }
     }
 
     /// Set a memory threshold for garbage collection.
     pub async fn set_gc_threshold(&self, threshold: usize) {
-        unsafe {
-            self.inner.lock().await.runtime.set_gc_threshold(threshold);
-        }
+        unsafe { self.lock().await.runtime.set_gc_threshold(threshold) }
     }
 
     /// Manually run the garbage collection.
@@ -252,111 +250,93 @@ impl AsyncRuntime {
     /// references. The garbage collector is only for collecting
     /// cyclic references.
     pub async fn run_gc(&self) {
-        unsafe {
-            let mut lock = self.inner.lock().await;
-            lock.drop_pending();
-            lock.runtime.run_gc();
-        }
+        let mut lock = self.lock().await;
+        lock.drop_pending();
+        unsafe { lock.runtime.run_gc() }
     }
 
-    /// Get memory usage stats
+    /// Get memory usage stats.
     pub async fn memory_usage(&self) -> MemoryUsage {
-        unsafe { self.inner.lock().await.runtime.memory_usage() }
+        unsafe { self.lock().await.runtime.memory_usage() }
     }
 
-    /// Test for pending jobs
+    /// Test for pending jobs.
     ///
     /// Returns true when at least one job is pending.
-    #[inline]
     pub async fn is_job_pending(&self) -> bool {
-        let lock = self.inner.lock().await;
-
+        let lock = self.lock().await;
         lock.runtime.is_job_pending() || !lock.runtime.get_opaque().spawner_is_empty()
     }
 
-    /// Execute first pending job
+    /// Execute first pending job.
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    #[inline]
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
-        let mut lock = self.inner.lock().await;
+        let mut lock = self.lock().await;
         lock.runtime.update_stack_top();
         lock.drop_pending();
 
-        let f = ManualPoll::new(|cx| {
-            let job_res = lock.runtime.execute_pending_job().map_err(|e| {
-                let ptr = NonNull::new(e)
-                    .expect("executing pending job returned a null context on error");
-                AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
-            })?;
+        if let Err(e) = lock.runtime.execute_pending_job() {
+            let ptr = NonNull::new(e).expect("null context on error");
+            return Err(AsyncJobException(unsafe {
+                AsyncContext::from_raw(ptr, self.clone())
+            }));
+        }
 
-            if job_res {
-                return Poll::Ready(Ok(true));
+        Ok(lock.runtime.is_job_pending() || !lock.runtime.get_opaque().spawner_is_empty())
+    }
+
+    /// Run all futures and jobs until finished.
+    pub async fn idle(&self) {
+        core::future::poll_fn(|cx| {
+            let Some(mut lock) = self.try_lock() else {
+                cx.waker().wake_by_ref();
+                return Poll::Pending;
+            };
+
+            lock.runtime.update_stack_top();
+            lock.drop_pending();
+
+            // Run all pending JS jobs
+            loop {
+                match lock.runtime.execute_pending_job() {
+                    Ok(true) => continue,
+                    Ok(false) => break,
+                    Err(e) => {
+                        let ctx = unsafe { Ctx::from_ptr(e) };
+                        let err = ctx.catch();
+                        #[cfg(feature = "std")]
+                        {
+                            use std::println;
+                            if let Some(ex) = err
+                                .clone()
+                                .into_object()
+                                .and_then(crate::Exception::from_object)
+                            {
+                                println!("error executing job: {}", ex);
+                            } else {
+                                println!("error executing job: {:?}", err);
+                            }
+                        }
+                        let _ = err;
+                    }
+                }
             }
 
             match lock.runtime.get_opaque().poll(cx) {
-                SchedularPoll::ShouldYield => Poll::Pending,
-                SchedularPoll::Empty => Poll::Ready(Ok(false)),
-                SchedularPoll::Pending => Poll::Ready(Ok(false)),
-                SchedularPoll::PendingProgress => Poll::Ready(Ok(true)),
-            }
-        });
-
-        #[cfg(feature = "parallel")]
-        let f = unsafe { AssertSendFuture::assert(AssertSyncFuture::assert(f)) };
-
-        f.await
-    }
-
-    /// Run all futures and jobs in the runtime until all are finished.
-    #[inline]
-    pub async fn idle(&self) {
-        let mut lock = self.inner.lock().await;
-        lock.runtime.update_stack_top();
-        lock.drop_pending();
-
-        let f = ManualPoll::new(|cx| {
-            loop {
-                let pending = lock.runtime.execute_pending_job().map_err(|e| {
-                    let ptr = NonNull::new(e)
-                        .expect("executing pending job returned a null context on error");
-                    AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
-                });
-                match pending {
-                    Err(e) => {
-                        // SAFETY: Runtime is already locked so creating a context is safe.
-                        let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx().as_ptr()) };
-                        let err = ctx.catch();
-                        if let Some(_x) = err.clone().into_object().and_then(Exception::from_object)
-                        {
-                            // TODO do something better with errors.
-                            #[cfg(feature = "std")]
-                            println!("error executing job: {}", _x);
-                        } else {
-                            #[cfg(feature = "std")]
-                            println!("error executing job: {:?}", err);
-                        }
-                    }
-                    Ok(true) => continue,
-                    Ok(false) => {}
+                TaskPoll::Empty => Poll::Ready(()),
+                TaskPoll::Progress => {
+                    cx.waker().wake_by_ref();
+                    Poll::Pending
                 }
-
-                match lock.runtime.get_opaque().poll(cx) {
-                    SchedularPoll::ShouldYield => return Poll::Pending,
-                    SchedularPoll::Empty => return Poll::Ready(()),
-                    SchedularPoll::Pending => return Poll::Pending,
-                    SchedularPoll::PendingProgress => {}
-                }
+                TaskPoll::Pending => Poll::Pending,
             }
-        });
-
-        #[cfg(feature = "parallel")]
-        let f = unsafe { AssertSendFuture::assert(AssertSyncFuture::assert(f)) };
-
-        f.await
+        })
+        .await
     }
 
     /// Returns a future that completes when the runtime is dropped.
+    ///
     /// If the future is polled it will drive futures spawned inside the runtime completing them
     /// even if runtime is currently not in use.
     pub fn drive(&self) -> DriveFuture {
@@ -371,34 +351,25 @@ macro_rules! async_test_case {
     fn $name() {
         #[cfg(feature = "parallel")]
         let mut new_thread = tokio::runtime::Builder::new_multi_thread();
-
         #[cfg(not(feature = "parallel"))]
         let mut new_thread = tokio::runtime::Builder::new_current_thread();
 
-        let rt = new_thread
-            .enable_all()
-            .build()
-            .unwrap();
+        let rt = new_thread.enable_all().build().unwrap();
 
         #[cfg(feature = "parallel")]
-        {
-            rt.block_on(async {
-                let $rt = crate::AsyncRuntime::new().unwrap();
-                let $ctx = crate::AsyncContext::full(&$rt).await.unwrap();
-
-                $($t)*
-
-            })
-        }
+        rt.block_on(async {
+            let $rt = crate::AsyncRuntime::new().unwrap();
+            let $ctx = crate::AsyncContext::full(&$rt).await.unwrap();
+            $($t)*
+        });
         #[cfg(not(feature = "parallel"))]
         {
             let set = tokio::task::LocalSet::new();
             set.block_on(&rt, async {
                 let $rt = crate::AsyncRuntime::new().unwrap();
                 let $ctx = crate::AsyncContext::full(&$rt).await.unwrap();
-
                 $($t)*
-            })
+            });
         }
     }
     };
@@ -406,11 +377,9 @@ macro_rules! async_test_case {
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
-
-    use crate::*;
-
     use self::context::EvalOptions;
+    use crate::*;
+    use std::time::Duration;
 
     async_test_case!(basic => (_rt,ctx){
         ctx.async_with(async |ctx|{
@@ -420,10 +389,8 @@ mod test {
     });
 
     async_test_case!(sleep_closure => (_rt,ctx){
-
         let mut a = 1;
         let a_ref = &mut a;
-
 
         ctx.async_with(async |ctx|{
             tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
@@ -441,7 +408,6 @@ mod test {
         #[cfg(not(feature = "parallel"))]
         tokio::task::spawn_local(rt.drive());
 
-        // Give drive time to start.
         tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
 
         let number = Arc::new(AtomicUsize::new(0));
@@ -454,10 +420,8 @@ mod test {
             });
         }).await;
         assert_eq!(number.load(Ordering::SeqCst),0);
-        // Give drive time to finish the task.
         tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
         assert_eq!(number.load(Ordering::SeqCst),1);
-
     });
 
     async_test_case!(no_drive => (rt,ctx){
@@ -475,7 +439,6 @@ mod test {
         assert_eq!(number.load(Ordering::SeqCst),0);
         tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
         assert_eq!(number.load(Ordering::SeqCst),0);
-
     });
 
     async_test_case!(idle => (rt,ctx){
@@ -493,7 +456,6 @@ mod test {
         assert_eq!(number.load(Ordering::SeqCst),0);
         rt.idle().await;
         assert_eq!(number.load(Ordering::SeqCst),1);
-
     });
 
     async_test_case!(recursive_spawn => (rt,ctx){
@@ -505,9 +467,7 @@ mod test {
             let (tx2,rx2) = oneshot::channel::<()>();
             ctx.spawn(async move {
                 tokio::task::yield_now().await;
-
                 let ctx = ctx_clone.clone();
-
                 ctx_clone.spawn(async move {
                     tokio::task::yield_now().await;
                     ctx.spawn(async move {
@@ -518,18 +478,11 @@ mod test {
                     tokio::task::yield_now().await;
                     tx.send(()).unwrap();
                 });
-
-                // Add a bunch of futures just to make sure possible segfaults are more likely to
-                // happen
-                for _ in 0..32{
-                    ctx_clone.spawn(async move {})
-                }
-
+                for _ in 0..32 { ctx_clone.spawn(async move {}) }
             });
             tokio::time::timeout(Duration::from_millis(500), rx).await.unwrap().unwrap();
             tokio::time::timeout(Duration::from_millis(500), rx2).await.unwrap().unwrap();
         }).await;
-
     });
 
     async_test_case!(recursive_spawn_from_script => (rt,ctx) {
@@ -538,93 +491,51 @@ mod test {
 
         static COUNT: AtomicUsize = AtomicUsize::new(0);
         static SCRIPT: &str = r#"
-
         async function main() {
-
           setTimeout(() => {
             inc_count()
-            setTimeout(async () => {
-                inc_count()
-            }, 100);
+            setTimeout(async () => { inc_count() }, 100);
           }, 100);
         }
-
         main().catch(print);
-
-
         "#;
 
-        fn inc_count(){
-            COUNT.fetch_add(1,Ordering::Relaxed);
-        }
+        fn inc_count() { COUNT.fetch_add(1,Ordering::Relaxed); }
 
         fn set_timeout_spawn<'js>(ctx: Ctx<'js>, callback: Function<'js>, millis: usize) -> Result<()> {
             ctx.spawn(async move {
                 tokio::time::sleep(Duration::from_millis(millis as u64)).await;
                 callback.call::<_, ()>(()).unwrap();
             });
-
             Ok(())
         }
-
 
         ctx.async_with(async |ctx|{
 
             let res: Result<Promise> = (|| {
                 let globals = ctx.globals();
-
                 globals.set("inc_count", Func::from(inc_count))?;
-
                 globals.set("setTimeout", Func::from(set_timeout_spawn))?;
-                let options = EvalOptions{
-                    promise: true,
-                    strict: false,
-                    ..EvalOptions::default()
-                };
-
-                ctx.eval_with_options(SCRIPT, options)?
+                ctx.eval_with_options(SCRIPT, EvalOptions { promise: true, strict: false, ..Default::default() })
             })();
 
-            match res.catch(&ctx){
-                Ok(promise) => {
-                    if let Err(err) = promise.into_future::<Value>().await.catch(&ctx){
-                        eprintln!("{}", err)
-                    }
-                },
-                Err(err) => {
-                    eprintln!("{}", err)
-                },
+            match res.catch(&ctx) {
+                Ok(promise) => { let _ = promise.into_future::<Value>().await.catch(&ctx); },
+                Err(err) => { #[cfg(feature = "std")] std::println!("{}", err); },
             };
-
-        })
-        .await;
+        }).await;
 
         rt.idle().await;
-
-        assert_eq!(COUNT.load(Ordering::Relaxed),2);
+        assert_eq!(COUNT.load(Ordering::Relaxed), 2);
     });
 
     #[cfg(feature = "parallel")]
-    fn assert_is_send<T: Send>(t: T) -> T {
-        t
-    }
-
-    #[cfg(feature = "parallel")]
-    fn assert_is_sync<T: Send>(t: T) -> T {
-        t
-    }
-
-    #[cfg(feature = "parallel")]
     #[tokio::test]
-    async fn ensure_types_are_send_sync() {
+    async fn ensure_types_are_send() {
+        fn assert_send<T: Send>(_: &T) {}
         let rt = AsyncRuntime::new().unwrap();
-
-        std::mem::drop(assert_is_sync(rt.idle()));
-        std::mem::drop(assert_is_sync(rt.execute_pending_job()));
-        std::mem::drop(assert_is_sync(rt.drive()));
-
-        std::mem::drop(assert_is_send(rt.idle()));
-        std::mem::drop(assert_is_send(rt.execute_pending_job()));
-        std::mem::drop(assert_is_send(rt.drive()));
+        assert_send(&rt.idle());
+        assert_send(&rt.execute_pending_job());
+        assert_send(&rt.drive());
     }
 }

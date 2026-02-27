@@ -31,6 +31,7 @@ impl<R: DropContext> ContextOwner<R> {
     #[cfg(feature = "parallel")]
     pub(crate) unsafe fn new(ctx: NonNull<qjs::JSContext>, rt: R) -> Self {
         Self {
+            #[allow(clippy::arc_with_non_send_sync)]
             ctx: Arc::new(ctx),
             rt,
         }

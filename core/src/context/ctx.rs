@@ -407,7 +407,8 @@ impl<'js> Ctx<'js> {
         Opaque::from_runtime_ptr(qjs::JS_GetRuntime(self.ctx.as_ptr()))
     }
 
-    /// Spawn future using configured async runtime
+    /// Spawn future on QuickJS's task queue (same thread as JS).
+    /// Use this when the future needs to access JS values.
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub fn spawn<F>(&self, future: F)
@@ -415,6 +416,65 @@ impl<'js> Ctx<'js> {
         F: Future<Output = ()> + 'js,
     {
         unsafe { self.get_opaque().push(future) }
+    }
+
+    /// Execute pending JS jobs and poll spawned futures once.
+    #[cfg(feature = "futures")]
+    fn poll_once(&self, cx: &mut core::task::Context) -> bool {
+        let mut did_work = false;
+
+        // Execute JS pending jobs
+        while self.execute_pending_job() {
+            did_work = true;
+        }
+
+        // Poll spawned futures
+        let opaque = unsafe { self.get_opaque() };
+        if opaque.poll(cx) == crate::runtime::task_queue::TaskPoll::Progress {
+            did_work = true
+        }
+
+        did_work
+    }
+
+    /// Await a promise, blocking until resolved while driving QuickJS jobs.
+    ///
+    /// The `yield_fn` is called **only when idle** (no JS jobs or futures made progress)
+    /// to let the async runtime process timers and I/O.
+    ///
+    /// For tokio multi-threaded runtime:
+    /// ```ignore
+    /// ctx.await_promise(promise, || {
+    ///     tokio::task::block_in_place(|| {
+    ///         tokio::runtime::Handle::current().block_on(tokio::task::yield_now())
+    ///     })
+    /// })
+    /// ```
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub fn await_promise<T: FromJs<'js>>(
+        &self,
+        promise: Promise<'js>,
+        yield_fn: impl Fn(),
+    ) -> Result<T> {
+        use crate::value::promise::PromiseState;
+        use core::task::{Context, Waker};
+
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(waker);
+
+        loop {
+            match promise.state() {
+                PromiseState::Resolved => return promise.result().unwrap(),
+                PromiseState::Rejected => return promise.result().unwrap(),
+                PromiseState::Pending => {
+                    // Only yield if no work was done - avoids expensive runtime calls
+                    if !self.poll_once(&mut cx) {
+                        yield_fn();
+                    }
+                }
+            }
+        }
     }
 
     /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
