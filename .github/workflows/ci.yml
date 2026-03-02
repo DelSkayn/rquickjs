@@ -477,7 +477,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Download bindings
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: bindings-*
           path: sys/src/bindings
