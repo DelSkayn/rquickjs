@@ -36,6 +36,9 @@ either-rs = { package = "either", version = "1", optional = true }
 rquickjs-core = { workspace = true }
 rquickjs-macro = { workspace = true, optional = true }
 
+[dev-dependencies]
+futures = "0.3"
+trybuild = "1"
 
 [features]
 default = ["std"]
@@ -135,8 +138,9 @@ allocator = ["rquickjs-core/allocator"]
 properties = ["rquickjs-core/properties"]
 
 
-[dev-dependencies]
-trybuild = "1"
+[[bench]]
+name = "async_bench"
+harness = false
 
 [package.metadata.docs.rs]
 features = ["full-async", "parallel", "doc-cfg"]
