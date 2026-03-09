@@ -76,8 +76,8 @@ where
                 // at this point we have acquired a lock, so we will now drop the future allowing
                 // us to reused the memory space.
                 unsafe { ManuallyDrop::drop(fut) };
-                // The pinned memory is dropped so now we can freely move into it.
-                this.lock_state = LockState::Initial;
+                // Avoid running `Drop` on the old `LockState`: `fut` was already manually dropped.
+                unsafe { core::ptr::write(&mut this.lock_state, LockState::Initial) };
                 break lock;
             } else {
                 // we assign a state with manually drop so we can drop the value when we need to
