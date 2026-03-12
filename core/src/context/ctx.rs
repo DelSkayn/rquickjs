@@ -376,14 +376,14 @@ impl<'js> Ctx<'js> {
 
     /// Creates javascipt promise along with its reject and resolve functions.
     pub fn promise(&self) -> Result<(Promise<'js>, Function<'js>, Function<'js>)> {
-        let mut funcs = mem::MaybeUninit::<(qjs::JSValue, qjs::JSValue)>::uninit();
+        let mut funcs = mem::MaybeUninit::<[qjs::JSValue; 2]>::uninit();
 
         Ok(unsafe {
             let promise = self.handle_exception(qjs::JS_NewPromiseCapability(
                 self.ctx.as_ptr(),
                 funcs.as_mut_ptr() as _,
             ))?;
-            let (resolve, reject) = funcs.assume_init();
+            let [resolve, reject] = funcs.assume_init();
             (
                 Promise::from_js_value(self.clone(), promise),
                 Function::from_js_value(self.clone(), resolve),
