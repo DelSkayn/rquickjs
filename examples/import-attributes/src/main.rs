@@ -7,7 +7,13 @@ use rquickjs::{
 struct ExampleResolver;
 
 impl Resolver for ExampleResolver {
-    fn resolve<'js>(&mut self, _ctx: &Ctx<'js>, _base: &str, name: &str) -> Result<String> {
+    fn resolve<'js>(
+        &mut self,
+        _ctx: &Ctx<'js>,
+        _base: &str,
+        name: &str,
+        _attributes: Option<ImportAttributes<'js>>,
+    ) -> Result<String> {
         Ok(name.to_string())
     }
 }
