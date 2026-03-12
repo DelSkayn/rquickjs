@@ -1,5 +1,5 @@
 error: lifetime may not live long enough
-Error:   --> tests/async_compile_fail/async_nested_contexts.rs:10:43
+  --> tests/async_compile_fail/async_nested_contexts.rs:10:43
    |
  8 |           .async_with(async |ctx_1| {
    |                              ----- lifetime `'2` appears in the type of `ctx_1`
@@ -15,7 +15,7 @@ Error:   --> tests/async_compile_fail/async_nested_contexts.rs:10:43
    | |_________________^ returning this value requires that `'1` must outlive `'2`
 
 error: lifetime may not live long enough
-Error:   --> tests/async_compile_fail/async_nested_contexts.rs:10:43
+  --> tests/async_compile_fail/async_nested_contexts.rs:10:43
    |
  8 |           .async_with(async |ctx_1| {
    |                              ----- has type `Ctx<'1>`
