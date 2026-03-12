@@ -1,18 +1,18 @@
 error: lifetime may not live long enough
   --> tests/async_compile_fail/async_nested_contexts.rs:10:43
    |
- 8 |           .async_with(async |ctx_1| {
-   |                              ----- lifetime `'2` appears in the type of `ctx_1`
- 9 |               ctx_2
-10 |                   .async_with(async |ctx_2| {
-   |  ____________________________________-----__^
-   | |                                    |
-   | |                                    has type `Ctx<'1>`
-11 | |                     // It is disallowed to use multiple ctx object together from different with closures.
-12 | |                     // Lifetime on ctx should be unique.
-13 | |                     ctx_1.globals().set("t", ctx_2.globals());
-14 | |                 })
-   | |_________________^ returning this value requires that `'1` must outlive `'2`
+ 8 |   ...   .async_with(async |ctx_1| {
+   |                            ----- lifetime `'2` appears in the type of `ctx_1`
+ 9 |   ...       ctx_2
+10 |   ...           .async_with(async |ctx_2| {
+   |  __________________________________-----__^
+   | |                                  |
+   | |                                  has type `Ctx<'1>`
+11 | | ...               // It is disallowed to use multiple ctx object together from diff...
+12 | | ...               // Lifetime on ctx should be unique.
+13 | | ...               ctx_1.globals().set("t", ctx_2.globals());
+14 | | ...           })
+   | |_______________^ returning this value requires that `'1` must outlive `'2`
    |
    = note: requirement occurs because of the type `Ctx<'_>`, which makes the generic argument `'_` invariant
    = note: the struct `Ctx<'js>` is invariant over the parameter `'js`
@@ -21,13 +21,13 @@ error: lifetime may not live long enough
 error: lifetime may not live long enough
   --> tests/async_compile_fail/async_nested_contexts.rs:10:43
    |
- 8 |           .async_with(async |ctx_1| {
-   |                              ----- has type `Ctx<'1>`
- 9 |               ctx_2
-10 |                   .async_with(async |ctx_2| {
-   |  ___________________________________________^
-11 | |                     // It is disallowed to use multiple ctx object together from different with closures.
-12 | |                     // Lifetime on ctx should be unique.
-13 | |                     ctx_1.globals().set("t", ctx_2.globals());
-14 | |                 })
-   | |_________________^ returning this value requires that `'1` must outlive `'static`
+ 8 |   ...   .async_with(async |ctx_1| {
+   |                            ----- has type `Ctx<'1>`
+ 9 |   ...       ctx_2
+10 |   ...           .async_with(async |ctx_2| {
+   |  _________________________________________^
+11 | | ...               // It is disallowed to use multiple ctx object together from diff...
+12 | | ...               // Lifetime on ctx should be unique.
+13 | | ...               ctx_1.globals().set("t", ctx_2.globals());
+14 | | ...           })
+   | |_______________^ returning this value requires that `'1` must outlive `'static`
