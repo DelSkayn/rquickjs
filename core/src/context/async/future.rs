@@ -73,11 +73,10 @@ where
                 // SAFETY: Sound as we don't move future while it is pending.
                 let pin = unsafe { Pin::new_unchecked(&mut **fut) };
                 let lock = ready!(pin.poll(cx));
-                // at this point we have acquired a lock, so we will now drop the future allowing
-                // us to reused the memory space.
-                unsafe { ManuallyDrop::drop(fut) };
-                // The pinned memory is dropped so now we can freely move into it.
-                this.lock_state = LockState::Initial;
+                // Replace lock_state with Initial first, so the old Pending variant
+                // is moved out and its Drop runs exactly once.
+                let old = mem::replace(&mut this.lock_state, LockState::Initial);
+                drop(old);
                 break lock;
             } else {
                 // we assign a state with manually drop so we can drop the value when we need to
