@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed iterators to use correct IteratorPrototype chain
 - Fixed a latent ABI layout vulnerability in `JS_NewPromiseCapability` FFI boundary by replacing tuple with strictly compatible array
 
+### Added
+
+- Add inheritance support for Rust classes #[#587](https://github.com/DelSkayn/rquickjs/pull/587)
+
 ## [0.11.0] - 2025-12-16
 
 ### Added
