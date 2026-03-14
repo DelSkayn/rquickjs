@@ -208,7 +208,7 @@ fn main() {
     }
     fs::copy("quickjs.bind.h", out_dir.join("quickjs.bind.h")).expect("Unable to copy source");
 
-    if target_os == "wasi" {
+    if target_os == "wasi" && !matches!(env::var("RQUICKJS_SYS_NO_WASI_SDK").as_deref(), Ok("1")) {
         let wasi_sdk_path = get_wasi_sdk_path();
         if !wasi_sdk_path.try_exists().unwrap() {
             panic!(
