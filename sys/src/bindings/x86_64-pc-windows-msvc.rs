@@ -109,6 +109,7 @@ pub const JS_TAG_FIRST: _bindgen_ty_1 = -9;
 pub const JS_TAG_BIG_INT: _bindgen_ty_1 = -9;
 pub const JS_TAG_SYMBOL: _bindgen_ty_1 = -8;
 pub const JS_TAG_STRING: _bindgen_ty_1 = -7;
+pub const JS_TAG_STRING_ROPE: _bindgen_ty_1 = -6;
 pub const JS_TAG_MODULE: _bindgen_ty_1 = -3;
 pub const JS_TAG_FUNCTION_BYTECODE: _bindgen_ty_1 = -2;
 pub const JS_TAG_OBJECT: _bindgen_ty_1 = -1;
@@ -345,7 +346,7 @@ unsafe extern "C" {
     pub fn JS_AddIntrinsicRegExpCompiler(ctx: *mut JSContext);
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicRegExp(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicRegExp(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
     pub fn JS_AddIntrinsicJSON(ctx: *mut JSContext);
@@ -1371,6 +1372,12 @@ unsafe extern "C" {
     pub fn JS_IsArrayBuffer(obj: JSValue) -> bool;
 }
 unsafe extern "C" {
+    pub fn JS_IsImmutableArrayBuffer(obj: JSValue) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
+    pub fn JS_SetImmutableArrayBuffer(obj: JSValue, immutable: bool) -> ::core::ffi::c_int;
+}
+unsafe extern "C" {
     pub fn JS_GetUint8Array(ctx: *mut JSContext, psize: *mut size_t, obj: JSValue) -> *mut u8;
 }
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C: JSTypedArrayEnum = 0;
@@ -1385,7 +1392,7 @@ pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64: JSTypedArrayEnum = 8;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16: JSTypedArrayEnum = 9;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32: JSTypedArrayEnum = 10;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64: JSTypedArrayEnum = 11;
-pub type JSTypedArrayEnum = ::core::ffi::c_int;
+pub type JSTypedArrayEnum = ::core::ffi::c_uint;
 unsafe extern "C" {
     pub fn JS_NewTypedArray(
         ctx: *mut JSContext,
@@ -1485,7 +1492,7 @@ pub const JSPromiseHookType_JS_PROMISE_HOOK_INIT: JSPromiseHookType = 0;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_BEFORE: JSPromiseHookType = 1;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_AFTER: JSPromiseHookType = 2;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE: JSPromiseHookType = 3;
-pub type JSPromiseHookType = ::core::ffi::c_int;
+pub type JSPromiseHookType = ::core::ffi::c_uint;
 pub type JSPromiseHook = ::core::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,
@@ -1550,6 +1557,15 @@ pub type JSModuleNormalizeFunc = ::core::option::Option<
         opaque: *mut ::core::ffi::c_void,
     ) -> *mut ::core::ffi::c_char,
 >;
+pub type JSModuleNormalizeFunc2 = ::core::option::Option<
+    unsafe extern "C" fn(
+        ctx: *mut JSContext,
+        module_base_name: *const ::core::ffi::c_char,
+        module_name: *const ::core::ffi::c_char,
+        attributes: JSValue,
+        opaque: *mut ::core::ffi::c_void,
+    ) -> *mut ::core::ffi::c_char,
+>;
 pub type JSModuleLoaderFunc = ::core::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,
@@ -1588,6 +1604,9 @@ unsafe extern "C" {
         module_check_attrs: JSModuleCheckSupportedImportAttributes,
         opaque: *mut ::core::ffi::c_void,
     );
+}
+unsafe extern "C" {
+    pub fn JS_SetModuleNormalizeFunc2(rt: *mut JSRuntime, module_normalize: JSModuleNormalizeFunc2);
 }
 unsafe extern "C" {
     pub fn JS_GetImportMeta(ctx: *mut JSContext, m: *mut JSModuleDef) -> JSValue;
@@ -1711,7 +1730,7 @@ pub const JSCFunctionEnum_JS_CFUNC_setter: JSCFunctionEnum = 9;
 pub const JSCFunctionEnum_JS_CFUNC_getter_magic: JSCFunctionEnum = 10;
 pub const JSCFunctionEnum_JS_CFUNC_setter_magic: JSCFunctionEnum = 11;
 pub const JSCFunctionEnum_JS_CFUNC_iterator_next: JSCFunctionEnum = 12;
-pub type JSCFunctionEnum = ::core::ffi::c_int;
+pub type JSCFunctionEnum = ::core::ffi::c_uint;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSCFunctionType {
@@ -2279,4 +2298,4 @@ pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 226;
 pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 227;
 pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 228;
 pub const JS_ATOM_END: _bindgen_ty_2 = 229;
-pub type _bindgen_ty_2 = ::core::ffi::c_int;
+pub type _bindgen_ty_2 = ::core::ffi::c_uint;
