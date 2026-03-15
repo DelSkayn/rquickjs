@@ -23,6 +23,7 @@ copy_bindings x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu
 copy_bindings x86_64-unknown-linux-gnu aarch64-unknown-linux-musl
 copy_bindings x86_64-unknown-linux-gnu loongarch64-unknown-linux-gnu
 copy_bindings x86_64-unknown-linux-gnu loongarch64-unknown-linux-musl
+copy_bindings x86_64-unknown-linux-gnu riscv64gc-unknown-linux-gnu
 copy_bindings wasm32-wasip1 wasm32-wasip1
 copy_bindings x86_64-unknown-linux-gnu wasm32-wasip2
 copy_bindings x86_64-unknown-linux-gnu x86_64-unknown-linux-musl

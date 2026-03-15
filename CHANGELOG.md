@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)\
 
+### Added
+
+- Added `riscv64gc-unknown-linux-gnu` support with generated bindings and CI coverage #[649](https://github.com/DelSkayn/rquickjs/pull/649)
+
 ### Changed
 
 - Updated `AsyncContext::async_with` to use async closure syntax #[602](https://github.com/DelSkayn/rquickjs/pull/602)
