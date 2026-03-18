@@ -22,3 +22,11 @@ Special patches:
 - Reading module exports (`exports` feature)
 - Reset stack function (`parallel` feature)
 - MSVC support
+
+## Environment Variables
+
+The following environment variables can be used to control which WASI SDK is using during the build:
+
+- `WASI_SDK`: Path to the WASI SDK to use during the build. If unset, this crate will download it automatically instead.
+- `RQUICKJS_SYS_NO_WASI_SDK`: If set to `1`, this crate will not attempt to use the WASI SDK
+  and instead the `CC`, `AR`, and `CFLAGS` environment variables must be appropriately set.

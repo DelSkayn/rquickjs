@@ -11,6 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)\
 
+### Added
+
+- Added `RQUICKJS_SYS_NO_WASI_SDK` env variable that skips downloading and setting up the WASI SDK when set to `1` #[648](https://github.com/DelSkayn/rquickjs/pull/648)
+
 ### Changed
 
 - Updated `AsyncContext::async_with` to use async closure syntax #[602](https://github.com/DelSkayn/rquickjs/pull/602)
