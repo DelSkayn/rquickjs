@@ -1483,6 +1483,9 @@ unsafe extern "C" {
     pub fn JS_IsPromise(val: JSValue) -> bool;
 }
 unsafe extern "C" {
+    pub fn JS_NewSettledPromise(ctx: *mut JSContext, is_reject: bool, value: JSValue) -> JSValue;
+}
+unsafe extern "C" {
     pub fn JS_NewSymbol(
         ctx: *mut JSContext,
         description: *const ::core::ffi::c_char,
