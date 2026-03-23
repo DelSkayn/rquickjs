@@ -261,6 +261,11 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Returns true if there is a pending JavaScript exception.
+    pub fn has_exception(&self) -> bool {
+        unsafe { qjs::JS_HasException(self.ctx.as_ptr()) }
+    }
+
     /// Throws a JavaScript value as a new exception.
     /// Always returns `Error::Exception`;
     pub fn throw(&self, value: Value<'js>) -> Error {
