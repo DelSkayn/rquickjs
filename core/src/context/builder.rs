@@ -71,8 +71,6 @@ pub mod intrinsic {
         TypedArrays JS_AddIntrinsicTypedArrays,
         /// Add Promise object support
         Promise JS_AddIntrinsicPromise,
-        /// Add BigInt support
-        BigInt JS_AddIntrinsicBigInt,
         /// Add Performance support
         Performance JS_AddPerformance,
         /// Add WeakRef support
@@ -93,7 +91,6 @@ pub mod intrinsic {
         MapSet,
         TypedArrays,
         Promise,
-        BigInt,
         Performance,
         WeakRef,
     );
