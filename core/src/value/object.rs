@@ -24,6 +24,19 @@ impl<'js> Object<'js> {
         })
     }
 
+    /// Create a new JavaScript object with a specified prototype
+    ///
+    /// This is equivalent to `Object.create(proto)` in JavaScript.
+    /// Pass `None` to create an object with a null prototype.
+    pub fn new_proto(ctx: Ctx<'js>, proto: Option<&Object<'js>>) -> Result<Self> {
+        let proto_val = proto.map(|p| p.0.as_js_value()).unwrap_or(qjs::JS_NULL);
+        Ok(unsafe {
+            let val = qjs::JS_NewObjectProto(ctx.as_ptr(), proto_val);
+            let val = ctx.handle_exception(val)?;
+            Object::from_js_value(ctx, val)
+        })
+    }
+
     /// Get a new value
     pub fn get<K: IntoAtom<'js>, V: FromJs<'js>>(&self, k: K) -> Result<V> {
         let atom = k.into_atom(self.ctx())?;
@@ -776,6 +789,51 @@ mod test {
                 .unwrap();
             assert_eq!(keys.len(), 1);
             assert_eq!(keys[0], "123");
+        })
+    }
+
+    #[test]
+    fn new_proto_with_empty_prototype() {
+        test_with(|ctx| {
+            // Object.create({}) equivalent — prototype should be an empty object
+            let proto = Object::new(ctx.clone()).unwrap();
+            let obj = Object::new_proto(ctx.clone(), Some(&proto)).unwrap();
+            obj.set("a", 1).unwrap();
+
+            let got_proto = obj.get_prototype().expect("should have a prototype");
+            // The prototype itself should have no own enumerable properties
+            assert_eq!(got_proto.keys::<StdString>().count(), 0);
+            // But the object's own properties should work
+            let v: i32 = obj.get("a").unwrap();
+            assert_eq!(v, 1);
+        })
+    }
+
+    #[test]
+    fn new_proto_with_null_prototype() {
+        test_with(|ctx| {
+            // Object.create(null) equivalent
+            let obj = Object::new_proto(ctx.clone(), None).unwrap();
+            obj.set("x", 42).unwrap();
+
+            assert!(obj.get_prototype().is_none());
+            let v: i32 = obj.get("x").unwrap();
+            assert_eq!(v, 42);
+        })
+    }
+
+    #[test]
+    fn new_proto_console_namespace() {
+        // Reproduces the exact scenario from issue #572
+        test_with(|ctx| {
+            let proto = Object::new(ctx.clone()).unwrap();
+            let console = Object::new_proto(ctx.clone(), Some(&proto)).unwrap();
+            ctx.globals().set("console", console).unwrap();
+
+            let names: Array = ctx
+                .eval("Object.getOwnPropertyNames(Object.getPrototypeOf(console))")
+                .unwrap();
+            assert_eq!(names.len(), 0);
         })
     }
 
