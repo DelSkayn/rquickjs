@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Added `RQUICKJS_SYS_NO_WASI_SDK` env variable that skips downloading and setting up the WASI SDK when set to `1` #[648](https://github.com/DelSkayn/rquickjs/pull/648)
+- Added `Object::new_proto` for creating objects with a custom or null prototype #[572](https://github.com/DelSkayn/rquickjs/issues/572)
 
 ### Changed
 
