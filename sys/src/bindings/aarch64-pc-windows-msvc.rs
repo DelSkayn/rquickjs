@@ -82,6 +82,8 @@ pub const JS_DEF_PROP_DOUBLE: u32 = 6;
 pub const JS_DEF_PROP_UNDEFINED: u32 = 7;
 pub const JS_DEF_OBJECT: u32 = 8;
 pub const JS_DEF_ALIAS: u32 = 9;
+pub const JS_DEF_PROP_SYMBOL: u32 = 10;
+pub const JS_DEF_PROP_BOOL: u32 = 11;
 pub type size_t = ::core::ffi::c_ulonglong;
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
@@ -334,13 +336,13 @@ unsafe extern "C" {
     pub fn JS_NewContextRaw(rt: *mut JSRuntime) -> *mut JSContext;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicBaseObjects(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicBaseObjects(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicDate(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicDate(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicEval(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicEval(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
     pub fn JS_AddIntrinsicRegExpCompiler(ctx: *mut JSContext);
@@ -349,31 +351,31 @@ unsafe extern "C" {
     pub fn JS_AddIntrinsicRegExp(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicJSON(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicJSON(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicProxy(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicProxy(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicMapSet(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicMapSet(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicTypedArrays(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicTypedArrays(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicPromise(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicPromise(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicBigInt(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicBigInt(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicWeakRef(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicWeakRef(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddPerformance(ctx: *mut JSContext);
+    pub fn JS_AddPerformance(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
-    pub fn JS_AddIntrinsicDOMException(ctx: *mut JSContext);
+    pub fn JS_AddIntrinsicDOMException(ctx: *mut JSContext) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
     pub fn JS_IsEqual(ctx: *mut JSContext, op1: JSValue, op2: JSValue) -> ::core::ffi::c_int;
@@ -1392,7 +1394,7 @@ pub const JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64: JSTypedArrayEnum = 8;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16: JSTypedArrayEnum = 9;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32: JSTypedArrayEnum = 10;
 pub const JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64: JSTypedArrayEnum = 11;
-pub type JSTypedArrayEnum = ::core::ffi::c_uint;
+pub type JSTypedArrayEnum = ::core::ffi::c_int;
 unsafe extern "C" {
     pub fn JS_NewTypedArray(
         ctx: *mut JSContext,
@@ -1482,6 +1484,9 @@ unsafe extern "C" {
     pub fn JS_IsPromise(val: JSValue) -> bool;
 }
 unsafe extern "C" {
+    pub fn JS_NewSettledPromise(ctx: *mut JSContext, is_reject: bool, value: JSValue) -> JSValue;
+}
+unsafe extern "C" {
     pub fn JS_NewSymbol(
         ctx: *mut JSContext,
         description: *const ::core::ffi::c_char,
@@ -1492,7 +1497,7 @@ pub const JSPromiseHookType_JS_PROMISE_HOOK_INIT: JSPromiseHookType = 0;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_BEFORE: JSPromiseHookType = 1;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_AFTER: JSPromiseHookType = 2;
 pub const JSPromiseHookType_JS_PROMISE_HOOK_RESOLVE: JSPromiseHookType = 3;
-pub type JSPromiseHookType = ::core::ffi::c_uint;
+pub type JSPromiseHookType = ::core::ffi::c_int;
 pub type JSPromiseHook = ::core::option::Option<
     unsafe extern "C" fn(
         ctx: *mut JSContext,
@@ -1730,7 +1735,7 @@ pub const JSCFunctionEnum_JS_CFUNC_setter: JSCFunctionEnum = 9;
 pub const JSCFunctionEnum_JS_CFUNC_getter_magic: JSCFunctionEnum = 10;
 pub const JSCFunctionEnum_JS_CFUNC_setter_magic: JSCFunctionEnum = 11;
 pub const JSCFunctionEnum_JS_CFUNC_iterator_next: JSCFunctionEnum = 12;
-pub type JSCFunctionEnum = ::core::ffi::c_uint;
+pub type JSCFunctionEnum = ::core::ffi::c_int;
 #[repr(C)]
 #[derive(Copy, Clone)]
 pub union JSCFunctionType {
@@ -1837,6 +1842,7 @@ unsafe extern "C" {
         cproto: JSCFunctionEnum,
         magic: ::core::ffi::c_int,
         proto_val: JSValue,
+        n_fields: ::core::ffi::c_int,
     ) -> JSValue;
 }
 unsafe extern "C" {
@@ -1874,7 +1880,11 @@ unsafe extern "C" {
     ) -> JSValue;
 }
 unsafe extern "C" {
-    pub fn JS_SetConstructor(ctx: *mut JSContext, func_obj: JSValue, proto: JSValue);
+    pub fn JS_SetConstructor(
+        ctx: *mut JSContext,
+        func_obj: JSValue,
+        proto: JSValue,
+    ) -> ::core::ffi::c_int;
 }
 #[repr(C)]
 #[derive(Copy, Clone)]
@@ -2298,4 +2308,4 @@ pub const JS_ATOM_Symbol_species: _bindgen_ty_2 = 226;
 pub const JS_ATOM_Symbol_unscopables: _bindgen_ty_2 = 227;
 pub const JS_ATOM_Symbol_asyncIterator: _bindgen_ty_2 = 228;
 pub const JS_ATOM_END: _bindgen_ty_2 = 229;
-pub type _bindgen_ty_2 = ::core::ffi::c_uint;
+pub type _bindgen_ty_2 = ::core::ffi::c_int;
