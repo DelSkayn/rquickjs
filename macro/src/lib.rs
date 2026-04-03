@@ -22,6 +22,7 @@ macro_rules! assert_eq_tokens {
 mod attrs;
 mod class;
 mod common;
+mod convert;
 mod embed;
 mod fields;
 mod function;
@@ -115,6 +116,15 @@ mod trace;
 ///     })
 /// }
 /// ```
+///
+/// # Incompatibility with the plain-data derives
+///
+/// This attribute cannot be combined with [`macro@FromJs`] or
+/// [`macro@IntoJs`] on the same type. `#[class]` already generates a
+/// `FromJs`/`IntoJs` pair that round-trips through a
+/// [`Class<Self>`](rquickjs_core::class::Class) instance, whereas the
+/// derives round-trip through a plain JS object. If both are present the
+/// macro emits a targeted compile error pointing at the offending derive.
 #[proc_macro_attribute]
 pub fn class(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
     let options = parse_macro_input!(attr as OptionList<ClassOption>);
@@ -493,6 +503,113 @@ pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 pub fn trace(stream: TokenStream1) -> TokenStream1 {
     let derive_input = parse_macro_input!(stream as DeriveInput);
     match trace::expand(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
+}
+
+/// A macro for deriving [`FromJs`](rquickjs_core::FromJs) for plain-data structs.
+///
+/// Generated impls treat the Rust value as a plain JavaScript object (for
+/// named-field structs), a JavaScript array (for tuple structs), or
+/// `undefined` (for unit structs) and read each field in turn via
+/// [`Object::get`](rquickjs_core::Object::get) or
+/// [`Array::get`](rquickjs_core::Array::get).
+///
+/// # Attribute options
+///
+/// Options can be supplied via a `#[qjs(...)]` attribute on the container or
+/// individual fields.
+///
+/// | **Option**   | **Scope**  | **Value** | **Description**                                                                                                                                                                |
+/// |--------------|------------|-----------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+/// | `crate`      | Container  | String    | Path of the rquickjs crate, in case the macro cannot resolve it automatically.                                                                                                 |
+/// | `rename_all` | Container  | Casing    | Rewrites every field name using the given case (`lowercase`, `UPPERCASE`, `camelCase`, `PascalCase`, `snake_case`, or `SCREAMING_SNAKE`) before reading it from the JS object. |
+/// | `rename`     | Field      | String    | Use the supplied string as the JavaScript property name instead of the Rust identifier.                                                                                        |
+///
+/// # Example
+///
+/// ```
+/// use rquickjs::{Context, FromJs, Runtime};
+///
+/// #[derive(Debug, PartialEq, FromJs)]
+/// #[qjs(rename_all = "camelCase")]
+/// struct Spec {
+///     some_value: u32,
+///     #[qjs(rename = "labelText")]
+///     label_text: String,
+/// }
+///
+/// let rt = Runtime::new().unwrap();
+/// let ctx = Context::full(&rt).unwrap();
+/// ctx.with(|ctx| {
+///     let spec: Spec = ctx
+///         .eval(r#"({ someValue: 2, labelText: "beta" })"#)
+///         .unwrap();
+///     assert_eq!(spec, Spec { some_value: 2, label_text: "beta".into() });
+/// });
+/// ```
+///
+/// # Incompatibility with [`macro@class`]
+///
+/// This derive cannot be stacked on a type that is also tagged with
+/// `#[rquickjs::class]`. `#[class]` already generates a `FromJs` impl that
+/// round-trips through a [`Class<Self>`](rquickjs_core::class::Class)
+/// instance, whereas this derive reads field-by-field from a plain JS
+/// object. The two representations are mutually exclusive; combining them
+/// produces a compile error pointing at the offending derive.
+#[proc_macro_derive(FromJs, attributes(qjs))]
+pub fn from_js(stream: TokenStream1) -> TokenStream1 {
+    let derive_input = parse_macro_input!(stream as DeriveInput);
+    match convert::expand_from_js(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
+}
+
+/// A macro for deriving [`IntoJs`](rquickjs_core::IntoJs) for plain-data structs.
+///
+/// Generated impls construct a JavaScript object (for named-field structs),
+/// a JavaScript array (for tuple structs), or `undefined` (for unit structs)
+/// and write each field in turn via
+/// [`Object::set`](rquickjs_core::Object::set) or
+/// [`Array::set`](rquickjs_core::Array::set).
+///
+/// The supported `#[qjs(...)]` attributes are the same as for
+/// [`macro@FromJs`]; see its documentation for details.
+///
+/// # Example
+///
+/// ```
+/// use rquickjs::{CatchResultExt, Context, IntoJs, Runtime};
+///
+/// #[derive(IntoJs)]
+/// struct Pair(u32, String);
+///
+/// let rt = Runtime::new().unwrap();
+/// let ctx = Context::full(&rt).unwrap();
+/// ctx.with(|ctx| {
+///     ctx.globals().set("pair", Pair(3, "gamma".into())).unwrap();
+///     ctx.eval::<(), _>(
+///         r#"if (pair[0] !== 3 || pair[1] !== "gamma") { throw new Error() }"#,
+///     )
+///     .catch(&ctx)
+///     .unwrap();
+/// });
+/// ```
+///
+/// # Incompatibility with [`macro@class`]
+///
+/// This derive cannot be stacked on a type that is also tagged with
+/// `#[rquickjs::class]`. `#[class]` already generates an `IntoJs` impl that
+/// round-trips through a [`Class<Self>`](rquickjs_core::class::Class)
+/// instance, whereas this derive writes the value as a plain JS object.
+/// The two representations are mutually exclusive; combining them produces
+/// a compile error pointing at the offending derive.
+#[proc_macro_derive(IntoJs, attributes(qjs))]
+pub fn into_js(stream: TokenStream1) -> TokenStream1 {
+    let derive_input = parse_macro_input!(stream as DeriveInput);
+    match convert::expand_into_js(derive_input) {
         Ok(x) => x.into(),
         Err(e) => e.into_compile_error().into(),
     }

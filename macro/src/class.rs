@@ -140,6 +140,13 @@ impl Class {
         }
     }
 
+    pub fn attrs(&self) -> &[syn::Attribute] {
+        match self {
+            Class::Struct { ref attrs, .. } => attrs,
+            Class::Enum { ref attrs, .. } => attrs,
+        }
+    }
+
     pub fn from_enum(mut config: ClassConfig, enum_: ItemEnum) -> Result<Self> {
         let ItemEnum {
             mut attrs,
@@ -334,6 +341,8 @@ impl Class {
     }
 
     pub fn expand(self) -> Result<TokenStream> {
+        ensure_no_conflicting_derives(self.attrs())?;
+
         let crate_name = format_ident!("{}", self.config().crate_name()?);
         let class_name = self.ident().clone();
         let javascript_name = self.javascript_name();
@@ -404,4 +413,132 @@ impl Class {
 
 pub(crate) fn expand(options: OptionList<ClassOption>, item: syn::Item) -> Result<TokenStream> {
     Class::from_proc_macro_input(options, item)?.expand()
+}
+
+/// Reports a helpful compile error when the class' `#[derive(...)]` list
+/// includes `FromJs` or `IntoJs`. `#[class]` already generates those impls
+/// and deriving them in addition would produce an unhelpful `E0119`
+/// conflicting-implementations error pointing inside the generated
+/// `__impl_class_*` module. The two macros are conceptually incompatible:
+/// `#[class]` round-trips through a `Class<Self>` JS instance, whereas the
+/// derives round-trip through a plain object/array, so we simply forbid
+/// stacking them.
+fn ensure_no_conflicting_derives(attrs: &[syn::Attribute]) -> Result<()> {
+    for attr in attrs {
+        if !attr.path().is_ident("derive") {
+            continue;
+        }
+        let mut conflict: Option<(String, proc_macro2::Span)> = None;
+        attr.parse_nested_meta(|meta| {
+            if conflict.is_some() {
+                return Ok(());
+            }
+            if let Some(last) = meta.path.segments.last() {
+                let name = last.ident.to_string();
+                if name == "FromJs" || name == "IntoJs" {
+                    conflict = Some((name, last.ident.span()));
+                }
+            }
+            Ok(())
+        })?;
+        if let Some((name, span)) = conflict {
+            return Err(Error::new(
+                span,
+                format!(
+                    "`#[rquickjs::class]` already implements `{name}` for this type; \
+                     remove `{name}` from `#[derive(...)]`, or drop `#[rquickjs::class]` \
+                     if you want plain-data conversion"
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::ensure_no_conflicting_derives;
+    use quote::quote;
+
+    fn attrs_of(input: proc_macro2::TokenStream) -> Vec<syn::Attribute> {
+        syn::parse2::<syn::ItemStruct>(input).unwrap().attrs
+    }
+
+    #[test]
+    fn accepts_empty_attrs() {
+        let attrs = attrs_of(quote! {
+            struct Foo { x: u32 }
+        });
+        ensure_no_conflicting_derives(&attrs).expect("no derive is fine");
+    }
+
+    #[test]
+    fn accepts_unrelated_derives() {
+        let attrs = attrs_of(quote! {
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            struct Foo { x: u32 }
+        });
+        ensure_no_conflicting_derives(&attrs).expect("unrelated derives are fine");
+    }
+
+    #[test]
+    fn rejects_derive_from_js() {
+        let attrs = attrs_of(quote! {
+            #[derive(FromJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("`FromJs`"), "unexpected message: {msg}");
+        assert!(
+            msg.contains("already implements"),
+            "unexpected message: {msg}"
+        );
+    }
+
+    #[test]
+    fn rejects_derive_into_js() {
+        let attrs = attrs_of(quote! {
+            #[derive(IntoJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        assert!(err.to_string().contains("`IntoJs`"));
+    }
+
+    #[test]
+    fn rejects_mixed_derive_list() {
+        // The conflicting derive can appear anywhere in the list, next
+        // to arbitrary unrelated derives.
+        let attrs = attrs_of(quote! {
+            #[derive(Clone, Trace, JsLifetime, FromJs, IntoJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        // We stop at the first match, which is `FromJs`.
+        assert!(err.to_string().contains("`FromJs`"));
+    }
+
+    #[test]
+    fn rejects_path_qualified_derive() {
+        // Users sometimes write `#[derive(rquickjs::FromJs)]`.
+        let attrs = attrs_of(quote! {
+            #[derive(rquickjs::FromJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        assert!(err.to_string().contains("`FromJs`"));
+    }
+
+    #[test]
+    fn accepts_multiple_derive_attributes() {
+        // Multiple `#[derive(...)]` attributes on the same item are legal
+        // in Rust; none of them should trip the check if they're unrelated.
+        let attrs = attrs_of(quote! {
+            #[derive(Clone)]
+            #[derive(Debug)]
+            struct Foo { x: u32 }
+        });
+        ensure_no_conflicting_derives(&attrs).expect("unrelated derives are fine");
+    }
 }
