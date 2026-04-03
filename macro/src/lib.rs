@@ -22,6 +22,7 @@ macro_rules! assert_eq_tokens {
 mod attrs;
 mod class;
 mod common;
+mod convert;
 mod embed;
 mod fields;
 mod function;
@@ -493,6 +494,26 @@ pub fn module(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 pub fn trace(stream: TokenStream1) -> TokenStream1 {
     let derive_input = parse_macro_input!(stream as DeriveInput);
     match trace::expand(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
+}
+
+/// A macro for deriving `FromJs` for structs.
+#[proc_macro_derive(FromJs, attributes(qjs))]
+pub fn from_js(stream: TokenStream1) -> TokenStream1 {
+    let derive_input = parse_macro_input!(stream as DeriveInput);
+    match convert::expand_from_js(derive_input) {
+        Ok(x) => x.into(),
+        Err(e) => e.into_compile_error().into(),
+    }
+}
+
+/// A macro for deriving `IntoJs` for structs.
+#[proc_macro_derive(IntoJs, attributes(qjs))]
+pub fn into_js(stream: TokenStream1) -> TokenStream1 {
+    let derive_input = parse_macro_input!(stream as DeriveInput);
+    match convert::expand_into_js(derive_input) {
         Ok(x) => x.into(),
         Err(e) => e.into_compile_error().into(),
     }
