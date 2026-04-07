@@ -101,6 +101,9 @@ macro = ["rquickjs-macro"]
 # Disabled for now as it can be used to create unsound code.
 # multi-ctx = ["rquickjs-core/multi-ctx"]
 
+# Enable hallf (f16) support
+half = ["rquickjs-core/half"]
+
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]
 
