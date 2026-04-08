@@ -386,6 +386,12 @@ impl<'js> Value<'js> {
         unsafe { qjs::JS_IsError(self.value) }
     }
 
+    /// Check if the value is an uncatchable error (e.g. from an interrupt handler)
+    #[inline]
+    pub fn is_uncatchable_error(&self) -> bool {
+        unsafe { qjs::JS_IsUncatchableError(self.value) }
+    }
+
     /// Check if the value is a BigInt
     #[inline]
     pub fn is_big_int(&self) -> bool {
