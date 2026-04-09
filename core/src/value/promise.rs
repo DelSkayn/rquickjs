@@ -190,11 +190,14 @@ where
             return Poll::Ready(x);
         }
 
-        // Check for pending exception (e.g., from interrupt handler).
-        // If there's a pending exception, the promise will never settle,
-        // so return the error instead of hanging forever.
+        // Only bail on uncatchable exceptions (e.g. interrupt handler).
+        // Regular pending exceptions are transient and don't prevent settlement.
         if this.promise.ctx.has_exception() {
-            return Poll::Ready(Err(Error::Exception));
+            let exc = this.promise.ctx.catch();
+            if exc.is_uncatchable_error() {
+                this.promise.ctx.throw(exc);
+                return Poll::Ready(Err(Error::Exception));
+            }
         }
 
         if this.state.is_none() {
@@ -540,5 +543,65 @@ mod test {
 
             assert!(DID_EXECUTE.load(Ordering::SeqCst));
         })
+    }
+
+    #[cfg(feature = "futures")]
+    #[tokio::test]
+    async fn promise_resolves_despite_stale_exception() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        ctx.async_with(async |ctx| {
+            // Leave a stale JS exception pending
+            let _ = ctx.eval::<(), _>("throw new Error('stale')");
+
+            let func = ctx
+                .eval::<Function, _>(
+                    r"
+                    (function(){
+                        return new Promise((resolve) => resolve(42))
+                    })
+                    ",
+                )
+                .catch(&ctx)
+                .unwrap();
+            let promise: Promise = func.call(()).unwrap();
+            assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
+        })
+        .await
+    }
+
+    #[cfg(feature = "futures")]
+    #[tokio::test]
+    async fn promise_fails_on_interrupt_exception() {
+        use std::sync::atomic::AtomicUsize;
+
+        let rt = AsyncRuntime::new().unwrap();
+        let counter = AtomicUsize::new(0);
+        rt.set_interrupt_handler(Some(Box::new(move || {
+            counter.fetch_add(1, Ordering::Relaxed) > 10
+        })))
+        .await;
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        ctx.async_with(async |ctx| {
+            let func = ctx
+                .eval::<Function, _>(
+                    r"
+                    (function(){
+                        return new Promise((resolve) => {
+                            while(true){}
+                            resolve(42)
+                        })
+                    })
+                    ",
+                )
+                .catch(&ctx)
+                .unwrap();
+            let promise: Promise = func.call(()).catch(&ctx).unwrap();
+            let result = promise.into_future::<i32>().await;
+            assert!(result.is_err(), "should fail due to interrupt");
+        })
+        .await
     }
 }
