@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed interrupt handler causing GC assertion failure due to missing `JS_DupContext` on error context from `JS_ExecutePendingJob` #[664](https://github.com/DelSkayn/rquickjs/pull/664)
 - Fixed cross-thread stack overflow false positives in parallel mode by updating stack baseline before QuickJS C entry points
 - Fixed promise polling not returning Ready variant when exception occurs
 - Fixed promise future aborting on stale pending exceptions by only bailing on uncatchable errors (e.g. interrupt handler)
