@@ -65,7 +65,7 @@ pub unsafe fn JS_IsUninitialized(v: JSValue) -> bool {
 #[inline]
 pub unsafe fn JS_IsString(v: JSValue) -> bool {
     let tag = JS_VALUE_GET_TAG(v);
-    tag == JS_TAG_STRING
+    tag == JS_TAG_STRING || tag == JS_TAG_STRING_ROPE
 }
 
 #[inline]

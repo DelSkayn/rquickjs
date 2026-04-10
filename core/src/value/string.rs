@@ -182,4 +182,28 @@ mod test {
             assert_eq!(text, "foobar".to_string());
         });
     }
+
+    #[test]
+    fn rope_string() {
+        test_with(|ctx| {
+            let val: Value = ctx
+                .eval(
+                    r#"
+                    let s = "";
+                    for (let i = 0; i < 10000; i++) s += "Line " + i + "\n";
+                    s
+                "#,
+                )
+                .unwrap();
+
+            assert_eq!(val.type_of(), Type::String);
+            assert!(val.is_string());
+            assert!(val.as_string().is_some());
+
+            let s: StdString = val.as_string().unwrap().to_string().unwrap();
+            assert!(s.starts_with("Line 0\n"));
+            assert!(s.contains("Line 999\n"));
+            assert!(s.len() > 8000);
+        });
+    }
 }
