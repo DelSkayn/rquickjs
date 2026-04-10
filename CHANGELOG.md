@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed QuickJS rope strings (`JS_TAG_STRING_ROPE`) not being recognized as strings, causing `type_of()`, `is_string()`, and `as_string()` to fail on large concatenated strings
 - Fixed interrupt handler causing GC assertion failure due to missing `JS_DupContext` on error context from `JS_ExecutePendingJob` #[664](https://github.com/DelSkayn/rquickjs/pull/664)
 - Fixed cross-thread stack overflow false positives in parallel mode by updating stack baseline before QuickJS C entry points
 - Fixed promise polling not returning Ready variant when exception occurs
