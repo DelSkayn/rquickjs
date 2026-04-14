@@ -687,31 +687,33 @@ impl Display for AsyncJobException {
 }
 
 impl<'js> Ctx<'js> {
-    pub(crate) fn handle_panic<F>(&self, f: F) -> qjs::JSValue
+    fn handle_panic_inner<R, F>(&self, f: F, err_val: R) -> R
     where
-        F: FnOnce() -> qjs::JSValue + UnwindSafe,
-    {
-        match crate::util::catch_unwind(f) {
-            Ok(x) => x,
-            Err(e) => unsafe {
-                self.get_opaque().set_panic(e);
-                qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0))
-            },
-        }
-    }
-
-    pub(crate) fn handle_panic_exotic<F>(&self, f: F) -> qjs::c_int
-    where
-        F: FnOnce() -> qjs::c_int + UnwindSafe,
+        F: FnOnce() -> R + UnwindSafe,
     {
         match crate::util::catch_unwind(f) {
             Ok(x) => x,
             Err(e) => unsafe {
                 self.get_opaque().set_panic(e);
                 qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0));
-                -1
+                err_val
             },
         }
+    }
+
+    pub(crate) fn handle_panic<F>(&self, f: F) -> qjs::JSValue
+    where
+        F: FnOnce() -> qjs::JSValue + UnwindSafe,
+    {
+        // JS_Throw already returns the exception tag value, so we use it directly
+        self.handle_panic_inner(f, qjs::JS_EXCEPTION)
+    }
+
+    pub(crate) fn handle_panic_exotic<F>(&self, f: F) -> qjs::c_int
+    where
+        F: FnOnce() -> qjs::c_int + UnwindSafe,
+    {
+        self.handle_panic_inner(f, -1)
     }
 
     /// Handle possible exceptions in [`JSValue`]'s and turn them into errors

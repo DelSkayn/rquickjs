@@ -7,7 +7,6 @@ use crate::{
     Atom, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
 use alloc::boxed::Box;
-use alloc::string::ToString as _;
 use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
 mod cell;
@@ -23,16 +22,26 @@ pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
 
+/// The kind of a JavaScript class.
+///
+/// A class can't be both callable and exotic, so this enum encodes that constraint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassKind {
+    /// A regular class.
+    Plain,
+    /// A callable class (i.e. can be used as a function).
+    Callable,
+    /// An exotic class (i.e. has custom property access behavior).
+    Exotic,
+}
+
 /// The trait which allows Rust types to be used from JavaScript.
 pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// The name the constructor has in JavaScript
     const NAME: &'static str;
 
-    /// Is this class a function.
-    const CALLABLE: bool = false;
-
-    /// Is this class exotic (e.g. will exotic_* methods be called with it)
-    const EXOTIC: bool = false;
+    /// The kind of this class (plain, callable, or exotic).
+    const KIND: ClassKind = ClassKind::Plain;
 
     /// Can the type be mutated while a JavaScript value.
     ///
@@ -47,7 +56,7 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// Returns a predefined constructor for this specific class type if there is one.
     fn constructor(ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>>;
 
-    /// The function which will be called if [`Self::CALLABLE`] is true and an an object with this
+    /// The function which will be called if [`Self::KIND`] is [`ClassKind::Callable`] and an object with this
     /// class is called as if it is a function.
     fn call<'a>(this: &JsCell<'js, Self>, params: Params<'a, 'js>) -> Result<Value<'js>> {
         let _ = this;
@@ -368,17 +377,10 @@ impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
 }
 
 unsafe fn class_id<'js, C: JsClass<'js>>(ctx: &Ctx<'js>) -> Result<qjs::JSClassID> {
-    if C::CALLABLE && C::EXOTIC {
-        Err(Error::InvalidClass {
-            class: C::NAME,
-            message: "a class cannot be both callable and exotic".to_string(),
-        })
-    } else if C::CALLABLE {
-        Ok(ctx.get_opaque().get_callable_id())
-    } else if C::EXOTIC {
-        Ok(ctx.get_opaque().get_exotic_id())
-    } else {
-        Ok(ctx.get_opaque().get_class_id())
+    match C::KIND {
+        ClassKind::Plain => Ok(ctx.get_opaque().get_class_id()),
+        ClassKind::Callable => Ok(ctx.get_opaque().get_callable_id()),
+        ClassKind::Exotic => Ok(ctx.get_opaque().get_exotic_id()),
     }
 }
 
@@ -391,7 +393,7 @@ mod test {
     };
 
     use crate::{
-        class::{JsClass, Readable, Trace, Tracer, Writable},
+        class::{ClassKind, JsClass, Readable, Trace, Tracer, Writable},
         function::This,
         test_with,
         value::Constructor,
@@ -736,7 +738,7 @@ mod test {
 
             type Mutable = Readable;
 
-            const EXOTIC: bool = true;
+            const KIND: ClassKind = ClassKind::Exotic;
 
             fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
                 Ok(Some(crate::Object::new(ctx.clone())?))
@@ -844,7 +846,7 @@ mod test {
 
             type Mutable = Writable;
 
-            const EXOTIC: bool = true;
+            const KIND: ClassKind = ClassKind::Exotic;
 
             fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
                 Ok(Some(crate::Object::new(ctx.clone())?))

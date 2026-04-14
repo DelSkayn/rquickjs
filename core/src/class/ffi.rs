@@ -151,7 +151,7 @@ pub(crate) type CallFunc = for<'a> unsafe fn(
     flags: qjs::c_int,
 ) -> qjs::JSValue;
 
-pub(crate) type GetPropertyFunc = for<'a> unsafe fn(
+pub(crate) type GetPropertyFunc = unsafe fn(
     this_ptr: NonNull<ClassCell<()>>,
     ctx: *mut qjs::JSContext,
     obj: qjs::JSValueConst,
@@ -159,7 +159,7 @@ pub(crate) type GetPropertyFunc = for<'a> unsafe fn(
     receiver: qjs::JSValueConst,
 ) -> qjs::JSValue;
 
-pub(crate) type SetPropertyFunc = for<'a> unsafe fn(
+pub(crate) type SetPropertyFunc = unsafe fn(
     this_ptr: NonNull<ClassCell<()>>,
     ctx: *mut qjs::JSContext,
     obj: qjs::JSValueConst,
@@ -169,14 +169,14 @@ pub(crate) type SetPropertyFunc = for<'a> unsafe fn(
     flags: qjs::c_int,
 ) -> qjs::c_int;
 
-pub(crate) type HasPropertyFunc = for<'a> unsafe fn(
+pub(crate) type HasPropertyFunc = unsafe fn(
     this_ptr: NonNull<ClassCell<()>>,
     ctx: *mut qjs::JSContext,
     obj: qjs::JSValueConst,
     atom: qjs::JSAtom,
 ) -> qjs::c_int;
 
-pub(crate) type DeletePropertyFunc = for<'a> unsafe fn(
+pub(crate) type DeletePropertyFunc = unsafe fn(
     this_ptr: NonNull<ClassCell<()>>,
     ctx: *mut qjs::JSContext,
     obj: qjs::JSValueConst,

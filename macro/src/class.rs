@@ -362,7 +362,7 @@ impl Class {
         let props = self.expand_props(&crate_name);
         let reexpand = self.reexpand();
         let exotic_const = if self.config().exotic {
-            quote! { const EXOTIC: bool = true; }
+            quote! { const KIND: #crate_name::class::ClassKind = #crate_name::class::ClassKind::Exotic; }
         } else {
             TokenStream::new()
         };

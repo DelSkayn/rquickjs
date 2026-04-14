@@ -1,5 +1,5 @@
 [package]
-name = "rquickjs-exotic"
+name = "exotic"
 version = "0.10.0"
 authors = ["K. <kayo@illumium.org>"]
 edition = "2018"
