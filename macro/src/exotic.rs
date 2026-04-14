@@ -10,6 +10,7 @@ use crate::{
     attrs::{take_attributes, FlagOption, OptionList},
     common::{crate_ident, kw},
     function::JsFunction,
+    methods::get_class_name,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -273,14 +274,6 @@ impl ExoticMethod {
         quote! {
             #(#attrs)* #vis #sig #block
         }
-    }
-}
-
-fn get_class_name(ty: &Type) -> String {
-    match ty {
-        Type::Path(x) => x.path.segments.first().unwrap().ident.to_string(),
-        Type::Paren(x) => get_class_name(&x.elem),
-        _ => "Unknown".to_string(),
     }
 }
 
