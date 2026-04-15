@@ -19,6 +19,8 @@ enum ExoticMethodKind {
     Set,
     Delete,
     Has,
+    GetOwnProperty,
+    GetOwnPropertyNames,
 }
 
 impl ExoticMethodKind {
@@ -28,6 +30,8 @@ impl ExoticMethodKind {
             Self::Set => "exotic_set_property",
             Self::Delete => "exotic_delete_property",
             Self::Has => "exotic_has_property",
+            Self::GetOwnProperty => "exotic_get_own_property",
+            Self::GetOwnPropertyNames => "exotic_get_own_property_names",
         }
     }
 }
@@ -42,11 +46,17 @@ enum ExoticMethodOption {
     Set(FlagOption<kw::set>),
     Delete(FlagOption<kw::delete>),
     Has(FlagOption<kw::has>),
+    GetOwnProperty(FlagOption<kw::get_own_property>),
+    GetOwnPropertyNames(FlagOption<kw::get_own_property_names>),
 }
 
 impl Parse for ExoticMethodOption {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        if input.peek(kw::get) {
+        if input.peek(kw::get_own_property_names) {
+            input.parse().map(Self::GetOwnPropertyNames)
+        } else if input.peek(kw::get_own_property) {
+            input.parse().map(Self::GetOwnProperty)
+        } else if input.peek(kw::get) {
             input.parse().map(Self::Get)
         } else if input.peek(kw::set) {
             input.parse().map(Self::Set)
@@ -57,7 +67,7 @@ impl Parse for ExoticMethodOption {
         } else {
             Err(syn::Error::new(
                 input.span(),
-                "invalid exotic method attribute, expected one of: get, set, delete, has",
+                "invalid exotic method attribute, expected one of: get, set, delete, has, get_own_property, get_own_property_names",
             ))
         }
     }
@@ -70,6 +80,13 @@ impl ExoticMethodConfig {
             ExoticMethodOption::Set(x) if x.is_true() => (ExoticMethodKind::Set, "set"),
             ExoticMethodOption::Delete(x) if x.is_true() => (ExoticMethodKind::Delete, "delete"),
             ExoticMethodOption::Has(x) if x.is_true() => (ExoticMethodKind::Has, "has"),
+            ExoticMethodOption::GetOwnProperty(x) if x.is_true() => {
+                (ExoticMethodKind::GetOwnProperty, "get_own_property")
+            }
+            ExoticMethodOption::GetOwnPropertyNames(x) if x.is_true() => (
+                ExoticMethodKind::GetOwnPropertyNames,
+                "get_own_property_names",
+            ),
             _ => return Ok(()), // Flag is false, ignore
         };
 
@@ -84,6 +101,8 @@ impl ExoticMethodConfig {
                         ExoticMethodKind::Set => "set",
                         ExoticMethodKind::Delete => "delete",
                         ExoticMethodKind::Has => "has",
+                        ExoticMethodKind::GetOwnProperty => "get_own_property",
+                        ExoticMethodKind::GetOwnPropertyNames => "get_own_property_names",
                     }
                 ),
             );
@@ -252,6 +271,44 @@ impl ExoticMethod {
                 };
                 (params, args, quote! { bool }, conversion)
             }
+            ExoticMethodKind::GetOwnProperty => {
+                let params = quote! { ctx: &#crate_name::Ctx<'js>, atom: #crate_name::Atom<'js> };
+                let args = if self.has_ctx {
+                    quote! { ctx, atom }
+                } else {
+                    quote! { atom }
+                };
+                let conversion = if self.returns_result {
+                    quote! { result }
+                } else {
+                    quote! { Ok(result) }
+                };
+                (
+                    params,
+                    args,
+                    quote! { Option<#crate_name::class::PropertyDescriptor<'js>> },
+                    conversion,
+                )
+            }
+            ExoticMethodKind::GetOwnPropertyNames => {
+                let params = quote! { ctx: &#crate_name::Ctx<'js> };
+                let args = if self.has_ctx {
+                    quote! { ctx }
+                } else {
+                    quote! {}
+                };
+                let conversion = if self.returns_result {
+                    quote! { result }
+                } else {
+                    quote! { Ok(result) }
+                };
+                (
+                    params,
+                    args,
+                    quote! { Vec<#crate_name::class::PropertyName<'js>> },
+                    conversion,
+                )
+            }
         };
 
         quote! {
@@ -377,6 +434,42 @@ pub(crate) fn expand(item: ItemImpl) -> Result<TokenStream> {
         TokenStream::new()
     };
 
+    let has_get_own_property = methods
+        .iter()
+        .any(|m| m.kind == ExoticMethodKind::GetOwnProperty);
+    let has_get_own_property_names = methods
+        .iter()
+        .any(|m| m.kind == ExoticMethodKind::GetOwnPropertyNames);
+
+    let default_get_own_property = if !has_get_own_property {
+        quote! {
+            pub fn exotic_get_own_property<'js>(
+                this: &#crate_name::class::JsCell<'js, #self_ty>,
+                _ctx: &#crate_name::Ctx<'js>,
+                _atom: #crate_name::Atom<'js>,
+            ) -> #crate_name::Result<Option<#crate_name::class::PropertyDescriptor<'js>>> {
+                let _ = this;
+                Ok(None)
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+
+    let default_get_own_property_names = if !has_get_own_property_names {
+        quote! {
+            pub fn exotic_get_own_property_names<'js>(
+                this: &#crate_name::class::JsCell<'js, #self_ty>,
+                _ctx: &#crate_name::Ctx<'js>,
+            ) -> #crate_name::Result<Vec<#crate_name::class::PropertyName<'js>>> {
+                let _ = this;
+                Ok(Vec::new())
+            }
+        }
+    } else {
+        TokenStream::new()
+    };
+
     let res = quote! {
         #(#attrs)*
         impl #generics #self_ty {
@@ -395,6 +488,8 @@ pub(crate) fn expand(item: ItemImpl) -> Result<TokenStream> {
                 #default_set
                 #default_delete
                 #default_has
+                #default_get_own_property
+                #default_get_own_property_names
             }
         }
     };

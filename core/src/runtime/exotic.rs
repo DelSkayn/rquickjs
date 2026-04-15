@@ -8,8 +8,8 @@ pub(crate) struct ExoticMethodsHolder(*mut qjs::JSClassExoticMethods);
 impl ExoticMethodsHolder {
     pub fn new() -> Self {
         Self(Box::into_raw(Box::new(qjs::JSClassExoticMethods {
-            get_own_property: None,       // TODO: Implement
-            get_own_property_names: None, // TODO: Implement
+            get_own_property: Some(crate::class::ffi::exotic_get_own_property),
+            get_own_property_names: Some(crate::class::ffi::exotic_get_own_property_names),
             delete_property: Some(crate::class::ffi::exotic_delete_property),
             define_own_property: None, // TODO: Implement
             has_property: Some(crate::class::ffi::exotic_has_property),

@@ -404,6 +404,21 @@ impl Class {
                 ) -> #crate_name::Result<bool> {
                     #exotic_module::ExoticImpl::exotic_has_property(this, ctx, atom)
                 }
+
+                fn exotic_get_own_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                ) -> #crate_name::Result<Option<#crate_name::class::PropertyDescriptor<'js>>> {
+                    #exotic_module::ExoticImpl::exotic_get_own_property(this, ctx, atom)
+                }
+
+                fn exotic_get_own_property_names(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                ) -> #crate_name::Result<Vec<#crate_name::class::PropertyName<'js>>> {
+                    #exotic_module::ExoticImpl::exotic_get_own_property_names(this, ctx)
+                }
             }
         } else {
             TokenStream::new()

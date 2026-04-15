@@ -7,6 +7,7 @@ use crate::{
     Atom, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
 mod cell;
@@ -33,6 +34,53 @@ pub enum ClassKind {
     Callable,
     /// An exotic class (i.e. has custom property access behavior).
     Exotic,
+}
+
+/// A JavaScript property descriptor returned from [`JsClass::exotic_get_own_property`].
+pub struct PropertyDescriptor<'js> {
+    /// The property value (for data descriptors).
+    pub value: Value<'js>,
+    /// The getter function (for accessor descriptors).
+    pub getter: Value<'js>,
+    /// The setter function (for accessor descriptors).
+    pub setter: Value<'js>,
+    /// Whether the property is configurable.
+    pub configurable: bool,
+    /// Whether the property is enumerable.
+    pub enumerable: bool,
+    /// Whether the property is writable (data descriptors only).
+    pub writable: bool,
+    /// Whether this is a getter/setter descriptor.
+    pub is_getset: bool,
+}
+
+impl<'js> PropertyDescriptor<'js> {
+    /// Create a simple value property descriptor.
+    pub fn new_value(
+        value: Value<'js>,
+        configurable: bool,
+        enumerable: bool,
+        writable: bool,
+    ) -> Self {
+        let ctx = value.ctx().clone();
+        PropertyDescriptor {
+            value,
+            getter: Value::new_undefined(ctx.clone()),
+            setter: Value::new_undefined(ctx),
+            configurable,
+            enumerable,
+            writable,
+            is_getset: false,
+        }
+    }
+}
+
+/// A property name entry returned from [`JsClass::exotic_get_own_property_names`].
+pub struct PropertyName<'js> {
+    /// The atom identifying the property.
+    pub atom: Atom<'js>,
+    /// Whether this property is enumerable.
+    pub is_enumerable: bool,
 }
 
 /// The trait which allows Rust types to be used from JavaScript.
@@ -104,6 +152,29 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     ) -> Result<bool> {
         let _ = this;
         Ok(false)
+    }
+
+    /// Called to get the own property descriptor for a given property name.
+    ///
+    /// Return `Ok(Some(descriptor))` if the property exists, `Ok(None)` if it doesn't.
+    fn exotic_get_own_property(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+    ) -> Result<Option<PropertyDescriptor<'js>>> {
+        let _ = this;
+        Ok(None)
+    }
+
+    /// Called to enumerate the own property names of this object.
+    ///
+    /// Return a list of property names.
+    fn exotic_get_own_property_names(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+    ) -> Result<Vec<PropertyName<'js>>> {
+        let _ = this;
+        Ok(Vec::new())
     }
 }
 
@@ -944,6 +1015,42 @@ mod test {
                     .into_value();
                 Err(ctx.throw(err_val))
             }
+
+            fn exotic_get_own_property(
+                this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+            ) -> crate::Result<Option<super::PropertyDescriptor<'js>>> {
+                let name = atom.to_string()?;
+                if name == "hello" || name == "i" {
+                    let value = if name == "hello" {
+                        "world".into_js(ctx)?
+                    } else {
+                        this.borrow().i.into_js(ctx)?
+                    };
+                    Ok(Some(super::PropertyDescriptor::new_value(
+                        value, true, true, false,
+                    )))
+                } else {
+                    Ok(None)
+                }
+            }
+
+            fn exotic_get_own_property_names(
+                _this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+            ) -> crate::Result<Vec<super::PropertyName<'js>>> {
+                Ok(vec![
+                    super::PropertyName {
+                        atom: crate::Atom::from_str(ctx.clone(), "hello")?,
+                        is_enumerable: true,
+                    },
+                    super::PropertyName {
+                        atom: crate::Atom::from_str(ctx.clone(), "i")?,
+                        is_enumerable: true,
+                    },
+                ])
+            }
         }
 
         test_with(|ctx| {
@@ -1008,6 +1115,27 @@ mod test {
                 }
 
                 assert(resp.toString() === 'hello:1292,i:43', `${resp.toString()} with length ${resp.length} should be [] as properties are not enumerable`);
+
+                // Test Object.getOwnPropertyNames() (uses get_own_property_names)
+                let ownNames = Object.getOwnPropertyNames(exotic);
+                assert(ownNames.length === 2, `getOwnPropertyNames should return 2, got ${ownNames.length}`);
+                assert(ownNames.includes('hello'), 'getOwnPropertyNames should include hello');
+                assert(ownNames.includes('i'), 'getOwnPropertyNames should include i');
+
+                // Test Object.keys() (uses get_own_property_names + get_own_property)
+                let keys = Object.keys(exotic);
+                assert(keys.length === 2, `Object.keys should return 2 keys, got ${keys.length}`);
+
+                // Test Object.getOwnPropertyDescriptor() (uses get_own_property)
+                let desc = Object.getOwnPropertyDescriptor(exotic, 'hello');
+                assert(desc !== undefined, 'descriptor for hello should exist');
+                assert(desc.value === 'world', `descriptor value should be world, got ${desc.value}`);
+                assert(desc.configurable === true, 'hello should be configurable');
+                assert(desc.enumerable === true, 'hello should be enumerable');
+                assert(desc.writable === false, 'hello should not be writable');
+
+                // Non-existent property returns undefined descriptor
+                assert(Object.getOwnPropertyDescriptor(exotic, 'nonexistent') === undefined, 'nonexistent should be undefined');
 
                 exotic.hello
             ",

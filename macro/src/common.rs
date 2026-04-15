@@ -142,4 +142,6 @@ pub(crate) mod kw {
     syn::custom_keyword!(exotic);
     syn::custom_keyword!(delete);
     syn::custom_keyword!(has);
+    syn::custom_keyword!(get_own_property);
+    syn::custom_keyword!(get_own_property_names);
 }
