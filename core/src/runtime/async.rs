@@ -449,16 +449,23 @@ mod test {
 
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let gate_clone = gate.clone();
+        let done = Arc::new(tokio::sync::Notify::new());
+        let done_clone = done.clone();
 
         ctx.async_with(async |ctx|{
             ctx.spawn(async move {
-                tokio::task::yield_now().await;
+                gate_clone.notified().await;
                 number_clone.store(1,Ordering::SeqCst);
+                done_clone.notify_one();
             });
         }).await;
+        // Task is blocked on gate, so value is definitely still 0.
         assert_eq!(number.load(Ordering::SeqCst),0);
-        // Give drive time to finish the task.
-        tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+        // Unblock the task and wait for it to complete.
+        gate.notify_one();
+        done.notified().await;
         assert_eq!(number.load(Ordering::SeqCst),1);
 
     });
