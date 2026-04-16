@@ -449,15 +449,22 @@ mod test {
 
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
+        let notify = Arc::new(tokio::sync::Notify::new());
+        let notify_clone = notify.clone();
 
         ctx.async_with(async |ctx|{
             ctx.spawn(async move {
-                tokio::task::yield_now().await;
+                // Wait until the test tells us to proceed.
+                notify_clone.notified().await;
                 number_clone.store(1,Ordering::SeqCst);
             });
         }).await;
+
+        // Task is spawned and drive is running, but the task is blocked on notify.
         assert_eq!(number.load(Ordering::SeqCst),0);
-        // Give drive time to finish the task.
+
+        // Unblock the task and let drive complete it.
+        notify.notify_one();
         tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
         assert_eq!(number.load(Ordering::SeqCst),1);
 
