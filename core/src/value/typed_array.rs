@@ -47,6 +47,11 @@ typedarray_items! {
     BigUint64Array: u64, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64,
 }
 
+#[cfg(feature = "half")]
+typedarray_items! {
+    Float16Array: half::f16, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16,
+}
+
 /// Rust representation of a JavaScript objects of TypedArray classes.
 ///
 /// | ES Type            | Rust Type             |

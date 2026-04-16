@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Breaking Changes
 
 - Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)\
+- Added half support (f16) for Float16Array # [662](https://github.com/DelSkayn/rquickjs/pull/662)
 
 ### Added
 
