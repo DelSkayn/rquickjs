@@ -4,9 +4,10 @@ use crate::{
     function::Params,
     qjs::{self},
     value::Constructor,
-    Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
+    Atom, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
 };
 use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::{hash::Hash, marker::PhantomData, mem, ops::Deref, ptr::NonNull};
 
 mod cell;
@@ -22,13 +23,73 @@ pub use trace::{Trace, Tracer};
 #[doc(hidden)]
 pub mod impl_;
 
+/// The kind of a JavaScript class.
+///
+/// A class can't be both callable and exotic, so this enum encodes that constraint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassKind {
+    /// A regular class.
+    Plain,
+    /// A callable class (i.e. can be used as a function).
+    Callable,
+    /// An exotic class (i.e. has custom property access behavior).
+    Exotic,
+}
+
+/// A JavaScript property descriptor returned from [`JsClass::exotic_get_own_property`].
+pub struct PropertyDescriptor<'js> {
+    /// The property value (for data descriptors).
+    pub value: Value<'js>,
+    /// The getter function (for accessor descriptors).
+    pub getter: Value<'js>,
+    /// The setter function (for accessor descriptors).
+    pub setter: Value<'js>,
+    /// Whether the property is configurable.
+    pub configurable: bool,
+    /// Whether the property is enumerable.
+    pub enumerable: bool,
+    /// Whether the property is writable (data descriptors only).
+    pub writable: bool,
+    /// Whether this is a getter/setter descriptor.
+    pub is_getset: bool,
+}
+
+impl<'js> PropertyDescriptor<'js> {
+    /// Create a simple value property descriptor.
+    pub fn new_value(
+        value: Value<'js>,
+        configurable: bool,
+        enumerable: bool,
+        writable: bool,
+    ) -> Self {
+        let ctx = value.ctx().clone();
+        PropertyDescriptor {
+            value,
+            getter: Value::new_undefined(ctx.clone()),
+            setter: Value::new_undefined(ctx),
+            configurable,
+            enumerable,
+            writable,
+            is_getset: false,
+        }
+    }
+}
+
+/// A property name entry returned from [`JsClass::exotic_get_own_property_names`].
+pub struct PropertyName<'js> {
+    /// The atom identifying the property.
+    pub atom: Atom<'js>,
+    /// Whether this property is enumerable.
+    pub is_enumerable: bool,
+}
+
 /// The trait which allows Rust types to be used from JavaScript.
 pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// The name the constructor has in JavaScript
     const NAME: &'static str;
 
-    /// Is this class a function.
-    const CALLABLE: bool = false;
+    /// The kind of this class (plain, callable, or exotic).
+    const KIND: ClassKind = ClassKind::Plain;
 
     /// Can the type be mutated while a JavaScript value.
     ///
@@ -43,11 +104,77 @@ pub trait JsClass<'js>: Trace<'js> + JsLifetime<'js> + Sized {
     /// Returns a predefined constructor for this specific class type if there is one.
     fn constructor(ctx: &Ctx<'js>) -> Result<Option<Constructor<'js>>>;
 
-    /// The function which will be called if [`Self::CALLABLE`] is true and an an object with this
+    /// The function which will be called if [`Self::KIND`] is [`ClassKind::Callable`] and an object with this
     /// class is called as if it is a function.
     fn call<'a>(this: &JsCell<'js, Self>, params: Params<'a, 'js>) -> Result<Value<'js>> {
         let _ = this;
         Ok(Value::new_undefined(params.ctx().clone()))
+    }
+
+    /// The function which will be called if a get property is performed on an object with this class
+    fn exotic_get_property(
+        this: &JsCell<'js, Self>,
+        ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+        _receiver: Value<'js>,
+    ) -> Result<Value<'js>> {
+        let _ = this;
+        Ok(Value::new_undefined(ctx.clone()))
+    }
+
+    /// The function which will be called if a set property is performed on an object with this class
+    fn exotic_set_property(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+        _receiver: Value<'js>,
+        _value: Value<'js>,
+    ) -> Result<bool> {
+        let _ = this;
+        Ok(false)
+    }
+
+    /// The function which will be called if a delete property is performed on an object with this class
+    fn exotic_delete_property(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+    ) -> Result<bool> {
+        let _ = this;
+        Ok(false)
+    }
+
+    /// The function which will be called if has property or similar is called on an object with this class
+    fn exotic_has_property(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+    ) -> Result<bool> {
+        let _ = this;
+        Ok(false)
+    }
+
+    /// Called to get the own property descriptor for a given property name.
+    ///
+    /// Return `Ok(Some(descriptor))` if the property exists, `Ok(None)` if it doesn't.
+    fn exotic_get_own_property(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+        _atom: Atom<'js>,
+    ) -> Result<Option<PropertyDescriptor<'js>>> {
+        let _ = this;
+        Ok(None)
+    }
+
+    /// Called to enumerate the own property names of this object.
+    ///
+    /// Return a list of property names.
+    fn exotic_get_own_property_names(
+        this: &JsCell<'js, Self>,
+        _ctx: &Ctx<'js>,
+    ) -> Result<Vec<PropertyName<'js>>> {
+        let _ = this;
+        Ok(Vec::new())
     }
 }
 
@@ -94,13 +221,7 @@ impl<'js, C: JsClass<'js>> Deref for Class<'js, C> {
 impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// Create a class from a Rust object.
     pub fn instance(ctx: Ctx<'js>, value: C) -> Result<Class<'js, C>> {
-        let id = unsafe {
-            if C::CALLABLE {
-                ctx.get_opaque().get_callable_id()
-            } else {
-                ctx.get_opaque().get_class_id()
-            }
-        };
+        let id = unsafe { class_id::<C>(&ctx)? };
 
         let prototype = Self::prototype(&ctx)?;
 
@@ -119,13 +240,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Create a class from a Rust object with a given prototype.
     pub fn instance_proto(value: C, proto: Object<'js>) -> Result<Class<'js, C>> {
-        let id = unsafe {
-            if C::CALLABLE {
-                proto.ctx().get_opaque().get_callable_id()
-            } else {
-                proto.ctx().get_opaque().get_class_id()
-            }
-        };
+        let id = unsafe { class_id::<C>(proto.ctx())? };
 
         let val = unsafe {
             proto.ctx.handle_exception(qjs::JS_NewObjectProtoClass(
@@ -225,13 +340,7 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
     /// returns a pointer to the class object.
     #[inline]
     pub(crate) fn get_class_ptr(&self) -> NonNull<ClassCell<JsCell<'js, C>>> {
-        let id = unsafe {
-            if C::CALLABLE {
-                self.ctx.get_opaque().get_callable_id()
-            } else {
-                self.ctx.get_opaque().get_class_id()
-            }
-        };
+        let id = unsafe { class_id::<C>(&self.ctx).expect("invalid class") };
 
         let ptr = unsafe { qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0 .0.as_js_value(), id) };
 
@@ -279,12 +388,8 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 impl<'js> Object<'js> {
     /// Returns if the object is of a certain Rust class.
     pub fn instance_of<C: JsClass<'js>>(&self) -> bool {
-        let id = unsafe {
-            if C::CALLABLE {
-                self.ctx.get_opaque().get_callable_id()
-            } else {
-                self.ctx.get_opaque().get_class_id()
-            }
+        let Ok(id) = (unsafe { class_id::<C>(&self.ctx) }) else {
+            return false;
         };
 
         // This checks if the class is of the right class id.
@@ -342,19 +447,29 @@ impl<'js, C: JsClass<'js>> IntoJs<'js> for Class<'js, C> {
     }
 }
 
+unsafe fn class_id<'js, C: JsClass<'js>>(ctx: &Ctx<'js>) -> Result<qjs::JSClassID> {
+    match C::KIND {
+        ClassKind::Plain => Ok(ctx.get_opaque().get_class_id()),
+        ClassKind::Callable => Ok(ctx.get_opaque().get_callable_id()),
+        ClassKind::Exotic => Ok(ctx.get_opaque().get_exotic_id()),
+    }
+}
+
 #[cfg(test)]
 mod test {
+    use core::sync::atomic::AtomicI32;
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     };
 
     use crate::{
-        class::{JsClass, Readable, Trace, Tracer, Writable},
+        class::{ClassKind, JsClass, Readable, Trace, Tracer, Writable},
         function::This,
         test_with,
         value::Constructor,
-        CatchResultExt, Class, Context, FromJs, Function, IntoJs, JsLifetime, Object, Runtime,
+        CatchResultExt, Class, Context, FromIteratorJs, FromJs, Function, IntoJs, JsLifetime,
+        Object, Runtime,
     };
 
     /// Test circular references.
@@ -672,6 +787,363 @@ mod test {
             ctx.globals()
                 .get::<_, Class<DebugPrinter<String>>>("b")
                 .unwrap();
+        })
+    }
+
+    #[test]
+    fn exotic() {
+        pub struct ExoticIterator {
+            curr_state: Arc<AtomicI32>,
+        }
+
+        impl<'js> Trace<'js> for ExoticIterator {
+            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        unsafe impl<'js> JsLifetime<'js> for ExoticIterator {
+            type Changed<'to> = ExoticIterator;
+        }
+
+        impl<'js> JsClass<'js> for ExoticIterator {
+            const NAME: &'static str = "ExoticIterator";
+
+            type Mutable = Readable;
+
+            const KIND: ClassKind = ClassKind::Exotic;
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
+                Ok(Some(crate::Object::new(ctx.clone())?))
+            }
+
+            fn constructor(
+                _ctx: &crate::Ctx<'js>,
+            ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
+                Ok(None)
+            }
+
+            fn exotic_get_property(
+                this: &crate::class::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _receiver: crate::Value<'js>,
+            ) -> crate::Result<crate::Value<'js>> {
+                println!("Get property [iter]: {}", atom.to_string()?);
+                if atom.to_string()? == "next" {
+                    let state = this.borrow().curr_state.clone();
+                    Ok(Function::new(ctx.clone(), move |ctx: crate::Ctx<'js>| {
+                        // A really awful iterator thats implemented as a handwritten state machine
+                        //
+                        // Do not use this in production
+                        if state.load(Ordering::SeqCst) <= 1 {
+                            state.store(2, Ordering::SeqCst);
+
+                            let val = crate::Object::from_iter_js(
+                                &ctx,
+                                [
+                                    ("done", false.into_js(&ctx)?),
+                                    ("value", vec!["hello", "1292"].into_js(&ctx)?),
+                                ],
+                            )?
+                            .into_value();
+
+                            Ok::<crate::Value<'_>, crate::Error>(val)
+                        } else if state.load(Ordering::SeqCst) == 2 {
+                            state.fetch_add(1, Ordering::SeqCst);
+
+                            let val = crate::Object::from_iter_js(
+                                &ctx,
+                                [
+                                    ("done", false.into_js(&ctx)?),
+                                    (
+                                        "value",
+                                        vec!["i".into_js(&ctx)?, 43.into_js(&ctx)?]
+                                            .into_js(&ctx)?,
+                                    ),
+                                ],
+                            )?
+                            .into_value();
+
+                            Ok(val)
+                        } else {
+                            state.fetch_add(1, Ordering::SeqCst);
+
+                            let val = crate::Object::from_iter_js(
+                                &ctx,
+                                [
+                                    ("done", true.into_js(&ctx)?),
+                                    ("value", crate::Value::new_undefined(ctx.clone())),
+                                ],
+                            )?
+                            .into_value();
+
+                            Ok(val)
+                        }
+                    })?
+                    .into_value())
+                } else {
+                    Ok(crate::Value::new_undefined(ctx.clone()))
+                }
+            }
+
+            fn exotic_has_property(
+                this: &super::JsCell<'js, Self>,
+                _ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+            ) -> crate::Result<bool> {
+                let _ = this;
+                if atom.to_string()? == "next" {
+                    return Ok(true);
+                }
+
+                Ok(false)
+            }
+        }
+
+        #[derive(Clone)]
+        pub struct Exotic {
+            pub i: i32,
+        }
+
+        impl<'js> Trace<'js> for Exotic {
+            fn trace<'a>(&self, _tracer: Tracer<'a, 'js>) {}
+        }
+
+        unsafe impl<'js> JsLifetime<'js> for Exotic {
+            type Changed<'to> = Exotic;
+        }
+
+        impl<'js> JsClass<'js> for Exotic {
+            const NAME: &'static str = "Exotic";
+
+            type Mutable = Writable;
+
+            const KIND: ClassKind = ClassKind::Exotic;
+
+            fn prototype(ctx: &crate::Ctx<'js>) -> crate::Result<Option<crate::Object<'js>>> {
+                Ok(Some(crate::Object::new(ctx.clone())?))
+            }
+
+            fn constructor(
+                _ctx: &crate::Ctx<'js>,
+            ) -> crate::Result<Option<crate::value::Constructor<'js>>> {
+                Ok(None)
+            }
+
+            fn exotic_get_property(
+                this: &crate::class::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _receiver: crate::Value<'js>,
+            ) -> crate::Result<crate::Value<'js>> {
+                let symbol_iterator = crate::Atom::from_predefined(
+                    ctx.clone(),
+                    crate::atom::PredefinedAtom::SymbolIterator,
+                );
+                println!("Get property: {}", atom.to_string()?);
+                if atom.to_string()? == "hello" {
+                    assert!(this.borrow().i == 42);
+                    Ok("world".into_js(ctx)?)
+                } else if atom.to_string()? == "toString" {
+                    Ok(Function::new(ctx.clone(), || {
+                        let f = "class Exotic { [native code] }";
+                        Ok::<&'static str, crate::Error>(f)
+                    })?
+                    .into_value())
+                } else if atom == symbol_iterator {
+                    println!("Getting iterator");
+                    let exotic = Class::<ExoticIterator>::instance(
+                        ctx.clone(),
+                        ExoticIterator {
+                            curr_state: Arc::default(),
+                        },
+                    )?;
+                    println!("Returning ExoticIterator");
+                    Ok(Function::new(ctx.clone(), move || {
+                        Ok::<crate::Value<'_>, crate::Error>(exotic.clone().into_value())
+                    })?
+                    .into_value())
+                } else {
+                    Ok(crate::Value::new_null(ctx.clone()))
+                }
+            }
+
+            fn exotic_set_property(
+                this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+                _receiver: crate::Value<'js>,
+                _value: crate::Value<'js>,
+            ) -> crate::Result<bool> {
+                let _ = this;
+                if atom.to_string()? == "i" {
+                    let Some(new_i) = _value.as_int() else {
+                        let err_val = crate::String::from_str(ctx.clone(), "i must be an integer")?
+                            .into_value();
+                        return Err(ctx.throw(err_val));
+                    };
+                    this.borrow_mut().i = new_i;
+                    return Ok(true);
+                }
+                let err_val =
+                    crate::String::from_str(ctx.clone(), "Properties are read-only")?.into_value();
+                Err(ctx.throw(err_val))
+            }
+
+            fn exotic_has_property(
+                this: &super::JsCell<'js, Self>,
+                _ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+            ) -> crate::Result<bool> {
+                let _ = this;
+                println!("Got atom: {}", atom.to_string()?);
+                if atom.to_string()? == "hello"
+                    || atom.to_string()? == "i"
+                    || atom.to_string()? == "toString"
+                {
+                    return Ok(true);
+                }
+
+                Ok(false)
+            }
+
+            fn exotic_delete_property(
+                _this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                _atom: crate::Atom<'js>,
+            ) -> crate::Result<bool> {
+                let err_val = crate::String::from_str(ctx.clone(), "Properties cannot be deleted")?
+                    .into_value();
+                Err(ctx.throw(err_val))
+            }
+
+            fn exotic_get_own_property(
+                this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+                atom: crate::Atom<'js>,
+            ) -> crate::Result<Option<super::PropertyDescriptor<'js>>> {
+                let name = atom.to_string()?;
+                if name == "hello" || name == "i" {
+                    let value = if name == "hello" {
+                        "world".into_js(ctx)?
+                    } else {
+                        this.borrow().i.into_js(ctx)?
+                    };
+                    Ok(Some(super::PropertyDescriptor::new_value(
+                        value, true, true, false,
+                    )))
+                } else {
+                    Ok(None)
+                }
+            }
+
+            fn exotic_get_own_property_names(
+                _this: &super::JsCell<'js, Self>,
+                ctx: &crate::Ctx<'js>,
+            ) -> crate::Result<Vec<super::PropertyName<'js>>> {
+                Ok(vec![
+                    super::PropertyName {
+                        atom: crate::Atom::from_str(ctx.clone(), "hello")?,
+                        is_enumerable: true,
+                    },
+                    super::PropertyName {
+                        atom: crate::Atom::from_str(ctx.clone(), "i")?,
+                        is_enumerable: true,
+                    },
+                ])
+            }
+        }
+
+        test_with(|ctx| {
+            let exotic = Class::<Exotic>::instance(ctx.clone(), Exotic { i: 0 }).unwrap();
+            ctx.globals().set("exotic", exotic).unwrap();
+            ctx.globals()
+                .set(
+                    "assert",
+                    Function::new(
+                        ctx.clone(),
+                        |ctx: crate::Ctx<'_>, cond: bool, msg: String| {
+                            if !cond {
+                                let err_val =
+                                    crate::String::from_str(ctx.clone(), &msg)?.into_value();
+                                return Err(ctx.throw(err_val));
+                            }
+                            Ok(())
+                        },
+                    ),
+                )
+                .unwrap();
+
+            let v = ctx
+                .eval::<String, _>(
+                    r"
+                if(exotic.foo !== null) {
+                    throw new Error('foo should be null');
+                }
+                try {
+                    exotic.foo = 1
+                } catch(e) {
+                    if (e?.toString() !== 'Properties are read-only') {
+                        throw new Error('wrong error message: ' + e?.toString());
+                    }
+                }
+                if (exotic.foo !== null) {
+                    throw new Error('foo should be null');
+                }
+                exotic.i = 42;
+                if (exotic.hello === 42) {
+                    throw new Error('i should be 42');
+                }
+                assert(exotic?.toString() === 'class Exotic { [native code] }', `exotic.toString() should be 'class Exotic { [native code] }' but is ${exotic?.toString()}`);
+                assert('i' in exotic, 'i should be in exotic');
+                assert('hello' in exotic, 'hello should be in exotic');
+                assert(!('foo' in exotic), 'foo should not be in exotic');
+
+                try {
+                    delete exotic.i;
+                } catch(e) {
+                    if (e?.toString() !== 'Properties cannot be deleted') {
+                        throw new Error('wrong error message: ' + e?.toString());
+                    }
+                }
+
+                let resp = []
+                for (let [objKey, value] of exotic) {
+                    if (objKey !== 'i' && objKey !== 'hello') {
+                        throw new Error('only i and hello should be enumerable, got ' + objKey);
+                    }
+                    resp.push(`${objKey}:${value}`);
+                }
+
+                assert(resp.toString() === 'hello:1292,i:43', `${resp.toString()} with length ${resp.length} should be [] as properties are not enumerable`);
+
+                // Test Object.getOwnPropertyNames() (uses get_own_property_names)
+                let ownNames = Object.getOwnPropertyNames(exotic);
+                assert(ownNames.length === 2, `getOwnPropertyNames should return 2, got ${ownNames.length}`);
+                assert(ownNames.includes('hello'), 'getOwnPropertyNames should include hello');
+                assert(ownNames.includes('i'), 'getOwnPropertyNames should include i');
+
+                // Test Object.keys() (uses get_own_property_names + get_own_property)
+                let keys = Object.keys(exotic);
+                assert(keys.length === 2, `Object.keys should return 2 keys, got ${keys.length}`);
+
+                // Test Object.getOwnPropertyDescriptor() (uses get_own_property)
+                let desc = Object.getOwnPropertyDescriptor(exotic, 'hello');
+                assert(desc !== undefined, 'descriptor for hello should exist');
+                assert(desc.value === 'world', `descriptor value should be world, got ${desc.value}`);
+                assert(desc.configurable === true, 'hello should be configurable');
+                assert(desc.enumerable === true, 'hello should be enumerable');
+                assert(desc.writable === false, 'hello should not be writable');
+
+                // Non-existent property returns undefined descriptor
+                assert(Object.getOwnPropertyDescriptor(exotic, 'nonexistent') === undefined, 'nonexistent should be undefined');
+
+                exotic.hello
+            ",
+                )
+                .catch(&ctx)
+                .unwrap();
+
+            assert_eq!(v, "world");
         })
     }
 }

@@ -1,5 +1,5 @@
 use crate::{
-    class::{JsCell, JsClass, Readable, Trace, Tracer},
+    class::{ClassKind, JsCell, JsClass, Readable, Trace, Tracer},
     qjs,
     value::function::Params,
     Ctx, Function, JsLifetime, Object, Result, Value,
@@ -52,7 +52,7 @@ impl<'js> JsClass<'js> for RustFunction<'js> {
 
     type Mutable = Readable;
 
-    const CALLABLE: bool = true;
+    const KIND: ClassKind = ClassKind::Callable;
 
     fn prototype(ctx: &Ctx<'js>) -> Result<Option<Object<'js>>> {
         Ok(Some(Function::prototype(ctx.clone())))
