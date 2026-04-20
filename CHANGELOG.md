@@ -14,8 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `FromJs` and `IntoJs` derive macros for plain-data structs
 - Added `RQUICKJS_SYS_NO_WASI_SDK` env variable that skips downloading and setting up the WASI SDK when set to `1` #[648](https://github.com/DelSkayn/rquickjs/pull/648)
 - Added `Object::new_proto` for creating objects with a custom or null prototype #[572](https://github.com/DelSkayn/rquickjs/issues/572)
+- Added `Symbol::new`, `Symbol::with_description`, and `Symbol::new_global` for creating local and global symbols from Rust #[672](https://github.com/DelSkayn/rquickjs/pull/672)
 
 ### Changed
 
@@ -33,8 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed QuickJS rope strings (`JS_TAG_STRING_ROPE`) not being recognized as strings, causing `type_of()`, `is_string()`, and `as_string()` to fail on large concatenated strings
+- Fixed interrupt handler causing GC assertion failure due to missing `JS_DupContext` on error context from `JS_ExecutePendingJob` #[664](https://github.com/DelSkayn/rquickjs/pull/664)
 - Fixed cross-thread stack overflow false positives in parallel mode by updating stack baseline before QuickJS C entry points
 - Fixed promise polling not returning Ready variant when exception occurs
+- Fixed promise future aborting on stale pending exceptions by only bailing on uncatchable errors (e.g. interrupt handler)
 - Fixed iterators to use correct IteratorPrototype chain
 - Fixed a latent ABI layout vulnerability in `JS_NewPromiseCapability` FFI boundary by replacing tuple with strictly compatible array
 

@@ -19,13 +19,10 @@ use super::{
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{
-    context::AsyncContext, result::AsyncJobException, util::ManualPoll, Ctx, Exception, Result,
-};
 #[cfg(feature = "parallel")]
+use crate::util::{AssertSendFuture, AssertSyncFuture};
 use crate::{
-    qjs,
-    util::{AssertSendFuture, AssertSyncFuture},
+    context::AsyncContext, qjs, result::AsyncJobException, util::ManualPoll, Ctx, Exception, Result,
 };
 
 #[derive(Debug)]
@@ -287,6 +284,9 @@ impl AsyncRuntime {
             let job_res = lock.runtime.execute_pending_job().map_err(|e| {
                 let ptr = NonNull::new(e)
                     .expect("executing pending job returned a null context on error");
+                // JS_ExecutePendingJob returns a borrowed context pointer;
+                // dup it so AsyncContext can own a reference.
+                unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
                 AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
             })?;
 
@@ -320,6 +320,9 @@ impl AsyncRuntime {
                 let pending = lock.runtime.execute_pending_job().map_err(|e| {
                     let ptr = NonNull::new(e)
                         .expect("executing pending job returned a null context on error");
+                    // JS_ExecutePendingJob returns a borrowed context pointer;
+                    // dup it so AsyncContext can own a reference.
+                    unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
                     AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
                 });
                 match pending {
@@ -446,16 +449,23 @@ mod test {
 
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
+        let gate = Arc::new(tokio::sync::Notify::new());
+        let gate_clone = gate.clone();
+        let done = Arc::new(tokio::sync::Notify::new());
+        let done_clone = done.clone();
 
         ctx.async_with(async |ctx|{
             ctx.spawn(async move {
-                tokio::task::yield_now().await;
+                gate_clone.notified().await;
                 number_clone.store(1,Ordering::SeqCst);
+                done_clone.notify_one();
             });
         }).await;
+        // Task is blocked on gate, so value is definitely still 0.
         assert_eq!(number.load(Ordering::SeqCst),0);
-        // Give drive time to finish the task.
-        tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
+        // Unblock the task and wait for it to complete.
+        gate.notify_one();
+        done.notified().await;
         assert_eq!(number.load(Ordering::SeqCst),1);
 
     });
@@ -602,6 +612,32 @@ mod test {
         rt.idle().await;
 
         assert_eq!(COUNT.load(Ordering::Relaxed),2);
+    });
+
+    async_test_case!(interrupt_handler_idle => (rt, ctx) {
+        use std::time::Instant;
+
+        let timeout = Duration::from_millis(100);
+        let start_time = Instant::now();
+
+        rt.set_interrupt_handler(Some(Box::new(move || start_time.elapsed() >= timeout)))
+            .await;
+
+        let _ = ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>(r#"
+                async function example() {
+                    while (true) {
+                        await Promise.resolve();
+                    }
+                }
+                example();
+            "#)
+        }).await;
+
+        // This previously caused an assertion failure in gc_decref_child
+        // due to the interrupt handler corrupting reference counts during
+        // pending job execution.
+        rt.idle().await;
     });
 
     #[cfg(feature = "parallel")]

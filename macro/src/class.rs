@@ -17,6 +17,7 @@ use crate::{
 #[derive(Debug, Default, Clone)]
 pub(crate) struct ClassConfig {
     pub frozen: bool,
+    pub exotic: bool,
     pub crate_: Option<String>,
     pub rename: Option<String>,
     pub rename_all: Option<Case>,
@@ -24,6 +25,7 @@ pub(crate) struct ClassConfig {
 
 pub(crate) enum ClassOption {
     Frozen(FlagOption<kw::frozen>),
+    Exotic(FlagOption<kw::exotic>),
     Crate(ValueOption<Token![crate], LitStr>),
     Rename(ValueOption<kw::rename, LitStr>),
     RenameAll(ValueOption<kw::rename_all, Case>),
@@ -33,6 +35,8 @@ impl Parse for ClassOption {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         if input.peek(kw::frozen) {
             input.parse().map(Self::Frozen)
+        } else if input.peek(kw::exotic) {
+            input.parse().map(Self::Exotic)
         } else if input.peek(Token![crate]) {
             input.parse().map(Self::Crate)
         } else if input.peek(kw::rename) {
@@ -50,6 +54,9 @@ impl ClassConfig {
         match option {
             ClassOption::Frozen(ref x) => {
                 self.frozen = x.is_true();
+            }
+            ClassOption::Exotic(ref x) => {
+                self.exotic = x.is_true();
             }
             ClassOption::Crate(ref x) => {
                 self.crate_ = Some(x.value.value());
@@ -137,6 +144,13 @@ impl Class {
         match self {
             Class::Struct { ref ident, .. } => ident,
             Class::Enum { ref ident, .. } => ident,
+        }
+    }
+
+    pub fn attrs(&self) -> &[syn::Attribute] {
+        match self {
+            Class::Struct { ref attrs, .. } => attrs,
+            Class::Enum { ref attrs, .. } => attrs,
         }
     }
 
@@ -334,6 +348,8 @@ impl Class {
     }
 
     pub fn expand(self) -> Result<TokenStream> {
+        ensure_no_conflicting_derives(self.attrs())?;
+
         let crate_name = format_ident!("{}", self.config().crate_name()?);
         let class_name = self.ident().clone();
         let javascript_name = self.javascript_name();
@@ -345,6 +361,68 @@ impl Class {
         let mutability = self.mutability();
         let props = self.expand_props(&crate_name);
         let reexpand = self.reexpand();
+        let exotic_const = if self.config().exotic {
+            quote! { const KIND: #crate_name::class::ClassKind = #crate_name::class::ClassKind::Exotic; }
+        } else {
+            TokenStream::new()
+        };
+
+        let exotic_methods = if self.config().exotic {
+            let exotic_module = format_ident!("__impl_exotic_{}__", self.ident());
+            quote! {
+                fn exotic_get_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                    receiver: #crate_name::Value<'js>,
+                ) -> #crate_name::Result<#crate_name::Value<'js>> {
+                    #exotic_module::ExoticImpl::exotic_get_property(this, ctx, atom, receiver)
+                }
+
+                fn exotic_set_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                    receiver: #crate_name::Value<'js>,
+                    value: #crate_name::Value<'js>,
+                ) -> #crate_name::Result<bool> {
+                    #exotic_module::ExoticImpl::exotic_set_property(this, ctx, atom, receiver, value)
+                }
+
+                fn exotic_delete_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                ) -> #crate_name::Result<bool> {
+                    #exotic_module::ExoticImpl::exotic_delete_property(this, ctx, atom)
+                }
+
+                fn exotic_has_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                ) -> #crate_name::Result<bool> {
+                    #exotic_module::ExoticImpl::exotic_has_property(this, ctx, atom)
+                }
+
+                fn exotic_get_own_property(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                    atom: #crate_name::Atom<'js>,
+                ) -> #crate_name::Result<Option<#crate_name::class::PropertyDescriptor<'js>>> {
+                    #exotic_module::ExoticImpl::exotic_get_own_property(this, ctx, atom)
+                }
+
+                fn exotic_get_own_property_names(
+                    this: &#crate_name::class::JsCell<'js, Self>,
+                    ctx: &#crate_name::Ctx<'js>,
+                ) -> #crate_name::Result<Vec<#crate_name::class::PropertyName<'js>>> {
+                    #exotic_module::ExoticImpl::exotic_get_own_property_names(this, ctx)
+                }
+            }
+        } else {
+            TokenStream::new()
+        };
 
         let res = quote! {
             #reexpand
@@ -357,6 +435,8 @@ impl Class {
                     const NAME: &'static str = #javascript_name;
 
                     type Mutable = #crate_name::class::#mutability;
+
+                    #exotic_const
 
                     fn prototype(ctx: &#crate_name::Ctx<'js>) -> #crate_name::Result<Option<#crate_name::Object<'js>>>{
                         use #crate_name::class::impl_::MethodImplementor;
@@ -374,6 +454,8 @@ impl Class {
                         let implementor = #crate_name::class::impl_::ConstructorCreate::<Self>::new();
                         (&implementor).create_constructor(ctx)
                     }
+
+                    #exotic_methods
                 }
 
                 impl #generics_with_lifetimes #crate_name::IntoJs<'js> for #class_name #generics{
@@ -404,4 +486,132 @@ impl Class {
 
 pub(crate) fn expand(options: OptionList<ClassOption>, item: syn::Item) -> Result<TokenStream> {
     Class::from_proc_macro_input(options, item)?.expand()
+}
+
+/// Reports a helpful compile error when the class' `#[derive(...)]` list
+/// includes `FromJs` or `IntoJs`. `#[class]` already generates those impls
+/// and deriving them in addition would produce an unhelpful `E0119`
+/// conflicting-implementations error pointing inside the generated
+/// `__impl_class_*` module. The two macros are conceptually incompatible:
+/// `#[class]` round-trips through a `Class<Self>` JS instance, whereas the
+/// derives round-trip through a plain object/array, so we simply forbid
+/// stacking them.
+fn ensure_no_conflicting_derives(attrs: &[syn::Attribute]) -> Result<()> {
+    for attr in attrs {
+        if !attr.path().is_ident("derive") {
+            continue;
+        }
+        let mut conflict: Option<(String, proc_macro2::Span)> = None;
+        attr.parse_nested_meta(|meta| {
+            if conflict.is_some() {
+                return Ok(());
+            }
+            if let Some(last) = meta.path.segments.last() {
+                let name = last.ident.to_string();
+                if name == "FromJs" || name == "IntoJs" {
+                    conflict = Some((name, last.ident.span()));
+                }
+            }
+            Ok(())
+        })?;
+        if let Some((name, span)) = conflict {
+            return Err(Error::new(
+                span,
+                format!(
+                    "`#[rquickjs::class]` already implements `{name}` for this type; \
+                     remove `{name}` from `#[derive(...)]`, or drop `#[rquickjs::class]` \
+                     if you want plain-data conversion"
+                ),
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::ensure_no_conflicting_derives;
+    use quote::quote;
+
+    fn attrs_of(input: proc_macro2::TokenStream) -> Vec<syn::Attribute> {
+        syn::parse2::<syn::ItemStruct>(input).unwrap().attrs
+    }
+
+    #[test]
+    fn accepts_empty_attrs() {
+        let attrs = attrs_of(quote! {
+            struct Foo { x: u32 }
+        });
+        ensure_no_conflicting_derives(&attrs).expect("no derive is fine");
+    }
+
+    #[test]
+    fn accepts_unrelated_derives() {
+        let attrs = attrs_of(quote! {
+            #[derive(Clone, Debug, PartialEq, Eq)]
+            struct Foo { x: u32 }
+        });
+        ensure_no_conflicting_derives(&attrs).expect("unrelated derives are fine");
+    }
+
+    #[test]
+    fn rejects_derive_from_js() {
+        let attrs = attrs_of(quote! {
+            #[derive(FromJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("`FromJs`"), "unexpected message: {msg}");
+        assert!(
+            msg.contains("already implements"),
+            "unexpected message: {msg}"
+        );
+    }
+
+    #[test]
+    fn rejects_derive_into_js() {
+        let attrs = attrs_of(quote! {
+            #[derive(IntoJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        assert!(err.to_string().contains("`IntoJs`"));
+    }
+
+    #[test]
+    fn rejects_mixed_derive_list() {
+        // The conflicting derive can appear anywhere in the list, next
+        // to arbitrary unrelated derives.
+        let attrs = attrs_of(quote! {
+            #[derive(Clone, Trace, JsLifetime, FromJs, IntoJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        // We stop at the first match, which is `FromJs`.
+        assert!(err.to_string().contains("`FromJs`"));
+    }
+
+    #[test]
+    fn rejects_path_qualified_derive() {
+        // Users sometimes write `#[derive(rquickjs::FromJs)]`.
+        let attrs = attrs_of(quote! {
+            #[derive(rquickjs::FromJs)]
+            struct Foo { x: u32 }
+        });
+        let err = ensure_no_conflicting_derives(&attrs).unwrap_err();
+        assert!(err.to_string().contains("`FromJs`"));
+    }
+
+    #[test]
+    fn accepts_multiple_derive_attributes() {
+        // Multiple `#[derive(...)]` attributes on the same item are legal
+        // in Rust; none of them should trip the check if they're unrelated.
+        let attrs = attrs_of(quote! {
+            #[derive(Clone)]
+            #[derive(Debug)]
+            struct Foo { x: u32 }
+        });
+        ensure_no_conflicting_derives(&attrs).expect("unrelated derives are fine");
+    }
 }

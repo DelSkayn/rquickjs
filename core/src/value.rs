@@ -329,7 +329,8 @@ impl<'js> Value<'js> {
     /// Check if the value is a string
     #[inline]
     pub fn is_string(&self) -> bool {
-        qjs::JS_TAG_STRING == unsafe { qjs::JS_VALUE_GET_TAG(self.value) }
+        let tag = unsafe { qjs::JS_VALUE_GET_TAG(self.value) };
+        tag == qjs::JS_TAG_STRING || tag == qjs::JS_TAG_STRING_ROPE
     }
 
     /// Check if the value is a symbol
@@ -384,6 +385,12 @@ impl<'js> Value<'js> {
     #[inline]
     pub fn is_error(&self) -> bool {
         unsafe { qjs::JS_IsError(self.value) }
+    }
+
+    /// Check if the value is an uncatchable error (e.g. from an interrupt handler)
+    #[inline]
+    pub fn is_uncatchable_error(&self) -> bool {
+        unsafe { qjs::JS_IsUncatchableError(self.value) }
     }
 
     /// Check if the value is a BigInt
@@ -535,7 +542,7 @@ type_impls! {
     Bool: bool => JS_TAG_BOOL,
     Int: int => JS_TAG_INT,
     Float: float => JS_TAG_FLOAT64,
-    String: string => JS_TAG_STRING,
+    String: string => JS_TAG_STRING | JS_TAG_STRING_ROPE,
     Symbol: symbol => JS_TAG_SYMBOL,
     Array: array => JS_TAG_OBJECT,
     Constructor: constructor => JS_TAG_OBJECT,
