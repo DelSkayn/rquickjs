@@ -331,6 +331,9 @@ pub enum PredefinedAtom {
     BigInt64Array = qjs::JS_ATOM_BigInt64Array as u32,
     /// "BigUint64Array"
     BigUint64Array = qjs::JS_ATOM_BigUint64Array as u32,
+    /// "Float16Array"
+    #[cfg(feature = "half")]
+    Float16Array = qjs::JS_ATOM_Float16Array as u32,
     /// "Float32Array"
     Float32Array = qjs::JS_ATOM_Float32Array as u32,
     /// "Float64Array"
@@ -601,6 +604,8 @@ impl PredefinedAtom {
             PredefinedAtom::Uint32Array => "Uint32Array",
             PredefinedAtom::BigInt64Array => "BigInt64Array",
             PredefinedAtom::BigUint64Array => "BigUint64Array",
+            #[cfg(feature = "half")]
+            PredefinedAtom::Float16Array => "Float16Array",
             PredefinedAtom::Float32Array => "Float32Array",
             PredefinedAtom::Float64Array => "Float64Array",
             PredefinedAtom::DataView => "DataView",
