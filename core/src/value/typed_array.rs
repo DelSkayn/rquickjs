@@ -469,4 +469,54 @@ mod test {
             assert!(!obj.is_typed_array::<u8>());
         });
     }
+
+    #[cfg(feature = "half")]
+    #[test]
+    fn from_javascript_f16() {
+        use half::f16;
+        test_with(|ctx| {
+            let val: TypedArray<f16> = ctx
+                .eval(
+                    r#"
+                        new Float16Array([0.5, -5.25, 123.125])
+                    "#,
+                )
+                .unwrap();
+            assert_eq!(val.len(), 3);
+            assert_eq!(
+                val.as_ref() as &[f16],
+                &[
+                    f16::from_f32(0.5),
+                    f16::from_f32(-5.25),
+                    f16::from_f32(123.125)
+                ]
+            );
+        });
+    }
+
+    #[cfg(feature = "half")]
+    #[test]
+    fn into_javascript_f16() {
+        use half::f16;
+        test_with(|ctx| {
+            let val = TypedArray::<f16>::new(
+                ctx.clone(),
+                [f16::from_f32(-1.5), f16::from_f32(0.0), f16::from_f32(2.25)],
+            )
+            .unwrap();
+            ctx.globals().set("v", val).unwrap();
+            let res: i8 = ctx
+                .eval(
+                    r#"
+                        v.length != 3 ? 1 :
+                        v[0] != -1.5 ? 2 :
+                        v[1] != 0 ? 3 :
+                        v[2] != 2.25 ? 4 :
+                        0
+                    "#,
+                )
+                .unwrap();
+            assert_eq!(res, 0);
+        })
+    }
 }
