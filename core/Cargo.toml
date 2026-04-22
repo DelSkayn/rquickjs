@@ -33,7 +33,6 @@ bytes = { version = "1", optional = true, default-features = false }
 futures-rs = { package = "futures", version = "0.3" }
 tokio = { version = "1", default-features = false, features = [
   "rt",
-  "rt-multi-thread",
   "time",
   "macros",
   "sync",
@@ -41,6 +40,9 @@ tokio = { version = "1", default-features = false, features = [
 rquickjs.path = "../"
 approx = "0.5"
 trybuild = "1"
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }
 
 [features]
 default = ["std"]
