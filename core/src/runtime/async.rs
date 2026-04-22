@@ -564,7 +564,7 @@ mod test {
         rt.idle().await;
     });
 
-    #[cfg(feature = "loader")]
+    #[cfg(all(feature = "loader", not(target_family = "wasm")))]
     #[tokio::test(flavor = "multi_thread")]
     async fn sync_await_js_import() {
         use crate::{
