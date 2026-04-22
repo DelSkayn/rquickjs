@@ -14,6 +14,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added `#[qjs(prop)]` method attribute to declare a JS data property on a class prototype.
+  Unlike `#[qjs(get)]`, which generates an accessor and requires a `FromJs<Self>` receiver,
+  `prop` is evaluated at class registration time and emits a plain data descriptor (matching
+  Web IDL semantics for `@@toStringTag`, `@@species`, etc.). Honours `rename`, `configurable`,
+  `enumerable`, and a new `writable` flag (which also gates `writable` on `prop`).
 - Added `FromJs` and `IntoJs` derive macros for plain-data structs
 - Added `RQUICKJS_SYS_NO_WASI_SDK` env variable that skips downloading and setting up the WASI SDK when set to `1` #[648](https://github.com/DelSkayn/rquickjs/pull/648)
 - Added `Object::new_proto` for creating objects with a custom or null prototype #[572](https://github.com/DelSkayn/rquickjs/issues/572)

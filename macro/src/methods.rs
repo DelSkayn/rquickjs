@@ -133,6 +133,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
 
     let mut accessors = HashMap::new();
     let mut functions = Vec::new();
+    let mut props = Vec::<Method>::new();
     let mut constructor: Option<Method> = None;
     let mut static_span: Option<Span> = None;
     //let mut consts = Vec::new();
@@ -143,7 +144,9 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
             syn::ImplItem::Fn(item) => {
                 let function = Method::parse_impl_fn(item, &self_ty)?;
                 let span = function.attr_span;
-                if function.config.get || function.config.set {
+                if function.config.prop {
+                    props.push(function);
+                } else if function.config.get || function.config.set {
                     let access = accessors
                         .entry(function.name(config.rename_all))
                         .or_insert_with(JsAccessor::new);
@@ -184,6 +187,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
 
     let function_impls = functions.iter().map(|func| func.expand_impl());
     let accessor_impls = accessors.values().map(|access| access.expand_impl());
+    let prop_impls = props.iter().map(|p| p.expand_impl());
     let constructor_impl = constructor.as_ref().map(|constr| constr.expand_impl());
 
     let function_js_impls = functions
@@ -210,6 +214,9 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
     let accessor_apply_proto = accessors
         .values()
         .map(|access| access.expand_apply_to_proto(&crate_name, config.rename_all));
+    let prop_apply_proto = props
+        .iter()
+        .map(|p| p.expand_apply_prop_to_object(&crate_name, &proto_ident, config.rename_all));
 
     let constructor_ident = format_ident!("constr");
 
@@ -252,6 +259,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
         #impl_token #generics #self_ty {
             #(#function_impls)*
             #(#accessor_impls)*
+            #(#prop_impls)*
             #constructor_impl
         }
 
@@ -271,6 +279,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
                 fn implement(&self, _proto: &#crate_name::Object<'_>) -> #crate_name::Result<()>{
                     #(#function_apply_proto)*
                     #(#accessor_apply_proto)*
+                    #(#prop_apply_proto)*
                     Ok(())
                 }
             }
