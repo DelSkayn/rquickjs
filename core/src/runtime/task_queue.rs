@@ -38,7 +38,7 @@ pub enum TaskPoll {
     Progress,
 }
 
-const CHUNK: usize = 1024;
+const CHUNK: usize = 64;
 const INLINE_SIZE: usize = 64;
 const INLINE_ALIGN: usize = 16;
 
