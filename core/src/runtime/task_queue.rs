@@ -4,11 +4,10 @@
 //!
 //! Everything touched *only* while the async runtime lock is held uses
 //! [`UnsafeCell`]/`Cell` (tasks, free/chunk lists, slot vtable).
-//! `len` is an unconditional atomic so it is safe to read from any context.
-//! Fields that a `Waker` can touch from an arbitrary thread need further
-//! synchronisation: the per-slot `queued` and `active` flags (atomics in
-//! parallel mode, `Cell` otherwise), and the `ready` list and stored
-//! `waker` (mutexes in parallel mode, `UnsafeCell` otherwise).
+//! Fields that a `Waker` can touch from an arbitrary thread use
+//! unconditional atomics (`Flag`, `len`) or mutexes (`Shared`).
+//! This makes the task queue safe for cross-thread waker delivery
+//! regardless of the `parallel` feature.
 //!
 //! # Task storage
 //!
@@ -26,14 +25,14 @@ use core::{
     mem::{align_of, size_of, MaybeUninit},
     pin::Pin,
     ptr,
-    sync::atomic::{AtomicU32, Ordering as AtomicOrdering},
+    sync::atomic::{AtomicBool, AtomicU32, Ordering},
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
 #[cfg(feature = "parallel")]
-use core::sync::atomic::{AtomicBool, Ordering};
-#[cfg(feature = "parallel")]
 use parking_lot::Mutex;
+#[cfg(not(feature = "parallel"))]
+use std::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskPoll {
@@ -46,10 +45,8 @@ const CHUNK: usize = 1024;
 const INLINE_SIZE: usize = 64;
 const INLINE_ALIGN: usize = 16;
 
-#[cfg(feature = "parallel")]
 #[derive(Default)]
 struct Flag(AtomicBool);
-#[cfg(feature = "parallel")]
 impl Flag {
     #[inline]
     fn get(&self) -> bool {
@@ -67,33 +64,7 @@ impl Flag {
     }
 }
 
-#[cfg(not(feature = "parallel"))]
-#[derive(Default)]
-struct Flag(Cell<bool>);
-#[cfg(not(feature = "parallel"))]
-impl Flag {
-    #[inline]
-    fn get(&self) -> bool {
-        self.0.get()
-    }
-    #[inline]
-    fn set(&self, v: bool) {
-        self.0.set(v)
-    }
-    #[inline]
-    fn try_set(&self) -> bool {
-        if self.0.get() {
-            false
-        } else {
-            self.0.set(true);
-            true
-        }
-    }
-}
-
-#[cfg(feature = "parallel")]
 struct Shared<T>(Mutex<T>);
-#[cfg(feature = "parallel")]
 impl<T> Shared<T> {
     #[inline]
     fn new(v: T) -> Self {
@@ -101,21 +72,14 @@ impl<T> Shared<T> {
     }
     #[inline]
     fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        f(&mut self.0.lock())
-    }
-}
-
-#[cfg(not(feature = "parallel"))]
-struct Shared<T>(UnsafeCell<T>);
-#[cfg(not(feature = "parallel"))]
-impl<T> Shared<T> {
-    #[inline]
-    fn new(v: T) -> Self {
-        Self(UnsafeCell::new(v))
-    }
-    #[inline]
-    fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        f(unsafe { &mut *self.0.get() })
+        #[cfg(feature = "parallel")]
+        {
+            f(&mut self.0.lock())
+        }
+        #[cfg(not(feature = "parallel"))]
+        {
+            f(&mut self.0.lock().unwrap())
+        }
     }
 }
 
@@ -198,7 +162,7 @@ impl TaskQueue {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.len.load(AtomicOrdering::Acquire) == 0
+        self.len.load(Ordering::Acquire) == 0
     }
 
     fn alloc_slot(&self) -> *mut Slot {
@@ -247,7 +211,7 @@ impl TaskQueue {
         slot.active.set(true);
         slot.queued.set(true);
         self.ready.with(|r| r.push(slot_ptr));
-        self.len.fetch_add(1, AtomicOrdering::Release);
+        self.len.fetch_add(1, Ordering::Release);
 
         if self.has_waker.get() {
             let waker = self.waker.with(|w| w.take());
@@ -290,7 +254,7 @@ impl TaskQueue {
                 slot.vtable.set(None);
                 slot.active.set(false);
                 unsafe { (*self.free.get()).push(slot_ptr) };
-                self.len.fetch_sub(1, AtomicOrdering::Release);
+                self.len.fetch_sub(1, Ordering::Release);
                 progress = true;
             }
         }
@@ -325,7 +289,5 @@ impl Default for TaskQueue {
     }
 }
 
-#[cfg(feature = "parallel")]
 unsafe impl Send for TaskQueue {}
-#[cfg(feature = "parallel")]
 unsafe impl Sync for TaskQueue {}
