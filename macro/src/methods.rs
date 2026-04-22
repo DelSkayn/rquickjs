@@ -133,7 +133,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
 
     let mut accessors = HashMap::new();
     let mut functions = Vec::new();
-    let mut props = Vec::<Method>::new();
+    let mut props = Vec::new();
     let mut constructor: Option<Method> = None;
     let mut static_span: Option<Span> = None;
     //let mut consts = Vec::new();
