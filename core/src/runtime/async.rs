@@ -564,6 +564,74 @@ mod test {
         rt.idle().await;
     });
 
+    #[cfg(feature = "loader")]
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sync_await_js_import() {
+        use crate::{
+            loader::{Loader, Resolver},
+            prelude::Func,
+            Function, Module,
+        };
+
+        struct TestResolver;
+        impl Resolver for TestResolver {
+            fn resolve<'js>(
+                &mut self,
+                _ctx: &Ctx<'js>,
+                _base: &str,
+                name: &str,
+                _a: Option<crate::loader::ImportAttributes<'js>>,
+            ) -> Result<std::string::String> {
+                Ok(name.into())
+            }
+        }
+        struct TestLoader;
+        impl Loader for TestLoader {
+            fn load<'js>(
+                &mut self,
+                ctx: &Ctx<'js>,
+                name: &str,
+                _a: Option<crate::loader::ImportAttributes<'js>>,
+            ) -> Result<Module<'js>> {
+                Module::declare(
+                    ctx.clone(),
+                    name,
+                    r#"
+                    await new Promise(r => setTimeout(r, 10));
+                    export const answer = 42;
+                "#,
+                )
+            }
+        }
+
+        fn set_timeout<'js>(ctx: Ctx<'js>, cb: Function<'js>, ms: u64) {
+            ctx.spawn(async move {
+                tokio::time::sleep(Duration::from_millis(ms)).await;
+                let _ = cb.call::<_, ()>(());
+            });
+        }
+
+        let rt = crate::AsyncRuntime::new().unwrap();
+        let ctx = crate::AsyncContext::full(&rt).await.unwrap();
+        rt.set_loader(TestResolver, TestLoader).await;
+
+        let answer: i32 = ctx
+            .with(|ctx| {
+                ctx.globals()
+                    .set("setTimeout", Func::from(set_timeout))
+                    .unwrap();
+                let promise: Promise = ctx.eval(r#"import("test").then(m => m.answer)"#).unwrap();
+                ctx.await_promise(promise, || {
+                    tokio::task::block_in_place(|| {
+                        tokio::runtime::Handle::current().block_on(tokio::task::yield_now())
+                    })
+                })
+                .unwrap()
+            })
+            .await;
+        assert_eq!(answer, 42);
+    }
+
     #[cfg(feature = "parallel")]
     #[tokio::test]
     async fn ensure_types_are_send() {
