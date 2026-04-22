@@ -194,8 +194,10 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// |----------------|-------------------------------------------------------------------|-------------------------------------------------------------------------------------------------|
 /// | `get`          | Flag                                                              | Makes this method a getter for a field of the same name.                                        |
 /// | `set`          | Flag                                                              | Makes this method a setter for a field of the same name.                                        |
-/// | `enumerable`   | Flag                                                              | Makes the method, if it is a getter or setter, enumerable in JavaScript.                        |
-/// | `configurable` | Flag                                                              | Makes the method, if it is a getter or setter, configurable in JavaScript.                      |
+/// | `prop`         | Flag                                                              | Declares a JS **data property** on the prototype. The function takes no receiver, is evaluated once at class registration time, and its return value becomes the property's value. Useful for Web IDL hooks like `Symbol.toStringTag` where the spec mandates a data (not accessor) descriptor. |
+/// | `enumerable`   | Flag                                                              | Makes the method, if it is a getter, setter or `prop`, enumerable in JavaScript.                |
+/// | `configurable` | Flag                                                              | Makes the method, if it is a getter, setter or `prop`, configurable in JavaScript (i.e. the descriptor can later be redefined or deleted). |
+/// | `writable`     | Flag                                                              | Only valid together with `prop`: makes the data property writable from JavaScript. Defaults to non-writable, matching Web IDL defaults for things like `@@toStringTag`. |
 /// | `rename`       | String or [`PredefinedAtom`](rquickjs_core::atom::PredefinedAtom) | Changes the name of the field getter and/or setter to the specified name in JavaScript.         |
 /// | `static`       | Flag                                                              | Makes the method a static method i.e. defined on the type constructor instead of the prototype. |
 /// | `constructor`  | Flag                                                              | Marks this method a the constructor for this type.                                              |
@@ -265,6 +267,24 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     /// class. This attributes allows you to skip certain functions.
 ///     #[qjs(skip)]
 ///     pub fn inner_function(&self) {}
+///
+///     /// Declares a **data property** on the prototype. Unlike `get`, `prop` takes no
+///     /// receiver and is evaluated once at class registration time; the return value
+///     /// becomes the property's value. This is the correct shape for Web IDL hooks
+///     /// like `Symbol.toStringTag`, which the spec mandates be a non-writable,
+///     /// configurable *data* descriptor (so e.g.
+///     /// `Object.prototype.toString.call(Object.create(TestClass.prototype))`
+///     /// works without a real class instance).
+///     #[qjs(prop, rename = PredefinedAtom::SymbolToStringTag, configurable)]
+///     pub fn to_string_tag() -> &'static str {
+///         "TestClass"
+///     }
+///
+///     /// A named, writable data property with all three descriptor flags set.
+///     #[qjs(prop, rename = "kind", configurable, enumerable, writable)]
+///     pub fn kind() -> &'static str {
+///         "test"
+///     }
 ///
 ///     /// Functions can also be renamed to specific symbols. This allows you to make an Rust type
 ///     /// act like an iteratable value for example.
