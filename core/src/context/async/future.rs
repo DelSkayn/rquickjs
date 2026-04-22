@@ -18,7 +18,7 @@ enum WithFutureState<'a, F, R> {
         closure: F,
     },
     Running {
-        future: Pin<Box<dyn Future<Output = R> + 'a + Send>>,
+        future: Pin<Box<dyn Future<Output = R> + 'a>>,
     },
     Done,
 }
@@ -60,7 +60,7 @@ where
                 let ctx = unsafe { Ctx::new_async(this.context) };
                 Box::pin(closure(ctx))
             }
-            WithFutureState::FutureCreated { future } => future,
+            WithFutureState::Running { future } => future,
             WithFutureState::Done => panic!("WithFuture polled after completion"),
         };
 
@@ -85,7 +85,7 @@ where
             }
 
             if !made_progress {
-                this.state = WithFutureState::FutureCreated { future };
+                this.state = WithFutureState::Running { future };
                 return Poll::Pending;
             }
         }
