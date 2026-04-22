@@ -29,10 +29,7 @@ use core::{
     task::{Context, Poll, RawWaker, RawWakerVTable, Waker},
 };
 
-#[cfg(feature = "parallel")]
 use parking_lot::Mutex;
-#[cfg(not(feature = "parallel"))]
-use std::sync::Mutex;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TaskPoll {
@@ -72,14 +69,7 @@ impl<T> Shared<T> {
     }
     #[inline]
     fn with<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
-        #[cfg(feature = "parallel")]
-        {
-            f(&mut self.0.lock())
-        }
-        #[cfg(not(feature = "parallel"))]
-        {
-            f(&mut self.0.lock().unwrap())
-        }
+        f(&mut self.0.lock())
     }
 }
 

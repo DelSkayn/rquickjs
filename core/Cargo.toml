@@ -60,7 +60,7 @@ chrono = ["dep:chrono"]
 bindgen = ["rquickjs-sys/bindgen"]
 
 # Enable support of parallel execution
-parallel = ["std", "tokio/rt-multi-thread", "parking_lot"]
+parallel = ["std", "tokio/rt-multi-thread"]
 
 # Enable user-defined module loader support
 loader = ["relative-path"]
@@ -79,7 +79,7 @@ rust-alloc = []
 half = ["dep:half"]
 
 # Enable interop between Rust futures and JS Promises
-futures = ["dep:async-lock"]
+futures = ["dep:async-lock", "dep:parking_lot"]
 
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
