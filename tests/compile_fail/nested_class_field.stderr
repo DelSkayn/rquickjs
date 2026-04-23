@@ -1,0 +1,21 @@
+error[E0277]: using a `JsClass` type directly as a class field is not supported
+  --> tests/compile_fail/nested_class_field.rs:4:1
+   |
+ 4 | #[rquickjs::class]
+   | ^^^^^^^^^^^^^^^^^^ `Inner` implements `JsClass` — wrap the field in `Class<'js, T>` instead
+   |
+help: the trait `rquickjs::class::impl_::NotAJsClassField` is not implemented for `Inner`
+  --> tests/compile_fail/nested_class_field.rs:11:1
+   |
+11 | #[rquickjs::class]
+   | ^^^^^^^^^^^^^^^^^^
+   = note: nested mutations are lost because the generated getter clones the value
+note: required by a bound in `rquickjs::class::impl_::JsClassFieldCheck::<T>::check`
+  --> core/src/class/impl_.rs
+   |
+   |     pub fn check(self)
+   |            ----- required by a bound in this associated function
+   |     where
+   |         T: NotAJsClassField,
+   |            ^^^^^^^^^^^^^^^^ required by this bound in `JsClassFieldCheck::<T>::check`
+   = note: this error originates in the attribute macro `rquickjs::class` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -1,6 +1,6 @@
 //! Helper classes and functions for use inside the macros.
 
-use crate::{value::Constructor, Ctx, Object, Result};
+use crate::{class::JsClass, value::Constructor, Ctx, Object, Result};
 use core::marker::PhantomData;
 
 /// Trait used for borrow specialization for implementing methods without access to the class.
@@ -72,4 +72,52 @@ impl<'a, T: Clone> CloneTrait<T> for CloneWrapper<'a, T> {
     fn wrap_clone(&self) -> T {
         self.0.clone()
     }
+}
+
+/// Compile-time check used by the `#[rquickjs::class]` macro to reject
+/// fields with `#[qjs(get)]`/`#[qjs(set)]` that are themselves a [`JsClass`]
+/// type.
+///
+/// Such fields do not round-trip with reference semantics: the generated
+/// getter clones the value and wraps the clone in a fresh class instance, so
+/// nested mutations (e.g. `obj.b.c = x`) are discarded. Wrap the field in a
+/// [`Class<'js, T>`](crate::class::Class) instead to share the underlying cell.
+///
+/// Uses autoref-specialization: the inherent `check` (deprecated) is picked
+/// when `T: JsClass`, otherwise the trait fallback below is used.
+#[derive(Default)]
+pub struct JsClassFieldCheck<T>(PhantomData<T>);
+
+impl<T> JsClassFieldCheck<T> {
+    pub fn new() -> Self {
+        Self(PhantomData)
+    }
+}
+
+/// Marker trait with no implementations. Used purely for its
+/// [`on_unimplemented`](https://doc.rust-lang.org/reference/attributes/diagnostics.html#the-diagnosticon_unimplemented-attribute)
+/// diagnostic: when `JsClassFieldCheck::<T>::check()` is selected via
+/// autoref-specialization for a `T: JsClass`, its `where T: NotAJsClassField`
+/// bound fails and rustc emits this custom message.
+#[diagnostic::on_unimplemented(
+    message = "using a `JsClass` type directly as a class field is not supported",
+    label = "`{Self}` implements `JsClass` \u{2014} wrap the field in `Class<'js, T>` instead",
+    note = "nested mutations are lost because the generated getter clones the value"
+)]
+pub trait NotAJsClassField {}
+
+impl<'js, T: JsClass<'js>> JsClassFieldCheck<T> {
+    pub fn check(self)
+    where
+        T: NotAJsClassField,
+    {
+    }
+}
+
+pub trait JsClassFieldCheckFallback {
+    fn check(self);
+}
+
+impl<T> JsClassFieldCheckFallback for &JsClassFieldCheck<T> {
+    fn check(self) {}
 }

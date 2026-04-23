@@ -232,7 +232,7 @@ impl Field {
     }
 
     pub fn expand_accessor(&self, field: &Ident, crate_name: &Ident, ty: &Type) -> TokenStream {
-        if self.config.get && self.config.set {
+        let accessor = if self.config.get && self.config.set {
             quote! {
                 #crate_name::object::Accessor::new(
                     |this: #crate_name::function::This<#crate_name::class::OwnedBorrow<'js, Self>>|{
@@ -261,7 +261,22 @@ impl Field {
             }
         } else {
             panic!("called expand_accessor on non accessor field")
-        }
+        };
+
+        // Reject fields whose type implements `JsClass` (see
+        // `JsClassFieldCheck`). Autoref-specialization picks the inherent
+        // `check` (bounded on `T: NotAJsClassField`, which has no impls) for
+        // `JsClass` types, producing a custom `E0277` via
+        // `#[diagnostic::on_unimplemented]`. For any other type, the trait
+        // fallback is selected and compiles cleanly. Trait-bound checks run
+        // during type-check so the closure body never needs to execute.
+        quote! {{
+            let _ = || {
+                use #crate_name::class::impl_::JsClassFieldCheckFallback as _;
+                #crate_name::class::impl_::JsClassFieldCheck::<#ty>::new().check();
+            };
+            #accessor
+        }}
     }
 
     pub fn expand_attrs(&self) -> TokenStream {
