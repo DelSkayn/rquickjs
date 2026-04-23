@@ -48,6 +48,16 @@ impl TestClass {
     #[qjs(skip)]
     pub fn inner_function(&self) {}
 
+    #[qjs(prop, rename = PredefinedAtom::SymbolToStringTag, configurable)]
+    pub fn to_string_tag() -> &'static str {
+        "TestClass"
+    }
+
+    #[qjs(prop, rename = "kind", configurable, enumerable, writable)]
+    pub fn kind() -> &'static str {
+        "test"
+    }
+
     #[qjs(rename = PredefinedAtom::SymbolIterator)]
     pub fn iterate<'js>(&self, ctx: Ctx<'js>) -> Result<Object<'js>> {
         let res = Object::new(ctx)?;
@@ -112,6 +122,31 @@ pub fn main() {
             }
             for(const v of t){
                 throw new Error("iterator should be done immediately")
+            }
+            // --- data-property (`#[qjs(prop)]`) assertions ---
+            // @@toStringTag must be a data descriptor (value present, no get/set).
+            let tagDesc = Object.getOwnPropertyDescriptor(proto, Symbol.toStringTag);
+            if(!tagDesc || tagDesc.value !== "TestClass"){
+                throw new Error(9)
+            }
+            if(tagDesc.get !== undefined || tagDesc.set !== undefined){
+                throw new Error(10)
+            }
+            if(tagDesc.configurable !== true || tagDesc.enumerable !== false || tagDesc.writable !== false){
+                throw new Error(11)
+            }
+            // The regression case: calling toString on a fake instance must not throw.
+            let fake = Object.create(TestClass.prototype);
+            if(Object.prototype.toString.call(fake) !== "[object TestClass]"){
+                throw new Error(12)
+            }
+            // Named data property with writable + enumerable + configurable.
+            let kindDesc = Object.getOwnPropertyDescriptor(proto, "kind");
+            if(!kindDesc || kindDesc.value !== "test"){
+                throw new Error(13)
+            }
+            if(kindDesc.configurable !== true || kindDesc.enumerable !== true || kindDesc.writable !== true){
+                throw new Error(14)
             }
         "#,
         )
