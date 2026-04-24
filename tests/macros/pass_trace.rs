@@ -63,6 +63,16 @@ pub enum TraceEnum {
     C,
 }
 
+#[derive(Trace, JsLifetime)]
+#[allow(dead_code)]
+pub struct TraceBuiltins<'js> {
+    constructor: rquickjs::Constructor<'js>,
+    promise: rquickjs::Promise<'js>,
+    proxy: rquickjs::Proxy<'js>,
+    array_buffer: rquickjs::ArrayBuffer<'js>,
+    typed_array: rquickjs::TypedArray<'js, u8>,
+}
+
 impl<'js> JsClass<'js> for TraceEnum {
     const NAME: &'static str = "TraceEnum";
 
