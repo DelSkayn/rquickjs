@@ -209,7 +209,13 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
         .iter()
         .filter(|&func| !func.config.r#static)
         .map(|func| {
-            func.expand_apply_to_object(&prefix, &self_ty, &proto_ident, config.rename_all)
+            func.expand_apply_to_object(
+                &prefix,
+                &crate_name,
+                &self_ty,
+                &proto_ident,
+                config.rename_all,
+            )
         });
     let accessor_apply_proto = accessors
         .values()
@@ -232,6 +238,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
                 .map(|func| {
                     func.expand_apply_to_object(
                         &prefix,
+                        &crate_name,
                         &self_ty,
                         &constructor_ident,
                         config.rename_all,
