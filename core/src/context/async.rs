@@ -241,13 +241,6 @@ impl AsyncContext {
     }
 }
 
-// Since the reference to runtime is behind a Arc this object is send
-#[cfg(feature = "parallel")]
-unsafe impl Send for AsyncContext {}
-
-// Since all functions lock the global runtime lock access is synchronized so
-// this object is sync
-#[cfg(feature = "parallel")]
 unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]

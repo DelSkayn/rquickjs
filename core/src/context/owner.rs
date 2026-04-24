@@ -11,7 +11,6 @@ pub(crate) trait DropContext: Clone {
     unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>);
 }
 
-#[cfg(feature = "parallel")]
 unsafe impl<R: Send + DropContext> Send for ContextOwner<R> {}
 
 /// Struct in charge of dropping contexts when they go out of scope

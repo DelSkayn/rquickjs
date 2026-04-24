@@ -47,8 +47,8 @@ impl Drop for InnerRuntime {
     }
 }
 
-#[cfg(feature = "parallel")]
 unsafe impl Send for InnerRuntime {}
+unsafe impl Sync for InnerRuntime {}
 
 /// A weak handle to the async runtime.
 ///
@@ -83,17 +83,13 @@ pub struct AsyncRuntime {
 
 // Since all functions which use runtime are behind a mutex
 // sending the runtime to other threads should be fine.
-#[cfg(feature = "parallel")]
 unsafe impl Send for AsyncRuntime {}
-#[cfg(feature = "parallel")]
 unsafe impl Send for AsyncWeakRuntime {}
 
 // Since a global lock needs to be locked for safe use
 // using runtime in a sync way should be safe as
 // simultaneous accesses is synchronized behind a lock.
-#[cfg(feature = "parallel")]
 unsafe impl Sync for AsyncRuntime {}
-#[cfg(feature = "parallel")]
 unsafe impl Sync for AsyncWeakRuntime {}
 
 impl AsyncRuntime {
@@ -640,27 +636,28 @@ mod test {
         rt.idle().await;
     });
 
-    #[cfg(feature = "parallel")]
     fn assert_is_send<T: Send>(t: T) -> T {
         t
     }
 
-    #[cfg(feature = "parallel")]
-    fn assert_is_sync<T: Send>(t: T) -> T {
+    fn assert_is_sync<T: Sync>(t: T) -> T {
         t
     }
 
-    #[cfg(feature = "parallel")]
     #[tokio::test]
     async fn ensure_types_are_send_sync() {
         let rt = AsyncRuntime::new().unwrap();
 
-        std::mem::drop(assert_is_sync(rt.idle()));
-        std::mem::drop(assert_is_sync(rt.execute_pending_job()));
-        std::mem::drop(assert_is_sync(rt.drive()));
-
         std::mem::drop(assert_is_send(rt.idle()));
         std::mem::drop(assert_is_send(rt.execute_pending_job()));
         std::mem::drop(assert_is_send(rt.drive()));
+
+        std::mem::drop(assert_is_send(rt.clone()));
+        std::mem::drop(assert_is_sync(rt.clone()));
+
+        let ctx = crate::AsyncContext::full(&rt).await.unwrap();
+        std::mem::drop(assert_is_send(ctx.clone()));
+        std::mem::drop(assert_is_sync(ctx.clone()));
+        std::mem::drop(assert_is_send(ctx.async_with(async |_| {})));
     }
 }

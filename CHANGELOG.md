@@ -48,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed iterators to use correct IteratorPrototype chain
 - Fixed a latent ABI layout vulnerability in `JS_NewPromiseCapability` FFI boundary by replacing tuple with strictly compatible array
 - `#[rquickjs::class]` now rejects fields whose type implements `JsClass` with a clear compile error; such fields silently dropped nested mutations because the generated getter cloned the value. Wrap the field in `Class<'js, T>` instead #[532](https://github.com/DelSkayn/rquickjs/issues/532)
+- Made `AsyncRuntime`, `AsyncContext`, and `WithFuture` unconditionally `Send`/`Sync` so `async_with` works with multi-threaded executors without requiring the `parallel` feature #[495](https://github.com/DelSkayn/rquickjs/issues/495)
 
 ## [0.11.0] - 2025-12-16
 

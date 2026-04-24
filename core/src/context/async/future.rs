@@ -157,5 +157,4 @@ where
     }
 }
 
-#[cfg(feature = "parallel")]
 unsafe impl<F, R> Send for WithFuture<'_, F, R> {}
