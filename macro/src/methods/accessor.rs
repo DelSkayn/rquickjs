@@ -30,6 +30,16 @@ impl JsAccessor {
             error.combine(Error::new(first_span, "Getter first defined here."));
             return Err(error);
         }
+        if let Some(set) = self.set.as_ref() {
+            if set.config.r#static != method.config.r#static {
+                let mut error = Error::new(
+                    method.attr_span,
+                    "getter and setter for the same property must agree on `static`.",
+                );
+                error.combine(Error::new(set.attr_span, "setter defined here."));
+                return Err(error);
+            }
+        }
         self.get = Some(method);
         Ok(())
     }
@@ -44,8 +54,26 @@ impl JsAccessor {
             error.combine(Error::new(first_span, "Setter first defined here."));
             return Err(error);
         }
+        if let Some(get) = self.get.as_ref() {
+            if get.config.r#static != method.config.r#static {
+                let mut error = Error::new(
+                    method.attr_span,
+                    "getter and setter for the same property must agree on `static`.",
+                );
+                error.combine(Error::new(get.attr_span, "getter defined here."));
+                return Err(error);
+            }
+        }
         self.set = Some(method);
         Ok(())
+    }
+
+    pub fn is_static(&self) -> bool {
+        self.get
+            .as_ref()
+            .map(|g| g.config.r#static)
+            .or_else(|| self.set.as_ref().map(|s| s.config.r#static))
+            .unwrap_or(false)
     }
 
     pub fn expand_impl(&self) -> TokenStream {
@@ -70,7 +98,12 @@ impl JsAccessor {
         res
     }
 
-    pub fn expand_apply_to_proto(&self, lib_crate: &Ident, case: Option<Case>) -> TokenStream {
+    pub fn expand_apply_to(
+        &self,
+        lib_crate: &Ident,
+        object_name: &Ident,
+        case: Option<Case>,
+    ) -> TokenStream {
         match (self.get.as_ref(), self.set.as_ref()) {
             (Some(get), Some(set)) => {
                 let configurable = get.config.configurable || set.config.configurable;
@@ -90,7 +123,7 @@ impl JsAccessor {
                 };
                 let get_name = get.function.expand_carry_type_name(GET_PREFIX);
                 let set_name = set.function.expand_carry_type_name(SET_PREFIX);
-                quote! {_proto.prop(#name,
+                quote! {#object_name.prop(#name,
                         #lib_crate::object::Accessor::new(#get_name,#set_name)
                         #configurable
                         #enumerable
@@ -113,7 +146,7 @@ impl JsAccessor {
                     Default::default()
                 };
                 let get_name = get.function.expand_carry_type_name(GET_PREFIX);
-                quote! {_proto.prop(#name,
+                quote! {#object_name.prop(#name,
                         #lib_crate::object::Accessor::new_get(#get_name)
                         #configurable
                         #enumerable
@@ -137,7 +170,7 @@ impl JsAccessor {
                 };
 
                 let set_name = set.function.expand_carry_type_name(GET_PREFIX);
-                quote! {_proto.prop(#name,
+                quote! {#object_name.prop(#name,
                         #lib_crate::object::Accessor::new_set(#set_name)
                         #configurable
                         #enumerable
@@ -145,5 +178,10 @@ impl JsAccessor {
             }
             (None, None) => TokenStream::new(),
         }
+    }
+
+    pub fn expand_apply_to_proto(&self, lib_crate: &Ident, case: Option<Case>) -> TokenStream {
+        let proto = Ident::new("_proto", proc_macro2::Span::call_site());
+        self.expand_apply_to(lib_crate, &proto, case)
     }
 }

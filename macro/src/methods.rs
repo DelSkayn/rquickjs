@@ -213,6 +213,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
         });
     let accessor_apply_proto = accessors
         .values()
+        .filter(|a| !a.is_static())
         .map(|access| access.expand_apply_to_proto(&crate_name, config.rename_all));
     let prop_apply_proto = props
         .iter()
@@ -238,11 +239,16 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
                     )
                 });
 
+        let static_accessor_apply = accessors.values().filter(|a| a.is_static()).map(|access| {
+            access.expand_apply_to(&crate_name, &constructor_ident, config.rename_all)
+        });
+
         quote! {
             impl #js_added_generics #crate_name::class::impl_::ConstructorCreator<'js,#self_ty> for #crate_name::class::impl_::ConstructorCreate<#self_ty> {
                 fn create_constructor(&self, ctx: &#crate_name::Ctx<'js>) -> #crate_name::Result<Option<#crate_name::function::Constructor<'js>>>{
                     let constr = #crate_name::function::Constructor::new_class::<#self_ty,_,_>(ctx.clone(),#name)?;
                     #(#static_function_apply)*
+                    #(#static_accessor_apply)*
                     Ok(Some(constr))
                 }
             }
