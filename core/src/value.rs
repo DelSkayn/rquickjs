@@ -31,7 +31,7 @@ pub mod array_buffer;
 pub mod iterable;
 pub mod typed_array;
 
-pub use array_buffer::ArrayBuffer;
+pub use array_buffer::{ArrayBuffer, ArrayBufferDrop, ArrayBufferSource};
 pub use iterable::{Iterable, IterableFn, JsIterator};
 pub use typed_array::TypedArray;
 

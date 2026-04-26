@@ -105,6 +105,9 @@ macro = ["rquickjs-macro"]
 # Enable hallf (f16) support
 half = ["rquickjs-core/half"]
 
+# Enable `ArrayBufferSource` impl for `bytes::Bytes`
+bytes = ["rquickjs-core/bytes"]
+
 # Enable interop between Rust futures and JS Promises
 futures = ["rquickjs-core/futures"]
 
