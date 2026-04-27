@@ -250,9 +250,16 @@ impl RawRuntime {
 
     /// Set a limit on the max size of stack the runtime will use.
     ///
-    /// The default values is 256x1024 bytes.
+    /// The default value is 256x1024 bytes. A `limit` of `0` disables the
+    /// check. Values larger than 16 MiB are treated as `0` so QuickJS's
+    /// `stack_top - stack_size` subtraction cannot underflow.
     pub unsafe fn set_max_stack_size(&mut self, limit: usize) {
-        let limit: size_t = limit.try_into().unwrap_or(size_t::MAX);
+        const MAX_SANE: usize = 1 << 24;
+        let limit: size_t = if limit > MAX_SANE {
+            0
+        } else {
+            limit.try_into().unwrap_or(0)
+        };
         qjs::JS_SetMaxStackSize(self.rt.as_ptr(), limit);
     }
 
