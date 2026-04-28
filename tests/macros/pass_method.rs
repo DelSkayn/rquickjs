@@ -45,6 +45,11 @@ impl TestClass {
         a.value == b.value && a.another_value == b.another_value
     }
 
+    #[qjs(static, rename = PredefinedAtom::SymbolHasInstance)]
+    pub fn has_instance<'js>(_value: rquickjs::Value<'js>) -> bool {
+        false
+    }
+
     #[qjs(static, get, rename = "defaultValue")]
     pub fn default_value() -> u32 {
         42
@@ -125,6 +130,12 @@ pub fn main() {
             }
             if(nv.inner_function !== undefined){
                 throw new Error(6)
+            }
+            if(typeof TestClass[Symbol.hasInstance] !== "function"){
+                throw new Error("static Symbol.hasInstance not attached")
+            }
+            if(TestClass[Symbol.hasInstance]({}) !== false){
+                throw new Error("static Symbol.hasInstance wrong return")
             }
             let proto = TestClass.prototype;
             if(!Object.keys(proto).includes("anotherValue")){
