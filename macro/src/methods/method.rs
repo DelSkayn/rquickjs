@@ -296,6 +296,7 @@ impl Method {
     pub(crate) fn expand_apply_to_object(
         &self,
         prefix: &str,
+        lib_crate: &Ident,
         self_ty: &Type,
         object_name: &Ident,
         case: Option<Case>,
@@ -306,7 +307,12 @@ impl Method {
         let func_name_str = self.name(case);
         let js_func_name = self.function.expand_carry_type_name(prefix);
         quote! {
-            #object_name.set(#func_name_str,<#self_ty>::#js_func_name)?;
+            #object_name.prop(
+                #func_name_str,
+                #lib_crate::object::Property::from(<#self_ty>::#js_func_name)
+                    .writable()
+                    .configurable(),
+            )?;
         }
     }
 

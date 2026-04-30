@@ -49,6 +49,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed iterators to use correct IteratorPrototype chain
 - Fixed a latent ABI layout vulnerability in `JS_NewPromiseCapability` FFI boundary by replacing tuple with strictly compatible array
 - `#[rquickjs::class]` now rejects fields whose type implements `JsClass` with a clear compile error; such fields silently dropped nested mutations because the generated getter cloned the value. Wrap the field in `Class<'js, T>` instead #[532](https://github.com/DelSkayn/rquickjs/issues/532)
+<<<<<<< fix/missing-trace-impls
+- Added missing `Trace` implementations for `Constructor`, `Promise`, `Proxy`, `ArrayBuffer`, and `TypedArray`; added `JsLifetime` for `Proxy`; re-exported `Constructor` at the crate root
+=======
+- Fixed `#[qjs(static, rename = PredefinedAtom::...)]` methods failing when the target symbol exists as a non-writable property on `Function.prototype` (e.g. `Symbol.hasInstance`) by defining properties directly on the constructor instead of going through the prototype chain #[315](https://github.com/DelSkayn/rquickjs/issues/315)
+>>>>>>> master
+- Fixed `#[qjs(static, get/set)]` accessors being placed on the class prototype instead of the constructor #[478](https://github.com/DelSkayn/rquickjs/issues/478)
+- Fixed `Runtime::set_max_stack_size` crashing on large values (e.g. `usize::MAX`) by clamping to avoid a pointer underflow inside QuickJS's stack limit check #[437](https://github.com/DelSkayn/rquickjs/issues/437)
 
 ## [0.11.0] - 2025-12-16
 

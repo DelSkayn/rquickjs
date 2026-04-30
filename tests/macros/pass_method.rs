@@ -45,6 +45,24 @@ impl TestClass {
         a.value == b.value && a.another_value == b.another_value
     }
 
+    #[qjs(static, rename = PredefinedAtom::SymbolHasInstance)]
+    pub fn has_instance<'js>(_value: rquickjs::Value<'js>) -> bool {
+        false
+    }
+
+    #[qjs(static, get, rename = "defaultValue")]
+    pub fn default_value() -> u32 {
+        42
+    }
+
+    #[qjs(static, get, rename = "staticPair")]
+    pub fn get_static_pair() -> u32 {
+        7
+    }
+
+    #[qjs(static, set, rename = "staticPair")]
+    pub fn set_static_pair(_v: u32) {}
+
     #[qjs(skip)]
     pub fn inner_function(&self) {}
 
@@ -113,6 +131,12 @@ pub fn main() {
             if(nv.inner_function !== undefined){
                 throw new Error(6)
             }
+            if(typeof TestClass[Symbol.hasInstance] !== "function"){
+                throw new Error("static Symbol.hasInstance not attached")
+            }
+            if(TestClass[Symbol.hasInstance]({}) !== false){
+                throw new Error("static Symbol.hasInstance wrong return")
+            }
             let proto = TestClass.prototype;
             if(!Object.keys(proto).includes("anotherValue")){
                 throw new Error(7)
@@ -147,6 +171,20 @@ pub fn main() {
             }
             if(kindDesc.configurable !== true || kindDesc.enumerable !== true || kindDesc.writable !== true){
                 throw new Error(14)
+            }
+            if(TestClass.defaultValue !== 42){
+                throw new Error(15)
+            }
+            let dvDesc = Object.getOwnPropertyDescriptor(TestClass, "defaultValue");
+            if(!dvDesc || typeof dvDesc.get !== "function" || dvDesc.set !== undefined){
+                throw new Error(16)
+            }
+            let spDesc = Object.getOwnPropertyDescriptor(TestClass, "staticPair");
+            if(!spDesc || typeof spDesc.get !== "function" || typeof spDesc.set !== "function"){
+                throw new Error(17)
+            }
+            if(proto.defaultValue !== undefined){
+                throw new Error(18)
             }
         "#,
         )

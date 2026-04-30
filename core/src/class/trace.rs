@@ -108,6 +108,24 @@ impl<'js> Trace<'js> for Atom<'js> {
     }
 }
 
+impl<'js> Trace<'js> for crate::Constructor<'js> {
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        self.0.trace(tracer)
+    }
+}
+
+impl<'js> Trace<'js> for crate::Proxy<'js> {
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        self.0.trace(tracer)
+    }
+}
+
+impl<'js, T> Trace<'js> for crate::TypedArray<'js, T> {
+    fn trace<'a>(&self, tracer: Tracer<'a, 'js>) {
+        self.as_value().trace(tracer)
+    }
+}
+
 #[cfg(feature = "either")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "either")))]
 impl<'js, L, R> Trace<'js> for Either<L, R>
@@ -227,6 +245,8 @@ trace_impls! {
     crate::Symbol,
     crate::Exception,
     crate::String,
+    crate::Promise,
+    crate::ArrayBuffer,
 }
 
 trace_impls! {

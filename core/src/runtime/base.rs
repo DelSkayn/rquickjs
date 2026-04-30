@@ -217,4 +217,26 @@ mod test {
         rt.set_gc_threshold(0xFF);
         rt.run_gc();
     }
+
+    #[test]
+    fn set_max_stack_size_large_values() {
+        let rt = Runtime::new().unwrap();
+        rt.set_max_stack_size(usize::MAX);
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<i32, _>("1 + 1").unwrap();
+        });
+        rt.set_max_stack_size(isize::MAX as usize);
+        ctx.with(|ctx| {
+            ctx.eval::<i32, _>("1 + 1").unwrap();
+        });
+        rt.set_max_stack_size(0);
+        ctx.with(|ctx| {
+            ctx.eval::<i32, _>("1 + 1").unwrap();
+        });
+        rt.set_max_stack_size(256 * 1024);
+        ctx.with(|ctx| {
+            ctx.eval::<i32, _>("1 + 1").unwrap();
+        });
+    }
 }
