@@ -57,7 +57,9 @@ pub use context::MultiWith;
 #[cfg(feature = "futures")]
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 pub use runtime::AsyncRuntime;
-pub use value::{ArrayBuffer, Iterable, IterableFn, JsIterator, TypedArray};
+pub use value::{
+    ArrayBuffer, ArrayBufferDrop, ArrayBufferSource, Iterable, IterableFn, JsIterator, TypedArray,
+};
 
 //#[doc(hidden)]
 pub mod qjs {
