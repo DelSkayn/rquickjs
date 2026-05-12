@@ -1,0 +1,134 @@
+name: Update bindings
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: Branch to open the pull request against
+        required: false
+        default: master
+  push:
+    branches:
+      - master
+    paths:
+      - 'sys/quickjs'
+      - 'sys/wrapper.h'
+      - 'sys/build.rs'
+      - 'sys/Cargo.toml'
+      - '.github/workflows/bindings.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bindings:
+    name: ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Cross-compiled Linux targets handled by cargo-zigbuild.
+          - { os: ubuntu-latest,  target: i686-unknown-linux-gnu,          rust: stable,  builder: zigbuild }
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-gnu,        rust: stable,  builder: zigbuild }
+          - { os: ubuntu-latest,  target: x86_64-unknown-linux-musl,       rust: stable,  builder: zigbuild }
+          - { os: ubuntu-latest,  target: aarch64-unknown-linux-gnu,       rust: stable,  builder: zigbuild }
+          - { os: ubuntu-latest,  target: aarch64-unknown-linux-musl,      rust: stable,  builder: zigbuild }
+          - { os: ubuntu-latest,  target: armv7-unknown-linux-gnueabihf,   rust: stable,  builder: zigbuild }
+          - { os: ubuntu-latest,  target: powerpc64-unknown-linux-gnu,     rust: stable,  builder: zigbuild }
+          - { os: ubuntu-24.04,   target: loongarch64-unknown-linux-gnu,   rust: nightly, builder: zigbuild }
+          - { os: ubuntu-24.04,   target: loongarch64-unknown-linux-musl,  rust: nightly, builder: zigbuild }
+          # Native builds.
+          - { os: macos-latest,   target: x86_64-apple-darwin,             rust: stable,  builder: native }
+          - { os: macos-latest,   target: aarch64-apple-darwin,            rust: stable,  builder: native }
+          - { os: windows-latest, target: x86_64-pc-windows-msvc,          rust: stable,  builder: native }
+          - { os: windows-latest, target: x86_64-pc-windows-gnu,           rust: stable,  builder: msys2 }
+          - { os: windows-11-arm, target: aarch64-pc-windows-msvc,         rust: stable,  builder: native }
+          - { os: ubuntu-latest,  target: wasm32-wasip1,                   rust: stable,  builder: native }
+          - { os: ubuntu-latest,  target: wasm32-wasip2,                   rust: nightly, builder: native }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      - name: Set up Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          target: ${{ matrix.target }}
+          components: rust-src
+
+      - name: Set up zig
+        if: matrix.builder == 'zigbuild'
+        uses: mlugg/setup-zig@v2
+        with:
+          version: 0.14.1
+
+      - name: Install cargo-zigbuild
+        if: matrix.builder == 'zigbuild'
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+
+      - name: Set up msys2
+        if: matrix.builder == 'msys2'
+        uses: msys2/setup-msys2@v2
+        with:
+          release: false
+
+      - name: Prepare msys2 env
+        if: matrix.builder == 'msys2'
+        shell: pwsh
+        run: |
+          New-Item -Path "C:\Program Files\LLVM\x86_64-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\x86_64-w64-mingw32"
+          New-Item -Path "C:\Program Files\LLVM\i686-w64-mingw32" -ItemType SymbolicLink -Value "C:\msys64\mingw64\i686-w64-mingw32"
+          echo "C:\msys64\mingw64\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "C:\msys64\mingw32\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          echo "CC_x86_64_pc_windows_gnu=x86_64-w64-mingw32-gcc" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+          echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc"     | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Regenerate bindings
+        shell: bash
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+          RUST_LOG: bindgen=warn,bindgen::ir=error,bindgen::codegen=error
+        run: |
+          if [ "${{ matrix.builder }}" = "zigbuild" ]; then
+            cargo zigbuild --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging
+          else
+            cargo build --manifest-path sys/Cargo.toml --target ${{ matrix.target }} --features bindgen,update-bindings,logging
+          fi
+          cat "sys/src/bindings/${{ matrix.target }}.rs" | head -n 20
+
+      - name: Upload bindings
+        uses: actions/upload-artifact@v7
+        with:
+          name: bindings-${{ matrix.target }}
+          path: sys/src/bindings/${{ matrix.target }}.rs
+          overwrite: true
+
+  open-pr:
+    needs: bindings
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download bindings artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: bindings-*
+          path: sys/src/bindings
+          merge-multiple: true
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          base: ${{ github.event.inputs.base || github.ref_name }}
+          branch: update-bindings
+          delete-branch: true
+          commit-message: Update bindings
+          title: Update bindings
+          body: |
+            Regenerated `sys/src/bindings/*.rs` after a change to `sys/quickjs`, `sys/wrapper.h`, `sys/build.rs`, or `sys/Cargo.toml`.
