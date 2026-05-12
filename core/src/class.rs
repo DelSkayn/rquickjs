@@ -729,7 +729,7 @@ mod test {
                     Function::new(
                         ctx.clone(),
                         |this: This<Class<DebugPrinter<D>>>| -> crate::Result<String> {
-                            Ok(format!("{:?}", &this.0.borrow().d))
+                            Ok(format!("{:?}", this.0.borrow().d))
                         },
                     ),
                 )?;
