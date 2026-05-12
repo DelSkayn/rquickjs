@@ -246,6 +246,12 @@ jobs:
             features: full-async
 
           - task: bindings
+            os: ubuntu-24.04
+            rust: stable
+            target: riscv64gc-unknown-linux-gnu
+            features: full-async
+
+          - task: bindings
             os: ubuntu-latest
             rust: stable
             target: wasm32-wasip1
@@ -310,7 +316,7 @@ jobs:
         with:
           submodules: true
       - name: Setup cross linux toolchain
-        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'armv7') && !startsWith(matrix.target, 'loongarch64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl') && !startsWith(matrix.target, 'powerpc64')
+        if: contains(matrix.target, '-linux-') && !startsWith(matrix.target, 'aarch64') && !startsWith(matrix.target, 'armv7') && !startsWith(matrix.target, 'loongarch64') && !startsWith(matrix.target, 'riscv64') && !startsWith(matrix.target, 'x86_64-') && !endsWith(matrix.target, '-musl') && !startsWith(matrix.target, 'powerpc64')
         run: |
           case "${{ matrix.target }}" in
             i686-*) SYSTEM_ARCH=i386 ;;
@@ -455,6 +461,27 @@ jobs:
           echo 'rustflags = ["-C", "linker=loongarch64-linux-gnu-gcc-14"]' >> ~/.cargo/config.toml
 
           echo "/musl/bin" >> $GITHUB_PATH
+
+      - name: Setup cross riscv64
+        if: startsWith(matrix.target, 'riscv64') && contains(matrix.target, '-linux-')
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            clang \
+            crossbuild-essential-riscv64 \
+            qemu-user
+
+          mkdir -p ~/.cargo/
+          cat >> ~/.cargo/config.toml <<EOF
+          [target.riscv64gc-unknown-linux-gnu]
+          linker = "riscv64-linux-gnu-gcc"
+          runner = "qemu-riscv64"
+          rustflags = ["-C", "link-arg=-latomic"]
+          rustdocflags = ["-C", "link-arg=-latomic"]
+          EOF
+
+          echo "LD_LIBRARY_PATH=/usr/riscv64-linux-gnu/lib" >> $GITHUB_ENV
+          sudo ln -s /usr/riscv64-linux-gnu/lib/ld-linux-riscv64-lp64d.so.1 /lib/ld-linux-riscv64-lp64d.so.1
       - name: Setup wasmtime for wasm32-wasip1 and wasm32-wasip2
         if: matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2'
         uses: bytecodealliance/actions/wasmtime/setup@v1
@@ -514,7 +541,7 @@ jobs:
           # Limit test threads to 1 for QEMU-emulated targets to work around an intermittent
           # QEMU user-mode emulation bug: "QEMU internal SIGSEGV {code=MAPERR, addr=0x20}"
           # This is a race condition in QEMU's thread emulation, not a bug in rquickjs.
-          ${{ (startsWith(matrix.target, 'loongarch64') || startsWith(matrix.target, 'aarch64-unknown-linux') || startsWith(matrix.target, 'armv7') || startsWith(matrix.target, 'powerpc64')) && 'RUST_TEST_THREADS=1' || '' }} ${{ matrix.target == 'wasm32-wasip1' && 'CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime' || '' }} ${{ matrix.target == 'wasm32-wasip2' && 'CARGO_TARGET_WASM32_WASIP2_RUNNER=wasmtime' || '' }} cargo test ${{ matrix.optimization && '--release' || '' }} --all ${{ (matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2') && '--exclude module-loader' || ''  }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
+          ${{ (startsWith(matrix.target, 'loongarch64') || startsWith(matrix.target, 'riscv64') || startsWith(matrix.target, 'aarch64-unknown-linux') || startsWith(matrix.target, 'armv7') || startsWith(matrix.target, 'powerpc64')) && 'RUST_TEST_THREADS=1' || '' }} ${{ matrix.target == 'wasm32-wasip1' && 'CARGO_TARGET_WASM32_WASIP1_RUNNER=wasmtime' || '' }} ${{ matrix.target == 'wasm32-wasip2' && 'CARGO_TARGET_WASM32_WASIP2_RUNNER=wasmtime' || '' }} cargo test ${{ matrix.optimization && '--release' || '' }} --all ${{ (matrix.target == 'wasm32-wasip1' || matrix.target == 'wasm32-wasip2') && '--exclude module-loader' || ''  }} --target ${{ matrix.target }} --no-default-features --features ${{ matrix.features }}
 
   update-bindings:
     if: ${{ github.event_name != 'pull_request' && !startsWith(github.ref, 'refs/tags/') }}
