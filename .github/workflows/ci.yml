@@ -212,11 +212,45 @@ jobs:
 
       - name: Install QEMU user emulation
         if: matrix.qemu
+        shell: bash
         run: |
+          # Cross-compiled glibc binaries need both the dynamic linker and the
+          # matching sysroot at runtime. zigbuild produces dynamic binaries for
+          # *-linux-gnu targets, so install the cross libc and point qemu's
+          # -L prefix at it. *-linux-musl binaries are statically linked and
+          # need neither.
+          case "${{ matrix.target }}" in
+            aarch64-unknown-linux-gnu)
+              LIBC_PKG=libc6-arm64-cross
+              PREFIX=/usr/aarch64-linux-gnu
+              ;;
+            armv7-unknown-linux-gnueabihf)
+              LIBC_PKG=libc6-armhf-cross
+              PREFIX=/usr/arm-linux-gnueabihf
+              ;;
+            powerpc64-unknown-linux-gnu)
+              LIBC_PKG=libc6-ppc64-cross
+              PREFIX=/usr/powerpc64-linux-gnu
+              ;;
+            loongarch64-unknown-linux-gnu)
+              LIBC_PKG=libc6-dev-loong64-cross
+              PREFIX=/usr/loongarch64-linux-gnu
+              ;;
+            *)
+              LIBC_PKG=''
+              PREFIX=''
+              ;;
+          esac
+
           sudo apt-get update -y
-          sudo apt-get install -y qemu-user
+          sudo apt-get install -y qemu-user $LIBC_PKG
+
           QEMU_TARGET=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-          echo "CARGO_TARGET_${QEMU_TARGET}_RUNNER=qemu-${{ matrix.qemu }}" >> "$GITHUB_ENV"
+          if [ -n "$PREFIX" ]; then
+            echo "CARGO_TARGET_${QEMU_TARGET}_RUNNER=qemu-${{ matrix.qemu }} -L $PREFIX" >> "$GITHUB_ENV"
+          else
+            echo "CARGO_TARGET_${QEMU_TARGET}_RUNNER=qemu-${{ matrix.qemu }}" >> "$GITHUB_ENV"
+          fi
 
       - name: Set up wasmtime
         if: matrix.wasi
