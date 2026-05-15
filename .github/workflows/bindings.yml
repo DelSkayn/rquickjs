@@ -35,7 +35,7 @@ jobs:
           - { os: ubuntu-latest,  target: aarch64-unknown-linux-gnu,       rust: stable,  builder: zigbuild }
           - { os: ubuntu-latest,  target: aarch64-unknown-linux-musl,      rust: stable,  builder: zigbuild }
           - { os: ubuntu-latest,  target: armv7-unknown-linux-gnueabihf,   rust: stable,  builder: zigbuild }
-          - { os: ubuntu-latest,  target: powerpc64-unknown-linux-gnu,     rust: stable,  builder: cross-gcc }
+          - { os: ubuntu-latest,  target: powerpc64-unknown-linux-gnu,     rust: stable,  builder: zigbuild }
           - { os: ubuntu-24.04,   target: loongarch64-unknown-linux-gnu,   rust: nightly, builder: zigbuild }
           - { os: ubuntu-24.04,   target: loongarch64-unknown-linux-musl,  rust: nightly, builder: zigbuild }
           # Native builds.
@@ -63,40 +63,13 @@ jobs:
         if: matrix.builder == 'zigbuild'
         uses: mlugg/setup-zig@v2
         with:
-          version: 0.14.1
+          version: 0.16.0
 
       - name: Install cargo-zigbuild
         if: matrix.builder == 'zigbuild'
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-zigbuild
-
-      - name: Set up cross-gcc toolchain
-        if: matrix.builder == 'cross-gcc'
-        shell: bash
-        run: |
-          case "${{ matrix.target }}" in
-            powerpc64-unknown-linux-gnu)
-              GCC_TARGET=powerpc64-linux-gnu
-              GCC_PKGS=(gcc-powerpc64-linux-gnu g++-powerpc64-linux-gnu libc6-dev-ppc64-cross)
-              ;;
-            *)
-              echo "unsupported cross-gcc target: ${{ matrix.target }}" >&2
-              exit 1
-              ;;
-          esac
-
-          sudo apt-get update -y
-          sudo apt-get install -y "${GCC_PKGS[@]}"
-
-          ENV_UPPER=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
-          ENV_LOWER=$(printf "${{ matrix.target }}" | tr '-' '_')
-          {
-            echo "CC_${ENV_LOWER}=${GCC_TARGET}-gcc"
-            echo "CXX_${ENV_LOWER}=${GCC_TARGET}-g++"
-            echo "AR_${ENV_LOWER}=${GCC_TARGET}-ar"
-            echo "CARGO_TARGET_${ENV_UPPER}_LINKER=${GCC_TARGET}-gcc"
-          } >> "$GITHUB_ENV"
 
       - name: Set up msys2
         if: matrix.builder == 'msys2'
