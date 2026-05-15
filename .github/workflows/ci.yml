@@ -162,7 +162,7 @@ jobs:
           - { task: test, os: ubuntu-latest, rust: stable,  target: aarch64-unknown-linux-gnu,      features: full-async, builder: zigbuild, qemu: aarch64 }
           - { task: test, os: ubuntu-latest, rust: stable,  target: aarch64-unknown-linux-musl,     features: full-async, builder: zigbuild, qemu: aarch64 }
           - { task: test, os: ubuntu-latest, rust: stable,  target: armv7-unknown-linux-gnueabihf,  features: full-async, builder: zigbuild, qemu: arm }
-          - { task: test, os: ubuntu-latest, rust: stable,  target: powerpc64-unknown-linux-gnu,    features: full-async, builder: zigbuild, qemu: ppc64 }
+          - { task: test, os: ubuntu-latest, rust: stable,  target: powerpc64-unknown-linux-gnu,    features: full-async, builder: cross-gcc, qemu: ppc64 }
           - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-gnu,  features: full-async, builder: zigbuild, qemu: loongarch64 }
           - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-musl, features: full-async, builder: zigbuild, qemu: loongarch64 }
 
@@ -209,6 +209,36 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: cargo-zigbuild
+
+      - name: Set up cross-gcc toolchain
+        if: matrix.builder == 'cross-gcc'
+        shell: bash
+        run: |
+          # zig 0.14 ships an incomplete glibc sysroot for some targets
+          # (e.g. powerpc64 lacks `gnu/stubs-64-v2.h`), so for those targets
+          # we fall back to the apt cross-gcc toolchain.
+          case "${{ matrix.target }}" in
+            powerpc64-unknown-linux-gnu)
+              GCC_TARGET=powerpc64-linux-gnu
+              GCC_PKGS=(gcc-powerpc64-linux-gnu g++-powerpc64-linux-gnu libc6-dev-ppc64-cross)
+              ;;
+            *)
+              echo "unsupported cross-gcc target: ${{ matrix.target }}" >&2
+              exit 1
+              ;;
+          esac
+
+          sudo apt-get update -y
+          sudo apt-get install -y "${GCC_PKGS[@]}"
+
+          ENV_UPPER=$(printf "${{ matrix.target }}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+          ENV_LOWER=$(printf "${{ matrix.target }}" | tr '-' '_')
+          {
+            echo "CC_${ENV_LOWER}=${GCC_TARGET}-gcc"
+            echo "CXX_${ENV_LOWER}=${GCC_TARGET}-g++"
+            echo "AR_${ENV_LOWER}=${GCC_TARGET}-ar"
+            echo "CARGO_TARGET_${ENV_UPPER}_LINKER=${GCC_TARGET}-gcc"
+          } >> "$GITHUB_ENV"
 
       - name: Install QEMU user emulation
         if: matrix.qemu
