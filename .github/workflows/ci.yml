@@ -162,7 +162,12 @@ jobs:
           - { task: test, os: ubuntu-latest, rust: stable,  target: aarch64-unknown-linux-gnu,      features: full-async, builder: zigbuild, qemu: aarch64 }
           - { task: test, os: ubuntu-latest, rust: stable,  target: aarch64-unknown-linux-musl,     features: full-async, builder: zigbuild, qemu: aarch64 }
           - { task: test, os: ubuntu-latest, rust: stable,  target: armv7-unknown-linux-gnueabihf,  features: full-async, builder: zigbuild, qemu: arm }
-          - { task: test, os: ubuntu-latest, rust: stable,  target: powerpc64-unknown-linux-gnu,    features: full-async, builder: zigbuild, qemu: ppc64 }
+          # NOTE: powerpc64-unknown-linux-gnu is not tested in CI because zig's
+          # bundled lld does not support PPC64 ELFv1 (the ABI Rust's
+          # precompiled std for that target uses), so linking the test
+          # executables fails. Bindings are still regenerated for it via
+          # `.github/workflows/bindings.yml` (sys builds as a static rlib,
+          # which does not trigger lld).
           - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-gnu,  features: full-async, builder: zigbuild, qemu: loongarch64 }
           - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-musl, features: full-async, builder: zigbuild, qemu: loongarch64 }
 
@@ -227,10 +232,6 @@ jobs:
             armv7-unknown-linux-gnueabihf)
               LIBC_PKG=libc6-armhf-cross
               PREFIX=/usr/arm-linux-gnueabihf
-              ;;
-            powerpc64-unknown-linux-gnu)
-              LIBC_PKG=libc6-ppc64-cross
-              PREFIX=/usr/powerpc64-linux-gnu
               ;;
             loongarch64-unknown-linux-gnu)
               LIBC_PKG=libc6-dev-loong64-cross
