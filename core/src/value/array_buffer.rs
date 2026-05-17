@@ -1,4 +1,6 @@
-use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value};
+use crate::{
+    markers::ParallelSend, qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value,
+};
 use alloc::boxed::Box;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -13,27 +15,6 @@ use core::{
 };
 
 use super::typed_array::TypedArrayItem;
-
-/// The drop callback invoked when an externally backed `ArrayBuffer` is
-/// garbage-collected (or when construction fails).
-#[cfg(not(feature = "parallel"))]
-pub type ArrayBufferDrop = Box<dyn FnOnce() + 'static>;
-/// The drop callback invoked when an externally backed `ArrayBuffer` is
-/// garbage-collected (or when construction fails).
-#[cfg(feature = "parallel")]
-pub type ArrayBufferDrop = Box<dyn FnOnce() + Send + 'static>;
-
-/// Marker bound used by the `from_source*` APIs so that the captured source
-/// satisfies the `Send` requirement only when the `parallel` feature is
-/// enabled.
-#[cfg(not(feature = "parallel"))]
-pub trait DropSend {}
-#[cfg(not(feature = "parallel"))]
-impl<T> DropSend for T {}
-#[cfg(feature = "parallel")]
-pub trait DropSend: Send {}
-#[cfg(feature = "parallel")]
-impl<T: Send> DropSend for T {}
 
 /// A contiguous byte region owned by `self` and usable as the backing store
 /// of an [`ArrayBuffer`].
@@ -151,118 +132,31 @@ impl<'js> ArrayBuffer<'js> {
         })))
     }
 
-    /// Create an `ArrayBuffer` backed by an external buffer.
-    ///
-    /// `drop` is invoked exactly once: when the buffer is garbage-collected,
-    /// or synchronously if construction fails. It should release whatever
-    /// backing storage it captures.
-    ///
-    /// # Safety
-    ///
-    /// `ptr` must point to `len` bytes of valid memory for the entire lifetime
-    /// of the returned buffer and any views of it. The `drop` closure must
-    /// release that memory correctly.
-    pub unsafe fn from_raw_parts(
-        ctx: Ctx<'js>,
-        ptr: *mut u8,
-        len: usize,
-        drop: ArrayBufferDrop,
-    ) -> Result<Self> {
-        unsafe { Self::from_raw_parts_inner(ctx, ptr, len, drop, false, false) }
-    }
-
-    /// Create a JS `SharedArrayBuffer` backed by an external buffer.
-    ///
-    /// Same semantics as [`from_raw_parts`] but produces a JS `SharedArrayBuffer`,
-    /// which supports `Atomics` and can be shared across workers.
-    ///
-    /// # Safety
-    ///
-    /// See [`from_raw_parts`].
-    pub unsafe fn from_raw_parts_shared(
-        ctx: Ctx<'js>,
-        ptr: *mut u8,
-        len: usize,
-        drop: ArrayBufferDrop,
-    ) -> Result<Self> {
-        unsafe { Self::from_raw_parts_inner(ctx, ptr, len, drop, true, false) }
-    }
-
-    /// Create an `ArrayBuffer` that JS sees as immutable.
-    ///
-    /// Same semantics as [`from_raw_parts`] but any JS-side write throws,
-    /// which makes it sound to back the buffer with a shared-immutable
-    /// Rust value (`Arc<[u8]>`, `bytes::Bytes`, …) that is still accessible
-    /// from Rust as `&[u8]` after this call returns.
-    ///
-    /// # Safety
-    ///
-    /// See [`from_raw_parts`].
-    pub unsafe fn from_raw_parts_immutable(
-        ctx: Ctx<'js>,
-        ptr: *mut u8,
-        len: usize,
-        drop: ArrayBufferDrop,
-    ) -> Result<Self> {
-        unsafe { Self::from_raw_parts_inner(ctx, ptr, len, drop, false, true) }
-    }
-
-    unsafe fn from_raw_parts_inner(
-        ctx: Ctx<'js>,
-        ptr: *mut u8,
-        len: usize,
-        drop: ArrayBufferDrop,
-        is_shared: bool,
-        immutable: bool,
-    ) -> Result<Self> {
-        extern "C" fn shim(_rt: *mut qjs::JSRuntime, opaque: *mut c_void, _ptr: *mut c_void) {
-            unsafe {
-                let boxed: Box<ArrayBufferDrop> = Box::from_raw(opaque as *mut ArrayBufferDrop);
-                (*boxed)();
-            }
-        }
-
-        let opaque = Box::into_raw(Box::new(drop)) as *mut c_void;
-
-        Ok(Self(Object(unsafe {
-            let val =
-                qjs::JS_NewArrayBuffer(ctx.as_ptr(), ptr, len as _, Some(shim), opaque, is_shared);
-            if let Err(e) = ctx.handle_exception(val) {
-                shim(qjs::JS_GetRuntime(ctx.as_ptr()), opaque, ptr as *mut c_void);
-                return Err(e);
-            }
-            if immutable {
-                qjs::JS_SetImmutableArrayBuffer(val, true);
-            }
-            Value::from_js_value(ctx, val)
-        })))
-    }
-
     /// Create an `ArrayBuffer` from a source that owns its backing bytes.
     ///
     /// The source is moved into the buffer; JS has exclusive mutable access
     /// until the buffer is collected, at which point the source is dropped.
     /// Using this with a shared-immutable source (`Arc<[u8]>`, `bytes::Bytes`,
-    /// …) is unsound; use [`from_source_immutable`] for those.
+    /// …) is unsound; use [`from_source_immutable`](Self::from_source_immutable) for those.
     pub fn from_source<S>(ctx: Ctx<'js>, src: S) -> Result<Self>
     where
-        S: ArrayBufferSource + DropSend + 'static,
+        S: ArrayBufferSource + ParallelSend + 'static,
     {
         let ptr = src.as_ptr();
         let len = src.len();
-        unsafe { Self::from_raw_parts(ctx, ptr, len, Box::new(move || drop(src))) }
+        unsafe { Self::from_external(ctx, ptr, len, false, false, move || drop(src)) }
     }
 
     /// Create a `SharedArrayBuffer` from a source that owns its backing bytes.
     ///
-    /// See [`from_source`] for ownership semantics.
+    /// See [`from_source`](Self::from_source) for ownership semantics.
     pub fn from_source_shared<S>(ctx: Ctx<'js>, src: S) -> Result<Self>
     where
-        S: ArrayBufferSource + DropSend + 'static,
+        S: ArrayBufferSource + ParallelSend + 'static,
     {
         let ptr = src.as_ptr();
         let len = src.len();
-        unsafe { Self::from_raw_parts_shared(ctx, ptr, len, Box::new(move || drop(src))) }
+        unsafe { Self::from_external(ctx, ptr, len, true, false, move || drop(src)) }
     }
 
     /// Create an `ArrayBuffer` that JS sees as immutable, backed by a
@@ -273,11 +167,63 @@ impl<'js> ArrayBuffer<'js> {
     /// `bytes::Bytes`, …).
     pub fn from_source_immutable<S>(ctx: Ctx<'js>, src: S) -> Result<Self>
     where
-        S: ArrayBufferSource + DropSend + 'static,
+        S: ArrayBufferSource + ParallelSend + 'static,
     {
         let ptr = src.as_ptr();
         let len = src.len();
-        unsafe { Self::from_raw_parts_immutable(ctx, ptr, len, Box::new(move || drop(src))) }
+        unsafe { Self::from_external(ctx, ptr, len, false, true, move || drop(src)) }
+    }
+
+    /// Internal helper backing the safe `from_source*` constructors.
+    ///
+    /// `drop_fn` is invoked exactly once: when the buffer is garbage-collected,
+    /// or synchronously if construction fails.
+    ///
+    /// # Safety
+    ///
+    /// `ptr` must point to `len` bytes of valid memory until `drop_fn` runs.
+    unsafe fn from_external<F>(
+        ctx: Ctx<'js>,
+        ptr: *mut u8,
+        len: usize,
+        is_shared: bool,
+        immutable: bool,
+        drop_fn: F,
+    ) -> Result<Self>
+    where
+        F: FnOnce() + ParallelSend + 'static,
+    {
+        extern "C" fn shim<F: FnOnce()>(
+            _rt: *mut qjs::JSRuntime,
+            opaque: *mut c_void,
+            _ptr: *mut c_void,
+        ) {
+            unsafe {
+                let boxed: Box<F> = Box::from_raw(opaque as *mut F);
+                (*boxed)();
+            }
+        }
+
+        let opaque = Box::into_raw(Box::new(drop_fn)) as *mut c_void;
+
+        Ok(Self(Object(unsafe {
+            let val = qjs::JS_NewArrayBuffer(
+                ctx.as_ptr(),
+                ptr,
+                len as _,
+                Some(shim::<F>),
+                opaque,
+                is_shared,
+            );
+            if let Err(e) = ctx.handle_exception(val) {
+                shim::<F>(qjs::JS_GetRuntime(ctx.as_ptr()), opaque, ptr as *mut c_void);
+                return Err(e);
+            }
+            if immutable {
+                qjs::JS_SetImmutableArrayBuffer(val, true);
+            }
+            Value::from_js_value(ctx, val)
+        })))
     }
 
     /// Get the length of the array buffer in bytes.
@@ -540,29 +486,31 @@ mod test {
     }
 
     #[test]
-    fn from_raw_parts_external_buffer() {
+    fn from_source_external_buffer() {
         use core::sync::atomic::{AtomicBool, Ordering};
 
         static DROPPED: AtomicBool = AtomicBool::new(false);
 
+        struct Tracker(alloc::boxed::Box<[u8]>);
+        unsafe impl ArrayBufferSource for Tracker {
+            fn as_ptr(&self) -> *mut u8 {
+                self.0.as_ptr()
+            }
+            fn len(&self) -> usize {
+                self.0.len()
+            }
+        }
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                DROPPED.store(true, Ordering::SeqCst);
+            }
+        }
+
         let rt = crate::Runtime::new().unwrap();
         let c = crate::Context::full(&rt).unwrap();
         c.with(|ctx| {
-            let buf: alloc::boxed::Box<[u8]> = alloc::vec![1u8, 2, 3, 4].into_boxed_slice();
-            let ptr = buf.as_ptr();
-            let len = buf.len();
-            let ab = unsafe {
-                ArrayBuffer::from_raw_parts(
-                    ctx.clone(),
-                    ptr,
-                    len,
-                    Box::new(move || {
-                        drop(buf);
-                        DROPPED.store(true, Ordering::SeqCst);
-                    }),
-                )
-                .unwrap()
-            };
+            let src = Tracker(alloc::vec![1u8, 2, 3, 4].into_boxed_slice());
+            let ab = ArrayBuffer::from_source(ctx.clone(), src).unwrap();
             assert_eq!(ab.len(), 4);
             assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
         });
@@ -571,34 +519,54 @@ mod test {
     }
 
     #[test]
-    fn from_raw_parts_error_invokes_drop_fn() {
+    fn from_source_error_invokes_drop_fn() {
         use core::sync::atomic::{AtomicBool, Ordering};
 
         static DROPPED: AtomicBool = AtomicBool::new(false);
 
+        // A source that lies about its length to force construction failure,
+        // and signals via `Drop` that the source was released exactly once.
+        struct BadSource(#[allow(dead_code)] alloc::boxed::Box<[u8]>);
+        unsafe impl ArrayBufferSource for BadSource {
+            fn as_ptr(&self) -> *mut u8 {
+                self.0.as_ptr()
+            }
+            fn len(&self) -> usize {
+                i64::MAX as usize
+            }
+        }
+        impl Drop for BadSource {
+            fn drop(&mut self) {
+                DROPPED.store(true, Ordering::SeqCst);
+            }
+        }
+
         let rt = crate::Runtime::new().unwrap();
         let c = crate::Context::full(&rt).unwrap();
         c.with(|ctx| {
-            let buf: alloc::boxed::Box<[u8]> = alloc::vec![1u8, 2, 3, 4].into_boxed_slice();
-            let ptr = buf.as_ptr();
-            let err = unsafe {
-                ArrayBuffer::from_raw_parts(
-                    ctx.clone(),
-                    ptr,
-                    i64::MAX as usize,
-                    Box::new(move || {
-                        drop(buf);
-                        DROPPED.store(true, Ordering::SeqCst);
-                    }),
-                )
-            };
+            let src = BadSource(alloc::vec![1u8, 2, 3, 4].into_boxed_slice());
+            let err = ArrayBuffer::from_source(ctx.clone(), src);
             assert!(err.is_err());
         });
         assert!(DROPPED.load(Ordering::SeqCst));
     }
 
     #[test]
-    fn from_raw_parts_immutable_arc_slices() {
+    fn from_source_immutable_arc_slices() {
+        struct ArcSlice {
+            arc: Arc<Vec<u8>>,
+            offset: usize,
+            len: usize,
+        }
+        unsafe impl ArrayBufferSource for ArcSlice {
+            fn as_ptr(&self) -> *mut u8 {
+                unsafe { self.arc.as_ptr().add(self.offset) }
+            }
+            fn len(&self) -> usize {
+                self.len
+            }
+        }
+
         let buf: Arc<Vec<u8>> = Arc::new((0u8..16).collect());
         let weak = Arc::downgrade(&buf);
 
@@ -606,17 +574,15 @@ mod test {
         let c = crate::Context::full(&rt).unwrap();
         c.with(|ctx| {
             let mk = |offset: usize, len: usize| -> ArrayBuffer<'_> {
-                let clone = buf.clone();
-                let ptr = unsafe { clone.as_ptr().add(offset) };
-                unsafe {
-                    ArrayBuffer::from_raw_parts_immutable(
-                        ctx.clone(),
-                        ptr,
+                ArrayBuffer::from_source_immutable(
+                    ctx.clone(),
+                    ArcSlice {
+                        arc: buf.clone(),
+                        offset,
                         len,
-                        Box::new(move || drop(clone)),
-                    )
-                    .unwrap()
-                }
+                    },
+                )
+                .unwrap()
             };
             let full = mk(0, 16);
             let head = mk(0, 4);
