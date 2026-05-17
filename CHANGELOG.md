@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)\
 - Added half support (f16) for Float16Array # [662](https://github.com/DelSkayn/rquickjs/pull/662)
+- `Value::new_big_int` now returns `Result<Value>` so QuickJS allocation failures are surfaced to the caller #[585](https://github.com/DelSkayn/rquickjs/issues/585)
 
 ### Added
 

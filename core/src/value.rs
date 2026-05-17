@@ -236,11 +236,13 @@ impl<'js> Value<'js> {
         }
     }
 
-    /// Create a new number value
+    /// Create a new big int value.
+    ///
+    /// Returns an error if the underlying QuickJS allocation fails.
     #[inline]
-    pub fn new_big_int(ctx: Ctx<'js>, value: i64) -> Self {
-        let value = unsafe { qjs::JS_NewBigInt64(ctx.as_ptr(), value) };
-        Self { ctx, value }
+    pub fn new_big_int(ctx: Ctx<'js>, value: i64) -> Result<Self> {
+        let value = unsafe { ctx.handle_exception(qjs::JS_NewBigInt64(ctx.as_ptr(), value))? };
+        Ok(Self { ctx, value })
     }
 
     /// Create a new number value
@@ -825,10 +827,32 @@ mod test {
             assert_eq!(val.type_of(), Type::BigInt);
             let val: Value = ctx.eval(r#"999999999999999999999n"#).unwrap();
             assert_eq!(val.type_of(), Type::BigInt);
-            let val = Value::new_big_int(ctx.clone(), 1245);
+            let val = Value::new_big_int(ctx.clone(), 1245).unwrap();
             assert_eq!(val.type_of(), Type::BigInt);
-            let val = Value::new_big_int(ctx, 9999999999999999);
+            let val = Value::new_big_int(ctx, 9999999999999999).unwrap();
             assert_eq!(val.type_of(), Type::BigInt);
+        });
+    }
+
+    // Regression for https://github.com/DelSkayn/rquickjs/issues/585:
+    // `Value::new_big_int` must surface QuickJS allocation failures as
+    // `Err(Error::Exception)` rather than returning a `Value` that wraps a
+    // `JS_EXCEPTION` sentinel.
+    #[test]
+    fn big_int_oom_is_reported() {
+        let rt = crate::Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        // Shrink the memory allowance *after* the context has been built so
+        // that the context itself can allocate, but new heap allocations
+        // like the one inside `JS_NewBigInt64` will fail.
+        rt.set_memory_limit(0x1000);
+        ctx.with(|ctx| {
+            // A value outside the short big-int range forces a heap
+            // allocation inside QuickJS, which will fail under the tiny
+            // memory limit set above.
+            let err = Value::new_big_int(ctx.clone(), i64::MAX)
+                .expect_err("expected allocation failure to be reported");
+            assert!(matches!(err, Error::Exception));
         });
     }
 }
