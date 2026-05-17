@@ -20,6 +20,7 @@ phf = { version = "0.13", optional = true }
 indexmap = { version = "2", optional = true }
 either = { version = "1", optional = true }
 async-lock = { version = "3", optional = true, default-features = false }
+parking_lot = { version = "0.12", optional = true }
 chrono = { version = "0.4", optional = true }
 dlopen2 = { version = "0.8", optional = true }
 relative-path = { version = "2.0", optional = true, default-features = false, features = [
@@ -38,6 +39,9 @@ tokio = { version = "1", default-features = false, features = [
 rquickjs.path = "../"
 approx = "0.5"
 trybuild = "1"
+
+[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }
 
 [features]
 default = ["std"]
@@ -77,7 +81,7 @@ rust-alloc = []
 half = ["dep:half"]
 
 # Enable interop between Rust futures and JS Promises
-futures = ["dep:async-lock"]
+futures = ["dep:async-lock", "dep:parking_lot"]
 
 # Allows transferring objects between different contexts of the same runtime.
 multi-ctx = []
