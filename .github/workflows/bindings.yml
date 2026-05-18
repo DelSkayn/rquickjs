@@ -61,19 +61,19 @@ jobs:
 
       - name: Set up zig
         if: matrix.builder == 'zigbuild'
-        uses: mlugg/setup-zig@v2
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: 0.16.0
 
       - name: Install cargo-zigbuild
         if: matrix.builder == 'zigbuild'
-        uses: taiki-e/install-action@v2
+        uses: taiki-e/install-action@7be9fd86bd1707236395105d6e9329dd1511a7e1 # v2.79.0
         with:
           tool: cargo-zigbuild
 
       - name: Set up msys2
         if: matrix.builder == 'msys2'
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@e9898307ac31d1a803454791be09ab9973336e1c # v2.31.1
         with:
           release: false
 
