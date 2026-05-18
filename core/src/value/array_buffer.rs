@@ -1,4 +1,6 @@
 use crate::{qjs, Ctx, Error, FromJs, IntoJs, JsLifetime, Object, Result, Value};
+#[cfg(feature = "bytes")]
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::{
     ffi::c_void,
@@ -73,6 +75,38 @@ impl<'js> ArrayBuffer<'js> {
                 // don't forget to free data when error occurred
                 Vec::from_raw_parts(ptr, capacity, capacity);
             })?;
+            Value::from_js_value(ctx, val)
+        })))
+    }
+
+    /// Create an immutable array buffer from a [`bytes::Bytes`] instance without copying.
+    ///
+    /// The resulting `ArrayBuffer` is marked immutable via `JS_SetImmutableArrayBuffer`,
+    /// so JavaScript code cannot write to it. The `Bytes` reference count is held for the
+    /// lifetime of the buffer, ensuring the underlying data outlives the JS object.
+    #[cfg(feature = "bytes")]
+    pub fn new_from_bytes(ctx: Ctx<'js>, bytes: bytes::Bytes) -> Result<Self> {
+        let ptr = bytes.as_ptr() as *mut u8;
+        let len = bytes.len();
+        let opaque = Box::into_raw(Box::new(bytes)) as *mut c_void;
+
+        extern "C" fn free_bytes(_rt: *mut qjs::JSRuntime, opaque: *mut c_void, _ptr: *mut c_void) {
+            unsafe { drop(Box::from_raw(opaque as *mut bytes::Bytes)) };
+        }
+
+        Ok(Self(Object(unsafe {
+            let val = qjs::JS_NewArrayBuffer(
+                ctx.as_ptr(),
+                ptr,
+                len as _,
+                Some(free_bytes),
+                opaque,
+                false,
+            );
+            ctx.handle_exception(val).inspect_err(|_| {
+                drop(Box::from_raw(opaque as *mut bytes::Bytes));
+            })?;
+            qjs::JS_SetImmutableArrayBuffer(val, true);
             Value::from_js_value(ctx, val)
         })))
     }
@@ -229,6 +263,13 @@ impl<'js> IntoJs<'js> for ArrayBuffer<'js> {
     }
 }
 
+#[cfg(feature = "bytes")]
+impl<'js> IntoJs<'js> for bytes::Bytes {
+    fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        ArrayBuffer::new_from_bytes(ctx.clone(), self).map(|ab| ab.into_value())
+    }
+}
+
 impl<'js> Object<'js> {
     /// Returns whether the object is an instance of [`ArrayBuffer`].
     pub fn is_array_buffer(&self) -> bool {
@@ -326,6 +367,61 @@ mod test {
                 .unwrap();
             assert_eq!(res, 0);
         })
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn from_bytes_zero_copy() {
+        test_with(|ctx| {
+            let b = bytes::Bytes::from_static(b"\x01\x02\x03\x04");
+            let val = ArrayBuffer::new_from_bytes(ctx.clone(), b).unwrap();
+            assert_eq!(val.len(), 4);
+            assert_eq!(val.as_bytes().unwrap(), &[1u8, 2, 3, 4]);
+        });
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn from_bytes_is_immutable() {
+        test_with(|ctx| {
+            let b = bytes::Bytes::from_static(b"\x01\x02\x03\x04");
+            let val = ArrayBuffer::new_from_bytes(ctx.clone(), b).unwrap();
+            ctx.globals().set("buf", val).unwrap();
+            // Writes to an immutable ArrayBuffer are silently ignored
+            let res: u32 = ctx
+                .eval(
+                    r#"
+                        let v = new Uint8Array(buf);
+                        v[0] = 99;
+                        v[0]
+                    "#,
+                )
+                .unwrap();
+            assert_eq!(res, 1, "write to immutable buffer should be ignored");
+        });
+    }
+
+    #[cfg(feature = "bytes")]
+    #[test]
+    fn bytes_into_js() {
+        test_with(|ctx| {
+            let b = bytes::Bytes::copy_from_slice(b"\xCA\xFE\xBE\xEF");
+            ctx.globals().set("buf", b).unwrap();
+            let res: i8 = ctx
+                .eval(
+                    r#"
+                        let v = new Uint8Array(buf);
+                        v.length != 4 ? 1 :
+                        v[0] != 0xCA ? 2 :
+                        v[1] != 0xFE ? 3 :
+                        v[2] != 0xBE ? 4 :
+                        v[3] != 0xEF ? 5 :
+                        0
+                    "#,
+                )
+                .unwrap();
+            assert_eq!(res, 0);
+        });
     }
 
     #[test]

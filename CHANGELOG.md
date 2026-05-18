@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `RQUICKJS_SYS_NO_WASI_SDK` env variable that skips downloading and setting up the WASI SDK when set to `1` #[648](https://github.com/DelSkayn/rquickjs/pull/648)
 - Added `Object::new_proto` for creating objects with a custom or null prototype #[572](https://github.com/DelSkayn/rquickjs/issues/572)
 - Added `Symbol::new`, `Symbol::with_description`, and `Symbol::new_global` for creating local and global symbols from Rust #[672](https://github.com/DelSkayn/rquickjs/pull/672)
+- Added `ArrayBuffer::new_from_bytes` for creating `ArrayBuffer` from `bytes::Bytes`
 
 ### Changed
 
@@ -49,11 +50,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed iterators to use correct IteratorPrototype chain
 - Fixed a latent ABI layout vulnerability in `JS_NewPromiseCapability` FFI boundary by replacing tuple with strictly compatible array
 - `#[rquickjs::class]` now rejects fields whose type implements `JsClass` with a clear compile error; such fields silently dropped nested mutations because the generated getter cloned the value. Wrap the field in `Class<'js, T>` instead #[532](https://github.com/DelSkayn/rquickjs/issues/532)
-<<<<<<< fix/missing-trace-impls
-- Added missing `Trace` implementations for `Constructor`, `Promise`, `Proxy`, `ArrayBuffer`, and `TypedArray`; added `JsLifetime` for `Proxy`; re-exported `Constructor` at the crate root
-=======
+  <<<<<<< fix/missing-trace-impls
+- # Added missing `Trace` implementations for `Constructor`, `Promise`, `Proxy`, `ArrayBuffer`, and `TypedArray`; added `JsLifetime` for `Proxy`; re-exported `Constructor` at the crate root
 - Fixed `#[qjs(static, rename = PredefinedAtom::...)]` methods failing when the target symbol exists as a non-writable property on `Function.prototype` (e.g. `Symbol.hasInstance`) by defining properties directly on the constructor instead of going through the prototype chain #[315](https://github.com/DelSkayn/rquickjs/issues/315)
->>>>>>> master
+  > > > > > > > master
 - Fixed `#[qjs(static, get/set)]` accessors being placed on the class prototype instead of the constructor #[478](https://github.com/DelSkayn/rquickjs/issues/478)
 - Fixed `Runtime::set_max_stack_size` crashing on large values (e.g. `usize::MAX`) by clamping to avoid a pointer underflow inside QuickJS's stack limit check #[437](https://github.com/DelSkayn/rquickjs/issues/437)
 
