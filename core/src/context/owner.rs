@@ -14,12 +14,25 @@ pub(crate) trait DropContext: Clone {
 #[cfg(feature = "parallel")]
 unsafe impl<R: Send + DropContext> Send for ContextOwner<R> {}
 
+/// Newtype so `Arc<CtxPtr>` is `Send + Sync` without tripping
+/// `clippy::arc_with_non_send_sync`. Access to the underlying QuickJS context
+/// is protected by the runtime lock, so sharing the pointer between threads
+/// is sound as long as callers go through `ContextOwner`.
+#[cfg(feature = "parallel")]
+#[repr(transparent)]
+pub(crate) struct CtxPtr(pub(crate) NonNull<qjs::JSContext>);
+
+#[cfg(feature = "parallel")]
+unsafe impl Send for CtxPtr {}
+#[cfg(feature = "parallel")]
+unsafe impl Sync for CtxPtr {}
+
 /// Struct in charge of dropping contexts when they go out of scope
 pub(crate) struct ContextOwner<R: DropContext> {
     #[cfg(not(feature = "parallel"))]
     ctx: NonNull<qjs::JSContext>,
     #[cfg(feature = "parallel")]
-    pub(crate) ctx: Arc<NonNull<qjs::JSContext>>,
+    pub(crate) ctx: Arc<CtxPtr>,
     pub(crate) rt: R,
 }
 
@@ -31,7 +44,7 @@ impl<R: DropContext> ContextOwner<R> {
     #[cfg(feature = "parallel")]
     pub(crate) unsafe fn new(ctx: NonNull<qjs::JSContext>, rt: R) -> Self {
         Self {
-            ctx: Arc::new(ctx),
+            ctx: Arc::new(CtxPtr(ctx)),
             rt,
         }
     }
@@ -43,7 +56,7 @@ impl<R: DropContext> ContextOwner<R> {
 
     #[cfg(feature = "parallel")]
     pub(crate) fn ctx(&self) -> NonNull<qjs::JSContext> {
-        *self.ctx
+        self.ctx.0
     }
 
     pub(crate) fn rt(&self) -> &R {
