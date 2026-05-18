@@ -53,6 +53,7 @@ pub const JS_DUMP_MEM: u32 = 65536;
 pub const JS_DUMP_OBJECTS: u32 = 131072;
 pub const JS_DUMP_ATOMS: u32 = 262144;
 pub const JS_DUMP_SHAPES: u32 = 524288;
+pub const JS_ABORT_ON_LEAKS: u32 = 1097728;
 pub const JS_ATOM_NULL: u32 = 0;
 pub const JS_CALL_FLAG_CONSTRUCTOR: u32 = 1;
 pub const JS_EVAL_OPTIONS_VERSION: u32 = 1;
