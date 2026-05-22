@@ -93,9 +93,9 @@ macro_rules! wrapper_impls {
     };
 
     (@flag $flag:ident) => { wrapper_impls!{@_flag $flag} as PropertyFlags };
-    (@_flag configurable) => { qjs::JS_PROP_CONFIGURABLE };
-    (@_flag enumerable) => { qjs::JS_PROP_ENUMERABLE };
-    (@_flag writable) => { qjs::JS_PROP_WRITABLE };
+    (@_flag configurable) => { qjs::JS_PROP_CONFIGURABLE | qjs::JS_PROP_HAS_CONFIGURABLE };
+    (@_flag enumerable) => { qjs::JS_PROP_ENUMERABLE | qjs::JS_PROP_HAS_ENUMERABLE };
+    (@_flag writable) => { qjs::JS_PROP_WRITABLE | qjs::JS_PROP_HAS_WRITABLE };
     (@_flag value) => { qjs::JS_PROP_HAS_VALUE };
     (@_flag get) => { qjs::JS_PROP_HAS_GET };
     (@_flag set) => { qjs::JS_PROP_HAS_SET };
@@ -372,6 +372,38 @@ mod test {
             let keys: Vec<StdString> = obj.keys().collect::<Result<_>>().unwrap();
             assert_eq!(keys.len(), 1);
             assert_eq!(&keys[0], "key");
+        });
+    }
+
+    #[test]
+    fn property_redefine_make_enumerable() {
+        test_with(|ctx| {
+            let obj = Object::new(ctx).unwrap();
+            // Start non-enumerable, configurable so we're allowed to redefine.
+            obj.prop("key", Property::from("a").configurable()).unwrap();
+            let keys: Vec<StdString> = obj.keys().collect::<Result<_>>().unwrap();
+            assert!(keys.is_empty(), "should start non-enumerable");
+            // Redefine with enumerable; without JS_PROP_HAS_ENUMERABLE this used
+            // to silently keep the existing non-enumerable attribute.
+            obj.prop("key", Property::from("b").enumerable().configurable())
+                .unwrap();
+            let keys: Vec<StdString> = obj.keys().collect::<Result<_>>().unwrap();
+            assert_eq!(keys, ["key".to_string()]);
+        });
+    }
+
+    #[test]
+    fn property_redefine_make_writable() {
+        test_with(|ctx| {
+            let obj = Object::new(ctx).unwrap();
+            // Start non-writable, configurable.
+            obj.prop("key", Property::from("a").configurable()).unwrap();
+            // Redefine with writable; this used to be ignored.
+            obj.prop("key", Property::from("b").writable().configurable())
+                .unwrap();
+            obj.set("key", "c").unwrap();
+            let s: StdString = obj.get("key").unwrap();
+            assert_eq!(s, "c");
         });
     }
 
