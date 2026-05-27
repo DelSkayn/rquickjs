@@ -9,7 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)\
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.12.0] - 2026-05-26
+
+### Breaking Changes
+
+- Added import attributes to the Loader trait #[601](https://github.com/DelSkayn/rquickjs/pull/601)
 - Added half support (f16) for Float16Array # [662](https://github.com/DelSkayn/rquickjs/pull/662)
 - `Value::new_big_int` now returns `Result<Value>` so QuickJS allocation failures are surfaced to the caller #[585](https://github.com/DelSkayn/rquickjs/issues/585)
 
@@ -25,6 +41,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `Object::new_proto` for creating objects with a custom or null prototype #[572](https://github.com/DelSkayn/rquickjs/issues/572)
 - Added `Symbol::new`, `Symbol::with_description`, and `Symbol::new_global` for creating local and global symbols from Rust #[672](https://github.com/DelSkayn/rquickjs/pull/672)
 - Added `ArrayBufferSource` trait and `ArrayBuffer::from_source` / `from_source_shared` / `from_source_immutable` safe constructors for wrapping external, caller-owned buffers, with built-in impls for `Vec<u8>`, `Box<[u8]>`, `Arc<[u8]>`, `Arc<Vec<u8>>`, and (behind the `bytes` feature) `bytes::Bytes`
+- Add pre-generated bindings for `armv7-unknown-linux-gnueabihf`
+- Add pre-generated bindings for `powerpc64-unknown-linux-gnu`
 
 ### Changed
 
@@ -34,11 +52,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Deprecated
 
 - Deprecated `async_with!` macro #[602](https://github.com/DelSkayn/rquickjs/pull/602)
-
-### Added
-
-- Add pre-generated bindings for `armv7-unknown-linux-gnueabihf`
-- Add pre-generated bindings for `powerpc64-unknown-linux-gnu`
 
 ### Fixed
 
