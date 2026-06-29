@@ -240,14 +240,16 @@ impl<'js> Constructor<'js> {
     where
         F: IntoJsFunc<'js, P> + 'js,
     {
-        let proto_clone = prototype.clone();
         let func = Box::new(move |params: Params<'_, 'js>| -> Result<Value<'js>> {
             params.check_params(F::param_requirements())?;
             let this = params.this();
+
             let proto = this
-                .as_function()
+                .into_function()
+                .or_else(|| params.function().into_function())
                 .map(|func| func.get(PredefinedAtom::Prototype))
-                .unwrap_or_else(|| Ok(Some(proto_clone.clone())))?;
+                .transpose()?
+                .flatten();
 
             let res = f.call(params)?;
             res.as_object()
@@ -815,6 +817,32 @@ mod test {
                 .unwrap();
             let n: u32 = ctx.eval("log(\"foo\") + log(\"bar\")").unwrap();
             assert_eq!(n, 3);
+        });
+    }
+
+    #[test]
+    fn constructor_new_prototype_no_leak() {
+        use crate::function::Constructor;
+
+        // Creating a constructor via `new_prototype` used to capture an owned clone of the
+        // prototype inside the constructor closure. Combined with the
+        // `prototype.constructor = func` wiring done by `JS_SetConstructor`, that formed a
+        // reference cycle the GC could not collect, which tripped the
+        // `list_empty(&rt->gc_obj_list)` assertion in `JS_FreeRuntime` when the runtime was
+        // dropped. This test reproduces that teardown (the runtime is dropped at the end of
+        // `test_with`) and must shut down cleanly.
+        test_with(|ctx| {
+            fn make<'js>(ctx: Ctx<'js>) -> Result<Object<'js>> {
+                Object::new(ctx)
+            }
+            let proto = Object::new(ctx.clone()).unwrap();
+            let ctor = Constructor::new_prototype(&ctx, proto, make).unwrap();
+            ctx.globals().set("Foo", ctor).unwrap();
+
+            // Mirror real usage: actually construct an instance and verify its prototype is
+            // wired up correctly via the fallback path.
+            let is_instance: bool = ctx.eval("var f = new Foo(); f instanceof Foo").unwrap();
+            assert!(is_instance);
         });
     }
 }
