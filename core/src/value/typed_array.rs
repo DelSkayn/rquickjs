@@ -23,6 +23,47 @@ pub trait TypedArrayItem: Copy {
     const ARRAY_TYPE: qjs::JSTypedArrayEnum;
 }
 
+/// The class of a JavaScript `TypedArray`.
+///
+/// Unlike [`TypedArrayItem`], this covers every typed array class the engine
+/// supports, including `Uint8ClampedArray` (which shares its element type with
+/// `Uint8Array` and so has no distinct [`TypedArrayItem`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TypedArrayType {
+    Int8,
+    Uint8,
+    Uint8Clamped,
+    Int16,
+    Uint16,
+    Int32,
+    Uint32,
+    BigInt64,
+    BigUint64,
+    Float16,
+    Float32,
+    Float64,
+}
+
+impl TypedArrayType {
+    fn from_raw(array_type: qjs::JSTypedArrayEnum) -> Option<Self> {
+        Some(match array_type {
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT8 => Self::Int8,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8 => Self::Uint8,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C => Self::Uint8Clamped,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT16 => Self::Int16,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT16 => Self::Uint16,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_INT32 => Self::Int32,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT32 => Self::Uint32,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_INT64 => Self::BigInt64,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64 => Self::BigUint64,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16 => Self::Float16,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT32 => Self::Float32,
+            qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT64 => Self::Float64,
+            _ => return None,
+        })
+    }
+}
+
 macro_rules! typedarray_items {
     ($($name:ident: $type:ty, $array_type:expr,)*) => {
         $(impl TypedArrayItem for $type {
@@ -341,6 +382,21 @@ impl<'js> Object<'js> {
         false
     }
 
+    /// Returns the [`TypedArrayType`] of this object, or `None` if it is not a
+    /// typed array.
+    ///
+    /// Unlike [`is_typed_array`](Self::is_typed_array), this reports the class
+    /// for every typed array, including `Uint8ClampedArray`.
+    pub fn typed_array_type(&self) -> Option<TypedArrayType> {
+        let array_type = unsafe { qjs::JS_GetTypedArrayType(self.value) };
+        if array_type < 0 {
+            return None;
+        }
+        TryInto::<qjs::JSTypedArrayEnum>::try_into(array_type)
+            .ok()
+            .and_then(TypedArrayType::from_raw)
+    }
+
     /// Interpret as [`TypedArray`]
     ///
     /// # Safety
@@ -467,6 +523,38 @@ mod test {
 
             let obj = Object::new(ctx).unwrap();
             assert!(!obj.is_typed_array::<u8>());
+        });
+    }
+
+    #[test]
+    fn typed_array_type() {
+        test_with(|ctx| {
+            let cases = [
+                ("new Uint8Array(1)", TypedArrayType::Uint8),
+                ("new Uint8ClampedArray(1)", TypedArrayType::Uint8Clamped),
+                ("new Int8Array(1)", TypedArrayType::Int8),
+                ("new Uint16Array(1)", TypedArrayType::Uint16),
+                ("new Int16Array(1)", TypedArrayType::Int16),
+                ("new Uint32Array(1)", TypedArrayType::Uint32),
+                ("new Int32Array(1)", TypedArrayType::Int32),
+                ("new BigInt64Array(1)", TypedArrayType::BigInt64),
+                ("new BigUint64Array(1)", TypedArrayType::BigUint64),
+                ("new Float32Array(1)", TypedArrayType::Float32),
+                ("new Float64Array(1)", TypedArrayType::Float64),
+            ];
+            for (src, expected) in cases {
+                let obj: Object = ctx.eval(src).unwrap();
+                assert_eq!(obj.typed_array_type(), Some(expected), "{src}");
+            }
+
+            // Uint8ClampedArray is not exposed as a `TypedArray<T>` but is still
+            // reported here, unlike `is_typed_array`.
+            let clamped: Object = ctx.eval("new Uint8ClampedArray(1)").unwrap();
+            assert!(!clamped.is_typed_array::<u8>());
+
+            let non_array: Object = ctx.eval("new DataView(new ArrayBuffer(1))").unwrap();
+            assert_eq!(non_array.typed_array_type(), None);
+            assert_eq!(Object::new(ctx).unwrap().typed_array_type(), None);
         });
     }
 
