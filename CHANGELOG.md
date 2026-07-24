@@ -19,9 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed `rquickjs-sys` host build failing during cross-compilation by reusing bundled bindings for the host target instead of running bindgen with a mismatched `libclang` #[709](https://github.com/DelSkayn/rquickjs/issues/709)
-
 ### Security
+
+## [0.13.0] - 2026-07-24
+
+### Added
+
+- Added `TypedArray<U8Clamped>` support for `Uint8ClampedArray`, obtainable via `TypedArray::from_object` and matched by `is_typed_array` like other typed array classes
+
+### Fixed
+
+- Fixed `rquickjs-sys` host build failing during cross-compilation by reusing bundled bindings for the host target instead of running bindgen with a mismatched `libclang` #[709](https://github.com/DelSkayn/rquickjs/issues/709)
 
 ## [0.12.1] - 2026-06-29
 
