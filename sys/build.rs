@@ -304,6 +304,28 @@ where
     let out_dir = out_dir.as_ref();
     let header_file = header_file.as_ref();
 
+    let target = env::var("TARGET").unwrap();
+    let host = env::var("HOST").unwrap();
+
+    // When cross-compiling with the `macro` feature, sys also gets built for the host.
+    // If LIBCLANG_PATH points at the cross toolchain (e.g. Android NDK), that host build
+    // generates mismatched bindings, so reuse the bundled binding for the host instead.
+    // `update-bindings` still regenerates.
+    if target == host && env::var("CARGO_FEATURE_UPDATE_BINDINGS").is_err() {
+        let bundled = Path::new("src")
+            .join("bindings")
+            .join(format!("{}.rs", target));
+        if bundled.exists() {
+            println!(
+                "cargo:warning=using bundled bindings for host target `{}` instead of running bindgen (enable the `update-bindings` feature to regenerate)",
+                target
+            );
+            fs::copy(&bundled, out_dir.join("bindings.rs"))
+                .expect("Unable to copy bundled bindings");
+            return;
+        }
+    }
+
     let mut cflags = add_cflags;
 
     //format!("-I{}", out_dir.parent().display()),
