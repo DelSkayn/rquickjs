@@ -47,6 +47,36 @@ typedarray_items! {
     BigUint64Array: u64, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_BIG_UINT64,
 }
 
+/// Element type for [`TypedArray`] over a `Uint8ClampedArray`.
+///
+/// `Uint8ClampedArray` stores `u8` values but is a distinct class from
+/// `Uint8Array`. This one-byte marker lets it be represented as
+/// `TypedArray<U8Clamped>`, since a bare `u8` already maps to `Uint8Array`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Default)]
+#[repr(transparent)]
+pub struct U8Clamped(pub u8);
+
+impl TypedArrayItem for U8Clamped {
+    const CLASS_NAME: PredefinedAtom = PredefinedAtom::Uint8ClampedArray;
+    const ARRAY_TYPE: qjs::JSTypedArrayEnum = qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_UINT8C;
+}
+
+unsafe impl<'js> JsLifetime<'js> for U8Clamped {
+    type Changed<'to> = U8Clamped;
+}
+
+impl From<u8> for U8Clamped {
+    fn from(value: u8) -> Self {
+        Self(value)
+    }
+}
+
+impl From<U8Clamped> for u8 {
+    fn from(value: U8Clamped) -> Self {
+        value.0
+    }
+}
+
 #[cfg(feature = "half")]
 typedarray_items! {
     Float16Array: half::f16, qjs::JSTypedArrayEnum_JS_TYPED_ARRAY_FLOAT16,
@@ -62,6 +92,7 @@ typedarray_items! {
 /// | `Uint16Array`      | [`TypedArray<u16>`]   |
 /// | `Int32Array`       | [`TypedArray<i32>`]   |
 /// | `Uint32Array`      | [`TypedArray<u32>`]   |
+/// | `Uint8ClampedArray` | [`TypedArray<U8Clamped>`] |
 /// | `Float32Array`     | [`TypedArray<f32>`]   |
 /// | `Float64Array`     | [`TypedArray<f64>`]   |
 /// | `BigInt64Array`    | [`TypedArray<i64>`]   |
@@ -467,6 +498,42 @@ mod test {
 
             let obj = Object::new(ctx).unwrap();
             assert!(!obj.is_typed_array::<u8>());
+        });
+    }
+
+    #[test]
+    fn clamped_array() {
+        test_with(|ctx| {
+            // Uint8ClampedArray is a distinct class from Uint8Array.
+            let val: TypedArray<U8Clamped> =
+                ctx.eval("new Uint8ClampedArray([0, 300, 11])").unwrap();
+            assert_eq!(val.len(), 3);
+            // Values are clamped to the 0..=255 range by the engine.
+            assert_eq!(
+                AsRef::<[U8Clamped]>::as_ref(&val),
+                &[U8Clamped(0), U8Clamped(255), U8Clamped(11)]
+            );
+
+            let obj: Object = ctx.eval("new Uint8ClampedArray(1)").unwrap();
+            assert!(obj.is_typed_array::<U8Clamped>());
+            assert!(!obj.is_typed_array::<u8>());
+
+            let plain: Object = ctx.eval("new Uint8Array(1)").unwrap();
+            assert!(!plain.is_typed_array::<U8Clamped>());
+            assert!(plain.is_typed_array::<u8>());
+        });
+    }
+
+    #[test]
+    fn clamped_array_roundtrip() {
+        test_with(|ctx| {
+            let ta = TypedArray::new(ctx.clone(), [U8Clamped(1), U8Clamped(2)]).unwrap();
+            assert_eq!(ta.len(), 2);
+            assert_eq!(
+                AsRef::<[U8Clamped]>::as_ref(&ta),
+                &[U8Clamped(1), U8Clamped(2)]
+            );
+            assert!(ta.as_object().is_typed_array::<U8Clamped>());
         });
     }
 
