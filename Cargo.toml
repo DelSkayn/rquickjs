@@ -24,6 +24,8 @@ members = [
   "examples/class-methods",
   "examples/exotic",
 ]
+# builds only for wasm32-unknown-unknown and is driven by wasm-test/runner.ts
+exclude = ["wasm-test"]
 
 [workspace.dependencies]
 rquickjs-core = { version = "0.12.2", path = "core", default-features = false }
