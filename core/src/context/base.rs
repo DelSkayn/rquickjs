@@ -1,5 +1,4 @@
 use super::{
-    ctx::RefCountHeader,
     intrinsic,
     owner::{ContextOwner, DropContext},
     ContextBuilder, Intrinsic,
@@ -13,15 +12,6 @@ impl DropContext for Runtime {
         let guard = match self.inner.try_lock() {
             Some(x) => x,
             None => {
-                let p = unsafe { &mut *(ctx.as_ptr() as *mut RefCountHeader) };
-                if p.ref_count <= 1 {
-                    // Lock was poisoned, this should only happen on a panic.
-                    // We should still free the context.
-                    // TODO see if there is a way to recover from a panic which could cause the
-                    // following assertion to trigger
-                    #[cfg(feature = "std")]
-                    assert!(std::thread::panicking());
-                }
                 unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
                 return;
             }
@@ -263,10 +253,9 @@ mod test {
         println!("done");
     }
 
-    // Will be improved by https://github.com/quickjs-ng/quickjs/pull/406
     #[test]
     #[should_panic(
-        expected = "Error: invalid first character of private name\n    at eval_script:1:1\n"
+        expected = "Error: invalid first character of private name\n    at eval_script:1:5\n"
     )]
     fn exception() {
         test_with(|ctx| {
