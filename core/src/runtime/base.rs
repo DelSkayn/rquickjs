@@ -239,4 +239,95 @@ mod test {
             ctx.eval::<i32, _>("1 + 1").unwrap();
         });
     }
+
+    #[test]
+    fn context_dropped_while_lock_held() {
+        let rt = Runtime::new().unwrap();
+        let ctx1 = crate::Context::full(&rt).unwrap();
+        let ctx2 = crate::Context::full(&rt).unwrap();
+
+        ctx1.with(|_| {
+            drop(ctx2);
+        });
+    }
+
+    #[test]
+    #[cfg(feature = "parallel")]
+    fn context_drop_waits_for_other_thread() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::{Arc, Barrier};
+        use std::{thread, time::Duration};
+
+        let rt = Runtime::new().unwrap();
+        let ctx1 = crate::Context::full(&rt).unwrap();
+        let ctx2 = crate::Context::full(&rt).unwrap();
+
+        let holding = Arc::new(AtomicBool::new(false));
+        let barrier = Arc::new(Barrier::new(2));
+
+        let holding_holder = holding.clone();
+        let barrier_holder = barrier.clone();
+        let holder = thread::spawn(move || {
+            ctx1.with(|_| {
+                holding_holder.store(true, Ordering::SeqCst);
+                barrier_holder.wait();
+                thread::sleep(Duration::from_millis(200));
+                holding_holder.store(false, Ordering::SeqCst);
+            });
+        });
+
+        barrier.wait();
+        drop(ctx2);
+        // Dropping had to wait for the lock; had it freed the context without
+        // it, the holder thread would still be inside `with`.
+        assert!(!holding.load(Ordering::SeqCst));
+
+        holder.join().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "parallel")]
+    fn held_lock_is_not_observable_from_another_thread() {
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let lock = Arc::new(crate::Mut::new(0u32));
+        let barrier = Arc::new(Barrier::new(2));
+
+        let lock_holder = lock.clone();
+        let barrier_holder = barrier.clone();
+        let holder = thread::spawn(move || {
+            let guard = lock_holder.lock();
+            barrier_holder.wait();
+            barrier_holder.wait();
+            drop(guard);
+        });
+
+        barrier.wait();
+        assert!(!lock.is_locked_by_current_thread());
+        barrier.wait();
+
+        holder.join().unwrap();
+    }
+
+    #[test]
+    #[cfg(feature = "parallel")]
+    fn leaked_guard_does_not_leak_into_other_threads() {
+        use std::thread;
+
+        let lock = crate::Mut::new(0u32);
+        // A guard that never runs its destructor leaves this thread's
+        // bookkeeping stale on purpose.
+        core::mem::forget(lock.try_lock().unwrap());
+        assert!(lock.is_locked_by_current_thread());
+
+        // A different thread must not inherit that state, however its
+        // thread-local storage happens to be laid out.
+        let seen = thread::scope(|s| {
+            s.spawn(|| lock.is_locked_by_current_thread())
+                .join()
+                .unwrap()
+        });
+        assert!(!seen);
+    }
 }
