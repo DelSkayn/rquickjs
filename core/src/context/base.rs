@@ -10,6 +10,13 @@ use core::{mem, ptr::NonNull};
 impl DropContext for Runtime {
     unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>) {
         //TODO
+        // `try_lock` blocks under `parallel`, so a re-entrant drop on this
+        // thread would deadlock on itself.
+        #[cfg(feature = "parallel")]
+        if self.inner.is_locked_by_current_thread() {
+            unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
+            return;
+        }
         let guard = match self.inner.try_lock() {
             Some(x) => x,
             None => {
