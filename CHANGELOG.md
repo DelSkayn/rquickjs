@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Updated `sys/quickjs` to `10b9969` and fixed `ArrayBuffer::new`/`from_source*` for the new `JS_NewArrayBuffer` signature
+- Fixed `Context`/`AsyncContext` leaking when dropped while the runtime lock is held
+
 ### Security
 
 ## [0.12.2] - 2026-07-27

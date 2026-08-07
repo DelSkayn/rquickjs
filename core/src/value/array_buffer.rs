@@ -94,12 +94,19 @@ impl<'js> ArrayBuffer<'js> {
         let capacity = src.capacity();
         let size = src.len() * size_of::<T>();
 
-        extern "C" fn drop_raw<T>(_rt: *mut qjs::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
+        extern "C" fn drop_raw<T>(
+            _rt: *mut qjs::JSRuntime,
+            opaque: *mut c_void,
+            ptr: *mut c_void,
+            size: qjs::size_t,
+        ) -> *mut c_void {
+            debug_assert_eq!(size, 0, "realloc is not supported for fixed-length buffers");
             let ptr = ptr as *mut T;
             let capacity = opaque as usize;
             // reconstruct vector in order to free data
             // the length of actual data does not matter for copyable types
             unsafe { Vec::from_raw_parts(ptr, capacity, capacity) };
+            core::ptr::null_mut()
         }
 
         Ok(Self(Object(unsafe {
@@ -107,6 +114,8 @@ impl<'js> ArrayBuffer<'js> {
                 ctx.as_ptr(),
                 ptr as _,
                 size as _,
+                // fixed-length buffer, not resizable
+                0,
                 Some(drop_raw::<T>),
                 capacity as _,
                 false,
@@ -197,11 +206,14 @@ impl<'js> ArrayBuffer<'js> {
             _rt: *mut qjs::JSRuntime,
             opaque: *mut c_void,
             _ptr: *mut c_void,
-        ) {
+            size: qjs::size_t,
+        ) -> *mut c_void {
+            debug_assert_eq!(size, 0, "realloc is not supported for fixed-length buffers");
             unsafe {
                 let boxed: Box<F> = Box::from_raw(opaque as *mut F);
                 (*boxed)();
             }
+            core::ptr::null_mut()
         }
 
         let opaque = Box::into_raw(Box::new(drop_fn)) as *mut c_void;
@@ -211,12 +223,19 @@ impl<'js> ArrayBuffer<'js> {
                 ctx.as_ptr(),
                 ptr,
                 len as _,
+                // fixed-length buffer, not resizable
+                0,
                 Some(shim::<F>),
                 opaque,
                 is_shared,
             );
             if let Err(e) = ctx.handle_exception(val) {
-                shim::<F>(qjs::JS_GetRuntime(ctx.as_ptr()), opaque, ptr as *mut c_void);
+                shim::<F>(
+                    qjs::JS_GetRuntime(ctx.as_ptr()),
+                    opaque,
+                    ptr as *mut c_void,
+                    0,
+                );
                 return Err(e);
             }
             if immutable {

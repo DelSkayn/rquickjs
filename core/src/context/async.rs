@@ -85,16 +85,6 @@ impl DropContext for AsyncRuntime {
             None => {
                 #[cfg(not(feature = "parallel"))]
                 {
-                    let p =
-                        unsafe { &mut *(ctx.as_ptr() as *mut crate::context::ctx::RefCountHeader) };
-                    if p.ref_count <= 1 {
-                        // Lock was poisoned, this should only happen on a panic.
-                        // We should still free the context.
-                        // TODO see if there is a way to recover from a panic which could cause the
-                        // following assertion to trigger
-                        #[cfg(feature = "std")]
-                        assert!(std::thread::panicking());
-                    }
                     unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
                     return;
                 }
