@@ -1,10 +1,14 @@
 #![allow(dead_code, unused_imports)]
+#[cfg(feature = "parallel")]
+use alloc::vec::Vec;
 use alloc::{boxed::Box, ffi::CString};
 use core::{mem, panic::AssertUnwindSafe, ptr::NonNull, result::Result as StdResult};
 
 use rquickjs_sys::JSPromiseHookType;
 
 use crate::allocator::{Allocator, AllocatorHolder};
+#[cfg(feature = "parallel")]
+use crate::context::owner::CtxPtr;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
 use crate::{
@@ -115,6 +119,44 @@ pub(crate) struct RawRuntime {
     #[cfg(feature = "loader")]
     #[allow(dead_code)]
     pub loader: Option<LoaderHolder>,
+
+    #[cfg(feature = "parallel")]
+    pub(crate) pending_free: PendingFree,
+}
+
+/// Contexts whose `JS_FreeContext` could not be run at drop time because the
+/// runtime lock was contended. The pointer is parked here and drained by
+/// whoever next holds the lock, or by `RawRuntime::drop`.
+#[cfg(feature = "parallel")]
+#[derive(Clone, Default)]
+pub(crate) struct PendingFree(std::sync::Arc<std::sync::Mutex<Vec<CtxPtr>>>);
+
+#[cfg(feature = "parallel")]
+impl core::fmt::Debug for PendingFree {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("PendingFree")
+    }
+}
+
+#[cfg(feature = "parallel")]
+impl PendingFree {
+    pub(crate) fn push(&self, ctx: NonNull<qjs::JSContext>) {
+        if let Ok(mut queued) = self.0.lock() {
+            queued.push(CtxPtr(ctx));
+        }
+    }
+
+    /// # Safety
+    /// The caller must hold the runtime lock.
+    pub(crate) unsafe fn drain(&self) {
+        let taken = match self.0.lock() {
+            Ok(mut queued) => mem::take(&mut *queued),
+            Err(_) => return,
+        };
+        for CtxPtr(ctx) in taken {
+            unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
+        }
+    }
 }
 
 #[cfg(feature = "parallel")]
@@ -123,6 +165,8 @@ unsafe impl Send for RawRuntime {}
 impl Drop for RawRuntime {
     fn drop(&mut self) {
         unsafe {
+            #[cfg(feature = "parallel")]
+            self.pending_free.drain();
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
             let mut opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
             opaque.clear();
@@ -160,6 +204,8 @@ impl RawRuntime {
             allocator: None,
             #[cfg(feature = "loader")]
             loader: None,
+            #[cfg(feature = "parallel")]
+            pending_free: PendingFree::default(),
         })
     }
 
@@ -188,6 +234,8 @@ impl RawRuntime {
             allocator: Some(allocator),
             #[cfg(feature = "loader")]
             loader: None,
+            #[cfg(feature = "parallel")]
+            pending_free: PendingFree::default(),
         })
     }
 

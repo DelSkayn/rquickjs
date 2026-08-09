@@ -49,7 +49,7 @@ impl<T: ?Sized> Mut<T> {
 
         #[cfg(feature = "parallel")]
         {
-            self.0.lock().ok()
+            self.0.try_lock().ok()
         }
     }
 }

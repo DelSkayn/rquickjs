@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed deadlock when dropping a `Context` while the runtime lock is held under the `parallel` feature
+
 ### Security
 
 ## [0.12.2] - 2026-07-27
