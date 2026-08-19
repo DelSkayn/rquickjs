@@ -324,12 +324,32 @@ impl AsyncRuntime {
             }
 
             match lock.runtime.get_opaque().poll(cx) {
-                TaskPoll::Empty => Poll::Ready(()),
+                TaskPoll::Empty => {
+                    // A task may have enqueued a new JS job (e.g. an I/O
+                    // callback resolving a promise) as it completed. If so,
+                    // loop again to drain it rather than reporting done.
+                    if lock.runtime.is_job_pending() {
+                        cx.waker().wake_by_ref();
+                        Poll::Pending
+                    } else {
+                        Poll::Ready(())
+                    }
+                }
                 TaskPoll::Progress => {
                     cx.waker().wake_by_ref();
                     Poll::Pending
                 }
-                TaskPoll::Pending => Poll::Pending,
+                TaskPoll::Pending => {
+                    // A still-pending task (e.g. a socket listener) may have
+                    // run a JS callback that enqueued a new promise job. That
+                    // enqueue does not wake the task-queue waker, so without
+                    // this check the loop would park with work outstanding
+                    // and never resume.
+                    if lock.runtime.is_job_pending() {
+                        cx.waker().wake_by_ref();
+                    }
+                    Poll::Pending
+                }
             }
         })
         .await
