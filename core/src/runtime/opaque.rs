@@ -54,7 +54,7 @@ pub(crate) struct Opaque<'js> {
     userdata: UserDataMap,
 
     #[cfg(feature = "futures")]
-    queue: Option<UnsafeCell<TaskQueue>>,
+    queue: Option<TaskQueue>,
 
     exotic_methods: ExoticMethodsHolder,
 
@@ -92,7 +92,7 @@ impl<'js> Opaque<'js> {
     #[cfg(feature = "futures")]
     pub fn with_spawner() -> Self {
         let mut this = Opaque::new();
-        this.queue = Some(UnsafeCell::new(TaskQueue::new()));
+        this.queue = Some(TaskQueue::new());
         this
     }
 
@@ -145,7 +145,7 @@ impl<'js> Opaque<'js> {
     }
 
     #[cfg(feature = "futures")]
-    fn queue(&self) -> &UnsafeCell<TaskQueue> {
+    fn queue(&self) -> &TaskQueue {
         self.queue
             .as_ref()
             .expect("tried to use async function in non async runtime")
@@ -156,17 +156,17 @@ impl<'js> Opaque<'js> {
     where
         F: Future<Output = ()>,
     {
-        (*self.queue().get()).push(f)
+        self.queue().push(f)
     }
 
     #[cfg(feature = "futures")]
     pub fn spawner_is_empty(&self) -> bool {
-        unsafe { (*self.queue().get()).is_empty() }
+        self.queue().is_empty()
     }
 
     #[cfg(feature = "futures")]
     pub fn poll(&self, cx: &mut Context) -> TaskPoll {
-        unsafe { (*self.queue().get()).poll(cx) }
+        self.queue().poll(cx)
     }
 
     pub fn insert_userdata<U>(&self, data: U) -> Result<Option<Box<U>>, UserDataError<U>>
