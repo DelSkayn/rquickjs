@@ -543,11 +543,13 @@ mod tests {
         assert_eq!(polls.load(Ordering::Relaxed), 2);
     }
 
+    #[cfg(not(target_family = "wasm"))]
     struct ThreadWake {
         captured: Arc<StdMutex<Option<Waker>>>,
         ready: Arc<AtomicBool>,
     }
 
+    #[cfg(not(target_family = "wasm"))]
     impl Future for ThreadWake {
         type Output = ();
 
@@ -561,6 +563,7 @@ mod tests {
         }
     }
 
+    #[cfg(not(target_family = "wasm"))]
     #[test]
     fn waker_may_wake_from_another_thread() {
         let queue = TaskQueue::new();
