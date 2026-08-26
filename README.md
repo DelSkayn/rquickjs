@@ -121,22 +121,22 @@ Time zone data does not exist here, so scripts observe UTC: `getTimezoneOffset()
 
 ### `Runtime::set_max_stack_size` is mandatory
 
-`JS_DEFAULT_STACK_SIZE` is 1MB, which is exactly the size of the wasm shadow stack. The default computation of `stack_top - 1MB` therefore wraps, and stack-overflow detection is silently lost — deep recursion becomes a hard trap instead of a catchable `RangeError`. Always set an explicit limit:
+`JS_DEFAULT_STACK_SIZE` is 1MB, which is exactly the size of the wasm shadow stack. The default computation of `stack_top - 1MB` therefore wraps, and stack-overflow detection is silently lost: deep recursion becomes a hard trap instead of a catchable `RangeError`. Always set an explicit limit:
 
 ```rust
 let runtime = Runtime::new()?;
 runtime.set_max_stack_size(256 * 1024);
 ```
 
-(Defining `__wasi__` would also stop the wrap, but quickjs's `__wasi__` path pins `stack_limit = 0`, disabling stack checking outright. That is why this target patches the sysroot header instead.)
+(Defining `__wasi__` would also stop the wrap, but quickjs's `__wasi__` path pins `stack_limit = 0`, disabling stack checking outright. That is why the header is patched instead.)
 
 ### The sysroot
 
 The build script downloads `wasi-sysroot-24.0.tar.gz` from the [wasi-sdk-24 release](https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-24), verifies it against a pinned sha256 (`35172f7d…888f08`), and extracts it into `$CARGO_HOME/rquickjs-wasi-sysroot`. A checksum mismatch is a hard build failure.
 
-One header is then patched in place: `wasi/api.h` guards itself with `#ifndef __wasi__` / `#error`, so that `#error` is commented out. The patch is idempotent.
+`wasi/api.h` guards itself with `#ifndef __wasi__` / `#error`, so the build script writes a copy with that one `#error` commented out into `OUT_DIR` and puts it ahead of the sysroot on the include path. The sysroot itself is never modified.
 
-Set `RQUICKJS_WASM_SYSROOT` to the root of an existing wasi-sysroot to skip the download entirely. The header patch is still applied to it.
+Set `RQUICKJS_WASM_SYSROOT` to the root of an existing wasi-sysroot to skip the download entirely.
 
 ### Testing
 

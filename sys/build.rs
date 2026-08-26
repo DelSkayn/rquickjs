@@ -95,16 +95,29 @@ fn get_wasi_sdk_path() -> PathBuf {
 const WASI_SYSROOT_SHA256: &str =
     "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08";
 
+/// Does `path` look like a wasi-sysroot?
+fn is_wasi_sysroot(path: &Path) -> bool {
+    path.join("include/wasm32-wasi/wasi/api.h")
+        .try_exists()
+        .unwrap_or(false)
+}
+
 /// Root of the wasi-sysroot used for the `wasm32-unknown-unknown` target,
 /// honouring `RQUICKJS_WASM_SYSROOT` (which skips the download entirely).
 fn get_wasm_sysroot_path() -> PathBuf {
-    env::var_os("RQUICKJS_WASM_SYSROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(download_wasi_sysroot)
+    let Some(path) = env::var_os("RQUICKJS_WASM_SYSROOT").map(PathBuf::from) else {
+        return download_wasi_sysroot();
+    };
+    assert!(
+        is_wasi_sysroot(&path),
+        "RQUICKJS_WASM_SYSROOT points at {}, which is not a wasi-sysroot \
+         (no include/wasm32-wasi/wasi/api.h)",
+        path.display(),
+    );
+    path
 }
 
-/// Download and extract the pinned wasi-sysroot, then patch its one
-/// `__wasi__`-guarded header so it can be included from a non-wasi target.
+/// Download and extract the pinned wasi-sysroot.
 ///
 /// Unlike [`download_wasi_sdk`] this caches under `CARGO_HOME` rather than
 /// `OUT_DIR`: the archive is 68MB and `OUT_DIR` is wiped by `cargo clean` and
@@ -180,8 +193,6 @@ fn download_wasi_sysroot() -> PathBuf {
         }
     }
 
-    patch_wasi_api_header(&test_header);
-
     sysroot_dir
 }
 
@@ -207,36 +218,33 @@ fn verify_sha256(path: &Path, expected: &str) {
     }
 }
 
-/// `wasi/api.h` opens with an `#ifndef __wasi__` / `#error` guard. Replace the
-/// `#error` with a comment so the header can be included from
-/// `wasm32-unknown-unknown`.
+/// `wasi/api.h` opens with an `#ifndef __wasi__` / `#error` guard, so it cannot
+/// be included from `wasm32-unknown-unknown` as-is. Write a copy with that one
+/// `#error` commented out into `OUT_DIR`, and return the include directory
+/// holding it so it can be placed ahead of the sysroot on the include path.
+///
+/// The sysroot itself is left untouched: it is a shared cache, and may well be
+/// a system-wide install that `RQUICKJS_WASM_SYSROOT` points at.
 ///
 /// Defining `__wasi__` instead is *not* an option: quickjs's `__wasi__` path
 /// forces `stack_limit = 0`, disabling stack-overflow checking entirely.
-///
-/// Idempotent: reruns are a no-op once the `#error` line is gone.
-fn patch_wasi_api_header(header: &Path) {
+fn patched_wasi_headers(sysroot: &Path, out_dir: &Path) -> PathBuf {
     const MARKER: &str = "/* #error patched out by rquickjs-sys for wasm32-unknown-unknown */";
 
-    let contents = fs::read_to_string(header).expect("wasi-sysroot is missing wasi/api.h");
-    if contents.contains(MARKER) {
-        return;
-    }
+    let source = sysroot.join("include/wasm32-wasi/wasi/api.h");
+    let contents = fs::read_to_string(&source)
+        .unwrap_or_else(|err| panic!("unable to read {}: {err}", source.display()));
 
     // comment out only the `#error` directly inside the `#ifndef __wasi__`
     // guard, leaving the neighbouring `#ifndef __wasm32__` guard intact.
     let mut in_guard = false;
-    let mut patched_any = false;
     let patched = contents
         .lines()
         .map(|line| {
             match line.trim() {
                 "#ifndef __wasi__" => in_guard = true,
                 "#endif" => in_guard = false,
-                trimmed if in_guard && trimmed.starts_with("#error") => {
-                    patched_any = true;
-                    return MARKER;
-                }
+                trimmed if in_guard && trimmed.starts_with("#error") => return MARKER,
                 _ => {}
             }
             line
@@ -244,10 +252,10 @@ fn patch_wasi_api_header(header: &Path) {
         .collect::<Vec<_>>()
         .join("\n");
 
-    if !patched_any {
-        return;
-    }
-    fs::write(header, patched + "\n").expect("unable to patch wasi/api.h");
+    let include_dir = out_dir.join("wasm-include");
+    fs::create_dir_all(include_dir.join("wasi")).unwrap();
+    fs::write(include_dir.join("wasi/api.h"), patched + "\n").expect("unable to write wasi/api.h");
+    include_dir
 }
 
 fn main() {
@@ -353,7 +361,13 @@ fn main() {
         }
     }
 
-    if target_os == "wasi" {
+    // wasm32-unknown-unknown takes the same emscripten-flavoured config as wasi,
+    // but ships no libc: headers come from a wasi-sysroot include tree and the OS
+    // tail (clock, stdio, abort) is supplied by `wasm-shim/shim.c`.
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let is_wasm_unknown = target_arch == "wasm32" && target_os == "unknown";
+
+    if target_os == "wasi" || is_wasm_unknown {
         // pretend we're emscripten - there are already ifdefs that match
         // also, wasi doesn't have FE_DOWNWARD or FE_UPWARD
         defines.push(("EMSCRIPTEN".into(), Some("1")));
@@ -361,21 +375,19 @@ fn main() {
         defines.push(("FE_UPWARD".into(), Some("0")));
     }
 
-    // wasm32-unknown-unknown: same emscripten-flavored config as wasi, but the
-    // target ships no libc, so headers come from a wasi-sysroot include tree and
-    // the OS tail (clock, stdio, abort) is supplied by `wasm-shim/shim.c`.
-    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
-    let is_wasm_unknown = target_arch == "wasm32" && target_os == "unknown";
     let wasm_sysroot = is_wasm_unknown.then(|| {
         println!("cargo:rerun-if-env-changed=RQUICKJS_WASM_SYSROOT");
-        defines.push(("EMSCRIPTEN".into(), Some("1")));
-        defines.push(("FE_DOWNWARD".into(), Some("0")));
-        defines.push(("FE_UPWARD".into(), Some("0")));
         let sysroot = get_wasm_sysroot_path();
-        let include = sysroot.join("include/wasm32-wasi");
-        let flag = format!("-isystem{}", include.display());
-        builder.flag(&flag);
-        bindgen_cflags.push(flag);
+        // the patched copy of `wasi/api.h` has to shadow the sysroot's own, so
+        // its include dir goes first.
+        for dir in [
+            patched_wasi_headers(&sysroot, out_dir),
+            sysroot.join("include/wasm32-wasi"),
+        ] {
+            let flag = format!("-isystem{}", dir.display());
+            builder.flag(&flag);
+            bindgen_cflags.push(flag);
+        }
         sysroot
     });
 
