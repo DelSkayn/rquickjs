@@ -28,6 +28,9 @@ bindgen = ["bindgen-rs"]
 # Enable the versioned QuickJS JIT ABI.
 jit-abi = []
 
+# Expose generated-binding source to downstream ABI integration tests.
+jit-test-support = ["jit-abi"]
+
 # Debug logging
 logging = ["pretty_env_logger"]
 # Special case for updating bundled bindings

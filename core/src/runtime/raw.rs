@@ -34,17 +34,17 @@ const DUMP_OBJECTS: u64 = 0x20000;
 const DUMP_ATOMS: u64 = 0x40000;
 const DUMP_SHAPES: u64 = 0x80000;
 
-#[cfg(feature = "jit-abi")]
+#[cfg(feature = "jit-test-support")]
 struct RuntimeDropProbe(Option<Box<dyn FnOnce() + Send + 'static>>);
 
-#[cfg(feature = "jit-abi")]
+#[cfg(feature = "jit-test-support")]
 impl core::fmt::Debug for RuntimeDropProbe {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str("RuntimeDropProbe(..)")
     }
 }
 
-#[cfg(feature = "jit-abi")]
+#[cfg(feature = "jit-test-support")]
 impl RuntimeDropProbe {
     fn run(mut self) {
         if let Some(probe) = self.0.take() {
@@ -133,7 +133,7 @@ pub(crate) struct RawRuntime {
     pub allocator: Option<AllocatorHolder>,
     #[cfg(feature = "jit-abi")]
     jit_backend_attached: bool,
-    #[cfg(feature = "jit-abi")]
+    #[cfg(feature = "jit-test-support")]
     runtime_drop_probe: Option<RuntimeDropProbe>,
     #[cfg(feature = "loader")]
     #[allow(dead_code)]
@@ -157,7 +157,7 @@ impl Drop for RawRuntime {
             qjs::JS_FreeRuntime(self.rt.as_ptr());
             mem::drop(opaque);
         }
-        #[cfg(feature = "jit-abi")]
+        #[cfg(feature = "jit-test-support")]
         if let Some(probe) = self.runtime_drop_probe.take() {
             probe.run();
         }
@@ -192,7 +192,7 @@ impl RawRuntime {
             allocator: None,
             #[cfg(feature = "jit-abi")]
             jit_backend_attached: false,
-            #[cfg(feature = "jit-abi")]
+            #[cfg(feature = "jit-test-support")]
             runtime_drop_probe: None,
             #[cfg(feature = "loader")]
             loader: None,
@@ -224,7 +224,7 @@ impl RawRuntime {
             allocator: Some(allocator),
             #[cfg(feature = "jit-abi")]
             jit_backend_attached: false,
-            #[cfg(feature = "jit-abi")]
+            #[cfg(feature = "jit-test-support")]
             runtime_drop_probe: None,
             #[cfg(feature = "loader")]
             loader: None,
@@ -276,7 +276,7 @@ impl RawRuntime {
         }
     }
 
-    #[cfg(feature = "jit-abi")]
+    #[cfg(feature = "jit-test-support")]
     pub(super) fn set_jit_runtime_drop_probe<F>(&mut self, probe: F)
     where
         F: FnOnce() + Send + 'static,

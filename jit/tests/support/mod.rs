@@ -51,7 +51,7 @@ impl LifecycleRecorder {
     pub fn runtime(&self) -> LifecycleRuntime {
         let runtime = Runtime::new().expect("test runtime");
         let drop_events = Arc::clone(&self.events);
-        runtime.set_jit_runtime_drop_probe(move || {
+        rquickjs_core::runtime::test_support::set_runtime_drop_probe(&runtime, move || {
             drop_events.lock().unwrap().push("runtime_drop");
         });
         let guard = RuntimeJitGuard::attach(
@@ -76,6 +76,10 @@ impl LifecycleRecorder {
         let mut events = self.events.lock().unwrap();
         core::mem::take(&mut *events)
     }
+}
+
+pub const fn fresh_bindgen_bindings() -> Option<&'static str> {
+    rquickjs_core::runtime::test_support::fresh_bindgen_bindings()
 }
 
 struct DetachLabelBackend {

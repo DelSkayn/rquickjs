@@ -8,6 +8,7 @@ mod config;
 mod error;
 mod metrics;
 
+#[cfg(feature = "test-support")]
 #[doc(hidden)]
 #[path = "../tests/support/mod.rs"]
 pub mod test_support;

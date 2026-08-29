@@ -9,6 +9,10 @@ mod userdata;
 #[cfg(feature = "jit-abi")]
 mod jit;
 
+#[doc(hidden)]
+#[cfg(feature = "jit-test-support")]
+pub mod test_support;
+
 #[cfg(feature = "futures")]
 mod r#async;
 #[cfg(feature = "futures")]

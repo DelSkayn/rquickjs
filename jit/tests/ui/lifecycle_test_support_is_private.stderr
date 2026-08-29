@@ -1,0 +1,20 @@
+error[E0432]: unresolved import `rquickjs_jit::test_support`
+ --> tests/ui/lifecycle_test_support_is_private.rs:1:20
+  |
+1 | use rquickjs_jit::{test_support, Runtime};
+  |                    ^^^^^^^^^^^^ no `test_support` in the root
+  |
+note: found an item that was configured out
+ --> src/lib.rs
+  |
+  | #[cfg(feature = "test-support")]
+  |       ------------------------ the item is gated behind the `test-support` feature
+...
+  | pub mod test_support;
+  |         ^^^^^^^^^^^^
+
+error[E0599]: no method named `set_jit_runtime_drop_probe` found for struct `rquickjs_jit::Runtime` in the current scope
+ --> tests/ui/lifecycle_test_support_is_private.rs:5:13
+  |
+5 |     runtime.set_jit_runtime_drop_probe(|| {});
+  |             ^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `rquickjs_jit::Runtime`

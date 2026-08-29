@@ -15,6 +15,15 @@ pub const SIZE_T_ERROR: &str =
 
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 
+#[doc(hidden)]
+#[cfg(all(feature = "jit-test-support", feature = "bindgen"))]
+pub const JIT_BINDGEN_BINDINGS: Option<&str> =
+    Some(include_str!(concat!(env!("OUT_DIR"), "/bindings.rs")));
+
+#[doc(hidden)]
+#[cfg(all(feature = "jit-test-support", not(feature = "bindgen")))]
+pub const JIT_BINDGEN_BINDINGS: Option<&str> = None;
+
 #[cfg(not(feature = "bindgen"))]
 include!(concat!("bindings/", bindings_env!("TARGET"), ".rs"));
 

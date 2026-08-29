@@ -141,6 +141,7 @@ impl AbiInfo {
         mismatch.map_or(Ok(()), |mismatch| Err(AbiError::Incompatible(mismatch)))
     }
 
+    #[cfg(feature = "test-support")]
     pub(crate) fn corrupt(&mut self, mismatch: AbiMismatch) {
         match mismatch {
             AbiMismatch::StructSize => self.raw.struct_size ^= 1,

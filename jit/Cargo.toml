@@ -20,9 +20,11 @@ cranelift-native = { version = "0.116", optional = true }
 
 [dev-dependencies]
 rquickjs = { path = "..", features = ["jit-abi"] }
+trybuild = "1"
 
 [features]
 default = []
+bindgen = ["rquickjs-core/bindgen"]
 compiler = [
   "dep:cranelift-codegen",
   "dep:cranelift-frontend",
@@ -30,3 +32,4 @@ compiler = [
   "dep:cranelift-object",
   "dep:cranelift-native",
 ]
+test-support = ["rquickjs-core/jit-test-support"]

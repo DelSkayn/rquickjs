@@ -48,6 +48,9 @@ std = ["relative-path?/std"]
 # Enable the versioned QuickJS JIT ABI.
 jit-abi = ["rquickjs-sys/jit-abi"]
 
+# Enable integration-test-only JIT lifecycle and binding observations.
+jit-test-support = ["jit-abi", "rquickjs-sys/jit-test-support"]
+
 # Almost all features excluding "parallel" and support for async runtimes
 full = ["std", "chrono", "loader", "dyn-load", "either", "indexmap", "half"]
 
