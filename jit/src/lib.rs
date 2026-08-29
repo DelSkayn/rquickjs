@@ -1,15 +1,20 @@
 //! Optional tiered JIT integration for `rquickjs`.
 //!
-//! This initial crate exposes the owning runtime API while keeping execution on
-//! the QuickJS interpreter until the versioned engine ABI is available.
+//! The runtime attaches through a versioned engine ABI while execution remains
+//! on the QuickJS interpreter until compiler tiers are enabled.
 
+pub mod abi;
 mod config;
 mod error;
 mod metrics;
 
+#[doc(hidden)]
+#[path = "../tests/support/mod.rs"]
+pub mod test_support;
+
 use core::ops::Deref;
 
-pub use config::{JitConfig, JitConfigBuilder};
+pub use config::{JitConfig, JitConfigBuilder, JitDiagnostic, JitDiagnosticKind};
 pub use error::JitError;
 pub use metrics::JitMetrics;
 pub use rquickjs_core::Runtime;
@@ -33,13 +38,42 @@ const NATIVE_EXECUTION_SUPPORTED: bool = cfg!(any(
 #[derive(Debug)]
 pub struct Jit {
     metrics: JitMetrics,
+    _guard: rquickjs_core::runtime::RuntimeJitGuard,
 }
 
 impl Jit {
     /// Attaches the initial no-op backend to an existing runtime.
-    pub fn attach(_runtime: &Runtime, _config: JitConfig) -> Result<Self, JitError> {
+    pub fn attach(runtime: &Runtime, config: JitConfig) -> Result<Self, JitError> {
+        let info = abi::AbiInfo::query_linked()?;
+        Self::attach_with_info(runtime, config, info)
+    }
+
+    fn attach_with_info(
+        runtime: &Runtime,
+        config: JitConfig,
+        info: abi::AbiInfo,
+    ) -> Result<Self, JitError> {
+        if let Err(error) = info.validate() {
+            if let abi::AbiError::Incompatible(mismatch) = error {
+                config.report(JitDiagnosticKind::AbiMismatch(mismatch));
+            }
+            return Err(error.into());
+        }
+
+        let metrics = JitMetrics::disabled();
+        config.observe(&metrics);
+        let guard = match runtime.attach_jit_backend(NoopBackend {
+            _config: config.clone(),
+        }) {
+            Ok(guard) => guard,
+            Err(error) => {
+                config.report(JitDiagnosticKind::BackendAttachment);
+                return Err(error.into());
+            }
+        };
         Ok(Self {
-            metrics: JitMetrics::disabled(),
+            metrics,
+            _guard: guard,
         })
     }
 
@@ -57,6 +91,13 @@ impl Jit {
         &self.metrics
     }
 }
+
+#[derive(Debug)]
+struct NoopBackend {
+    _config: JitConfig,
+}
+
+unsafe impl rquickjs_core::runtime::JitBackend for NoopBackend {}
 
 /// Builder for an owning [`JitRuntime`].
 #[derive(Clone, Debug, Default)]

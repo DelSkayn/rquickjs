@@ -34,6 +34,25 @@ const DUMP_OBJECTS: u64 = 0x20000;
 const DUMP_ATOMS: u64 = 0x40000;
 const DUMP_SHAPES: u64 = 0x80000;
 
+#[cfg(feature = "jit-abi")]
+struct RuntimeDropProbe(Option<Box<dyn FnOnce() + Send + 'static>>);
+
+#[cfg(feature = "jit-abi")]
+impl core::fmt::Debug for RuntimeDropProbe {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str("RuntimeDropProbe(..)")
+    }
+}
+
+#[cfg(feature = "jit-abi")]
+impl RuntimeDropProbe {
+    fn run(mut self) {
+        if let Some(probe) = self.0.take() {
+            probe();
+        }
+    }
+}
+
 // Build the flags using `#[cfg]` at compile time
 const fn build_dump_flags() -> u64 {
     #[allow(unused_mut)]
@@ -112,6 +131,10 @@ pub(crate) struct RawRuntime {
 
     #[allow(dead_code)]
     pub allocator: Option<AllocatorHolder>,
+    #[cfg(feature = "jit-abi")]
+    jit_backend_attached: bool,
+    #[cfg(feature = "jit-abi")]
+    runtime_drop_probe: Option<RuntimeDropProbe>,
     #[cfg(feature = "loader")]
     #[allow(dead_code)]
     pub loader: Option<LoaderHolder>,
@@ -122,12 +145,21 @@ unsafe impl Send for RawRuntime {}
 
 impl Drop for RawRuntime {
     fn drop(&mut self) {
+        #[cfg(feature = "jit-abi")]
+        debug_assert!(
+            !self.jit_backend_attached,
+            "a JIT backend remained attached during runtime teardown"
+        );
         unsafe {
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
             let mut opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
             opaque.clear();
             qjs::JS_FreeRuntime(self.rt.as_ptr());
             mem::drop(opaque);
+        }
+        #[cfg(feature = "jit-abi")]
+        if let Some(probe) = self.runtime_drop_probe.take() {
+            probe.run();
         }
     }
 }
@@ -158,6 +190,10 @@ impl RawRuntime {
             rt,
             info: None,
             allocator: None,
+            #[cfg(feature = "jit-abi")]
+            jit_backend_attached: false,
+            #[cfg(feature = "jit-abi")]
+            runtime_drop_probe: None,
             #[cfg(feature = "loader")]
             loader: None,
         })
@@ -186,6 +222,10 @@ impl RawRuntime {
             rt,
             info: None,
             allocator: Some(allocator),
+            #[cfg(feature = "jit-abi")]
+            jit_backend_attached: false,
+            #[cfg(feature = "jit-abi")]
+            runtime_drop_probe: None,
             #[cfg(feature = "loader")]
             loader: None,
         })
@@ -196,6 +236,56 @@ impl RawRuntime {
         unsafe {
             qjs::JS_UpdateStackTop(self.rt.as_ptr());
         }
+    }
+
+    #[cfg(feature = "jit-abi")]
+    pub(super) unsafe fn attach_jit_backend(
+        &mut self,
+        vtable: *const qjs::JSJitBackendVTable,
+        opaque: *mut core::ffi::c_void,
+    ) -> StdResult<(), super::JitBackendAttachError> {
+        if self.jit_backend_attached {
+            return Err(super::JitBackendAttachError::AlreadyAttached);
+        }
+        let status = unsafe { qjs::JS_SetJitBackend(self.rt.as_ptr(), vtable, opaque) };
+        match status {
+            qjs::JS_JIT_BACKEND_OK => {
+                self.jit_backend_attached = true;
+                Ok(())
+            }
+            qjs::JS_JIT_BACKEND_ALREADY_ATTACHED => {
+                Err(super::JitBackendAttachError::AlreadyAttached)
+            }
+            qjs::JS_JIT_BACKEND_INVALID_VTABLE => Err(super::JitBackendAttachError::InvalidVTable),
+            _ => Err(super::JitBackendAttachError::EngineRejected),
+        }
+    }
+
+    #[cfg(feature = "jit-abi")]
+    pub(super) unsafe fn detach_jit_backend(
+        &mut self,
+    ) -> StdResult<(), super::JitBackendAttachError> {
+        let status = unsafe {
+            qjs::JS_SetJitBackend(self.rt.as_ptr(), core::ptr::null(), core::ptr::null_mut())
+        };
+        if status == qjs::JS_JIT_BACKEND_OK {
+            self.jit_backend_attached = false;
+            Ok(())
+        } else {
+            Err(super::JitBackendAttachError::EngineRejected)
+        }
+    }
+
+    #[cfg(feature = "jit-abi")]
+    pub(super) fn set_jit_runtime_drop_probe<F>(&mut self, probe: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        assert!(
+            self.runtime_drop_probe.is_none(),
+            "runtime drop probe already installed"
+        );
+        self.runtime_drop_probe = Some(RuntimeDropProbe(Some(Box::new(probe))));
     }
 
     pub fn get_opaque<'js>(&self) -> &Opaque<'js> {

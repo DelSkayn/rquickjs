@@ -1,7 +1,16 @@
 // A header which imports the all symbols of the quickjs header but also exports
 // the static atoms.
 
+#ifdef QJSJIT_BINDINGS_ONLY
+#define QUICKJS_H
+typedef struct JSRuntime JSRuntime;
+#include "quickjs-jit.h"
+#else
 #include "quickjs.h"
+
+#ifdef CONFIG_JIT_ABI
+#include "quickjs-jit.h"
+#endif
 
 #if !defined(EMSCRIPTEN) && !defined(_MSC_VER)
 #define CONFIG_ATOMICS
@@ -14,3 +23,4 @@ enum {
 #undef DEF
   JS_ATOM_END,
 };
+#endif

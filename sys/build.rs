@@ -111,6 +111,7 @@ fn main() {
         "dump-promise",
         "dump-read-object",
         "disable-assertions",
+        "jit-abi",
     ];
 
     for feature in &features {
@@ -138,14 +139,23 @@ fn main() {
         "quickjs-opcode.h",
         "quickjs-c-atomics.h",
         "quickjs.h",
+        "quickjs-jit.h",
     ];
 
     let source_files = ["libregexp.c", "libunicode.c", "quickjs.c", "dtoa.c"];
+
+    println!("cargo:rerun-if-changed=quickjs.bind.h");
+    for file in source_files.iter().chain(header_files.iter()) {
+        println!("cargo:rerun-if-changed={}", src_dir.join(file).display());
+    }
 
     let mut defines: Vec<(String, Option<&str>)> = vec![("_GNU_SOURCE".into(), None)];
 
     #[cfg(feature = "disable-assertions")]
     defines.push(("NDEBUG".into(), None));
+
+    #[cfg(feature = "jit-abi")]
+    defines.push(("CONFIG_JIT_ABI".into(), Some("1")));
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
     let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
@@ -311,7 +321,10 @@ where
     // If LIBCLANG_PATH points at the cross toolchain (e.g. Android NDK), that host build
     // generates mismatched bindings, so reuse the bundled binding for the host instead.
     // `update-bindings` still regenerates.
-    if target == host && env::var("CARGO_FEATURE_UPDATE_BINDINGS").is_err() {
+    if target == host
+        && env::var("CARGO_FEATURE_UPDATE_BINDINGS").is_err()
+        && env::var("CARGO_FEATURE_JIT_ABI").is_err()
+    {
         let bundled = Path::new("src")
             .join("bindings")
             .join(format!("{}.rs", target));
@@ -351,6 +364,7 @@ where
         .allowlist_function("JS.*")
         .allowlist_function("__JS.*")
         .allowlist_var("JS.*")
+        .allowlist_var("QJSJIT.*")
         .opaque_type("FILE")
         .blocklist_type("FILE")
         .blocklist_function("JS_DumpMemoryUsage");

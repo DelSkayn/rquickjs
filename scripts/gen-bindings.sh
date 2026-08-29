@@ -3,7 +3,7 @@
 build_target() {
     echo "Generating for $1"
     rustup target add "$1"
-    cargo zigbuild --manifest-path sys/Cargo.toml --features=bindgen,update-bindings,logging --target "$1"
+    cargo zigbuild --manifest-path sys/Cargo.toml --features=bindgen,update-bindings,logging,jit-abi --target "$1"
 }
 
 copy_bindings() {

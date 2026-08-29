@@ -64,6 +64,28 @@ impl Runtime {
         WeakRuntime(Ref::downgrade(&self.inner))
     }
 
+    /// Attaches a versioned backend and returns the guard that owns it.
+    #[cfg(feature = "jit-abi")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "jit-abi")))]
+    pub fn attach_jit_backend<B>(
+        &self,
+        backend: B,
+    ) -> StdResult<super::RuntimeJitGuard, super::JitBackendAttachError>
+    where
+        B: super::JitBackend,
+    {
+        super::RuntimeJitGuard::attach(self, backend)
+    }
+
+    #[doc(hidden)]
+    #[cfg(feature = "jit-abi")]
+    pub fn set_jit_runtime_drop_probe<F>(&self, probe: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        self.inner.lock().set_jit_runtime_drop_probe(probe);
+    }
+
     /// Set a closure which is called when a promise is created, resolved, or chained.
     #[inline]
     pub fn set_promise_hook(&self, tracker: Option<PromiseHook>) {

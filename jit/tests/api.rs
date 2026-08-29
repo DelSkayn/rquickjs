@@ -1,5 +1,9 @@
 use rquickjs::{Context, Runtime};
 use rquickjs_jit::{JitConfig, JitError, JitRuntime};
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 
 #[test]
 fn config_defaults_are_bounded() {
@@ -23,6 +27,30 @@ fn wrapper_derefs_to_runtime() {
 fn invalid_limits_are_rejected() {
     let error = JitConfig::builder().max_queue_len(0).build().unwrap_err();
     assert!(matches!(error, JitError::InvalidConfig("max_queue_len")));
+}
+
+#[test]
+fn configuration_accepts_structured_diagnostic_and_metrics_callbacks() {
+    let diagnostics = Arc::new(AtomicUsize::new(0));
+    let observations = Arc::new(AtomicUsize::new(0));
+    let diagnostic_count = Arc::clone(&diagnostics);
+    let observation_count = Arc::clone(&observations);
+    let config = JitConfig::builder()
+        .diagnostic_callback(move |diagnostic| {
+            let _ = diagnostic.kind();
+            diagnostic_count.fetch_add(1, Ordering::Relaxed);
+        })
+        .metrics_observer(move |metrics| {
+            let _ = metrics.native_enabled();
+            observation_count.fetch_add(1, Ordering::Relaxed);
+        })
+        .build()
+        .unwrap();
+
+    let runtime = JitRuntime::builder().config(config).build().unwrap();
+    assert_eq!(diagnostics.load(Ordering::Relaxed), 0);
+    assert_eq!(observations.load(Ordering::Relaxed), 1);
+    drop(runtime);
 }
 
 #[cfg(any(
