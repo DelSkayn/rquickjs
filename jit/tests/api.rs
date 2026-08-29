@@ -24,3 +24,46 @@ fn invalid_limits_are_rejected() {
     let error = JitConfig::builder().max_queue_len(0).build().unwrap_err();
     assert!(matches!(error, JitError::InvalidConfig("max_queue_len")));
 }
+
+#[cfg(any(
+    all(
+        target_os = "macos",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "windows",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+))]
+#[test]
+fn native_execution_is_available_on_supported_targets() {
+    let runtime = JitRuntime::builder().build().expect("JIT runtime");
+    assert!(runtime.jit().require_native().is_ok());
+}
+
+#[cfg(not(any(
+    all(
+        target_os = "macos",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "windows",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+)))]
+#[test]
+fn native_execution_is_rejected_on_unsupported_targets() {
+    let runtime = JitRuntime::builder().build().expect("JIT runtime");
+    assert!(matches!(
+        runtime.jit().require_native(),
+        Err(JitError::UnsupportedPlatform)
+    ));
+}

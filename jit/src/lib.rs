@@ -14,6 +14,21 @@ pub use error::JitError;
 pub use metrics::JitMetrics;
 pub use rquickjs_core::Runtime;
 
+const NATIVE_EXECUTION_SUPPORTED: bool = cfg!(any(
+    all(
+        target_os = "macos",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "windows",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+    all(
+        target_os = "linux",
+        any(target_arch = "x86_64", target_arch = "aarch64")
+    ),
+));
+
 /// Owns the guard that keeps a JIT backend attached to a runtime.
 #[derive(Debug)]
 pub struct Jit {
@@ -29,17 +44,12 @@ impl Jit {
     }
 
     /// Fails when the current target cannot support native execution.
-    #[cfg(target_arch = "wasm32")]
     pub fn require_native(&self) -> Result<(), JitError> {
-        let _ = self;
-        Err(JitError::UnsupportedPlatform)
-    }
-
-    /// Native execution is supported by this target, although this initial
-    /// backend intentionally remains disabled.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn require_native(&self) -> Result<(), JitError> {
-        Ok(())
+        if NATIVE_EXECUTION_SUPPORTED {
+            Ok(())
+        } else {
+            Err(JitError::UnsupportedPlatform)
+        }
     }
 
     /// Returns the metrics associated with this backend guard.
