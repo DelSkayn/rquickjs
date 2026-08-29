@@ -25,6 +25,9 @@ optional = true
 [features]
 bindgen = ["bindgen-rs"]
 
+# Enable the versioned QuickJS JIT ABI.
+jit-abi = []
+
 # Debug logging
 logging = ["pretty_env_logger"]
 # Special case for updating bundled bindings

@@ -45,6 +45,9 @@ default = ["std"]
 
 std = ["relative-path?/std"]
 
+# Enable the versioned QuickJS JIT ABI.
+jit-abi = ["rquickjs-sys/jit-abi"]
+
 # Almost all features excluding "parallel" and support for async runtimes
 full = ["std", "chrono", "loader", "dyn-load", "either", "indexmap", "half"]
 

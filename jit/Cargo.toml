@@ -1,0 +1,32 @@
+[package]
+name = "rquickjs-jit"
+version = "0.12.2"
+authors = ["Mees Delzenne <mees.delzenne@gmail.com>", "K. <kayo@illumium.org>"]
+edition = "2021"
+rust-version = "1.87"
+license = "MIT"
+description = "Optional tiered JIT runtime for rquickjs"
+repository = "https://github.com/DelSkayn/rquickjs.git"
+
+[dependencies]
+rquickjs-core = { path = "../core", features = ["jit-abi"] }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+cranelift-codegen = { version = "0.116", optional = true }
+cranelift-frontend = { version = "0.116", optional = true }
+cranelift-module = { version = "0.116", optional = true }
+cranelift-object = { version = "0.116", optional = true }
+cranelift-native = { version = "0.116", optional = true }
+
+[dev-dependencies]
+rquickjs = { path = "..", features = ["jit-abi"] }
+
+[features]
+default = []
+compiler = [
+  "dep:cranelift-codegen",
+  "dep:cranelift-frontend",
+  "dep:cranelift-module",
+  "dep:cranelift-object",
+  "dep:cranelift-native",
+]
