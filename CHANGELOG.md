@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- `TypedArray::as_bytes`, `ArrayBuffer::as_bytes` and `ArrayBuffer::as_slice` are now `unsafe fn`, and the unsound safe `AsRef<[T]>` impls for `TypedArray` and `ArrayBuffer` were removed in favor of the new `unsafe fn TypedArray::as_slice` #[736](https://github.com/DelSkayn/rquickjs/issues/736)
+
 ### Added
 
 - Add pre-generated bindings for `riscv64gc-unknown-linux-gnu` and `riscv64a23-unknown-linux-gnu`
@@ -22,6 +24,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 ### Security
+
+- Fixed `TypedArray`/`ArrayBuffer` byte-slice accessors returning a safe `&[u8]` that could be mutated, detached or reallocated by JS running while the slice was still borrowed #[736](https://github.com/DelSkayn/rquickjs/issues/736)
 
 ## [0.12.2] - 2026-07-27
 

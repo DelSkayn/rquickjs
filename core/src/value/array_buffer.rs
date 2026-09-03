@@ -54,6 +54,14 @@ impl_array_buffer_source!(Vec<u8>, alloc::boxed::Box<[u8]>, Arc<[u8]>, Arc<Vec<u
 #[cfg(feature = "bytes")]
 impl_array_buffer_source!(bytes::Bytes);
 
+/// The raw pointer and length backing an [`ArrayBuffer`] or [`TypedArray`](super::typed_array::TypedArray).
+///
+/// # Safety
+///
+/// `ptr` is only guaranteed valid until the next time JavaScript runs: JS can write
+/// through it, detach the buffer, or, for a resizable buffer, reallocate the backing
+/// store and free this pointer. Treat `ptr` as invalidated after any call back into
+/// the engine.
 pub struct RawArrayBuffer {
     pub len: usize,
     pub ptr: NonNull<u8>,
@@ -239,20 +247,32 @@ impl<'js> ArrayBuffer<'js> {
     /// Returns the underlying bytes of the buffer,
     ///
     /// Returns `None` if the array is detached.
-    pub fn as_bytes(&self) -> Option<&[u8]> {
+    ///
+    /// # Safety
+    ///
+    /// The returned slice aliases memory owned by the JS engine. The caller must not run
+    /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
+    /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
+    pub unsafe fn as_bytes(&self) -> Option<&[u8]> {
         let raw = Self::get_raw(self.as_value())?;
-        Some(unsafe { slice::from_raw_parts_mut(raw.ptr.as_ptr(), raw.len) })
+        Some(slice::from_raw_parts(raw.ptr.as_ptr(), raw.len))
     }
 
     /// Returns a slice if the buffer underlying buffer is properly aligned for the type and the
     /// buffer is not detached.
-    pub fn as_slice<T: TypedArrayItem>(&self) -> StdResult<&[T], AsSliceError> {
+    ///
+    /// # Safety
+    ///
+    /// The returned slice aliases memory owned by the JS engine. The caller must not run
+    /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
+    /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
+    pub unsafe fn as_slice<T: TypedArrayItem>(&self) -> StdResult<&[T], AsSliceError> {
         let raw = Self::get_raw(&self.0).ok_or(AsSliceError::BufferUsed)?;
         if raw.ptr.as_ptr().align_offset(mem::align_of::<T>()) != 0 {
             return Err(AsSliceError::InvalidAlignment);
         }
         let len = raw.len / size_of::<T>();
-        Ok(unsafe { slice::from_raw_parts(raw.ptr.as_ptr().cast(), len) })
+        Ok(slice::from_raw_parts(raw.ptr.as_ptr().cast(), len))
     }
 
     /// Detach array buffer
@@ -319,12 +339,6 @@ impl<'js> ArrayBuffer<'js> {
         } else {
             None
         }
-    }
-}
-
-impl<'js, T: TypedArrayItem> AsRef<[T]> for ArrayBuffer<'js> {
-    fn as_ref(&self) -> &[T] {
-        self.as_slice().expect("ArrayBuffer was detached")
     }
 }
 
@@ -402,7 +416,10 @@ mod test {
                 )
                 .unwrap();
             assert_eq!(val.len(), 4);
-            assert_eq!(val.as_ref() as &[i8], &[0i8, -5, 1, 11]);
+            assert_eq!(
+                unsafe { val.as_slice() }.unwrap() as &[i8],
+                &[0i8, -5, 1, 11]
+            );
         });
     }
 
@@ -439,7 +456,10 @@ mod test {
                 )
                 .unwrap();
             assert_eq!(val.len(), 12);
-            assert_eq!(val.as_ref() as &[f32], &[0.5f32, -5.25, 123.125]);
+            assert_eq!(
+                unsafe { val.as_slice() }.unwrap() as &[f32],
+                &[0.5f32, -5.25, 123.125]
+            );
         });
     }
 
@@ -481,7 +501,7 @@ mod test {
             let bytes_1 = 0xFEEDBEADu32.to_ne_bytes();
             res[4..].copy_from_slice(&bytes_1);
 
-            assert_eq!(val.as_bytes().unwrap(), &res)
+            assert_eq!(unsafe { val.as_bytes() }.unwrap(), &res)
         });
     }
 
@@ -512,7 +532,7 @@ mod test {
             let src = Tracker(alloc::vec![1u8, 2, 3, 4].into_boxed_slice());
             let ab = ArrayBuffer::from_source(ctx.clone(), src).unwrap();
             assert_eq!(ab.len(), 4);
-            assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
+            assert_eq!(unsafe { ab.as_bytes() }.unwrap(), &[1, 2, 3, 4]);
         });
         rt.run_gc();
         assert!(DROPPED.load(Ordering::SeqCst));
@@ -589,10 +609,16 @@ mod test {
             let tail = mk(12, 4);
             let middle = mk(4, 8);
 
-            assert_eq!(full.as_bytes().unwrap(), (0u8..16).collect::<Vec<_>>());
-            assert_eq!(head.as_bytes().unwrap(), &[0, 1, 2, 3]);
-            assert_eq!(tail.as_bytes().unwrap(), &[12, 13, 14, 15]);
-            assert_eq!(middle.as_bytes().unwrap(), (4u8..12).collect::<Vec<_>>());
+            assert_eq!(
+                unsafe { full.as_bytes() }.unwrap(),
+                (0u8..16).collect::<Vec<_>>()
+            );
+            assert_eq!(unsafe { head.as_bytes() }.unwrap(), &[0, 1, 2, 3]);
+            assert_eq!(unsafe { tail.as_bytes() }.unwrap(), &[12, 13, 14, 15]);
+            assert_eq!(
+                unsafe { middle.as_bytes() }.unwrap(),
+                (4u8..12).collect::<Vec<_>>()
+            );
             assert_eq!(Arc::strong_count(&buf), 5);
 
             ctx.globals().set("buf", full).unwrap();
@@ -633,7 +659,7 @@ mod test {
         let c = crate::Context::full(&rt).unwrap();
         c.with(|ctx| {
             let ab = ArrayBuffer::from_source(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
-            assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
+            assert_eq!(unsafe { ab.as_bytes() }.unwrap(), &[1, 2, 3, 4]);
         });
     }
 
@@ -696,7 +722,10 @@ mod test {
         let c = crate::Context::full(&rt).unwrap();
         c.with(|ctx| {
             let ab = ArrayBuffer::from_source_immutable(ctx.clone(), data.clone()).unwrap();
-            assert_eq!(ab.as_bytes().unwrap(), (0u8..8).collect::<Vec<_>>());
+            assert_eq!(
+                unsafe { ab.as_bytes() }.unwrap(),
+                (0u8..8).collect::<Vec<_>>()
+            );
         });
     }
 }
