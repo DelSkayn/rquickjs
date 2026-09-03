@@ -12,11 +12,6 @@ impl DropContext for Runtime {
         let guard = match self.inner.try_lock() {
             Some(x) => x,
             None => {
-                #[cfg(feature = "parallel")]
-                {
-                    self.pending_free.push(ctx);
-                    return;
-                }
                 // `RefCell` is neither `Send` nor `Sync`, so a failed
                 // `try_borrow_mut` is always this same thread and freeing
                 // directly is safe.
@@ -25,14 +20,18 @@ impl DropContext for Runtime {
                     unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
                     return;
                 }
+                #[cfg(feature = "parallel")]
+                {
+                    self.pending_free
+                        .send(ctx)
+                        .expect("runtime should be alive while contexts life");
+                    return;
+                }
             }
         };
         guard.update_stack_top();
         unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-        #[cfg(feature = "parallel")]
-        unsafe {
-            guard.pending_free.drain()
-        };
+        guard.drain_pending_free();
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
     }

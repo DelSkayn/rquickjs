@@ -1,7 +1,5 @@
 //! QuickJS runtime related types.
 
-#[cfg(feature = "parallel")]
-use super::raw::PendingFree;
 use super::{
     opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
@@ -11,6 +9,8 @@ use crate::loader::{Loader, Resolver};
 use crate::{qjs, result::JobException, Context, Mut, Ref, Result, Weak};
 use alloc::{ffi::CString, vec::Vec};
 use core::{ptr::NonNull, result::Result as StdResult};
+#[cfg(feature = "parallel")]
+use std::sync::mpsc::{self, Sender};
 
 /// A weak handle to the runtime.
 ///
@@ -19,7 +19,7 @@ use core::{ptr::NonNull, result::Result as StdResult};
 pub struct WeakRuntime {
     inner: Weak<Mut<RawRuntime>>,
     #[cfg(feature = "parallel")]
-    pending_free: PendingFree,
+    pending_free: Sender<NonNull<qjs::JSContext>>,
 }
 
 impl WeakRuntime {
@@ -37,7 +37,7 @@ impl WeakRuntime {
 pub struct Runtime {
     pub(crate) inner: Ref<Mut<RawRuntime>>,
     #[cfg(feature = "parallel")]
-    pub(crate) pending_free: PendingFree,
+    pub(crate) pending_free: Sender<NonNull<qjs::JSContext>>,
 }
 
 impl Runtime {
@@ -49,9 +49,15 @@ impl Runtime {
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new() -> Result<Self> {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new(opaque)? };
         #[cfg(feature = "parallel")]
-        let pending_free = rt.pending_free.clone();
+        let (pending_free, pending_free_recv) = mpsc::channel();
+        let rt = unsafe {
+            RawRuntime::new(
+                opaque,
+                #[cfg(feature = "parallel")]
+                pending_free_recv,
+            )?
+        };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
             #[cfg(feature = "parallel")]
@@ -67,9 +73,16 @@ impl Runtime {
         A: Allocator + 'static,
     {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator)? };
         #[cfg(feature = "parallel")]
-        let pending_free = rt.pending_free.clone();
+        let (pending_free, pending_free_recv) = mpsc::channel();
+        let rt = unsafe {
+            RawRuntime::new_with_allocator(
+                opaque,
+                allocator,
+                #[cfg(feature = "parallel")]
+                pending_free_recv,
+            )?
+        };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
             #[cfg(feature = "parallel")]

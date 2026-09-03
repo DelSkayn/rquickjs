@@ -93,7 +93,7 @@ impl DropContext for AsyncRuntime {
                 }
                 #[cfg(feature = "parallel")]
                 {
-                    self.drop_send
+                    self.pending_free
                         .send(ctx)
                         .expect("runtime should be alive while contexts life");
                     return;
@@ -142,7 +142,7 @@ impl AsyncContext {
         unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
-        guard.drop_pending();
+        guard.runtime.drain_pending_free();
         mem::drop(guard);
 
         Ok(AsyncContext(res))
@@ -157,7 +157,7 @@ impl AsyncContext {
             .ok_or(Error::Allocation)?;
         let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        guard.drop_pending();
+        guard.runtime.drain_pending_free();
         mem::drop(guard);
 
         Ok(AsyncContext(res))
@@ -229,7 +229,7 @@ impl AsyncContext {
         guard.runtime.update_stack_top();
         let ctx = unsafe { Ctx::new_async(self) };
         let res = f(ctx);
-        guard.drop_pending();
+        guard.runtime.drain_pending_free();
         res
     }
 }

@@ -1,14 +1,12 @@
 #![allow(dead_code, unused_imports)]
-#[cfg(feature = "parallel")]
-use alloc::vec::Vec;
 use alloc::{boxed::Box, ffi::CString};
 use core::{mem, panic::AssertUnwindSafe, ptr::NonNull, result::Result as StdResult};
+#[cfg(feature = "parallel")]
+use std::sync::mpsc::Receiver;
 
 use rquickjs_sys::JSPromiseHookType;
 
 use crate::allocator::{Allocator, AllocatorHolder};
-#[cfg(feature = "parallel")]
-use crate::context::owner::CtxPtr;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, LoaderHolder, Resolver};
 use crate::{
@@ -120,43 +118,13 @@ pub(crate) struct RawRuntime {
     #[allow(dead_code)]
     pub loader: Option<LoaderHolder>,
 
+    // Contexts whose `JS_FreeContext` could not be run at drop time because the
+    // runtime lock was contended, parked here by `drop_context` and drained by
+    // whoever next holds the lock, or by `RawRuntime::drop`. Uses a channel
+    // rather than a `Mutex<Vec<_>>` so a panic elsewhere can never poison it
+    // and silently strand a context; mirrors `AsyncRuntime`'s `pending_free`.
     #[cfg(feature = "parallel")]
-    pub(crate) pending_free: PendingFree,
-}
-
-/// Contexts whose `JS_FreeContext` could not be run at drop time because the
-/// runtime lock was contended. The pointer is parked here and drained by
-/// whoever next holds the lock, or by `RawRuntime::drop`.
-#[cfg(feature = "parallel")]
-#[derive(Clone, Default)]
-pub(crate) struct PendingFree(std::sync::Arc<std::sync::Mutex<Vec<CtxPtr>>>);
-
-#[cfg(feature = "parallel")]
-impl core::fmt::Debug for PendingFree {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.write_str("PendingFree")
-    }
-}
-
-#[cfg(feature = "parallel")]
-impl PendingFree {
-    pub(crate) fn push(&self, ctx: NonNull<qjs::JSContext>) {
-        if let Ok(mut queued) = self.0.lock() {
-            queued.push(CtxPtr(ctx));
-        }
-    }
-
-    /// # Safety
-    /// The caller must hold the runtime lock.
-    pub(crate) unsafe fn drain(&self) {
-        let taken = match self.0.lock() {
-            Ok(mut queued) => mem::take(&mut *queued),
-            Err(_) => return,
-        };
-        for CtxPtr(ctx) in taken {
-            unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-        }
-    }
+    pub(crate) pending_free: Receiver<NonNull<qjs::JSContext>>,
 }
 
 #[cfg(feature = "parallel")]
@@ -164,9 +132,8 @@ unsafe impl Send for RawRuntime {}
 
 impl Drop for RawRuntime {
     fn drop(&mut self) {
+        self.drain_pending_free();
         unsafe {
-            #[cfg(feature = "parallel")]
-            self.pending_free.drain();
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
             let mut opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
             opaque.clear();
@@ -177,16 +144,41 @@ impl Drop for RawRuntime {
 }
 
 impl RawRuntime {
-    pub unsafe fn new(opaque: Opaque<'static>) -> Result<Self> {
+    /// Frees contexts parked by `drop_context` while the runtime lock was contended.
+    ///
+    /// Caller must hold the runtime lock, or otherwise have exclusive access, as during `Drop`.
+    pub(crate) fn drain_pending_free(&self) {
+        #[cfg(feature = "parallel")]
+        while let Ok(ctx) = self.pending_free.try_recv() {
+            unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
+        }
+    }
+
+    pub unsafe fn new(
+        opaque: Opaque<'static>,
+        #[cfg(feature = "parallel")] pending_free: Receiver<NonNull<qjs::JSContext>>,
+    ) -> Result<Self> {
         #[cfg(not(feature = "rust-alloc"))]
-        return Self::new_base(opaque);
+        return Self::new_base(
+            opaque,
+            #[cfg(feature = "parallel")]
+            pending_free,
+        );
 
         #[cfg(feature = "rust-alloc")]
-        Self::new_with_allocator(opaque, crate::allocator::RustAllocator)
+        Self::new_with_allocator(
+            opaque,
+            crate::allocator::RustAllocator,
+            #[cfg(feature = "parallel")]
+            pending_free,
+        )
     }
 
     #[allow(dead_code)]
-    pub unsafe fn new_base(mut opaque: Opaque<'static>) -> Result<Self> {
+    pub unsafe fn new_base(
+        mut opaque: Opaque<'static>,
+        #[cfg(feature = "parallel")] pending_free: Receiver<NonNull<qjs::JSContext>>,
+    ) -> Result<Self> {
         let rt = qjs::JS_NewRuntime();
 
         Self::add_dump_flags(rt);
@@ -205,11 +197,15 @@ impl RawRuntime {
             #[cfg(feature = "loader")]
             loader: None,
             #[cfg(feature = "parallel")]
-            pending_free: PendingFree::default(),
+            pending_free,
         })
     }
 
-    pub unsafe fn new_with_allocator<A>(mut opaque: Opaque<'static>, allocator: A) -> Result<Self>
+    pub unsafe fn new_with_allocator<A>(
+        mut opaque: Opaque<'static>,
+        allocator: A,
+        #[cfg(feature = "parallel")] pending_free: Receiver<NonNull<qjs::JSContext>>,
+    ) -> Result<Self>
     where
         A: Allocator + 'static,
     {
@@ -235,7 +231,7 @@ impl RawRuntime {
             #[cfg(feature = "loader")]
             loader: None,
             #[cfg(feature = "parallel")]
-            pending_free: PendingFree::default(),
+            pending_free,
         })
     }
 
