@@ -891,11 +891,7 @@ mod test {
                 atom: crate::Atom<'js>,
             ) -> crate::Result<bool> {
                 let _ = this;
-                if atom.to_string()? == "next" {
-                    return Ok(true);
-                }
-
-                Ok(false)
+                Ok(atom.to_string()? == "next")
             }
         }
 
@@ -996,14 +992,9 @@ mod test {
             ) -> crate::Result<bool> {
                 let _ = this;
                 println!("Got atom: {}", atom.to_string()?);
-                if atom.to_string()? == "hello"
+                Ok(atom.to_string()? == "hello"
                     || atom.to_string()? == "i"
-                    || atom.to_string()? == "toString"
-                {
-                    return Ok(true);
-                }
-
-                Ok(false)
+                    || atom.to_string()? == "toString")
             }
 
             fn exotic_delete_property(
