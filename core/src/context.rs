@@ -3,7 +3,7 @@
 mod base;
 mod builder;
 mod ctx;
-mod owner;
+pub(crate) mod owner;
 
 #[cfg(feature = "futures")]
 mod r#async;

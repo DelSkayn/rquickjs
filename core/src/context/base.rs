@@ -1,5 +1,4 @@
 use super::{
-    ctx::RefCountHeader,
     intrinsic,
     owner::{ContextOwner, DropContext},
     ContextBuilder, Intrinsic,
@@ -13,21 +12,26 @@ impl DropContext for Runtime {
         let guard = match self.inner.try_lock() {
             Some(x) => x,
             None => {
-                let p = unsafe { &mut *(ctx.as_ptr() as *mut RefCountHeader) };
-                if p.ref_count <= 1 {
-                    // Lock was poisoned, this should only happen on a panic.
-                    // We should still free the context.
-                    // TODO see if there is a way to recover from a panic which could cause the
-                    // following assertion to trigger
-                    #[cfg(feature = "std")]
-                    assert!(std::thread::panicking());
+                // `RefCell` is neither `Send` nor `Sync`, so a failed
+                // `try_borrow_mut` is always this same thread and freeing
+                // directly is safe.
+                #[cfg(not(feature = "parallel"))]
+                {
+                    unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
+                    return;
                 }
-                unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-                return;
+                #[cfg(feature = "parallel")]
+                {
+                    self.pending_free
+                        .send(ctx)
+                        .expect("runtime should be alive while contexts life");
+                    return;
+                }
             }
         };
         guard.update_stack_top();
         unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
+        guard.drain_pending_free();
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
     }

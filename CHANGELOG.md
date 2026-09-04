@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed deadlock when dropping a `Context` while the runtime lock is held under the `parallel` feature
+
 ### Security
 
 - Fixed `TypedArray`/`ArrayBuffer` byte-slice accessors returning a safe `&[u8]` that could be mutated, detached or reallocated by JS running while the slice was still borrowed #[736](https://github.com/DelSkayn/rquickjs/issues/736)
