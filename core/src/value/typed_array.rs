@@ -14,8 +14,6 @@ use core::{
     slice,
 };
 
-use super::array_buffer::RawArrayBuffer;
-
 /// The trait which implements types which capable to be TypedArray items
 ///
 pub trait TypedArrayItem: Copy {
@@ -212,13 +210,20 @@ impl<'js, T> TypedArray<'js, T> {
     /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
     /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
     pub unsafe fn as_bytes(&self) -> Option<&[u8]> {
-        let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
-        Some(slice::from_raw_parts(ptr.as_ptr(), len))
+        Some(self.as_raw()?.as_ref())
     }
 
-    pub fn as_raw(&self) -> Option<RawArrayBuffer> {
+    /// Returns a pointer to the underlying bytes of the buffer,
+    ///
+    /// The returned pointer is only guaranteed valid until the next time
+    /// JavaScript runs: JS can write through it, detach the buffer, or, for a
+    /// resizable buffer, reallocate the backing store and free this pointer.
+    /// Treat the pointer as invalidated after any call back into the engine.
+    ///
+    /// Returns None if the buffer was already detached.
+    pub fn as_raw(&self) -> Option<NonNull<[u8]>> {
         let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
-        Some(RawArrayBuffer { len, ptr })
+        Some(NonNull::slice_from_raw_parts(ptr, len))
     }
 
     /// Get underlying ArrayBuffer
@@ -283,11 +288,11 @@ impl<'js, T> TypedArray<'js, T> {
             .try_into()
             .expect(qjs::SIZE_T_ERROR);
         let raw = ArrayBuffer::get_raw(&buf)?;
-        if (off + len) > raw.len {
+        if (off + len) > raw.len() {
             return None;
         }
         // SAFETY: ptr was non-null and then we added an offset so it should still be non null
-        let ptr = unsafe { NonNull::new_unchecked(raw.ptr.as_ptr().add(off)) };
+        let ptr = unsafe { raw.cast::<u8>().add(off) };
         Some((stp, len, ptr))
     }
 

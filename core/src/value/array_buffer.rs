@@ -54,19 +54,6 @@ impl_array_buffer_source!(Vec<u8>, alloc::boxed::Box<[u8]>, Arc<[u8]>, Arc<Vec<u
 #[cfg(feature = "bytes")]
 impl_array_buffer_source!(bytes::Bytes);
 
-/// The raw pointer and length backing an [`ArrayBuffer`] or [`TypedArray`](super::typed_array::TypedArray).
-///
-/// # Safety
-///
-/// `ptr` is only guaranteed valid until the next time JavaScript runs: JS can write
-/// through it, detach the buffer, or, for a resizable buffer, reallocate the backing
-/// store and free this pointer. Treat `ptr` as invalidated after any call back into
-/// the engine.
-pub struct RawArrayBuffer {
-    pub len: usize,
-    pub ptr: NonNull<u8>,
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AsSliceError {
     BufferUsed,
@@ -236,7 +223,7 @@ impl<'js> ArrayBuffer<'js> {
 
     /// Get the length of the array buffer in bytes.
     pub fn len(&self) -> usize {
-        Self::get_raw(&self.0).expect("Not an ArrayBuffer").len
+        Self::get_raw(&self.0).expect("Not an ArrayBuffer").len()
     }
 
     /// Returns whether an array buffer is empty.
@@ -254,8 +241,7 @@ impl<'js> ArrayBuffer<'js> {
     /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
     /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
     pub unsafe fn as_bytes(&self) -> Option<&[u8]> {
-        let raw = Self::get_raw(self.as_value())?;
-        Some(slice::from_raw_parts(raw.ptr.as_ptr(), raw.len))
+        Some(self.as_raw()?.as_ref())
     }
 
     /// Returns a slice if the buffer underlying buffer is properly aligned for the type and the
@@ -268,11 +254,11 @@ impl<'js> ArrayBuffer<'js> {
     /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
     pub unsafe fn as_slice<T: TypedArrayItem>(&self) -> StdResult<&[T], AsSliceError> {
         let raw = Self::get_raw(&self.0).ok_or(AsSliceError::BufferUsed)?;
-        if raw.ptr.as_ptr().align_offset(mem::align_of::<T>()) != 0 {
+        if raw.cast::<u8>().align_offset(mem::align_of::<T>()) != 0 {
             return Err(AsSliceError::InvalidAlignment);
         }
-        let len = raw.len / size_of::<T>();
-        Ok(slice::from_raw_parts(raw.ptr.as_ptr().cast(), len))
+        let len = raw.len() / size_of::<T>();
+        Ok(slice::from_raw_parts(raw.as_ptr().cast(), len))
     }
 
     /// Detach array buffer
@@ -318,14 +304,19 @@ impl<'js> ArrayBuffer<'js> {
         }
     }
 
-    /// Returns a structure with data about the raw buffer which this object contains.
+    /// Returns a pointer to the underlying bytes of the buffer,
     ///
-    /// Returns None if the buffer was already used.
-    pub fn as_raw(&self) -> Option<RawArrayBuffer> {
+    /// The returned pointer is only guaranteed valid until the next time
+    /// JavaScript runs: JS can write through it, detach the buffer, or, for a
+    /// resizable buffer, reallocate the backing store and free this pointer.
+    /// Treat the pointer as invalidated after any call back into the engine.
+    ///
+    /// Returns None if the buffer was already detached.
+    pub fn as_raw(&self) -> Option<NonNull<[u8]>> {
         Self::get_raw(self.as_value())
     }
 
-    pub(crate) fn get_raw(val: &Value<'js>) -> Option<RawArrayBuffer> {
+    pub(crate) fn get_raw(val: &Value<'js>) -> Option<NonNull<[u8]>> {
         let ctx = val.ctx();
         let val = val.as_js_value();
         let mut size = MaybeUninit::<qjs::size_t>::uninit();
@@ -335,7 +326,7 @@ impl<'js> ArrayBuffer<'js> {
             let len = unsafe { size.assume_init() }
                 .try_into()
                 .expect(qjs::SIZE_T_ERROR);
-            Some(RawArrayBuffer { len, ptr })
+            Some(NonNull::slice_from_raw_parts(ptr, len))
         } else {
             None
         }
