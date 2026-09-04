@@ -239,4 +239,16 @@ mod test {
             ctx.eval::<i32, _>("1 + 1").unwrap();
         });
     }
+
+    #[test]
+    #[cfg(not(feature = "parallel"))]
+    fn context_dropped_while_lock_held_by_another_context() {
+        let rt = Runtime::new().unwrap();
+        let ctx1 = crate::Context::full(&rt).unwrap();
+        let ctx2 = crate::Context::full(&rt).unwrap();
+
+        ctx1.with(|_| {
+            drop(ctx2);
+        });
+    }
 }

@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Updated `sys/quickjs` to `2c620e4` (quickjs-ng 0.16.2) and adapted `ArrayBuffer` callbacks to the new `JSReallocArrayBufferDataFunc` contract
+- Removed stale `RefCountHeader` cast in `drop_context` (field moved to allocator header in quickjs-ng)
+
 ### Security
 
 - Fixed `TypedArray`/`ArrayBuffer` byte-slice accessors returning a safe `&[u8]` that could be mutated, detached or reallocated by JS running while the slice was still borrowed #[736](https://github.com/DelSkayn/rquickjs/issues/736)

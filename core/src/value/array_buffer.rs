@@ -16,6 +16,11 @@ use core::{
 
 use super::typed_array::TypedArrayItem;
 
+/// JS_NewArrayBuffer uses max_len=0 for fixed-length buffers, and calls the
+/// realloc callback with size=0 to free. Same sentinel, different meanings.
+const FIXED_SIZE: qjs::size_t = 0;
+const FREE: qjs::size_t = 0;
+
 /// A contiguous byte region owned by `self` and usable as the backing store
 /// of an [`ArrayBuffer`].
 ///
@@ -102,12 +107,21 @@ impl<'js> ArrayBuffer<'js> {
         let capacity = src.capacity();
         let size = src.len() * size_of::<T>();
 
-        extern "C" fn drop_raw<T>(_rt: *mut qjs::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
+        extern "C" fn drop_raw<T>(
+            _rt: *mut qjs::JSRuntime,
+            opaque: *mut c_void,
+            ptr: *mut c_void,
+            size: qjs::size_t,
+        ) -> *mut c_void {
+            if size != FREE {
+                return core::ptr::null_mut();
+            }
             let ptr = ptr as *mut T;
             let capacity = opaque as usize;
             // reconstruct vector in order to free data
             // the length of actual data does not matter for copyable types
             unsafe { Vec::from_raw_parts(ptr, capacity, capacity) };
+            core::ptr::null_mut()
         }
 
         Ok(Self(Object(unsafe {
@@ -115,6 +129,7 @@ impl<'js> ArrayBuffer<'js> {
                 ctx.as_ptr(),
                 ptr as _,
                 size as _,
+                FIXED_SIZE,
                 Some(drop_raw::<T>),
                 capacity as _,
                 false,
@@ -205,11 +220,16 @@ impl<'js> ArrayBuffer<'js> {
             _rt: *mut qjs::JSRuntime,
             opaque: *mut c_void,
             _ptr: *mut c_void,
-        ) {
+            size: qjs::size_t,
+        ) -> *mut c_void {
+            if size != FREE {
+                return core::ptr::null_mut();
+            }
             unsafe {
                 let boxed: Box<F> = Box::from_raw(opaque as *mut F);
                 (*boxed)();
             }
+            core::ptr::null_mut()
         }
 
         let opaque = Box::into_raw(Box::new(drop_fn)) as *mut c_void;
@@ -219,12 +239,18 @@ impl<'js> ArrayBuffer<'js> {
                 ctx.as_ptr(),
                 ptr,
                 len as _,
+                FIXED_SIZE,
                 Some(shim::<F>),
                 opaque,
                 is_shared,
             );
             if let Err(e) = ctx.handle_exception(val) {
-                shim::<F>(qjs::JS_GetRuntime(ctx.as_ptr()), opaque, ptr as *mut c_void);
+                shim::<F>(
+                    qjs::JS_GetRuntime(ctx.as_ptr()),
+                    opaque,
+                    ptr as *mut c_void,
+                    FREE,
+                );
                 return Err(e);
             }
             if immutable {
@@ -661,6 +687,69 @@ mod test {
             let ab = ArrayBuffer::from_source(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
             assert_eq!(unsafe { ab.as_bytes() }.unwrap(), &[1, 2, 3, 4]);
         });
+    }
+
+    #[test]
+    fn transfer_to_different_length_preserves_vec_buffer() {
+        test_with(|ctx| {
+            let ab = ArrayBuffer::new(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            assert!(ctx.eval::<(), _>("buf.transfer(8)").is_err());
+            drop(ctx.catch());
+
+            let ab: ArrayBuffer = ctx.globals().get("buf").unwrap();
+            assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
+        });
+    }
+
+    #[test]
+    fn transfer_to_different_length_preserves_external_buffer() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Tracker {
+            data: alloc::boxed::Box<[u8]>,
+            drops: Arc<AtomicUsize>,
+        }
+
+        unsafe impl ArrayBufferSource for Tracker {
+            fn as_ptr(&self) -> *mut u8 {
+                self.data.as_ptr()
+            }
+
+            fn len(&self) -> usize {
+                self.data.len()
+            }
+        }
+
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                self.drops.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let drops = Arc::new(AtomicUsize::new(0));
+        let rt = crate::Runtime::new().unwrap();
+        let c = crate::Context::full(&rt).unwrap();
+        c.with(|ctx| {
+            let src = Tracker {
+                data: alloc::vec![1u8, 2, 3, 4].into_boxed_slice(),
+                drops: drops.clone(),
+            };
+            let ab = ArrayBuffer::from_source(ctx.clone(), src).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            assert!(ctx.eval::<(), _>("buf.transfer(8)").is_err());
+            drop(ctx.catch());
+            assert_eq!(drops.load(Ordering::SeqCst), 0);
+
+            let ab: ArrayBuffer = ctx.globals().get("buf").unwrap();
+            assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
+        });
+
+        drop(c);
+        drop(rt);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
     }
 
     #[test]
