@@ -1,4 +1,5 @@
 use alloc::string::String;
+use core::mem::{self, MaybeUninit};
 use core::{error::Error as ErrorTrait, ffi::CStr, fmt};
 
 use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Result, Value};
@@ -24,15 +25,26 @@ impl fmt::Debug for Exception<'_> {
 pub(crate) static ERROR_FORMAT_STR: &CStr =
     unsafe { CStr::from_bytes_with_nul_unchecked("%s\0".as_bytes()) };
 
-fn truncate_str(mut max: usize, bytes: &[u8]) -> &[u8] {
-    if bytes.len() <= max {
-        return bytes;
+/// Writes as many characters of `str` as will fit into `buf`, followed by a nul byte.
+///
+/// QuickJS implementation doesn't allow error strings longer than 256 anyway so
+/// truncating here is fine.
+fn truncate_cstr_into(buf: &mut [MaybeUninit<u8>; 256], mut str: &str) {
+    let mut max = buf.len() - 1;
+    if str.len() > max {
+        // while the byte at len is a continue byte shorten the byte.
+        // TODO: use floor_char_boundary when MSRV is at least 1.91
+        while (str.as_bytes()[max] & 0b1100_0000) == 0b1000_0000 {
+            max -= 1;
+        }
+        str = &str[..max];
     }
-    // while the byte at len is a continue byte shorten the byte.
-    while (bytes[max] & 0b1100_0000) == 0b1000_0000 {
-        max -= 1;
+    unsafe {
+        // SAFETY: these slice types have the same layout
+        buf[..str.len()]
+            .copy_from_slice(mem::transmute::<&[u8], &[MaybeUninit<u8>]>(str.as_bytes()));
     }
-    &bytes[..max]
+    buf[str.len()].write(0u8);
 }
 
 impl<'js> Exception<'js> {
@@ -109,18 +121,13 @@ impl<'js> Exception<'js> {
 
     /// Throws a new syntax error.
     pub fn throw_syntax(ctx: &Ctx<'js>, message: &str) -> Error {
-        // generate C string inline.
-        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
-        // here is fine.
-        let mut buffer = core::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str = truncate_str(255, message.as_bytes());
+        let mut buffer = [MaybeUninit::uninit(); 256];
+        truncate_cstr_into(&mut buffer, message);
         unsafe {
-            core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
-            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
             let res = qjs::JS_ThrowSyntaxError(
                 ctx.as_ptr(),
                 ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_ptr().cast::<*mut u8>(),
+                buffer.as_mut_ptr(),
             );
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
@@ -129,18 +136,13 @@ impl<'js> Exception<'js> {
 
     /// Throws a new type error.
     pub fn throw_type(ctx: &Ctx<'js>, message: &str) -> Error {
-        // generate C string inline.
-        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
-        // here is fine.
-        let mut buffer = core::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str = truncate_str(255, message.as_bytes());
+        let mut buffer = [MaybeUninit::uninit(); 256];
+        truncate_cstr_into(&mut buffer, message);
         unsafe {
-            core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
-            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
             let res = qjs::JS_ThrowTypeError(
                 ctx.as_ptr(),
                 ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_ptr().cast::<*mut u8>(),
+                buffer.as_mut_ptr(),
             );
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
@@ -149,18 +151,13 @@ impl<'js> Exception<'js> {
 
     /// Throws a new reference error.
     pub fn throw_reference(ctx: &Ctx<'js>, message: &str) -> Error {
-        // generate C string inline.
-        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
-        // here is fine.
-        let mut buffer = core::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str = truncate_str(255, message.as_bytes());
+        let mut buffer = [MaybeUninit::uninit(); 256];
+        truncate_cstr_into(&mut buffer, message);
         unsafe {
-            core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
-            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
             let res = qjs::JS_ThrowReferenceError(
                 ctx.as_ptr(),
                 ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_ptr().cast::<*mut u8>(),
+                buffer.as_mut_ptr(),
             );
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
@@ -169,18 +166,13 @@ impl<'js> Exception<'js> {
 
     /// Throws a new range error.
     pub fn throw_range(ctx: &Ctx<'js>, message: &str) -> Error {
-        // generate C string inline.
-        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
-        // here is fine.
-        let mut buffer = core::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str = truncate_str(255, message.as_bytes());
+        let mut buffer = [MaybeUninit::uninit(); 256];
+        truncate_cstr_into(&mut buffer, message);
         unsafe {
-            core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
-            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
             let res = qjs::JS_ThrowRangeError(
                 ctx.as_ptr(),
                 ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_ptr().cast::<*mut u8>(),
+                buffer.as_mut_ptr(),
             );
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
@@ -189,18 +181,13 @@ impl<'js> Exception<'js> {
 
     /// Throws a new internal error.
     pub fn throw_internal(ctx: &Ctx<'js>, message: &str) -> Error {
-        // generate C string inline.
-        // QuickJS implementation doesn't allow error strings longer then 256 anyway so truncating
-        // here is fine.
-        let mut buffer = core::mem::MaybeUninit::<[u8; 256]>::uninit();
-        let str = truncate_str(255, message.as_bytes());
+        let mut buffer = [MaybeUninit::uninit(); 256];
+        truncate_cstr_into(&mut buffer, message);
         unsafe {
-            core::ptr::copy_nonoverlapping(message.as_ptr(), buffer.as_mut_ptr().cast(), str.len());
-            buffer.as_mut_ptr().cast::<u8>().add(str.len()).write(b'\0');
             let res = qjs::JS_ThrowInternalError(
                 ctx.as_ptr(),
                 ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_ptr().cast::<*mut u8>(),
+                buffer.as_mut_ptr(),
             );
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
