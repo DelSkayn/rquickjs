@@ -99,21 +99,47 @@ impl<'js> ArrayBuffer<'js> {
         let capacity = src.capacity();
         let size = src.len() * size_of::<T>();
 
-        extern "C" fn drop_raw<T>(
+        // `opaque` stays fixed across `transfer()`, so mutable capacity lives behind it instead of in it.
+        let capacity_cell = Box::into_raw(Box::new(capacity));
+
+        extern "C" fn realloc_raw<T: Copy>(
             _rt: *mut qjs::JSRuntime,
             opaque: *mut c_void,
             ptr: *mut c_void,
             size: qjs::size_t,
         ) -> *mut c_void {
-            if size != FREE {
+            let capacity_cell = opaque as *mut usize;
+            let capacity = unsafe { *capacity_cell };
+            // `ManuallyDrop` so a failed or unsupported resize leaves the allocation untouched.
+            let mut vec = ManuallyDrop::new(unsafe {
+                Vec::from_raw_parts(ptr as *mut T, capacity, capacity)
+            });
+
+            if size == FREE {
+                unsafe {
+                    ManuallyDrop::drop(&mut vec);
+                    drop(Box::from_raw(capacity_cell));
+                }
                 return core::ptr::null_mut();
             }
-            let ptr = ptr as *mut T;
-            let capacity = opaque as usize;
-            // reconstruct vector in order to free data
-            // the length of actual data does not matter for copyable types
-            unsafe { Vec::from_raw_parts(ptr, capacity, capacity) };
-            core::ptr::null_mut()
+
+            let elem_size = size_of::<T>();
+            if elem_size == 0 {
+                return core::ptr::null_mut();
+            }
+            let new_len = (size as usize).div_ceil(elem_size);
+
+            if new_len > capacity {
+                if vec.try_reserve_exact(new_len - capacity).is_err() {
+                    return core::ptr::null_mut();
+                }
+            } else if new_len < capacity {
+                unsafe { vec.set_len(new_len) };
+                vec.shrink_to(new_len);
+            }
+
+            unsafe { *capacity_cell = vec.capacity() };
+            vec.as_mut_ptr() as *mut c_void
         }
 
         Ok(Self(Object(unsafe {
@@ -122,13 +148,14 @@ impl<'js> ArrayBuffer<'js> {
                 ptr as _,
                 size as _,
                 FIXED_SIZE,
-                Some(drop_raw::<T>),
-                capacity as _,
+                Some(realloc_raw::<T>),
+                capacity_cell as _,
                 false,
             );
             ctx.handle_exception(val).inspect_err(|_| {
                 // don't forget to free data when error occurred
                 Vec::from_raw_parts(ptr, capacity, capacity);
+                drop(Box::from_raw(capacity_cell));
             })?;
             Value::from_js_value(ctx, val)
         })))
@@ -664,16 +691,61 @@ mod test {
     }
 
     #[test]
-    fn transfer_to_different_length_preserves_vec_buffer() {
+    fn transfer_to_different_length_grows_vec_buffer() {
         test_with(|ctx| {
             let ab = ArrayBuffer::new(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
             ctx.globals().set("buf", ab).unwrap();
 
-            assert!(ctx.eval::<(), _>("buf.transfer(8)").is_err());
-            drop(ctx.catch());
+            ctx.eval::<(), _>("globalThis.grown = buf.transfer(8);")
+                .unwrap();
 
-            let ab: ArrayBuffer = ctx.globals().get("buf").unwrap();
-            assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
+            // A detached buffer fails `FromJs`, so fetch it as a plain `Object`.
+            let original: Object = ctx.globals().get("buf").unwrap();
+            assert!(
+                ArrayBuffer::from_object(original).is_none(),
+                "source buffer must be detached by transfer"
+            );
+
+            let grown: ArrayBuffer = ctx.globals().get("grown").unwrap();
+            assert_eq!(grown.as_bytes().unwrap(), &[1, 2, 3, 4, 0, 0, 0, 0]);
+        });
+    }
+
+    #[test]
+    fn transfer_to_different_length_shrinks_vec_buffer() {
+        test_with(|ctx| {
+            let ab = ArrayBuffer::new(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            ctx.eval::<(), _>("globalThis.shrunk = buf.transfer(2);")
+                .unwrap();
+
+            let shrunk: ArrayBuffer = ctx.globals().get("shrunk").unwrap();
+            assert_eq!(shrunk.as_bytes().unwrap(), &[1, 2]);
+        });
+    }
+
+    #[test]
+    fn transfer_chain_grows_then_shrinks_vec_buffer() {
+        test_with(|ctx| {
+            let ab = ArrayBuffer::new(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            // Grow far enough to force a real move, then shrink, then grow again.
+            ctx.eval::<(), _>(
+                r#"
+                    globalThis.mid = buf.transfer(64);
+                    globalThis.small = mid.transfer(3);
+                    globalThis.end = small.transfer(50);
+                "#,
+            )
+            .unwrap();
+
+            let end: ArrayBuffer = ctx.globals().get("end").unwrap();
+            let bytes = end.as_bytes().unwrap();
+            assert_eq!(bytes.len(), 50);
+            assert_eq!(&bytes[..3], &[1, 2, 3]);
+            assert!(bytes[3..].iter().all(|&b| b == 0));
         });
     }
 
