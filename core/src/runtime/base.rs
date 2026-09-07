@@ -9,25 +9,35 @@ use crate::loader::{Loader, Resolver};
 use crate::{qjs, result::JobException, Context, Mut, Ref, Result, Weak};
 use alloc::{ffi::CString, vec::Vec};
 use core::{ptr::NonNull, result::Result as StdResult};
+#[cfg(feature = "parallel")]
+use std::sync::mpsc::{self, Sender};
 
 /// A weak handle to the runtime.
 ///
 /// Holding onto this struct does not prevent the runtime from being dropped.
 #[derive(Clone)]
-#[repr(transparent)]
-pub struct WeakRuntime(Weak<Mut<RawRuntime>>);
+pub struct WeakRuntime {
+    inner: Weak<Mut<RawRuntime>>,
+    #[cfg(feature = "parallel")]
+    pending_free: Sender<NonNull<qjs::JSContext>>,
+}
 
 impl WeakRuntime {
     pub fn try_ref(&self) -> Option<Runtime> {
-        self.0.upgrade().map(|inner| Runtime { inner })
+        self.inner.upgrade().map(|inner| Runtime {
+            inner,
+            #[cfg(feature = "parallel")]
+            pending_free: self.pending_free.clone(),
+        })
     }
 }
 
 /// QuickJS runtime, entry point of the library.
 #[derive(Clone)]
-#[repr(transparent)]
 pub struct Runtime {
     pub(crate) inner: Ref<Mut<RawRuntime>>,
+    #[cfg(feature = "parallel")]
+    pub(crate) pending_free: Sender<NonNull<qjs::JSContext>>,
 }
 
 impl Runtime {
@@ -39,9 +49,19 @@ impl Runtime {
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new() -> Result<Self> {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new(opaque)? };
+        #[cfg(feature = "parallel")]
+        let (pending_free, pending_free_recv) = mpsc::channel();
+        let rt = unsafe {
+            RawRuntime::new(
+                opaque,
+                #[cfg(feature = "parallel")]
+                pending_free_recv,
+            )?
+        };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
+            #[cfg(feature = "parallel")]
+            pending_free,
         })
     }
 
@@ -53,15 +73,30 @@ impl Runtime {
         A: Allocator + 'static,
     {
         let opaque = Opaque::new();
-        let rt = unsafe { RawRuntime::new_with_allocator(opaque, allocator)? };
+        #[cfg(feature = "parallel")]
+        let (pending_free, pending_free_recv) = mpsc::channel();
+        let rt = unsafe {
+            RawRuntime::new_with_allocator(
+                opaque,
+                allocator,
+                #[cfg(feature = "parallel")]
+                pending_free_recv,
+            )?
+        };
         Ok(Self {
             inner: Ref::new(Mut::new(rt)),
+            #[cfg(feature = "parallel")]
+            pending_free,
         })
     }
 
     /// Get weak ref to runtime
     pub fn weak(&self) -> WeakRuntime {
-        WeakRuntime(Ref::downgrade(&self.inner))
+        WeakRuntime {
+            inner: Ref::downgrade(&self.inner),
+            #[cfg(feature = "parallel")]
+            pending_free: self.pending_free.clone(),
+        }
     }
 
     /// Set a closure which is called when a promise is created, resolved, or chained.
@@ -238,5 +273,45 @@ mod test {
         ctx.with(|ctx| {
             ctx.eval::<i32, _>("1 + 1").unwrap();
         });
+    }
+
+    #[test]
+    fn context_dropped_while_lock_held() {
+        let rt = Runtime::new().unwrap();
+        let ctx1 = crate::Context::full(&rt).unwrap();
+        let ctx2 = crate::Context::full(&rt).unwrap();
+
+        ctx1.with(|_| {
+            drop(ctx2);
+        });
+    }
+
+    #[test]
+    #[cfg(feature = "parallel")]
+    fn context_parked_by_other_thread_is_still_freed() {
+        use std::sync::{Arc, Barrier};
+        use std::{thread, time::Duration};
+
+        let rt = Runtime::new().unwrap();
+        let ctx1 = crate::Context::full(&rt).unwrap();
+        let ctx2 = crate::Context::full(&rt).unwrap();
+
+        let barrier = Arc::new(Barrier::new(2));
+        let barrier_holder = barrier.clone();
+        let holder = thread::spawn(move || {
+            ctx1.with(|_| {
+                barrier_holder.wait();
+                thread::sleep(Duration::from_millis(100));
+            });
+        });
+
+        barrier.wait();
+        // The lock is held by the other thread, so this parks rather than
+        // freeing. Tearing the runtime down afterwards has to release it;
+        // `JS_FreeRuntime` aborts if any context is still alive.
+        drop(ctx2);
+
+        holder.join().unwrap();
+        drop(rt);
     }
 }

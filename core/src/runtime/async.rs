@@ -8,7 +8,7 @@ use core::{ptr::NonNull, result::Result as StdResult, task::Poll};
 use std::println;
 
 #[cfg(feature = "parallel")]
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Sender};
 
 use async_lock::Mutex;
 
@@ -28,23 +28,6 @@ use crate::{
 #[derive(Debug)]
 pub(crate) struct InnerRuntime {
     pub runtime: RawRuntime,
-    #[cfg(feature = "parallel")]
-    pub drop_recv: Receiver<NonNull<qjs::JSContext>>,
-}
-
-impl InnerRuntime {
-    pub fn drop_pending(&self) {
-        #[cfg(feature = "parallel")]
-        while let Ok(x) = self.drop_recv.try_recv() {
-            unsafe { qjs::JS_FreeContext(x.as_ptr()) }
-        }
-    }
-}
-
-impl Drop for InnerRuntime {
-    fn drop(&mut self) {
-        self.drop_pending();
-    }
 }
 
 #[cfg(feature = "parallel")]
@@ -58,7 +41,7 @@ unsafe impl Send for InnerRuntime {}
 pub struct AsyncWeakRuntime {
     inner: Weak<Mutex<InnerRuntime>>,
     #[cfg(feature = "parallel")]
-    drop_send: Sender<NonNull<qjs::JSContext>>,
+    pending_free: Sender<NonNull<qjs::JSContext>>,
 }
 
 impl AsyncWeakRuntime {
@@ -66,7 +49,7 @@ impl AsyncWeakRuntime {
         self.inner.upgrade().map(|inner| AsyncRuntime {
             inner,
             #[cfg(feature = "parallel")]
-            drop_send: self.drop_send.clone(),
+            pending_free: self.pending_free.clone(),
         })
     }
 }
@@ -78,7 +61,7 @@ pub struct AsyncRuntime {
     // use Arc instead of Ref so we can use OwnedLock
     pub(crate) inner: Arc<Mutex<InnerRuntime>>,
     #[cfg(feature = "parallel")]
-    pub(crate) drop_send: Sender<NonNull<qjs::JSContext>>,
+    pub(crate) pending_free: Sender<NonNull<qjs::JSContext>>,
 }
 
 // Since all functions which use runtime are behind a mutex
@@ -107,19 +90,21 @@ impl AsyncRuntime {
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Result<Self> {
         let opaque = Opaque::with_spawner();
-        let runtime = unsafe { RawRuntime::new(opaque) }?;
 
         #[cfg(feature = "parallel")]
-        let (drop_send, drop_recv) = mpsc::channel();
+        let (pending_free, pending_free_recv) = mpsc::channel();
+        let runtime = unsafe {
+            RawRuntime::new(
+                opaque,
+                #[cfg(feature = "parallel")]
+                pending_free_recv,
+            )
+        }?;
 
         Ok(Self {
-            inner: Arc::new(Mutex::new(InnerRuntime {
-                runtime,
-                #[cfg(feature = "parallel")]
-                drop_recv,
-            })),
+            inner: Arc::new(Mutex::new(InnerRuntime { runtime })),
             #[cfg(feature = "parallel")]
-            drop_send,
+            pending_free,
         })
     }
 
@@ -133,19 +118,22 @@ impl AsyncRuntime {
         A: Allocator + 'static,
     {
         let opaque = Opaque::with_spawner();
-        let runtime = unsafe { RawRuntime::new_with_allocator(opaque, allocator) }?;
 
         #[cfg(feature = "parallel")]
-        let (drop_send, drop_recv) = mpsc::channel();
+        let (pending_free, pending_free_recv) = mpsc::channel();
+        let runtime = unsafe {
+            RawRuntime::new_with_allocator(
+                opaque,
+                allocator,
+                #[cfg(feature = "parallel")]
+                pending_free_recv,
+            )
+        }?;
 
         Ok(Self {
-            inner: Arc::new(Mutex::new(InnerRuntime {
-                runtime,
-                #[cfg(feature = "parallel")]
-                drop_recv,
-            })),
+            inner: Arc::new(Mutex::new(InnerRuntime { runtime })),
             #[cfg(feature = "parallel")]
-            drop_send,
+            pending_free,
         })
     }
 
@@ -154,7 +142,7 @@ impl AsyncRuntime {
         AsyncWeakRuntime {
             inner: Arc::downgrade(&self.inner),
             #[cfg(feature = "parallel")]
-            drop_send: self.drop_send.clone(),
+            pending_free: self.pending_free.clone(),
         }
     }
 
@@ -251,7 +239,7 @@ impl AsyncRuntime {
     pub async fn run_gc(&self) {
         unsafe {
             let mut lock = self.inner.lock().await;
-            lock.drop_pending();
+            lock.runtime.drain_pending_free();
             lock.runtime.run_gc();
         }
     }
@@ -278,7 +266,7 @@ impl AsyncRuntime {
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.inner.lock().await;
         lock.runtime.update_stack_top();
-        lock.drop_pending();
+        lock.runtime.drain_pending_free();
 
         let f = ManualPoll::new(|cx| {
             let job_res = lock.runtime.execute_pending_job().map_err(|e| {
@@ -313,7 +301,7 @@ impl AsyncRuntime {
     pub async fn idle(&self) {
         let mut lock = self.inner.lock().await;
         lock.runtime.update_stack_top();
-        lock.drop_pending();
+        lock.runtime.drain_pending_free();
 
         let f = ManualPoll::new(|cx| {
             loop {

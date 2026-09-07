@@ -16,6 +16,11 @@ use core::{
 
 use super::typed_array::TypedArrayItem;
 
+/// JS_NewArrayBuffer uses max_len=0 for fixed-length buffers, and calls the
+/// realloc callback with size=0 to free. Same sentinel, different meanings.
+const FIXED_SIZE: qjs::size_t = 0;
+const FREE: qjs::size_t = 0;
+
 /// A contiguous byte region owned by `self` and usable as the backing store
 /// of an [`ArrayBuffer`].
 ///
@@ -54,11 +59,6 @@ impl_array_buffer_source!(Vec<u8>, alloc::boxed::Box<[u8]>, Arc<[u8]>, Arc<Vec<u
 #[cfg(feature = "bytes")]
 impl_array_buffer_source!(bytes::Bytes);
 
-pub struct RawArrayBuffer {
-    pub len: usize,
-    pub ptr: NonNull<u8>,
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum AsSliceError {
     BufferUsed,
@@ -94,12 +94,47 @@ impl<'js> ArrayBuffer<'js> {
         let capacity = src.capacity();
         let size = src.len() * size_of::<T>();
 
-        extern "C" fn drop_raw<T>(_rt: *mut qjs::JSRuntime, opaque: *mut c_void, ptr: *mut c_void) {
-            let ptr = ptr as *mut T;
-            let capacity = opaque as usize;
-            // reconstruct vector in order to free data
-            // the length of actual data does not matter for copyable types
-            unsafe { Vec::from_raw_parts(ptr, capacity, capacity) };
+        // `opaque` stays fixed across `transfer()`, so mutable capacity lives behind it instead of in it.
+        let capacity_cell = Box::into_raw(Box::new(capacity));
+
+        extern "C" fn realloc_raw<T: Copy>(
+            _rt: *mut qjs::JSRuntime,
+            opaque: *mut c_void,
+            ptr: *mut c_void,
+            size: qjs::size_t,
+        ) -> *mut c_void {
+            let capacity_cell = opaque as *mut usize;
+            let capacity = unsafe { *capacity_cell };
+            // `ManuallyDrop` so a failed or unsupported resize leaves the allocation untouched.
+            let mut vec = ManuallyDrop::new(unsafe {
+                Vec::from_raw_parts(ptr as *mut T, capacity, capacity)
+            });
+
+            if size == FREE {
+                unsafe {
+                    ManuallyDrop::drop(&mut vec);
+                    drop(Box::from_raw(capacity_cell));
+                }
+                return core::ptr::null_mut();
+            }
+
+            let elem_size = size_of::<T>();
+            if elem_size == 0 {
+                return core::ptr::null_mut();
+            }
+            let new_len = (size as usize).div_ceil(elem_size);
+
+            if new_len > capacity {
+                if vec.try_reserve_exact(new_len - capacity).is_err() {
+                    return core::ptr::null_mut();
+                }
+            } else if new_len < capacity {
+                vec.truncate(new_len);
+                vec.shrink_to(new_len);
+            }
+
+            unsafe { *capacity_cell = vec.capacity() };
+            vec.as_mut_ptr() as *mut c_void
         }
 
         Ok(Self(Object(unsafe {
@@ -107,13 +142,15 @@ impl<'js> ArrayBuffer<'js> {
                 ctx.as_ptr(),
                 ptr as _,
                 size as _,
-                Some(drop_raw::<T>),
-                capacity as _,
+                FIXED_SIZE,
+                Some(realloc_raw::<T>),
+                capacity_cell as _,
                 false,
             );
             ctx.handle_exception(val).inspect_err(|_| {
                 // don't forget to free data when error occurred
                 Vec::from_raw_parts(ptr, capacity, capacity);
+                drop(Box::from_raw(capacity_cell));
             })?;
             Value::from_js_value(ctx, val)
         })))
@@ -197,11 +234,16 @@ impl<'js> ArrayBuffer<'js> {
             _rt: *mut qjs::JSRuntime,
             opaque: *mut c_void,
             _ptr: *mut c_void,
-        ) {
+            size: qjs::size_t,
+        ) -> *mut c_void {
+            if size != FREE {
+                return core::ptr::null_mut();
+            }
             unsafe {
                 let boxed: Box<F> = Box::from_raw(opaque as *mut F);
                 (*boxed)();
             }
+            core::ptr::null_mut()
         }
 
         let opaque = Box::into_raw(Box::new(drop_fn)) as *mut c_void;
@@ -211,12 +253,18 @@ impl<'js> ArrayBuffer<'js> {
                 ctx.as_ptr(),
                 ptr,
                 len as _,
+                FIXED_SIZE,
                 Some(shim::<F>),
                 opaque,
                 is_shared,
             );
             if let Err(e) = ctx.handle_exception(val) {
-                shim::<F>(qjs::JS_GetRuntime(ctx.as_ptr()), opaque, ptr as *mut c_void);
+                shim::<F>(
+                    qjs::JS_GetRuntime(ctx.as_ptr()),
+                    opaque,
+                    ptr as *mut c_void,
+                    FREE,
+                );
                 return Err(e);
             }
             if immutable {
@@ -228,7 +276,7 @@ impl<'js> ArrayBuffer<'js> {
 
     /// Get the length of the array buffer in bytes.
     pub fn len(&self) -> usize {
-        Self::get_raw(&self.0).expect("Not an ArrayBuffer").len
+        Self::get_raw(&self.0).expect("Not an ArrayBuffer").len()
     }
 
     /// Returns whether an array buffer is empty.
@@ -239,20 +287,31 @@ impl<'js> ArrayBuffer<'js> {
     /// Returns the underlying bytes of the buffer,
     ///
     /// Returns `None` if the array is detached.
-    pub fn as_bytes(&self) -> Option<&[u8]> {
-        let raw = Self::get_raw(self.as_value())?;
-        Some(unsafe { slice::from_raw_parts_mut(raw.ptr.as_ptr(), raw.len) })
+    ///
+    /// # Safety
+    ///
+    /// The returned slice aliases memory owned by the JS engine. The caller must not run
+    /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
+    /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
+    pub unsafe fn as_bytes(&self) -> Option<&[u8]> {
+        Some(self.as_raw()?.as_ref())
     }
 
     /// Returns a slice if the buffer underlying buffer is properly aligned for the type and the
     /// buffer is not detached.
-    pub fn as_slice<T: TypedArrayItem>(&self) -> StdResult<&[T], AsSliceError> {
+    ///
+    /// # Safety
+    ///
+    /// The returned slice aliases memory owned by the JS engine. The caller must not run
+    /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
+    /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
+    pub unsafe fn as_slice<T: TypedArrayItem>(&self) -> StdResult<&[T], AsSliceError> {
         let raw = Self::get_raw(&self.0).ok_or(AsSliceError::BufferUsed)?;
-        if raw.ptr.as_ptr().align_offset(mem::align_of::<T>()) != 0 {
+        if raw.cast::<u8>().align_offset(mem::align_of::<T>()) != 0 {
             return Err(AsSliceError::InvalidAlignment);
         }
-        let len = raw.len / size_of::<T>();
-        Ok(unsafe { slice::from_raw_parts(raw.ptr.as_ptr().cast(), len) })
+        let len = raw.len() / size_of::<T>();
+        Ok(slice::from_raw_parts(raw.as_ptr().cast(), len))
     }
 
     /// Detach array buffer
@@ -298,14 +357,19 @@ impl<'js> ArrayBuffer<'js> {
         }
     }
 
-    /// Returns a structure with data about the raw buffer which this object contains.
+    /// Returns a pointer to the underlying bytes of the buffer,
     ///
-    /// Returns None if the buffer was already used.
-    pub fn as_raw(&self) -> Option<RawArrayBuffer> {
+    /// The returned pointer is only guaranteed valid until the next time
+    /// JavaScript runs: JS can write through it, detach the buffer, or, for a
+    /// resizable buffer, reallocate the backing store and free this pointer.
+    /// Treat the pointer as invalidated after any call back into the engine.
+    ///
+    /// Returns None if the buffer was already detached.
+    pub fn as_raw(&self) -> Option<NonNull<[u8]>> {
         Self::get_raw(self.as_value())
     }
 
-    pub(crate) fn get_raw(val: &Value<'js>) -> Option<RawArrayBuffer> {
+    pub(crate) fn get_raw(val: &Value<'js>) -> Option<NonNull<[u8]>> {
         let ctx = val.ctx();
         let val = val.as_js_value();
         let mut size = MaybeUninit::<qjs::size_t>::uninit();
@@ -315,16 +379,10 @@ impl<'js> ArrayBuffer<'js> {
             let len = unsafe { size.assume_init() }
                 .try_into()
                 .expect(qjs::SIZE_T_ERROR);
-            Some(RawArrayBuffer { len, ptr })
+            Some(NonNull::slice_from_raw_parts(ptr, len))
         } else {
             None
         }
-    }
-}
-
-impl<'js, T: TypedArrayItem> AsRef<[T]> for ArrayBuffer<'js> {
-    fn as_ref(&self) -> &[T] {
-        self.as_slice().expect("ArrayBuffer was detached")
     }
 }
 
@@ -402,7 +460,10 @@ mod test {
                 )
                 .unwrap();
             assert_eq!(val.len(), 4);
-            assert_eq!(val.as_ref() as &[i8], &[0i8, -5, 1, 11]);
+            assert_eq!(
+                unsafe { val.as_slice() }.unwrap() as &[i8],
+                &[0i8, -5, 1, 11]
+            );
         });
     }
 
@@ -439,7 +500,10 @@ mod test {
                 )
                 .unwrap();
             assert_eq!(val.len(), 12);
-            assert_eq!(val.as_ref() as &[f32], &[0.5f32, -5.25, 123.125]);
+            assert_eq!(
+                unsafe { val.as_slice() }.unwrap() as &[f32],
+                &[0.5f32, -5.25, 123.125]
+            );
         });
     }
 
@@ -481,7 +545,7 @@ mod test {
             let bytes_1 = 0xFEEDBEADu32.to_ne_bytes();
             res[4..].copy_from_slice(&bytes_1);
 
-            assert_eq!(val.as_bytes().unwrap(), &res)
+            assert_eq!(unsafe { val.as_bytes() }.unwrap(), &res)
         });
     }
 
@@ -512,7 +576,7 @@ mod test {
             let src = Tracker(alloc::vec![1u8, 2, 3, 4].into_boxed_slice());
             let ab = ArrayBuffer::from_source(ctx.clone(), src).unwrap();
             assert_eq!(ab.len(), 4);
-            assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
+            assert_eq!(unsafe { ab.as_bytes() }.unwrap(), &[1, 2, 3, 4]);
         });
         rt.run_gc();
         assert!(DROPPED.load(Ordering::SeqCst));
@@ -589,10 +653,16 @@ mod test {
             let tail = mk(12, 4);
             let middle = mk(4, 8);
 
-            assert_eq!(full.as_bytes().unwrap(), (0u8..16).collect::<Vec<_>>());
-            assert_eq!(head.as_bytes().unwrap(), &[0, 1, 2, 3]);
-            assert_eq!(tail.as_bytes().unwrap(), &[12, 13, 14, 15]);
-            assert_eq!(middle.as_bytes().unwrap(), (4u8..12).collect::<Vec<_>>());
+            assert_eq!(
+                unsafe { full.as_bytes() }.unwrap(),
+                (0u8..16).collect::<Vec<_>>()
+            );
+            assert_eq!(unsafe { head.as_bytes() }.unwrap(), &[0, 1, 2, 3]);
+            assert_eq!(unsafe { tail.as_bytes() }.unwrap(), &[12, 13, 14, 15]);
+            assert_eq!(
+                unsafe { middle.as_bytes() }.unwrap(),
+                (4u8..12).collect::<Vec<_>>()
+            );
             assert_eq!(Arc::strong_count(&buf), 5);
 
             ctx.globals().set("buf", full).unwrap();
@@ -633,8 +703,119 @@ mod test {
         let c = crate::Context::full(&rt).unwrap();
         c.with(|ctx| {
             let ab = ArrayBuffer::from_source(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
-            assert_eq!(ab.as_bytes().unwrap(), &[1, 2, 3, 4]);
+            assert_eq!(unsafe { ab.as_bytes() }.unwrap(), &[1, 2, 3, 4]);
         });
+    }
+
+    #[test]
+    fn transfer_to_different_length_grows_vec_buffer() {
+        test_with(|ctx| {
+            let ab = ArrayBuffer::new(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            ctx.eval::<(), _>("globalThis.grown = buf.transfer(8);")
+                .unwrap();
+
+            // A detached buffer fails `FromJs`, so fetch it as a plain `Object`.
+            let original: Object = ctx.globals().get("buf").unwrap();
+            assert!(
+                ArrayBuffer::from_object(original).is_none(),
+                "source buffer must be detached by transfer"
+            );
+
+            let grown: ArrayBuffer = ctx.globals().get("grown").unwrap();
+            assert_eq!(
+                unsafe { grown.as_bytes() }.unwrap(),
+                &[1, 2, 3, 4, 0, 0, 0, 0]
+            );
+        });
+    }
+
+    #[test]
+    fn transfer_to_different_length_shrinks_vec_buffer() {
+        test_with(|ctx| {
+            let ab = ArrayBuffer::new(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            ctx.eval::<(), _>("globalThis.shrunk = buf.transfer(2);")
+                .unwrap();
+
+            let shrunk: ArrayBuffer = ctx.globals().get("shrunk").unwrap();
+            assert_eq!(unsafe { shrunk.as_bytes() }.unwrap(), &[1, 2]);
+        });
+    }
+
+    #[test]
+    fn transfer_chain_grows_then_shrinks_vec_buffer() {
+        test_with(|ctx| {
+            let ab = ArrayBuffer::new(ctx.clone(), alloc::vec![1u8, 2, 3, 4]).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            // Grow far enough to force a real move, then shrink, then grow again.
+            ctx.eval::<(), _>(
+                r#"
+                    globalThis.mid = buf.transfer(64);
+                    globalThis.small = mid.transfer(3);
+                    globalThis.end = small.transfer(50);
+                "#,
+            )
+            .unwrap();
+
+            let end: ArrayBuffer = ctx.globals().get("end").unwrap();
+            let bytes = unsafe { end.as_bytes() }.unwrap();
+            assert_eq!(bytes.len(), 50);
+            assert_eq!(&bytes[..3], &[1, 2, 3]);
+            assert!(bytes[3..].iter().all(|&b| b == 0));
+        });
+    }
+
+    #[test]
+    fn transfer_to_different_length_preserves_external_buffer() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Tracker {
+            data: alloc::boxed::Box<[u8]>,
+            drops: Arc<AtomicUsize>,
+        }
+
+        unsafe impl ArrayBufferSource for Tracker {
+            fn as_ptr(&self) -> *mut u8 {
+                self.data.as_ptr()
+            }
+
+            fn len(&self) -> usize {
+                self.data.len()
+            }
+        }
+
+        impl Drop for Tracker {
+            fn drop(&mut self) {
+                self.drops.fetch_add(1, Ordering::SeqCst);
+            }
+        }
+
+        let drops = Arc::new(AtomicUsize::new(0));
+        let rt = crate::Runtime::new().unwrap();
+        let c = crate::Context::full(&rt).unwrap();
+        c.with(|ctx| {
+            let src = Tracker {
+                data: alloc::vec![1u8, 2, 3, 4].into_boxed_slice(),
+                drops: drops.clone(),
+            };
+            let ab = ArrayBuffer::from_source(ctx.clone(), src).unwrap();
+            ctx.globals().set("buf", ab).unwrap();
+
+            assert!(ctx.eval::<(), _>("buf.transfer(8)").is_err());
+            drop(ctx.catch());
+            assert_eq!(drops.load(Ordering::SeqCst), 0);
+
+            let ab: ArrayBuffer = ctx.globals().get("buf").unwrap();
+            assert_eq!(unsafe { ab.as_bytes() }.unwrap(), &[1, 2, 3, 4]);
+        });
+
+        drop(c);
+        drop(rt);
+        assert_eq!(drops.load(Ordering::SeqCst), 1);
     }
 
     #[test]
@@ -696,7 +877,10 @@ mod test {
         let c = crate::Context::full(&rt).unwrap();
         c.with(|ctx| {
             let ab = ArrayBuffer::from_source_immutable(ctx.clone(), data.clone()).unwrap();
-            assert_eq!(ab.as_bytes().unwrap(), (0u8..8).collect::<Vec<_>>());
+            assert_eq!(
+                unsafe { ab.as_bytes() }.unwrap(),
+                (0u8..8).collect::<Vec<_>>()
+            );
         });
     }
 }
