@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed deadlock when dropping a `Context` while the runtime lock is held under the `parallel` feature
+- Updated `sys/quickjs` to `2c620e4` (quickjs-ng 0.16.2) and adapted `ArrayBuffer` callbacks to the new `JSReallocArrayBufferDataFunc` contract
+- Removed stale `RefCountHeader` cast in `drop_context` (field moved to allocator header in quickjs-ng)
 
 ### Security
 

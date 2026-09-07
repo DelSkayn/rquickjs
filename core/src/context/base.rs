@@ -267,10 +267,9 @@ mod test {
         println!("done");
     }
 
-    // Will be improved by https://github.com/quickjs-ng/quickjs/pull/406
     #[test]
     #[should_panic(
-        expected = "Error: invalid first character of private name\n    at eval_script:1:1\n"
+        expected = "Error: invalid first character of private name\n    at eval_script:1:5\n"
     )]
     fn exception() {
         test_with(|ctx| {
