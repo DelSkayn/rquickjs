@@ -129,7 +129,7 @@ impl<'js> ArrayBuffer<'js> {
                     return core::ptr::null_mut();
                 }
             } else if new_len < capacity {
-                unsafe { vec.set_len(new_len) };
+                vec.truncate(new_len);
                 vec.shrink_to(new_len);
             }
 
