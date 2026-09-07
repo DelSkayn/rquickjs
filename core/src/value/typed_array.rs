@@ -14,8 +14,6 @@ use core::{
     slice,
 };
 
-use super::array_buffer::RawArrayBuffer;
-
 /// The trait which implements types which capable to be TypedArray items
 ///
 pub trait TypedArrayItem: Copy {
@@ -205,14 +203,27 @@ impl<'js, T> TypedArray<'js, T> {
     /// Returns the underlying bytes of the buffer,
     ///
     /// Returns `None` if the array is detached.
-    pub fn as_bytes(&self) -> Option<&[u8]> {
-        let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
-        Some(unsafe { slice::from_raw_parts(ptr.as_ptr(), len) })
+    ///
+    /// # Safety
+    ///
+    /// The returned slice aliases memory owned by the JS engine. The caller must not run
+    /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
+    /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
+    pub unsafe fn as_bytes(&self) -> Option<&[u8]> {
+        Some(self.as_raw()?.as_ref())
     }
 
-    pub fn as_raw(&self) -> Option<RawArrayBuffer> {
+    /// Returns a pointer to the underlying bytes of the buffer,
+    ///
+    /// The returned pointer is only guaranteed valid until the next time
+    /// JavaScript runs: JS can write through it, detach the buffer, or, for a
+    /// resizable buffer, reallocate the backing store and free this pointer.
+    /// Treat the pointer as invalidated after any call back into the engine.
+    ///
+    /// Returns None if the buffer was already detached.
+    pub fn as_raw(&self) -> Option<NonNull<[u8]>> {
         let (_, len, ptr) = Self::get_raw_bytes(self.as_value())?;
-        Some(RawArrayBuffer { len, ptr })
+        Some(NonNull::slice_from_raw_parts(ptr, len))
     }
 
     /// Get underlying ArrayBuffer
@@ -277,11 +288,11 @@ impl<'js, T> TypedArray<'js, T> {
             .try_into()
             .expect(qjs::SIZE_T_ERROR);
         let raw = ArrayBuffer::get_raw(&buf)?;
-        if (off + len) > raw.len {
+        if (off + len) > raw.len() {
             return None;
         }
         // SAFETY: ptr was non-null and then we added an offset so it should still be non null
-        let ptr = unsafe { NonNull::new_unchecked(raw.ptr.as_ptr().add(off)) };
+        let ptr = unsafe { raw.cast::<u8>().add(off) };
         Some((stp, len, ptr))
     }
 
@@ -294,13 +305,25 @@ impl<'js, T> TypedArray<'js, T> {
         let ptr = ptr.cast::<T>();
         Some((len / mem::size_of::<T>(), ptr))
     }
-}
 
-impl<'js, T: TypedArrayItem> AsRef<[T]> for TypedArray<'js, T> {
-    fn as_ref(&self) -> &[T] {
+    /// Returns the underlying elements of the typed array as a slice.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the array is detached or the class does not match `T`.
+    ///
+    /// # Safety
+    ///
+    /// The returned slice aliases memory owned by the JS engine. The caller must not run
+    /// any JavaScript for as long as the slice is alive, since JS can write into, detach,
+    /// or (for a resizable buffer) reallocate the backing store, invalidating the slice.
+    pub unsafe fn as_slice(&self) -> &[T]
+    where
+        T: TypedArrayItem,
+    {
         let (len, ptr) =
             Self::get_raw(&self.0).unwrap_or_else(|| panic!("{}", T::CLASS_NAME.to_str()));
-        unsafe { slice::from_raw_parts(ptr.as_ptr().cast(), len) }
+        slice::from_raw_parts(ptr.as_ptr().cast(), len)
     }
 }
 
@@ -401,7 +424,7 @@ mod test {
                 )
                 .unwrap();
             assert_eq!(val.len(), 4);
-            assert_eq!(val.as_ref() as &[i8], &[0i8, -5, 1, 11]);
+            assert_eq!(unsafe { val.as_slice() } as &[i8], &[0i8, -5, 1, 11]);
         });
     }
 
@@ -438,7 +461,7 @@ mod test {
                 )
                 .unwrap();
             assert_eq!(val.len(), 3);
-            assert_eq!(val.as_ref() as &[f32], &[0.5, -5.25, 123.125]);
+            assert_eq!(unsafe { val.as_slice() } as &[f32], &[0.5, -5.25, 123.125]);
         });
     }
 
@@ -478,7 +501,7 @@ mod test {
             let bytes_1 = 0xFEEDBEADu32.to_ne_bytes();
             res[4..].copy_from_slice(&bytes_1);
 
-            assert_eq!(val.as_bytes().unwrap(), &res)
+            assert_eq!(unsafe { val.as_bytes() }.unwrap(), &res)
         });
     }
 
@@ -510,7 +533,7 @@ mod test {
             assert_eq!(val.len(), 3);
             // Values are clamped to the 0..=255 range by the engine.
             assert_eq!(
-                AsRef::<[U8Clamped]>::as_ref(&val),
+                unsafe { val.as_slice() },
                 &[U8Clamped(0), U8Clamped(255), U8Clamped(11)]
             );
 
@@ -529,10 +552,7 @@ mod test {
         test_with(|ctx| {
             let ta = TypedArray::new(ctx.clone(), [U8Clamped(1), U8Clamped(2)]).unwrap();
             assert_eq!(ta.len(), 2);
-            assert_eq!(
-                AsRef::<[U8Clamped]>::as_ref(&ta),
-                &[U8Clamped(1), U8Clamped(2)]
-            );
+            assert_eq!(unsafe { ta.as_slice() }, &[U8Clamped(1), U8Clamped(2)]);
             assert!(ta.as_object().is_typed_array::<U8Clamped>());
         });
     }
@@ -551,7 +571,7 @@ mod test {
                 .unwrap();
             assert_eq!(val.len(), 3);
             assert_eq!(
-                val.as_ref() as &[f16],
+                unsafe { val.as_slice() } as &[f16],
                 &[
                     f16::from_f32(0.5),
                     f16::from_f32(-5.25),
