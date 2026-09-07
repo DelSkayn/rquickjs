@@ -148,6 +148,28 @@ jobs:
         working-directory: examples
         run: make run
 
+  # wasm32-unknown-unknown is not part of the `test` matrix: it has no test
+  # runner, so `wasm-test` is driven through deno instead.
+  wasm-unknown:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: true
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+      - name: Setup deno
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Build wasm-test
+        run: cargo build --manifest-path wasm-test/Cargo.toml --release --target wasm32-unknown-unknown
+      - name: Test
+        run: deno run --allow-read wasm-test/runner.ts
+
   test:
     needs:
       - format

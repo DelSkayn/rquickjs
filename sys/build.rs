@@ -91,6 +91,173 @@ fn get_wasi_sdk_path() -> PathBuf {
         .unwrap_or_else(download_wasi_sdk)
 }
 
+// sha256 of wasi-sysroot-24.0.tar.gz as published on the wasi-sdk-24 release.
+const WASI_SYSROOT_SHA256: &str =
+    "35172f7d2799485b15a46b1d87f50a585d915ec662080f005d99153a50888f08";
+
+/// Does `path` look like a wasi-sysroot?
+fn is_wasi_sysroot(path: &Path) -> bool {
+    path.join("include/wasm32-wasi/wasi/api.h")
+        .try_exists()
+        .unwrap_or(false)
+}
+
+/// Root of the wasi-sysroot used for the `wasm32-unknown-unknown` target,
+/// honouring `RQUICKJS_WASM_SYSROOT` (which skips the download entirely).
+fn get_wasm_sysroot_path() -> PathBuf {
+    let Some(path) = env::var_os("RQUICKJS_WASM_SYSROOT").map(PathBuf::from) else {
+        return download_wasi_sysroot();
+    };
+    assert!(
+        is_wasi_sysroot(&path),
+        "RQUICKJS_WASM_SYSROOT points at {}, which is not a wasi-sysroot \
+         (no include/wasm32-wasi/wasi/api.h)",
+        path.display(),
+    );
+    path
+}
+
+/// Download and extract the pinned wasi-sysroot.
+///
+/// Unlike [`download_wasi_sdk`] this caches under `CARGO_HOME` rather than
+/// `OUT_DIR`: the archive is 68MB and `OUT_DIR` is wiped by `cargo clean` and
+/// is per-profile, so an `OUT_DIR` cache re-downloads far too often. `OUT_DIR`
+/// is still the fallback when `CARGO_HOME` is unset.
+fn download_wasi_sysroot() -> PathBuf {
+    let major_version = WASI_SDK_VERSION_MAJOR;
+    let minor_version = WASI_SDK_VERSION_MINOR;
+
+    let cache_dir: PathBuf = env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| env::var("OUT_DIR").unwrap().into())
+        .join("rquickjs-wasi-sysroot");
+    fs::create_dir_all(&cache_dir).unwrap();
+
+    let archive_path = cache_dir.join(format!(
+        "wasi-sysroot-{major_version}.{minor_version}.tar.gz"
+    ));
+    let sysroot_dir = cache_dir.join(format!("wasi-sysroot-{major_version}.{minor_version}"));
+
+    // Download archive if necessary
+    if !archive_path.try_exists().unwrap() {
+        let uri = format!(
+            "https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-{major_version}/wasi-sysroot-{major_version}.{minor_version}.tar.gz"
+        );
+        println!("Downloading wasi-sysroot archive from {uri} to {archive_path:?}");
+
+        // download to a temp path first so an interrupted curl cannot leave a
+        // truncated archive that later runs would treat as cached.
+        let partial_path = archive_path.with_extension("part");
+        let output = process::Command::new("curl")
+            .args([
+                "--location",
+                "--fail",
+                "-o",
+                partial_path.to_string_lossy().as_ref(),
+                uri.as_ref(),
+            ])
+            .output()
+            .expect("failed to download the wasi-sysroot with curl");
+        if !output.status.success() {
+            panic!(
+                "curl wasi-sysroot failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        verify_sha256(&partial_path, WASI_SYSROOT_SHA256);
+        fs::rename(&partial_path, &archive_path).unwrap();
+    } else {
+        verify_sha256(&archive_path, WASI_SYSROOT_SHA256);
+    }
+
+    // Extract archive if necessary
+    let test_header = sysroot_dir.join("include/wasm32-wasi/wasi/api.h");
+    if !test_header.try_exists().unwrap() {
+        println!("Extracting wasi-sysroot archive {archive_path:?}");
+        fs::create_dir_all(&sysroot_dir).unwrap();
+        let output = process::Command::new("tar")
+            .args([
+                "-zxf",
+                archive_path.to_string_lossy().as_ref(),
+                "--strip-components",
+                "1",
+            ])
+            .current_dir(&sysroot_dir)
+            .output()
+            .unwrap();
+        if !output.status.success() {
+            panic!(
+                "Unpacking wasi-sysroot failed: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    sysroot_dir
+}
+
+fn verify_sha256(path: &Path, expected: &str) {
+    let output = process::Command::new("sha256sum")
+        .arg(path)
+        .output()
+        .or_else(|_| {
+            process::Command::new("shasum")
+                .args(["-a", "256"])
+                .arg(path)
+                .output()
+        })
+        .expect("failed to run sha256sum/shasum to verify the wasi-sysroot archive");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let actual = stdout.split_whitespace().next().unwrap_or_default();
+    if !output.status.success() || actual != expected {
+        panic!(
+            "wasi-sysroot checksum mismatch for {}: expected {expected}, got {actual}. \
+             Delete the file and retry, or set RQUICKJS_WASM_SYSROOT to a trusted sysroot.",
+            path.display()
+        );
+    }
+}
+
+/// `wasi/api.h` opens with an `#ifndef __wasi__` / `#error` guard, so it cannot
+/// be included from `wasm32-unknown-unknown` as-is. Write a copy with that one
+/// `#error` commented out into `OUT_DIR`, and return the include directory
+/// holding it so it can be placed ahead of the sysroot on the include path.
+///
+/// The sysroot itself is left untouched: it is a shared cache, and may well be
+/// a system-wide install that `RQUICKJS_WASM_SYSROOT` points at.
+///
+/// Defining `__wasi__` instead is *not* an option: quickjs's `__wasi__` path
+/// forces `stack_limit = 0`, disabling stack-overflow checking entirely.
+fn patched_wasi_headers(sysroot: &Path, out_dir: &Path) -> PathBuf {
+    const MARKER: &str = "/* #error patched out by rquickjs-sys for wasm32-unknown-unknown */";
+
+    let source = sysroot.join("include/wasm32-wasi/wasi/api.h");
+    let contents = fs::read_to_string(&source)
+        .unwrap_or_else(|err| panic!("unable to read {}: {err}", source.display()));
+
+    // comment out only the `#error` directly inside the `#ifndef __wasi__`
+    // guard, leaving the neighbouring `#ifndef __wasm32__` guard intact.
+    let mut in_guard = false;
+    let patched = contents
+        .lines()
+        .map(|line| {
+            match line.trim() {
+                "#ifndef __wasi__" => in_guard = true,
+                "#endif" => in_guard = false,
+                trimmed if in_guard && trimmed.starts_with("#error") => return MARKER,
+                _ => {}
+            }
+            line
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let include_dir = out_dir.join("wasm-include");
+    fs::create_dir_all(include_dir.join("wasi")).unwrap();
+    fs::write(include_dir.join("wasi/api.h"), patched + "\n").expect("unable to write wasi/api.h");
+    include_dir
+}
+
 fn main() {
     #[cfg(feature = "logging")]
     pretty_env_logger::init();
@@ -194,13 +361,35 @@ fn main() {
         }
     }
 
-    if target_os == "wasi" {
+    // wasm32-unknown-unknown takes the same emscripten-flavoured config as wasi,
+    // but ships no libc: headers come from a wasi-sysroot include tree and the OS
+    // tail (clock, stdio, abort) is supplied by `wasm-shim/shim.c`.
+    let target_arch = env::var("CARGO_CFG_TARGET_ARCH").unwrap();
+    let is_wasm_unknown = target_arch == "wasm32" && target_os == "unknown";
+
+    if target_os == "wasi" || is_wasm_unknown {
         // pretend we're emscripten - there are already ifdefs that match
-        // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
+        // also, wasi doesn't have FE_DOWNWARD or FE_UPWARD
         defines.push(("EMSCRIPTEN".into(), Some("1")));
         defines.push(("FE_DOWNWARD".into(), Some("0")));
         defines.push(("FE_UPWARD".into(), Some("0")));
     }
+
+    let wasm_sysroot = is_wasm_unknown.then(|| {
+        println!("cargo:rerun-if-env-changed=RQUICKJS_WASM_SYSROOT");
+        let sysroot = get_wasm_sysroot_path();
+        // the patched copy of `wasi/api.h` has to shadow the sysroot's own, so
+        // its include dir goes first.
+        for dir in [
+            patched_wasi_headers(&sysroot, out_dir),
+            sysroot.join("include/wasm32-wasi"),
+        ] {
+            let flag = format!("-isystem{}", dir.display());
+            builder.flag(&flag);
+            bindgen_cflags.push(flag);
+        }
+        sysroot
+    });
 
     for file in source_files.iter().chain(header_files.iter()) {
         fs::copy(src_dir.join(file), out_dir.join(file))
@@ -242,7 +431,25 @@ fn main() {
         builder.file(out_dir.join(src));
     }
 
+    if is_wasm_unknown {
+        // the shim goes into libquickjs.a rather than its own archive: lld
+        // resolves an archive to a fixpoint, so every definition here is picked
+        // up before wasi-libc is reached and the matching wasi-libc member (and
+        // its wasi imports) is never extracted.
+        println!("cargo:rerun-if-changed=wasm-shim/shim.c");
+        builder.file("wasm-shim/shim.c");
+    }
+
     builder.compile("libquickjs.a");
+
+    // emitted after `compile` so `-lquickjs` precedes `-lc` on the link line.
+    if let Some(sysroot) = wasm_sysroot {
+        println!(
+            "cargo:rustc-link-search=native={}",
+            sysroot.join("lib/wasm32-wasi").display()
+        );
+        println!("cargo:rustc-link-lib=static=c");
+    }
 }
 
 fn feature_to_cargo(name: impl AsRef<str>) -> String {
