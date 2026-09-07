@@ -279,13 +279,13 @@ impl<'js, C: JsClass<'js>> Class<'js, C> {
 
     /// Returns a reference to the underlying object contained in a cell.
     #[inline]
-    pub(crate) fn get_class_cell<'a>(&self) -> &'a ClassCell<JsCell<'js, C>> {
+    pub(crate) fn get_class_cell<'a>(&'a self) -> &'a ClassCell<JsCell<'js, C>> {
         unsafe { self.get_class_ptr().as_ref() }
     }
 
     /// Returns a reference to the underlying object contained in a cell.
     #[inline]
-    pub fn get_cell<'a>(&self) -> &'a JsCell<'js, C> {
+    pub fn get_cell<'a>(&'a self) -> &'a JsCell<'js, C> {
         &self.get_class_cell().data
     }
 
