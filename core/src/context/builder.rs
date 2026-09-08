@@ -75,6 +75,8 @@ pub mod intrinsic {
         Performance JS_AddPerformance,
         /// Add WeakRef support
         WeakRef JS_AddIntrinsicWeakRef,
+        /// Add DOMException
+        DOMException JS_AddIntrinsicDOMException,
     }
 
     /// Add none intrinsics
@@ -93,6 +95,7 @@ pub mod intrinsic {
         Promise,
         Performance,
         WeakRef,
+        DOMException,
     );
 }
 
