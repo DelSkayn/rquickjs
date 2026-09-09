@@ -194,7 +194,25 @@ impl<'js> Exception<'js> {
         Error::Exception
     }
 
-    /// Sets the exception as the current error an returns `Error::Exception`
+    /// Throws a new DOMException.
+    pub fn throw_dom(ctx: &Ctx<'js>, name: &str, message: &str) -> Error {
+        let mut name_buffer = [MaybeUninit::uninit(); 256];
+        truncate_cstr_into(&mut name_buffer, name);
+        let mut message_buffer = [MaybeUninit::uninit(); 256];
+        truncate_cstr_into(&mut message_buffer, message);
+        unsafe {
+            let res = qjs::JS_ThrowDOMException(
+                ctx.as_ptr(),
+                name_buffer.as_ptr().cast(),
+                ERROR_FORMAT_STR.as_ptr(),
+                message_buffer.as_mut_ptr(),
+            );
+            debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
+        }
+        Error::Exception
+    }
+
+    /// Sets the exception as the current error and returns `Error::Exception`
     pub fn throw(self) -> Error {
         let ctx = self.ctx().clone();
         ctx.throw(self.0.into_value())
@@ -213,5 +231,33 @@ impl fmt::Display for Exception<'_> {
             stack.fmt(f)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{
+        atom::PredefinedAtom, context::intrinsic, Context, Error, Exception, Object, Runtime,
+    };
+
+    #[test]
+    fn test_throw_dom() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::custom::<intrinsic::DOMException>(&rt).unwrap();
+        ctx.with(|ctx| {
+            let e = Exception::throw_dom(&ctx, "SyntaxError", "oh no");
+            assert!(matches!(e, Error::Exception), "{e}");
+            let exception = ctx.catch().into_object().unwrap();
+            assert!(exception.is_instance_of(
+                ctx.globals()
+                    .get::<_, Object>(PredefinedAtom::DOMException)
+                    .unwrap()
+            ));
+            assert_eq!(
+                exception.get::<_, i32>("code").unwrap(),
+                // SyntaxError's legacy code
+                12
+            );
+        });
     }
 }
