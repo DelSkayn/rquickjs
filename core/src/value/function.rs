@@ -31,12 +31,6 @@ pub trait IntoJsFunc<'js, P> {
     fn call<'a>(&self, params: Params<'a, 'js>) -> Result<Value<'js>>;
 }
 
-/// A trait for functions callable from JavaScript but static,
-/// Used for implementing callable objects.
-pub trait StaticJsFunction {
-    fn call<'a, 'js>(params: Params<'a, 'js>) -> Result<Value<'js>>;
-}
-
 /// A JavaScript function.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[repr(transparent)]
