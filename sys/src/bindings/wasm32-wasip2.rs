@@ -102,11 +102,6 @@ pub struct JSContext {
 pub struct JSObject {
     _unused: [u8; 0],
 }
-#[repr(C)]
-#[derive(Debug, Copy, Clone)]
-pub struct JSClass {
-    _unused: [u8; 0],
-}
 pub type JSClassID = u32;
 pub type JSAtom = u32;
 pub const JS_TAG_FIRST: _bindgen_ty_1 = -9;
