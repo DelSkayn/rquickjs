@@ -182,7 +182,7 @@ impl Method {
         let ImplItemFn {
             mut attrs,
             vis,
-            defaultness,
+            modifiers,
             sig,
             block,
         } = func;
@@ -211,7 +211,7 @@ impl Method {
             attrs[0].span()
         };
 
-        if let Some(d) = defaultness {
+        if let Some(d) = modifiers.defaultness {
             return Err(Error::new(d.span(), "specialized fn's are not supported."));
         }
 

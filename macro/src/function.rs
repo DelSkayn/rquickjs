@@ -7,7 +7,7 @@ use syn::{
     punctuated::Punctuated,
     spanned::Spanned,
     token::Comma,
-    Error, FnArg, LitStr, Result, Signature, Token, Type, Visibility,
+    Error, FnArg, LitStr, ReceiverKind, Result, Safety, Signature, Token, Type, Visibility,
 };
 
 use crate::{
@@ -142,7 +142,7 @@ impl JsFunction {
     pub fn new(vis: Visibility, sig: &Signature, self_type: Option<&Type>) -> Result<Self> {
         let Signature {
             ref asyncness,
-            ref unsafety,
+            ref safety,
             ref abi,
             ref variadic,
             ref ident,
@@ -150,7 +150,7 @@ impl JsFunction {
             ..
         } = sig;
 
-        if let Some(unsafe_) = unsafety {
+        if let Safety::Unsafe(unsafe_) = safety {
             return Err(Error::new(
                 unsafe_.span(),
                 "implementing JavaScript callbacks for unsafe functions is not allowed.",
@@ -405,8 +405,8 @@ impl JsParams {
                         let stream = quote! {
                             #self_type
                         };
-                        let kind = if recv.reference.is_some() {
-                            if recv.mutability.is_some() {
+                        let kind = if let ReceiverKind::Reference(_, _, mutability) = &recv.kind {
+                            if mutability.is_some() {
                                 ParamKind::BorrowMut
                             } else {
                                 ParamKind::Borrow

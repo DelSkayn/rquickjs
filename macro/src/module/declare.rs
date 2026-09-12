@@ -1,6 +1,6 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{spanned::Spanned as _, Error, Ident, ItemFn, Result, ReturnType, Visibility};
+use syn::{spanned::Spanned as _, Error, Ident, ItemFn, Result, ReturnType, Safety, Visibility};
 
 /// make sure the declare function has the right type.
 pub fn validate(func: &ItemFn) -> Result<()> {
@@ -17,7 +17,7 @@ pub fn validate(func: &ItemFn) -> Result<()> {
             "A module declare function can't be async.",
         ));
     }
-    if let Some(x) = sig.unsafety.as_ref() {
+    if let Safety::Unsafe(x) = &sig.safety {
         return Err(Error::new(
             x.span(),
             "A module declare function can't be unsafe.",
