@@ -88,7 +88,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
 
     let ItemImpl {
         mut attrs,
-        defaultness,
+        modifiers,
         unsafety,
         impl_token,
         generics,
@@ -113,12 +113,12 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
 
     if let Some(trait_) = trait_.as_ref() {
         return Err(Error::new(
-            trait_.2.span(),
+            trait_.1.span(),
             "#[method] can't be applied to a trait implementation",
         ));
     }
 
-    if let Some(d) = defaultness {
+    if let Some(d) = modifiers.defaultness {
         return Err(Error::new(
             d.span(),
             "specialized impl's are not supported.",
