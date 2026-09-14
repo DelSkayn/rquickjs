@@ -70,7 +70,10 @@ jobs:
         if: matrix.builder == 'zigbuild'
         uses: taiki-e/install-action@7be9fd86bd1707236395105d6e9329dd1511a7e1 # v2.79.0
         with:
-          tool: cargo-zigbuild
+          # 0.23.0+ fixes zig cc rejecting -Wl,--fix-cortex-a53-843419 on aarch64
+          # (rust-cross/cargo-zigbuild#452); install-action's default resolves to
+          # an older cached version, so pin explicitly.
+          tool: cargo-zigbuild@0.23.4
 
       - name: Set up msys2
         if: matrix.builder == 'msys2'

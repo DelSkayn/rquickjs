@@ -169,8 +169,8 @@ jobs:
           # executables fails. Bindings are still regenerated for it via
           # `.github/workflows/bindings.yml` (sys builds as a static rlib,
           # which does not trigger lld).
-          - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-gnu,  features: full-async, builder: zigbuild, qemu: loongarch64 }
-          - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-musl, features: full-async, builder: zigbuild, qemu: loongarch64 }
+          - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-gnu,  features: full-async, builder: native }
+          - { task: test, os: ubuntu-24.04,  rust: nightly, target: loongarch64-unknown-linux-musl, features: full-async, builder: native }
 
           # Native targets.
           - { task: test, os: ubuntu-latest, rust: stable,  target: x86_64-unknown-linux-gnu,  features: full-async, builder: native }
@@ -214,7 +214,10 @@ jobs:
         if: matrix.builder == 'zigbuild'
         uses: taiki-e/install-action@7be9fd86bd1707236395105d6e9329dd1511a7e1 # v2.79.0
         with:
-          tool: cargo-zigbuild
+          # 0.23.0+ fixes zig cc rejecting -Wl,--fix-cortex-a53-843419 on aarch64
+          # (rust-cross/cargo-zigbuild#452); install-action's default resolves to
+          # an older cached version, so pin explicitly.
+          tool: cargo-zigbuild@0.23.4
 
       - name: Install QEMU user emulation
         if: matrix.qemu
@@ -233,10 +236,6 @@ jobs:
             armv7-unknown-linux-gnueabihf)
               LIBC_PKG=libc6-armhf-cross
               PREFIX=/usr/arm-linux-gnueabihf
-              ;;
-            loongarch64-unknown-linux-gnu)
-              LIBC_PKG=libc6-dev-loong64-cross
-              PREFIX=/usr/loongarch64-linux-gnu
               ;;
             riscv64gc-unknown-linux-gnu)
               LIBC_PKG=libc6-riscv64-cross
@@ -257,6 +256,55 @@ jobs:
           else
             echo "CARGO_TARGET_${QEMU_TARGET}_RUNNER=qemu-${{ matrix.qemu }}" >> "$GITHUB_ENV"
           fi
+
+      - name: Setup cross loongarch64
+        # zig cc rejects nightly rustc's -Wl,--no-rosegment as an unsupported
+        # linker arg (unlike the aarch64 cortex-a53 case, this isn't fixed in
+        # any cargo-zigbuild release), so loongarch64 is built natively here
+        # instead of through zigbuild.
+        if: startsWith(matrix.target, 'loongarch64') && contains(matrix.target, '-linux-')
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y \
+            libc6-dev-loong64-cross \
+            gcc-14-loongarch64-linux-gnu \
+            g++-14-loongarch64-linux-gnu \
+            lld \
+            qemu-user \
+            qemu-user-static
+
+          curl -L --retry 5 https://github.com/musl-cross/musl-cross/releases/latest/download/loongarch64-unknown-linux-musl.tar.xz | tar xJf -
+          sudo mv loongarch64-unknown-linux-musl /musl
+
+          echo "CC_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
+          echo "CXX_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-g++" >> $GITHUB_ENV
+          echo "AR_loongarch64_unknown_linux_musl=loongarch64-unknown-linux-musl-ar" >> $GITHUB_ENV
+          echo "CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_MUSL_LINKER=loongarch64-unknown-linux-musl-gcc" >> $GITHUB_ENV
+          echo "CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_MUSL_RUNNER=qemu-loongarch64 -L /musl/loongarch64-unknown-linux-musl/sysroot" >> $GITHUB_ENV
+
+          echo "CC_loongarch64_unknown_linux_gnu=loongarch64-linux-gnu-gcc-14" >> $GITHUB_ENV
+          echo "CXX_loongarch64_unknown_linux_gnu=loongarch64-linux-gnu-g++-14" >> $GITHUB_ENV
+          echo "AR_loongarch64_unknown_linux_gnu=loongarch64-linux-gnu-ar" >> $GITHUB_ENV
+
+          # Nightly's -Wl,--no-rosegment isn't supported by ubuntu-24.04's cross ld;
+          # force lld via a linker wrapper (a rustflags link-arg gets clobbered by the
+          # job-wide RUSTFLAGS from setup-rust-toolchain).
+          cat > /usr/local/bin/loongarch64-linux-gnu-gcc-lld <<'WRAP'
+          #!/bin/sh
+          exec loongarch64-linux-gnu-gcc-14 -fuse-ld=lld "$@"
+          WRAP
+          chmod +x /usr/local/bin/loongarch64-linux-gnu-gcc-lld
+
+          echo "CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_LINKER=loongarch64-linux-gnu-gcc-lld" >> $GITHUB_ENV
+          echo "CARGO_TARGET_LOONGARCH64_UNKNOWN_LINUX_GNU_RUNNER=qemu-loongarch64 -L /usr/loongarch64-linux-gnu" >> $GITHUB_ENV
+
+          mkdir -p ~/.cargo/
+          echo "[target.loongarch64-unknown-linux-musl]" >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "target-feature=+crt-static", "-C", "link-self-contained=yes", "-C", "linker=loongarch64-unknown-linux-musl-gcc"]' >> ~/.cargo/config.toml
+          echo "[target.loongarch64-unknown-linux-gnu]" >> ~/.cargo/config.toml
+          echo 'rustflags = ["-C", "linker=loongarch64-linux-gnu-gcc-lld"]' >> ~/.cargo/config.toml
+
+          echo "/musl/bin" >> $GITHUB_PATH
 
       - name: Set up wasmtime
         if: matrix.wasi
@@ -317,6 +365,9 @@ jobs:
         run: |
           # Limit test threads on QEMU-emulated targets to work around an intermittent
           # QEMU user-mode emulation bug: "QEMU internal SIGSEGV {code=MAPERR, addr=0x20}"
+          case "${{ matrix.target }}" in
+            loongarch64-*) export RUST_TEST_THREADS=1 ;;
+          esac
           if [ -n "${{ matrix.qemu }}" ]; then
             export RUST_TEST_THREADS=1
           fi
