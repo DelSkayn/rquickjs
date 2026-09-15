@@ -18,7 +18,7 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
           components: rustfmt
@@ -32,7 +32,7 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: nightly
           components: rust-docs
@@ -57,7 +57,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: true
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: nightly
           components: clippy
@@ -75,7 +75,7 @@ jobs:
         with:
           submodules: true
       - name: Install ${{ matrix.msrv }}
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: ${{ matrix.msrv }}
       - name: cargo +${{ matrix.msrv }} check
@@ -90,7 +90,7 @@ jobs:
         with:
           submodules: true
       - name: Install stable
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           components: llvm-tools-preview
       - name: cargo install cargo-llvm-cov
@@ -117,7 +117,7 @@ jobs:
         with:
           submodules: true
       - name: Install stable
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: nightly
           components: rust-src
@@ -138,7 +138,7 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
       - name: Run examples
@@ -361,7 +361,7 @@ jobs:
           echo "CC_i686_pc_windows_gnu=i686-w64-mingw32-gcc"     | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
