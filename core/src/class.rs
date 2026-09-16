@@ -396,6 +396,13 @@ impl<'js> Object<'js> {
         let Some(x) = NonNull::new(unsafe {
             qjs::JS_GetOpaque2(self.0.ctx.as_ptr(), self.0.as_js_value(), id)
         }) else {
+            // `JS_GetOpaque2` throws a `TypeError` internally whenever the class id
+            // doesn't match, leaving it pending on the runtime even though a
+            // negative result here is an ordinary, expected outcome. Clear it so a
+            // failed `instance_of` can't be mistaken for a real exception by code
+            // that later checks `Ctx::has_exception`/`Ctx::catch` for something
+            // unrelated (e.g. a pending `Promise`).
+            self.ctx.catch();
             return false;
         };
 
@@ -700,6 +707,29 @@ mod test {
         test_with(|ctx| {
             let proto = Class::<X>::prototype(&ctx).unwrap().unwrap();
             assert_eq!(proto.get::<_, String>("foo").unwrap(), "bar")
+        })
+    }
+
+    #[test]
+    fn instance_of_non_class_object_does_not_leave_pending_exception() {
+        test_with(|ctx| {
+            // A plain object isn't backed by any Rust class, so the underlying
+            // class-id check inside `instance_of` genuinely fails here (as
+            // opposed to checking one Rust class against another, where the
+            // class ids match and only a later, exception-free v-table
+            // comparison tells the classes apart).
+            let plain = Object::new(ctx.clone()).unwrap();
+
+            assert!(!plain.instance_of::<Vec3>());
+
+            // A negative `instance_of` result is an ordinary outcome, not an
+            // error: it must not leave a pending exception on the runtime for
+            // unrelated code to trip over later.
+            assert!(!ctx.has_exception());
+
+            // The context must still be perfectly usable afterwards.
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
         })
     }
 
