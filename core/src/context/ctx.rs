@@ -400,6 +400,16 @@ impl<'js> Ctx<'js> {
         let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
         let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
+        if res < 0 {
+            // A negative result means the job threw, and `JS_ExecutePendingJob`
+            // leaves the exception pending on the context it ran in (`*ptr`,
+            // which need not be `self` in a multi-context runtime) instead of
+            // surfacing it here. Drain it so it can't be mistaken for a real
+            // exception later by unrelated code that checks for one (e.g. the
+            // module loader's "is a module already loaded" check).
+            let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
+            ctx.catch();
+        }
         res != 0
     }
 
@@ -528,6 +538,29 @@ mod test {
             let func: Function = module.get("default").unwrap();
             func.call::<(), Promise>(()).unwrap();
         });
+    }
+
+    #[test]
+    fn execute_pending_job_clears_exception_from_failed_job() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            // Schedule a job that throws when it runs.
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('boom'); });")
+                .unwrap();
+
+            // Run it: the job throws, but that must not leave a pending
+            // exception on the context for unrelated code to trip over later.
+            while ctx.execute_pending_job() {}
+
+            assert!(!ctx.has_exception());
+
+            // The context must still be perfectly usable afterwards.
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
     }
 
     #[test]
