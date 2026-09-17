@@ -12,7 +12,7 @@ concurrency:
 
 env:
   RUSTFLAGS: -D warnings
-  CARGO_BUILD_WARNINGS: ""
+  CARGO_BUILD_WARNINGS: warn
 
 jobs:
   format:
