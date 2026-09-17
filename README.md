@@ -92,7 +92,58 @@ See below for a list of supported platforms.
 | aarch64-apple-darwin           |          ✅          |     ❌     |            ✅            |
 | wasm32-wasip1                  |          ✅          |     ✅     |            ✅            |
 | wasm32-wasip2                  |          ✅          |     ✅     |            ✅            |
+| wasm32-unknown-unknown         |          ✅          |     ✅     |            ✅            |
 | other                          |          ❌          |     ❌     |         Unknown          |
+
+## wasm32-unknown-unknown
+
+`wasm32-unknown-unknown` is supported out of the box: add rquickjs as a dependency and build for the target. No feature flag, no extra crate, no wasi runtime.
+
+The target ships no libc, so `rquickjs-sys` supplies the whole OS tail itself:
+
+- quickjs is compiled with the same `EMSCRIPTEN` / `FE_DOWNWARD` / `FE_UPWARD` defines already used for wasi, against a vendored subset of wasi-libc's headers.
+- the pure-compute members of wasi-libc (`snprintf`, `strtod`, libm, dlmalloc) are linked statically from a vendored `libc.a`.
+- `sys/wasm-shim/shim.c` replaces every member that would otherwise reach for the host: the clock, `localtime_r`, `abort`/`__assert_fail`, and the stdio backends.
+
+The result imports **exactly one** host function and nothing else.
+
+### The `__rquickjs_host_now_us` import
+
+The embedder must supply a single import, `env.__rquickjs_host_now_us`, returning microseconds since the unix epoch as an `f64`. It backs `Date.now()`, `new Date()` and `performance`-adjacent internals.
+
+```js
+const instance = new WebAssembly.Instance(module, {
+  env: { __rquickjs_host_now_us: () => Date.now() * 1000 },
+});
+```
+
+Time zone data does not exist here, so scripts observe UTC: `getTimezoneOffset()` is always `0`.
+
+### `Runtime::set_max_stack_size` is mandatory
+
+`JS_DEFAULT_STACK_SIZE` is 1MB, which is exactly the size of the wasm shadow stack. The default computation of `stack_top - 1MB` therefore wraps, and stack-overflow detection is silently lost: deep recursion becomes a hard trap instead of a catchable `RangeError`. Always set an explicit limit:
+
+```rust
+let runtime = Runtime::new()?;
+runtime.set_max_stack_size(256 * 1024);
+```
+
+(Defining `__wasi__` would also stop the wrap, but quickjs's `__wasi__` path pins `stack_limit = 0`, disabling stack checking outright. That is why the header is patched instead.)
+
+### The vendored libc
+
+Rather than downloading a wasi-sysroot at build time, `sys/vendor/wasi-libc/` commits the subset actually needed: the prebuilt `libc.a` from the [wasi-sdk-24 release](https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-24), plus the headers required to compile quickjs against it. It's populated (and updated, after bumping the pinned wasi-sdk version in the script) by `scripts/vendor-wasm-libc.sh`; see `sys/vendor/wasi-libc/NOTICE.md` for provenance and licensing.
+
+`wasi/api.h` guards itself with `#ifndef __wasi__` / `#error`, so the vendoring script writes a copy with that one `#error` commented out. The rest of the vendored headers are unmodified.
+
+### Testing
+
+`wasm-test/` builds the safe API as a cdylib and `wasm-test/runner.ts` drives a battery through it under [deno](https://deno.com), asserting the import list along the way:
+
+```sh
+cargo build --manifest-path wasm-test/Cargo.toml --release --target wasm32-unknown-unknown
+deno run --allow-read wasm-test/runner.ts
+```
 
 ## License
 

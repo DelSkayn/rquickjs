@@ -29,6 +29,7 @@ copy_bindings x86_64-unknown-linux-gnu loongarch64-unknown-linux-musl
 copy_bindings riscv64gc-unknown-linux-gnu riscv64a23-unknown-linux-gnu
 copy_bindings wasm32-wasip1 wasm32-wasip1
 copy_bindings x86_64-unknown-linux-gnu wasm32-wasip2
+copy_bindings wasm32-wasip1 wasm32-unknown-unknown
 copy_bindings x86_64-unknown-linux-gnu x86_64-unknown-linux-musl
 
 # Copy bindings for targets with same size_t as __darwin_size_t
