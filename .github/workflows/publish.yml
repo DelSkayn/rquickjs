@@ -4,6 +4,10 @@ on:
     tags:
       - 'v[0-9]+.[0-9]+.[0-9]+*'
 
+env:
+  RUSTFLAGS: -D warnings
+  CARGO_BUILD_WARNINGS: ""
+
 jobs:
   publish:
     if: github.repository == 'DelSkayn/rquickjs' || github.repository == 'katyo/rquickjs'
@@ -16,12 +20,6 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
-          # v2's new build-warnings=deny default also denies things the old
-          # "-D warnings" RUSTFLAGS default never did (build-script
-          # `cargo:warning=` output, unused-workspace-dependency manifest
-          # warnings); restore the old, narrower behavior explicitly.
-          build-warnings: ""
-          rustflags: "-D warnings"
       - name: Publish crates
         uses: katyo/publish-crates@v2
         with:
