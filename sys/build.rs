@@ -194,6 +194,25 @@ fn main() {
         }
     }
 
+    if target_os == "android" {
+        let min_sdk = env::var("ANDROID_MIN_SDK").expect("ANDROID_MIN_SDK not set");
+        let ndk = env::var("ANDROID_NDK_HOME").expect("ANDROID_NDK_HOME not set");
+        let host_tag = match (env::consts::OS, env::consts::ARCH) {
+            ("windows", "x86_64") => "windows-x86_64",
+            ("windows", "x86") => "windows-x86",
+            ("linux", "x86_64") => "linux-x86_64",
+            ("linux", "x86") => "linux-x86",
+            ("macos", "aarch64") => "darwin-x86_64",//fat binary
+            ("macos", "x86_64") => "darwin-x86_64",
+            _ => panic!("Unsupported platform"),
+        };
+        let is_windows = env::consts::OS == "windows";
+        let clang = format!("{ndk}\\toolchains\\llvm\\prebuilt\\{host_tag}\\bin\\aarch64-linux-android{min_sdk}-clang") + if is_windows { ".cmd" } else { "" };
+        env::set_var("CC", clang);
+        let sys = format!("--sysroot={ndk}\\toolchains\\llvm\\prebuilt\\{host_tag}\\sysroot");
+        bindgen_cflags.push(sys);
+    }
+
     if target_os == "wasi" {
         // pretend we're emscripten - there are already ifdefs that match
         // also, wasi doesn't ahve FE_DOWNWARD or FE_UPWARD
