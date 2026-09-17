@@ -9,12 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- Removed unused trait `StaticJsFunction`.
-
 ### Added
-
-- Added `Exception::throw_dom`, `PredefinedAtom::DOMException`, and `intrinsic::DOMException`.
-- Support for `wasm32-unknown-unknown` from [@mrchantey]
 
 ### Changed
 
@@ -24,12 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+### Security
+
+## [0.14.0] - 2026-09-17
+
+### Breaking Changes
+
+- Removed unused trait `StaticJsFunction`.
+
+### Added
+
+- Added `Exception::throw_dom`, `PredefinedAtom::DOMException`, and `intrinsic::DOMException`.
+- Support for `wasm32-unknown-unknown` from [@mrchantey]
+
+### Fixed
+
 - Fixed `Params::is_constructor` to return the suggested value instead of `false`.
 - Fixed `ExoticMethod` to fix type checking for `&Ctx`
 - Fixed `Ctx::execute_pending_job` treating a job that threw the same as one that ran successfully, leaving the exception pending on the runtime instead of clearing it.
 - Fixed `Object::instance_of` leaving a pending exception on the runtime when the checked object isn't an instance of the given Rust class.
-
-### Security
 
 ## [0.13.0] - 2026-09-07
 
