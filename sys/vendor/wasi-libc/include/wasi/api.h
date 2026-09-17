@@ -1,3 +1,5 @@
+/* Vendored from wasi-libc by scripts/vendor-wasm-libc.sh - do not edit.
+   MIT / Apache-2.0 WITH LLVM-exception; see sys/vendor/wasi-libc/NOTICE.md. */
 /**
  * <wasi/api.h>. This file contains declarations describing the WASI ABI
  * as of "snapshot preview1". It was originally auto-generated from

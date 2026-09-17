@@ -1,3 +1,5 @@
+/* Vendored from wasi-libc by scripts/vendor-wasm-libc.sh - do not edit.
+   MIT / Apache-2.0 WITH LLVM-exception; see sys/vendor/wasi-libc/NOTICE.md. */
 typedef int16_t int_fast16_t;
 typedef int32_t int_fast32_t;
 typedef uint16_t uint_fast16_t;
