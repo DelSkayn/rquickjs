@@ -78,6 +78,11 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: ${{ matrix.msrv }}
+          # v2 replaced the old "-D warnings" RUSTFLAGS default with
+          # CARGO_BUILD_WARNINGS=deny, which needs cargo 1.97+ (our MSRV is
+          # older); set rustflags explicitly here to keep denying warnings
+          # on this pinned toolchain.
+          rustflags: "-D warnings"
       - name: cargo +${{ matrix.msrv }} check
         run: cargo +${{ matrix.msrv }} check --features full-async,bindgen
 
