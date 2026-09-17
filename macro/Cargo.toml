@@ -18,8 +18,6 @@ rquickjs-core = { workspace = true, features = ["loader"] }
 proc-macro2 = "1"
 proc-macro-crate = "3"
 quote = "1"
-ident_case = "1"
-fnv = "1"
 indexmap = "2"
 convert_case = "0.12"
 syn = { version = "3", features = ["full", "fold", "extra-traits", "visit"] }
