@@ -59,6 +59,12 @@ jobs:
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
           components: rust-src
+          # v2's new build-warnings=deny default also denies things the old
+          # "-D warnings" RUSTFLAGS default never did (build-script
+          # `cargo:warning=` output, unused-workspace-dependency manifest
+          # warnings); restore the old, narrower behavior explicitly.
+          build-warnings: ""
+          rustflags: "-D warnings"
 
       - name: Set up zig
         if: matrix.builder == 'zigbuild'

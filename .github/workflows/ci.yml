@@ -22,6 +22,8 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt
+          build-warnings: ""
+          rustflags: "-D warnings"
       - name: Format
         run: cargo fmt --all -- --check
 
@@ -36,6 +38,8 @@ jobs:
         with:
           toolchain: nightly
           components: rust-docs
+          build-warnings: ""
+          rustflags: "-D warnings"
       - name: Documentation
         env:
           DOCS_RS: 1
@@ -61,6 +65,8 @@ jobs:
         with:
           toolchain: nightly
           components: clippy
+          build-warnings: ""
+          rustflags: "-D warnings"
       - name: Cargo clippy
         run: cargo clippy --all --all-targets --features full-async,bindgen
 
@@ -79,9 +85,12 @@ jobs:
         with:
           toolchain: ${{ matrix.msrv }}
           # v2 replaced the old "-D warnings" RUSTFLAGS default with
-          # CARGO_BUILD_WARNINGS=deny, which needs cargo 1.97+ (our MSRV is
-          # older); set rustflags explicitly here to keep denying warnings
-          # on this pinned toolchain.
+          # CARGO_BUILD_WARNINGS=deny (needs cargo 1.97+, newer than our MSRV,
+          # and also denies things RUSTFLAGS never did, like build-script
+          # `cargo:warning=` output and unused-workspace-dependency manifest
+          # warnings); restore the old, narrower "-D warnings" behavior
+          # explicitly instead.
+          build-warnings: ""
           rustflags: "-D warnings"
       - name: cargo +${{ matrix.msrv }} check
         run: cargo +${{ matrix.msrv }} check --features full-async,bindgen
@@ -98,6 +107,8 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           components: llvm-tools-preview
+          build-warnings: ""
+          rustflags: "-D warnings"
       - name: cargo install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: cargo generate-lockfile
@@ -126,6 +137,8 @@ jobs:
         with:
           toolchain: nightly
           components: rust-src
+          build-warnings: ""
+          rustflags: "-D warnings"
       - name: cargo generate-lockfile
         if: hashFiles('Cargo.lock') == ''
         run: cargo generate-lockfile
@@ -146,6 +159,8 @@ jobs:
         uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
+          build-warnings: ""
+          rustflags: "-D warnings"
       - name: Run examples
         working-directory: examples
         run: make run
@@ -159,10 +174,12 @@ jobs:
         with:
           submodules: true
       - name: Setup Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
+          build-warnings: ""
+          rustflags: "-D warnings"
       - name: Setup deno
         uses: denoland/setup-deno@v2
         with:
@@ -371,6 +388,15 @@ jobs:
           toolchain: ${{ matrix.rust }}
           target: ${{ matrix.target }}
           components: rustfmt rust-src
+          # Leave `rustflags` at v2's new empty default (don't set it here):
+          # a non-empty rustflags input becomes a job-wide RUSTFLAGS env var,
+          # which completely replaces (not merges with) the
+          # target.<triple>.rustflags set via ~/.cargo/config.toml for the
+          # loongarch64 targets below. Only disable the new build-warnings
+          # default, which (unlike the old RUSTFLAGS default) also denies
+          # build-script `cargo:warning=` output and unused-workspace-
+          # dependency manifest warnings that show up on every target here.
+          build-warnings: ""
 
       - name: Update deps
         run: cargo update
