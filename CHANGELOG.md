@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
+
 ### Security
 
 ## [0.14.0] - 2026-09-17

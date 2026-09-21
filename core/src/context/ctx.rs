@@ -4,7 +4,7 @@ use core::future::Future;
 use alloc::{boxed::Box, ffi::CString, vec::Vec};
 use core::{
     any::Any,
-    ffi::CStr,
+    ffi::{c_char, CStr},
     mem::{self, MaybeUninit},
     ptr::NonNull,
     result::Result as StdResult,
@@ -139,16 +139,18 @@ impl<'js> Ctx<'js> {
         file_name: &CStr,
         flag: i32,
     ) -> Result<qjs::JSValue> {
-        let src = source.into();
+        let mut src: Vec<u8> = source.into();
         let len = src.len();
-        let src = CString::new(src)?;
+        // JS_Eval requires the input to be null-terminated,
+        // but internal \0 bytes are allowed
+        src.push(0);
 
         #[cfg(feature = "parallel")]
         qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx.as_ptr()));
 
         let val = qjs::JS_Eval(
             self.ctx.as_ptr(),
-            src.as_ptr(),
+            src.as_ptr().cast::<c_char>(),
             len as _,
             file_name.as_ptr(),
             flag,
@@ -760,6 +762,18 @@ mod test {
 
         ctx.with(|ctx| {
             ctx.remove_userdata::<MyUserData>().unwrap().unwrap();
+        })
+    }
+
+    #[test]
+    fn eval_null_byte() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let res: String = ctx.eval("\"hi\0there\"").unwrap();
+            assert_eq!(res, "hi\0there");
         })
     }
 }
