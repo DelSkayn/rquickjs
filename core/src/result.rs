@@ -18,8 +18,8 @@ use std::io::Error as IoError;
 use crate::context::AsyncContext;
 use crate::value::array_buffer::AsSliceError;
 use crate::{
-    atom::PredefinedAtom, qjs, runtime::UserDataError, value::exception::ERROR_FORMAT_STR, Context,
-    Ctx, Exception, Object, StdResult, StdString, Type, Value,
+    atom::PredefinedAtom, qjs, runtime::UserDataError, Context, Ctx, Exception, Object, StdResult,
+    StdString, Type, Value,
 };
 
 /// Result type used throughout the library.
@@ -295,43 +295,25 @@ impl Error {
             | TooManyArgs { .. }
             | MissingArgs { .. } => {
                 let message = self.to_cstring();
-                unsafe {
-                    qjs::JS_ThrowTypeError(
-                        ctx.as_ptr(),
-                        ERROR_FORMAT_STR.as_ptr(),
-                        message.as_ptr(),
-                    )
-                }
+                unsafe { qjs::JS_ThrowTypeError(ctx.as_ptr(), c"%s".as_ptr(), message.as_ptr()) }
             }
             AsSlice(_) => {
                 let message = self.to_cstring();
                 unsafe {
-                    qjs::JS_ThrowReferenceError(
-                        ctx.as_ptr(),
-                        ERROR_FORMAT_STR.as_ptr(),
-                        message.as_ptr(),
-                    )
+                    qjs::JS_ThrowReferenceError(ctx.as_ptr(), c"%s".as_ptr(), message.as_ptr())
                 }
             }
             #[cfg(feature = "loader")]
             Resolving { .. } | Loading { .. } => {
                 let message = self.to_cstring();
                 unsafe {
-                    qjs::JS_ThrowReferenceError(
-                        ctx.as_ptr(),
-                        ERROR_FORMAT_STR.as_ptr(),
-                        message.as_ptr(),
-                    )
+                    qjs::JS_ThrowReferenceError(ctx.as_ptr(), c"%s".as_ptr(), message.as_ptr())
                 }
             }
             Unknown => {
                 let message = self.to_cstring();
                 unsafe {
-                    qjs::JS_ThrowInternalError(
-                        ctx.as_ptr(),
-                        ERROR_FORMAT_STR.as_ptr(),
-                        message.as_ptr(),
-                    )
+                    qjs::JS_ThrowInternalError(ctx.as_ptr(), c"%s".as_ptr(), message.as_ptr())
                 }
             }
             error => {
