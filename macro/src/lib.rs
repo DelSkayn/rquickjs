@@ -195,9 +195,9 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 /// | `get`          | Flag                                                              | Makes this method a getter for a field of the same name.                                        |
 /// | `set`          | Flag                                                              | Makes this method a setter for a field of the same name.                                        |
 /// | `prop`         | Flag                                                              | Declares a JS **data property** on the prototype. The function takes no receiver, is evaluated once at class registration time, and its return value becomes the property's value. Useful for Web IDL hooks like `Symbol.toStringTag` where the spec mandates a data (not accessor) descriptor. |
-/// | `enumerable`   | Flag                                                              | Makes the method, if it is a getter, setter or `prop`, enumerable in JavaScript.                |
-/// | `configurable` | Flag                                                              | Makes the method, if it is a getter, setter or `prop`, configurable in JavaScript (i.e. the descriptor can later be redefined or deleted). |
-/// | `writable`     | Flag                                                              | Only valid together with `prop`: makes the data property writable from JavaScript. Defaults to non-writable, matching Web IDL defaults for things like `@@toStringTag`. |
+/// | `enumerable`   | Flag                                                              | Makes the property enumerable in JavaScript. Defaults to `false`.                               |
+/// | `configurable` | Flag                                                              | Makes the property configurable in JavaScript (i.e. the descriptor can later be redefined or deleted). Defaults to `true` for a method and `false` for a getter, setter, or `prop`. |
+/// | `writable`     | Flag                                                              | Makes the property writable in JavaScript. Defaults to `true` for a method and `false` for a `prop`, matching Web IDL defaults for things like `@@toStringTag`. Not valid on a getter or setter. |
 /// | `rename`       | String or [`PredefinedAtom`](rquickjs_core::atom::PredefinedAtom) | Changes the name of the field getter and/or setter to the specified name in JavaScript.         |
 /// | `static`       | Flag                                                              | Makes the method a static method i.e. defined on the type constructor instead of the prototype. |
 /// | `constructor`  | Flag                                                              | Marks this method a the constructor for this type.                                              |
@@ -262,6 +262,10 @@ pub fn function(attr: TokenStream1, item: TokenStream1) -> TokenStream1 {
 ///     pub fn compare(a: &Self, b: &Self) -> bool {
 ///         a.value == b.value && a.another_value == b.another_value
 ///     }
+///
+///     /// Functions are writable and configurable by default, but that can be overridden.
+///     #[qjs(configurable = false)]
+///     pub fn special_function(&mut self) {}
 ///
 ///     /// All functions declared in this impl block will be defined on the prototype of the
 ///     /// class. This attributes allows you to skip certain functions.

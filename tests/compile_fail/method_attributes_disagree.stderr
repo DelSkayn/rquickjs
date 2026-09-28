@@ -1,0 +1,11 @@
+error: getter and setter for the same property must agree on `enumerable`.
+  --> tests/compile_fail/method_attributes_disagree.rs:17:5
+   |
+17 |     #[qjs(set, rename = "value", enumerable = false)]
+   |     ^
+
+error: getter defined here.
+  --> tests/compile_fail/method_attributes_disagree.rs:12:5
+   |
+12 |     #[qjs(get, rename = "value", enumerable)]
+   |     ^
