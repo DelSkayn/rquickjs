@@ -18,9 +18,9 @@ pub(crate) struct MethodConfig {
     pub constructor: bool,
     pub skip: bool,
     pub r#static: bool,
-    pub configurable: bool,
-    pub enumerable: bool,
-    pub writable: bool,
+    pub configurable: Option<bool>,
+    pub enumerable: Option<bool>,
+    pub writable: Option<bool>,
     pub get: bool,
     pub set: bool,
     pub prop: bool,
@@ -40,13 +40,13 @@ impl MethodConfig {
                 self.skip = x.is_true();
             }
             MethodOption::Configurable(x) => {
-                self.configurable = x.is_true();
+                self.configurable = Some(x.is_true());
             }
             MethodOption::Enumerable(x) => {
-                self.enumerable = x.is_true();
+                self.enumerable = Some(x.is_true());
             }
             MethodOption::Writable(x) => {
-                self.writable = x.is_true();
+                self.writable = Some(x.is_true());
             }
             MethodOption::Get(x) => {
                 self.get = x.is_true();
@@ -134,24 +134,19 @@ impl MethodConfig {
             ));
         }
 
-        if self.configurable && !(self.get || self.set || self.prop) {
+        if self.constructor
+            && (self.configurable.is_some() || self.enumerable.is_some() || self.writable.is_some())
+        {
             return Err(Error::new(
                 span,
-                "configurable can only be set for getters, setters and data properties.",
+                "a constructor's property attributes can't be set.",
             ));
         }
 
-        if self.enumerable && !(self.get || self.set || self.prop) {
+        if self.writable.is_some() && (self.get || self.set) {
             return Err(Error::new(
                 span,
-                "enumerable can only be set for getters, setters and data properties.",
-            ));
-        }
-
-        if self.writable && !self.prop {
-            return Err(Error::new(
-                span,
-                "writable can only be set for data properties (`prop`).",
+                "writable can't be set for getters and setters.",
             ));
         }
 
@@ -162,6 +157,44 @@ impl MethodConfig {
             ));
         }
         Ok(())
+    }
+}
+
+/// The property a method defines.
+#[derive(Clone, Copy)]
+pub(crate) struct Attributes {
+    pub configurable: bool,
+    pub enumerable: bool,
+    pub writable: bool,
+}
+
+impl Attributes {
+    /// Construct the corresponding `Property` or `Accessor` builder calls
+    pub fn expand(self) -> TokenStream {
+        let mut res = TokenStream::new();
+        if self.configurable {
+            res.extend(quote!(.configurable()));
+        }
+        if self.enumerable {
+            res.extend(quote!(.enumerable()));
+        }
+        if self.writable {
+            // N.B.: doesn't work for `Accessor`
+            res.extend(quote!(.writable()));
+        }
+        res
+    }
+}
+
+impl MethodConfig {
+    pub fn attributes(&self) -> Attributes {
+        // Methods are writable and configurable by default
+        let method = !(self.get || self.set || self.prop);
+        Attributes {
+            configurable: self.configurable.unwrap_or(method),
+            enumerable: self.enumerable.unwrap_or(false),
+            writable: self.writable.unwrap_or(method),
+        }
     }
 }
 
@@ -306,12 +339,12 @@ impl Method {
         }
         let func_name_str = self.name(case);
         let js_func_name = self.function.expand_carry_type_name(prefix);
+        let attributes = self.config.attributes().expand();
         quote! {
             #object_name.prop(
                 #func_name_str,
                 #lib_crate::object::Property::from(<#self_ty>::#js_func_name)
-                    .writable()
-                    .configurable(),
+                    #attributes,
             )?;
         }
     }
@@ -328,28 +361,12 @@ impl Method {
         }
         let name = self.name(case);
         let rust_function = &self.function.rust_function;
-        let configurable = if self.config.configurable {
-            quote!(.configurable())
-        } else {
-            TokenStream::new()
-        };
-        let enumerable = if self.config.enumerable {
-            quote!(.enumerable())
-        } else {
-            TokenStream::new()
-        };
-        let writable = if self.config.writable {
-            quote!(.writable())
-        } else {
-            TokenStream::new()
-        };
+        let attributes = self.config.attributes().expand();
         quote! {
             #object_name.prop(
                 #name,
                 #lib_crate::object::Property::from(#rust_function())
-                    #configurable
-                    #enumerable
-                    #writable
+                    #attributes
             )?;
         }
     }
