@@ -1,8 +1,9 @@
 #![allow(clippy::uninlined_format_args)]
 use std::{
     env, fs,
+    io::Write,
     path::{Path, PathBuf},
-    process::{self},
+    process::{self, Stdio},
 };
 
 // WASI logic lifted from https://github.com/bytecodealliance/javy/blob/61616e1507d2bf896f46dc8d72687273438b58b2/crates/quickjs-wasm-sys/build.rs#L18
@@ -224,6 +225,7 @@ fn main() {
             .expect("Unable to copy source; try 'git submodule update --init'");
     }
     fs::copy("quickjs.bind.h", out_dir.join("quickjs.bind.h")).expect("Unable to copy source");
+    apply_patches(out_dir, "0001-promise-hook-continuations.patch");
 
     if target_os == "wasi" && !matches!(env::var("RQUICKJS_SYS_NO_WASI_SDK").as_deref(), Ok("1")) {
         let wasi_sdk_path = get_wasi_sdk_path();
@@ -284,6 +286,66 @@ fn main() {
 
 fn feature_to_cargo(name: impl AsRef<str>) -> String {
     format!("CARGO_FEATURE_{}", feature_to_define(name))
+}
+
+fn apply_patches(out_dir: &Path, patch_name: &str) {
+    let patch = Path::new("patches").join(patch_name);
+    println!("cargo:rerun-if-changed={}", patch.display());
+
+    let repo_root = process::Command::new("git")
+        .args(["rev-parse", "--show-toplevel"])
+        .current_dir(out_dir)
+        .output()
+        .expect("failed to find git repository root");
+    let patch_prefix = if repo_root.status.success() {
+        let repo_root = PathBuf::from(String::from_utf8_lossy(&repo_root.stdout).trim())
+            .canonicalize()
+            .expect("failed to resolve git repository root");
+        let out_dir = out_dir
+            .canonicalize()
+            .expect("failed to resolve patch destination");
+        out_dir.strip_prefix(repo_root).ok().map(|relative| {
+            relative
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+        })
+    } else {
+        None
+    };
+
+    let contents = fs::read(&patch)
+        .unwrap_or_else(|error| panic!("failed to read {}: {error}", patch.display()));
+    let mut command = process::Command::new("git");
+    command.args(["apply", "--whitespace=error", "--unsafe-paths"]);
+    if let Some(prefix) = &patch_prefix {
+        command.arg(format!("--directory={prefix}"));
+    }
+    let mut child = command
+        .arg("-")
+        .current_dir(out_dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap_or_else(|error| panic!("failed to apply {}: {error}", patch.display()));
+    child
+        .stdin
+        .take()
+        .expect("git apply stdin was not piped")
+        .write_all(&contents)
+        .unwrap_or_else(|error| panic!("failed to pass {} to git apply: {error}", patch.display()));
+    let output = child
+        .wait_with_output()
+        .unwrap_or_else(|error| panic!("failed to apply {}: {error}", patch.display()));
+    if !output.status.success() {
+        panic!(
+            "failed to apply {}: {}",
+            patch.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
 }
 
 fn feature_to_define(name: impl AsRef<str>) -> String {
