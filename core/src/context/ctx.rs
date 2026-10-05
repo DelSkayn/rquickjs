@@ -295,6 +295,31 @@ impl<'js> Ctx<'js> {
         unsafe { self.get_opaque() }.take_job_error()
     }
 
+    /// Resumes a Rust panic stashed by a Rust callback that panicked inside a
+    /// job, if one is pending.
+    ///
+    /// A panic in a Rust callback is caught at the engine boundary: the
+    /// payload is stashed on the runtime and a synthetic exception fails the
+    /// call. When the failing call is a job, the failure surfaces through a
+    /// job drain — the pending-exception slot,
+    /// [`Ctx::take_pending_job_error`], or the return value of the runtime's
+    /// `execute_pending_job` methods — none of which resume a stashed panic
+    /// the way a call's return value does.
+    ///
+    /// Call this at a job-failure observation point, before consuming or
+    /// formatting the failure's JavaScript value: with a stash pending it
+    /// resumes the original payload and never returns; with no stash pending
+    /// it is a no-op and the failure can be handled as an ordinary exception.
+    /// The stash is taken either way, so a later crossing cannot resume it
+    /// detached from its cause.
+    pub fn resume_pending_panic(&self) {
+        unsafe {
+            if let Some(payload) = self.get_opaque().take_panic() {
+                crate::util::resume_unwind(payload);
+            }
+        }
+    }
+
     /// Parse json into a JavaScript value.
     pub fn json_parse<S>(&self, json: S) -> Result<Value<'js>>
     where
@@ -632,6 +657,43 @@ mod test {
             while ctx.execute_pending_job() {}
 
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_resumes_pending_panic() {
+        use crate::{Context, Function, Runtime};
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            // A Rust callback that panics inside a job: the engine catches
+            // the panic at the boundary, stashes the payload, and fails the
+            // job with a synthetic exception.
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+
+            // At a job-failure observation point the stashed panic must be
+            // resumed with its original payload, not consumed as an ordinary
+            // exception.
+            let payload = catch_unwind(AssertUnwindSafe(|| {
+                while ctx.execute_pending_job() {}
+                ctx.resume_pending_panic();
+            }))
+            .expect_err("the stashed panic should have been resumed");
+            assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+            // The stash was taken, so a later crossing does not resume it
+            // again, and the context remains usable.
+            ctx.resume_pending_panic();
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
         })
     }
 

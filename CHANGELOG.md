@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - `Ctx::take_pending_job_error` to observe the exception of a job that failed while a job drain executed it
+- `Ctx::resume_pending_panic` to resume, at a job-failure observation point, a Rust panic stashed by a Rust callback that panicked inside a job
 
 ### Changed
 
