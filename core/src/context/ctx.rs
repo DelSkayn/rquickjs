@@ -273,6 +273,28 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
+    /// Takes the exception of a job that failed while a job drain executed
+    /// it, if any.
+    ///
+    /// A failed job leaves its exception in the engine's runtime-wide
+    /// pending-exception slot, which a later job can replace (`JS_Throw`
+    /// frees a pending exception) or consume (a handled throw pops the slot)
+    /// before the context holder's next observation point. For jobs executed
+    /// by the internal drains — the `async_with` driver, the
+    /// [`crate::AsyncRuntime::drive`] future, and [`Ctx::execute_pending_job`]
+    /// — the first such failure is retained at the moment the job fails
+    /// instead of being discarded, and this method retrieves and clears that
+    /// retained value.
+    ///
+    /// Returns `None` when no job executed by those drains has failed since
+    /// the previous take. Failures of jobs executed through
+    /// [`crate::Runtime::execute_pending_job`] and
+    /// [`crate::AsyncRuntime::execute_pending_job`] are not retained; those
+    /// methods hand the failing context to the caller instead.
+    pub fn take_pending_job_error(&self) -> Option<Value<'js>> {
+        unsafe { self.get_opaque() }.take_job_error()
+    }
+
     /// Parse json into a JavaScript value.
     pub fn json_parse<S>(&self, json: S) -> Result<Value<'js>>
     where
@@ -408,9 +430,16 @@ impl<'js> Ctx<'js> {
             // which need not be `self` in a multi-context runtime) instead of
             // surfacing it here. Drain it so it can't be mistaken for a real
             // exception later by unrelated code that checks for one (e.g. the
-            // module loader's "is a module already loaded" check).
+            // module loader's "is a module already loaded" check), but retain
+            // the drained value on the runtime instead of discarding it: a raw
+            // job — a throwing `queueMicrotask` callback has no promise whose
+            // rejection would preserve the failure — otherwise becomes
+            // unobservable. `Ctx::take_pending_job_error` retrieves it.
             let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
-            ctx.catch();
+            // Safety: the caller holds the runtime lock (every
+            // `execute_pending_job` call site runs inside a `with` window),
+            // so accessing the runtime's Opaque is sound.
+            unsafe { ctx.get_opaque() }.retain_job_error(ctx.catch());
         }
         res != 0
     }
@@ -562,6 +591,47 @@ mod test {
             // The context must still be perfectly usable afterwards.
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_retains_failed_job_exception() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            // A raw job like this has no promise whose rejection would
+            // preserve the failure, so without retention it would be
+            // unobservable.
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 42; });")
+                .unwrap();
+
+            while ctx.execute_pending_job() {}
+
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(42));
+            // Taking the retained error clears it.
+            assert!(ctx.take_pending_job_error().is_none());
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_retains_first_failed_job_exception() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw 1; });
+                 queueMicrotask(() => { throw 2; });",
+            )
+            .unwrap();
+
+            // Both jobs fail, but only the earliest failure is retained.
+            while ctx.execute_pending_job() {}
+
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
         })
     }
 

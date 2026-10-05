@@ -45,6 +45,19 @@ pub(crate) struct Opaque<'js> {
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
 
+    /// The first exception of a job that failed while a job drain executed
+    /// it, taken from the engine's runtime-wide pending-exception slot at the
+    /// moment the job failed.
+    ///
+    /// A failed job leaves its exception in the pending-exception slot, where
+    /// a later job can replace it (`JS_Throw` frees a pending exception) or
+    /// consume it (a handled throw pops the slot), erasing the failure before
+    /// it can be observed. The job drains (the `async_with` driver, the
+    /// `Drive` future, and `Ctx::execute_pending_job`) retain the first such
+    /// failure here instead of discarding it;
+    /// [`crate::Ctx::take_pending_job_error`] retrieves it.
+    job_error: UnsafeCell<Option<Value<'js>>>,
+
     /// The class id for rust classes.
     class_id: qjs::JSClassID,
     /// The class id for rust classes which can be called.
@@ -74,6 +87,8 @@ impl<'js> Opaque<'js> {
             rejection_tracker: UnsafeCell::new(None),
 
             interrupt_handler: UnsafeCell::new(None),
+
+            job_error: UnsafeCell::new(None),
 
             class_id: qjs::JS_INVALID_CLASS_ID,
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
@@ -145,6 +160,25 @@ impl<'js> Opaque<'js> {
 
     pub unsafe fn from_runtime_ptr<'a>(rt: *mut qjs::JSRuntime) -> &'a Self {
         &*(qjs::JS_GetRuntimeOpaque(rt).cast::<Self>())
+    }
+
+    /// Retain the exception of a job that failed while a job drain executed
+    /// it, first-wins: the earliest failure of a drain is the one kept, so a
+    /// fail-fast consumer observes the root failure rather than the last one.
+    ///
+    /// The caller must already have taken the value out of the engine's
+    /// pending-exception slot (e.g. with `Ctx::catch`), making the retained
+    /// value the failure's only copy.
+    pub fn retain_job_error(&self, error: Value<'js>) {
+        let slot = unsafe { &mut *self.job_error.get() };
+        if slot.is_none() {
+            *slot = Some(error);
+        }
+    }
+
+    /// Take the retained job error, leaving the slot empty.
+    pub fn take_job_error(&self) -> Option<Value<'js>> {
+        unsafe { (*self.job_error.get()).take() }
     }
 
     #[cfg(feature = "futures")]
@@ -286,6 +320,10 @@ impl<'js> Opaque<'js> {
         self.interrupt_handler.get_mut().take();
         self.panic.take();
         self.prototypes.get_mut().clear();
+        // Drop a retained job error here, while the runtime is still alive
+        // (`clear` runs before `JS_FreeRuntime`; a `Value` dropping after it
+        // would free into a dead runtime).
+        self.job_error.get_mut().take();
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();

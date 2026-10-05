@@ -2,11 +2,12 @@ use super::{
     schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
 };
-use crate::AsyncRuntime;
+use crate::{AsyncRuntime, Ctx};
 use alloc::vec::Vec;
 use core::{
     future::Future,
     pin::Pin,
+    ptr::NonNull,
     task::{ready, Context, Poll, Waker},
 };
 
@@ -114,12 +115,27 @@ impl Future for DriveFuture {
             lock.runtime.get_opaque().listen(cx.waker().clone());
 
             loop {
-                // TODO: Handle error.
-                if let Ok(true) = lock.runtime.execute_pending_job() {
-                    continue;
+                match lock.runtime.execute_pending_job() {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    // A failed job leaves its exception in the engine's
+                    // runtime-wide pending-exception slot, where a later job
+                    // can replace or consume it before the failure can be
+                    // observed. Take it now and retain it on the runtime, so
+                    // it stays observable through
+                    // `Ctx::take_pending_job_error`; the drain still continues
+                    // after the failure.
+                    Err(ctx) => {
+                        // Safety: the runtime lock is held for the whole
+                        // poll, so viewing the failed job's context is sound;
+                        // `catch` clears the slot, making the retained value
+                        // the failure's only copy. The pointer comes from
+                        // `JS_ExecutePendingJob` and is never null.
+                        let job_ctx = unsafe { Ctx::from_raw(NonNull::new_unchecked(ctx)) };
+                        lock.runtime.get_opaque().retain_job_error(job_ctx.catch());
+                    }
                 }
 
-                // TODO: Handle error.
                 match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
                         break

@@ -258,6 +258,25 @@ mod test {
     }
 
     #[tokio::test]
+    async fn async_with_retains_failed_job_error() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+        ctx.async_with(async |ctx| {
+            // A raw job like this has no promise whose rejection would
+            // preserve the failure.
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 7; });")
+                .unwrap();
+
+            // Park the closure once so the driver's job drain runs the
+            // failing job before this closure finishes.
+            tokio::task::yield_now().await;
+
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(7));
+        })
+        .await;
+    }
+
+    #[tokio::test]
     async fn clone_ctx() {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
