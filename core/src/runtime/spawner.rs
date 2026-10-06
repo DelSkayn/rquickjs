@@ -2,11 +2,12 @@ use super::{
     schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
 };
-use crate::AsyncRuntime;
+use crate::{AsyncRuntime, Ctx};
 use alloc::vec::Vec;
 use core::{
     future::Future,
     pin::Pin,
+    ptr::NonNull,
     task::{ready, Context, Poll, Waker},
 };
 
@@ -114,12 +115,27 @@ impl Future for DriveFuture {
             lock.runtime.get_opaque().listen(cx.waker().clone());
 
             loop {
-                // TODO: Handle error.
-                if let Ok(true) = lock.runtime.execute_pending_job() {
-                    continue;
+                match lock.runtime.execute_pending_job() {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(ctx) => {
+                        // Retain the failed job's exception; see
+                        // `Opaque::job_error`. The drain continues after the
+                        // failure.
+                        //
+                        // Safety: the runtime lock is held for the whole
+                        // poll, so viewing the failed job's context is sound;
+                        // `catch` clears the slot, making the retained value
+                        // the failure's only copy.
+                        let job_ctx = unsafe {
+                            Ctx::from_raw(
+                                NonNull::new(ctx).expect("QuickJS returned null ptr for job error"),
+                            )
+                        };
+                        lock.runtime.get_opaque().retain_job_error(job_ctx.catch());
+                    }
                 }
 
-                // TODO: Handle error.
                 match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
                         break
