@@ -262,13 +262,11 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
         ctx.async_with(async |ctx| {
-            // A raw job like this has no promise whose rejection would
-            // preserve the failure.
+            // A raw job's failure would otherwise be unobservable.
             ctx.eval::<(), _>("queueMicrotask(() => { throw 7; });")
                 .unwrap();
 
-            // Park the closure once so the driver's job drain runs the
-            // failing job before this closure finishes.
+            // Yield once so the driver's job drain runs the failing job.
             tokio::task::yield_now().await;
 
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(7));

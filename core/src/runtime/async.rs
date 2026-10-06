@@ -465,13 +465,12 @@ mod test {
         tokio::task::spawn_local(rt.drive());
 
         ctx.async_with(async |ctx|{
-            // A raw job like this has no promise whose rejection would
-            // preserve the failure.
+            // A raw job's failure would otherwise be unobservable.
             ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
         }).await;
 
-        // The drive future drains the job on its own polls; wait for it to
-        // run, bounded so a regression fails instead of hanging.
+        // Wait for the drive future to drain the job, bounded so a
+        // regression fails instead of hanging.
         let mut found = false;
         for _ in 0..100 {
             tokio::time::sleep(Duration::from_millis(1)).await;

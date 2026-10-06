@@ -273,45 +273,26 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
-    /// Takes the exception of a job that failed while a job drain executed
-    /// it, if any.
+    /// Takes the exception of the first job that failed in an internal job
+    /// drain (the `async_with` driver, the [`crate::AsyncRuntime::drive`]
+    /// future, or [`Ctx::execute_pending_job`]) since the previous take.
     ///
-    /// A failed job leaves its exception in the engine's runtime-wide
-    /// pending-exception slot, which a later job can replace (`JS_Throw`
-    /// frees a pending exception) or consume (a handled throw pops the slot)
-    /// before the context holder's next observation point. For jobs executed
-    /// by the internal drains — the `async_with` driver, the
-    /// [`crate::AsyncRuntime::drive`] future, and [`Ctx::execute_pending_job`]
-    /// — the first such failure is retained at the moment the job fails
-    /// instead of being discarded, and this method retrieves and clears that
-    /// retained value.
-    ///
-    /// Returns `None` when no job executed by those drains has failed since
-    /// the previous take. Failures of jobs executed through
-    /// [`crate::Runtime::execute_pending_job`] and
-    /// [`crate::AsyncRuntime::execute_pending_job`] are not retained; those
-    /// methods hand the failing context to the caller instead.
+    /// Failures surfaced by the runtime's own `execute_pending_job` methods
+    /// are handed to the caller instead and not retained. If the failing job
+    /// may have run a Rust callback that panicked, call
+    /// [`Ctx::resume_pending_panic`] before consuming the returned value.
     pub fn take_pending_job_error(&self) -> Option<Value<'js>> {
         unsafe { self.get_opaque() }.take_job_error()
     }
 
-    /// Resumes a Rust panic stashed by a Rust callback that panicked inside a
-    /// job, if one is pending.
+    /// Resumes the runtime's most recently stashed Rust panic, if any.
     ///
-    /// A panic in a Rust callback is caught at the engine boundary: the
-    /// payload is stashed on the runtime and a synthetic exception fails the
-    /// call. When the failing call is a job, the failure surfaces through a
-    /// job drain — the pending-exception slot,
-    /// [`Ctx::take_pending_job_error`], or the return value of the runtime's
-    /// `execute_pending_job` methods — none of which resume a stashed panic
-    /// the way a call's return value does.
-    ///
-    /// Call this at a job-failure observation point, before consuming or
-    /// formatting the failure's JavaScript value: with a stash pending it
-    /// resumes the original payload and never returns; with no stash pending
-    /// it is a no-op and the failure can be handled as an ordinary exception.
-    /// The stash is taken either way, so a later crossing cannot resume it
-    /// detached from its cause.
+    /// A panic in a Rust callback is stashed on the runtime and surfaced as a
+    /// synthetic exception; a job failure never crosses the return-value
+    /// paths that would resume it. Call this at a job-failure observation
+    /// point, before consuming the failure's value: with a stash pending it
+    /// resumes the payload and never returns, otherwise it is a no-op. The
+    /// stash is runtime-wide and not tied to the observed job failure.
     pub fn resume_pending_panic(&self) {
         unsafe {
             if let Some(payload) = self.get_opaque().take_panic() {
@@ -456,10 +437,9 @@ impl<'js> Ctx<'js> {
             // surfacing it here. Drain it so it can't be mistaken for a real
             // exception later by unrelated code that checks for one (e.g. the
             // module loader's "is a module already loaded" check), but retain
-            // the drained value on the runtime instead of discarding it: a raw
-            // job — a throwing `queueMicrotask` callback has no promise whose
-            // rejection would preserve the failure — otherwise becomes
-            // unobservable. `Ctx::take_pending_job_error` retrieves it.
+            // the drained value on the runtime instead of discarding it, so a
+            // raw job's failure stays observable via
+            // `Ctx::take_pending_job_error`.
             let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
             // Safety: the caller holds the runtime lock (every
             // `execute_pending_job` call site runs inside a `with` window),
@@ -626,9 +606,7 @@ mod test {
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            // A raw job like this has no promise whose rejection would
-            // preserve the failure, so without retention it would be
-            // unobservable.
+            // A raw job's failure would otherwise be unobservable.
             ctx.eval::<(), _>("queueMicrotask(() => { throw 42; });")
                 .unwrap();
 
@@ -668,9 +646,8 @@ mod test {
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            // A Rust callback that panics inside a job: the engine catches
-            // the panic at the boundary, stashes the payload, and fails the
-            // job with a synthetic exception.
+            // A panicking Rust callback inside a job: the payload is stashed
+            // and the job fails with a synthetic exception.
             ctx.globals()
                 .set(
                     "rustPanic",
@@ -679,9 +656,7 @@ mod test {
                 .unwrap();
             ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
 
-            // At a job-failure observation point the stashed panic must be
-            // resumed with its original payload, not consumed as an ordinary
-            // exception.
+            // The stashed panic must be resumed with its original payload.
             let payload = catch_unwind(AssertUnwindSafe(|| {
                 while ctx.execute_pending_job() {}
                 ctx.resume_pending_panic();
@@ -689,8 +664,7 @@ mod test {
             .expect_err("the stashed panic should have been resumed");
             assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
 
-            // The stash was taken, so a later crossing does not resume it
-            // again, and the context remains usable.
+            // A second call is a no-op; the context remains usable.
             ctx.resume_pending_panic();
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
