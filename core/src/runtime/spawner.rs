@@ -118,20 +118,20 @@ impl Future for DriveFuture {
                 match lock.runtime.execute_pending_job() {
                     Ok(true) => continue,
                     Ok(false) => {}
-                    // A failed job leaves its exception in the engine's
-                    // runtime-wide pending-exception slot, where a later job
-                    // can replace or consume it before the failure can be
-                    // observed. Take it now and retain it on the runtime, so
-                    // it stays observable through
-                    // `Ctx::take_pending_job_error`; the drain still continues
-                    // after the failure.
                     Err(ctx) => {
+                        // Retain the failed job's exception; see
+                        // `Opaque::job_error`. The drain continues after the
+                        // failure.
+                        //
                         // Safety: the runtime lock is held for the whole
                         // poll, so viewing the failed job's context is sound;
                         // `catch` clears the slot, making the retained value
-                        // the failure's only copy. The pointer comes from
-                        // `JS_ExecutePendingJob` and is never null.
-                        let job_ctx = unsafe { Ctx::from_raw(NonNull::new_unchecked(ctx)) };
+                        // the failure's only copy.
+                        let job_ctx = unsafe {
+                            Ctx::from_raw(
+                                NonNull::new(ctx).expect("QuickJS returned null ptr for job error"),
+                            )
+                        };
                         lock.runtime.get_opaque().retain_job_error(job_ctx.catch());
                     }
                 }
