@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
 - Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
+- Fixed exotic classes freeing the value passed to `exotic_set_property` twice
 
 ### Security
 
