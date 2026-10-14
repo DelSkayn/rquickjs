@@ -1101,7 +1101,7 @@ mod test {
                     throw new Error('foo should be null');
                 }
                 try {
-                    exotic.foo = 1
+                    exotic.foo = {}
                 } catch(e) {
                     if (e?.toString() !== 'Properties are read-only') {
                         throw new Error('wrong error message: ' + e?.toString());
