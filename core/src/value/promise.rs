@@ -119,6 +119,8 @@ impl<'js> Promise<'js> {
             }
             PromiseState::Rejected => {
                 unsafe {
+                    // The rejection is surfaced as an `Err`, so it is no longer unhandled.
+                    qjs::JS_PromiseMarkAsHandled(self.ctx().as_ptr(), self.as_js_value());
                     let v = qjs::JS_PromiseResult(self.ctx().as_ptr(), self.as_js_value());
                     qjs::JS_Throw(self.ctx().as_ptr(), v);
                 };
@@ -367,18 +369,19 @@ where
 
 #[cfg(test)]
 mod test {
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    };
     #[cfg(feature = "futures")]
     use std::time::Duration;
 
     use super::Promise;
     #[cfg(feature = "futures")]
+    use crate::{function::Async, promise::Promised, AsyncContext, AsyncRuntime, Result};
     use crate::{
-        function::Async, promise::Promised, AsyncContext, AsyncRuntime, CaughtError, Result,
-    };
-    use crate::{
-        function::Func, prelude::This, promise::PromiseState, CatchResultExt, Context, Function,
-        Runtime,
+        function::Func, prelude::This, promise::PromiseState, CatchResultExt, CaughtError, Context,
+        Function, Runtime,
     };
 
     #[cfg(feature = "futures")]
@@ -603,5 +606,54 @@ mod test {
             assert!(result.is_err(), "should fail due to interrupt");
         })
         .await
+    }
+
+    #[test]
+    fn rejected_promise_result_marks_handled() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let rt = Runtime::new().unwrap();
+        {
+            let events = events.clone();
+            rt.set_host_promise_rejection_tracker(Some(Box::new(
+                move |_, _, reason, is_handled| {
+                    events.lock().unwrap().push((reason.as_int(), is_handled));
+                },
+            )));
+        }
+        let ctx = Context::full(&rt).unwrap();
+
+        ctx.with(|ctx| {
+            let promise: Promise = ctx.eval("Promise.reject(7)").unwrap();
+            let res = promise.result::<()>().unwrap().catch(&ctx);
+            assert!(matches!(res, Err(CaughtError::Value(v)) if v.as_int() == Some(7)));
+        });
+
+        assert_eq!(*events.lock().unwrap(), [(Some(7), false), (Some(7), true)]);
+    }
+
+    #[cfg(feature = "futures")]
+    #[tokio::test]
+    async fn rejected_promise_into_future_marks_handled() {
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let rt = AsyncRuntime::new().unwrap();
+        {
+            let events = events.clone();
+            rt.set_host_promise_rejection_tracker(Some(Box::new(
+                move |_, _, reason, is_handled| {
+                    events.lock().unwrap().push((reason.as_int(), is_handled));
+                },
+            )))
+            .await;
+        }
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        ctx.async_with(async |ctx| {
+            let promise: Promise = ctx.eval("Promise.reject(7)").unwrap();
+            let res = promise.into_future::<()>().await.catch(&ctx);
+            assert!(matches!(res, Err(CaughtError::Value(v)) if v.as_int() == Some(7)));
+        })
+        .await;
+
+        assert_eq!(*events.lock().unwrap(), [(Some(7), false), (Some(7), true)]);
     }
 }
