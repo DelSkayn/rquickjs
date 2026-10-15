@@ -49,8 +49,8 @@ impl<'js> PartialEq for Value<'js> {
     /// aren't stored on the heap).
     ///
     /// This doesn't agree with other notions of equality like
-    /// [`Value::is_strict_equal`]. For example, two strings may be strict-equal
-    /// but not `.eq()` if they are separate allocations with the same contents.
+    /// [`Value::strict_eq`]. For example, two strings may be strict-equal but
+    /// not `.eq()` if they are separate allocations with the same contents.
     fn eq(&self, other: &Self) -> bool {
         let tag = unsafe { qjs::JS_VALUE_GET_TAG(self.value) };
         let tag_other = unsafe { qjs::JS_VALUE_GET_TAG(other.value) };
@@ -435,7 +435,7 @@ impl<'js> Value<'js> {
     /// Loose equality, like the `==` operator.
     ///
     /// Beware that this coerces its input and may therefore run arbitrary JS, and could throw exceptions.
-    pub fn is_loosely_equal(&self, other: &Value<'js>) -> Result<bool> {
+    pub fn loose_eq(&self, other: &Value<'js>) -> Result<bool> {
         unsafe {
             // N.B.: the specific `ctx` does not matter for the comparison
             let ret = qjs::JS_IsEqual(self.ctx.as_ptr(), self.value, other.value);
@@ -447,23 +447,23 @@ impl<'js> Value<'js> {
     }
 
     /// Strict equality, like the `===` operator
-    pub fn is_strict_equal(&self, other: &Value<'js>) -> bool {
+    pub fn strict_eq(&self, other: &Value<'js>) -> bool {
         unsafe { qjs::JS_IsStrictEqual(self.ctx.as_ptr(), self.value, other.value) }
     }
 
-    /// Like [`Value::is_strict_equal`], but NaNs are equal while positive/negative zero are distinguished.
+    /// Like [`Value::strict_eq`], but NaNs are equal while positive/negative zero are distinguished.
     ///
-    /// - Two NaNs are considered `is_same_value`, but not `is_strict_equal`.
-    /// - `+0` and `-0` are not considered `is_same_value`, but _are_ considered `is_strict_equal`.
-    pub fn is_same_value(&self, other: &Value<'js>) -> bool {
+    /// - Two NaNs are considered `same_value`, but not `strict_eq`.
+    /// - `+0` and `-0` are not considered `same_value`, but _are_ considered `strict_eq`.
+    pub fn same_value(&self, other: &Value<'js>) -> bool {
         unsafe { qjs::JS_IsSameValue(self.ctx.as_ptr(), self.value, other.value) }
     }
 
-    /// Like [`Value::is_strict_equal`], but NaNs are equal.
+    /// Like [`Value::strict_eq`], but NaNs are equal.
     ///
-    /// - Two NaNs are considered `is_same_value_zero`, but not `is_strict_equal`.
-    /// - `+0` and `-0` are considered both `is_same_value_zero` and `is_strict_equal`.
-    pub fn is_same_value_zero(&self, other: &Value<'js>) -> bool {
+    /// - Two NaNs are considered `same_value_zero`, but not `strict_eq`.
+    /// - `+0` and `-0` are considered both `same_value_zero` and `strict_eq`.
+    pub fn same_value_zero(&self, other: &Value<'js>) -> bool {
         unsafe { qjs::JS_IsSameValueZero(self.ctx.as_ptr(), self.value, other.value) }
     }
 
@@ -879,10 +879,10 @@ mod test {
                 for (a, b) in [(&a, &b), (&b, &a)] {
                     assert_eq!(
                         [
-                            a.is_loosely_equal(b).unwrap(),
-                            a.is_strict_equal(b),
-                            a.is_same_value(b),
-                            a.is_same_value_zero(b),
+                            a.loose_eq(b).unwrap(),
+                            a.strict_eq(b),
+                            a.same_value(b),
+                            a.same_value_zero(b),
                         ],
                         expected,
                         "{source}",
@@ -904,10 +904,10 @@ mod test {
                 let number = Value::new_int(ctx.clone(), 1);
                 for (a, b) in [(&object, &number), (&number, &object)] {
                     // These comparisons don't coerce and are infallible.
-                    assert!(!a.is_strict_equal(b));
-                    assert!(!a.is_same_value(b));
-                    assert!(!a.is_same_value_zero(b));
-                    assert!(matches!(a.is_loosely_equal(b), Err(Error::Exception)));
+                    assert!(!a.strict_eq(b));
+                    assert!(!a.same_value(b));
+                    assert!(!a.same_value_zero(b));
+                    assert!(matches!(a.loose_eq(b), Err(Error::Exception)));
                     let exception = ctx.catch();
                     if let Some(thrown) = thrown {
                         assert_eq!(exception.as_int(), Some(thrown));
