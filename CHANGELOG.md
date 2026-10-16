@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
 - Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
+- Fixed `Promise::result` and `Promise::into_future` leaving an already rejected promise unhandled, which made the host promise rejection tracker report a false unhandled rejection
 - Fixed exotic classes freeing the value passed to `exotic_set_property` twice
 
 ### Security
