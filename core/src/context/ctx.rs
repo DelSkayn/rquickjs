@@ -273,6 +273,34 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
+    /// Takes the exception of the first job that failed in an internal job
+    /// drain (the `async_with` driver, the [`crate::AsyncRuntime::drive`]
+    /// future, or [`Ctx::execute_pending_job`]) since the previous take.
+    ///
+    /// Failures surfaced by the runtime's own `execute_pending_job` methods
+    /// are handed to the caller instead and not retained. If the failing job
+    /// may have run a Rust callback that panicked, call
+    /// [`Ctx::resume_pending_panic`] before consuming the returned value.
+    pub fn take_pending_job_error(&self) -> Option<Value<'js>> {
+        unsafe { self.get_opaque() }.take_job_error()
+    }
+
+    /// Resumes the runtime's most recently stashed Rust panic, if any.
+    ///
+    /// A panic in a Rust callback is stashed on the runtime and surfaced as a
+    /// synthetic exception; a job failure never crosses the return-value
+    /// paths that would resume it. Call this at a job-failure observation
+    /// point, before consuming the failure's value: with a stash pending it
+    /// resumes the payload and never returns, otherwise it is a no-op. The
+    /// stash is runtime-wide and not tied to the observed job failure.
+    pub fn resume_pending_panic(&self) {
+        unsafe {
+            if let Some(payload) = self.get_opaque().take_panic() {
+                crate::util::resume_unwind(payload);
+            }
+        }
+    }
+
     /// Parse json into a JavaScript value.
     pub fn json_parse<S>(&self, json: S) -> Result<Value<'js>>
     where
@@ -408,9 +436,15 @@ impl<'js> Ctx<'js> {
             // which need not be `self` in a multi-context runtime) instead of
             // surfacing it here. Drain it so it can't be mistaken for a real
             // exception later by unrelated code that checks for one (e.g. the
-            // module loader's "is a module already loaded" check).
+            // module loader's "is a module already loaded" check), but retain
+            // the drained value on the runtime instead of discarding it, so a
+            // raw job's failure stays observable via
+            // `Ctx::take_pending_job_error`.
             let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
-            ctx.catch();
+            // Safety: the caller holds the runtime lock (every
+            // `execute_pending_job` call site runs inside a `with` window),
+            // so accessing the runtime's Opaque is sound.
+            unsafe { ctx.get_opaque() }.retain_job_error(ctx.catch());
         }
         res != 0
     }
@@ -560,6 +594,78 @@ mod test {
             assert!(!ctx.has_exception());
 
             // The context must still be perfectly usable afterwards.
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_retains_failed_job_exception() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            // A raw job's failure would otherwise be unobservable.
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 42; });")
+                .unwrap();
+
+            while ctx.execute_pending_job() {}
+
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(42));
+            // Taking the retained error clears it.
+            assert!(ctx.take_pending_job_error().is_none());
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_retains_first_failed_job_exception() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw 1; });
+                 queueMicrotask(() => { throw 2; });",
+            )
+            .unwrap();
+
+            // Both jobs fail, but only the earliest failure is retained.
+            while ctx.execute_pending_job() {}
+
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_resumes_pending_panic() {
+        use crate::{Context, Function, Runtime};
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            // A panicking Rust callback inside a job: the payload is stashed
+            // and the job fails with a synthetic exception.
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+
+            // The stashed panic must be resumed with its original payload.
+            let payload = catch_unwind(AssertUnwindSafe(|| {
+                while ctx.execute_pending_job() {}
+                ctx.resume_pending_panic();
+            }))
+            .expect_err("the stashed panic should have been resumed");
+            assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+            // A second call is a no-op; the context remains usable.
+            ctx.resume_pending_panic();
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
         })

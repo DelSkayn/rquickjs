@@ -458,6 +458,36 @@ mod test {
 
     });
 
+    async_test_case!(drive_retains_failed_job_error => (rt,ctx){
+        #[cfg(feature = "parallel")]
+        tokio::spawn(rt.drive());
+        #[cfg(not(feature = "parallel"))]
+        tokio::task::spawn_local(rt.drive());
+
+        ctx.async_with(async |ctx|{
+            // A raw job's failure would otherwise be unobservable.
+            ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
+        }).await;
+
+        // Wait for the drive future to drain the job, bounded so a
+        // regression fails instead of hanging.
+        let mut found = false;
+        for _ in 0..100 {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            ctx.async_with(async |ctx|{
+                if let Some(error) = ctx.take_pending_job_error() {
+                    assert_eq!(error.as_int(), Some(5));
+                    found = true;
+                }
+            }).await;
+            if found {
+                break;
+            }
+        }
+        assert!(found, "the drive future did not run the failing job");
+
+    });
+
     async_test_case!(no_drive => (rt,ctx){
         use std::sync::{Arc, atomic::{Ordering,AtomicUsize}};
 
