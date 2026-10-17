@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Bindings for `JS_DiscardPendingJobs` to cancel queued jobs without executing them.
+- `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
+- Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 
 ### Changed
 
@@ -22,6 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
+- Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
+- Fixed `Promise::result` and `Promise::into_future` leaving an already rejected promise unhandled, which made the host promise rejection tracker report a false unhandled rejection
+- Fixed exotic classes freeing the value passed to `exotic_set_property` twice
+- `Atom::to_value` returns a symbol if the atom represents a symbol, instead of always returning a JS string
 
 ### Security
 

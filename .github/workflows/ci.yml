@@ -246,7 +246,7 @@ jobs:
 
       - name: Install cargo-zigbuild
         if: matrix.builder == 'zigbuild'
-        uses: taiki-e/install-action@9983c65e42da123ff25d1f78505eb6de315aa172 # v2.87.20
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0 # v2.87.22
         with:
           # 0.23.0+ fixes zig cc rejecting -Wl,--fix-cortex-a53-843419 on aarch64
           # (rust-cross/cargo-zigbuild#452); install-action's default resolves to
@@ -353,7 +353,7 @@ jobs:
 
       - name: Set up msys2
         if: matrix.builder == 'msys2'
-        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
+        uses: msys2/setup-msys2@ec48f7c5447b3140e2b088413ae3a55687bccb6e # v2.33.0
         with:
           release: false
 

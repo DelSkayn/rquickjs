@@ -310,7 +310,7 @@ impl VTable {
         let ctx = Ctx::from_ptr(ctx);
         let atom = Atom::from_atom_val_dup(ctx.clone(), atom);
         let receiver = Value::from_js_value_const(ctx.clone(), receiver);
-        let value = Value::from_js_value(ctx.clone(), value);
+        let value = Value::from_js_value_const(ctx.clone(), value);
 
         ctx.handle_panic_exotic(AssertUnwindSafe(|| {
             match C::exotic_set_property(&this_ptr.as_ref().data, &ctx, atom, receiver, value) {

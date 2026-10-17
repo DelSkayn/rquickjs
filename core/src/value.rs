@@ -42,6 +42,15 @@ pub struct Value<'js> {
 }
 
 impl<'js> PartialEq for Value<'js> {
+    /// Are two `Value`s identical?
+    ///
+    /// This is a very strict notion of equality that requires the two `Value`s
+    /// to refer to the same heap object or be bitwise equal (for values that
+    /// aren't stored on the heap).
+    ///
+    /// This doesn't agree with other notions of equality like
+    /// [`Value::strict_eq`]. For example, two strings may be strict-equal but
+    /// not `.eq()` if they are separate allocations with the same contents.
     fn eq(&self, other: &Self) -> bool {
         let tag = unsafe { qjs::JS_VALUE_GET_TAG(self.value) };
         let tag_other = unsafe { qjs::JS_VALUE_GET_TAG(other.value) };
@@ -421,6 +430,41 @@ impl<'js> Value<'js> {
     /// Convert from value to specified type
     pub fn get<T: FromJs<'js>>(&self) -> Result<T> {
         T::from_js(self.ctx(), self.clone())
+    }
+
+    /// Loose equality, like the `==` operator.
+    ///
+    /// Beware that this coerces its input and may therefore run arbitrary JS, and could throw exceptions.
+    pub fn loose_eq(&self, other: &Value<'js>) -> Result<bool> {
+        unsafe {
+            // N.B.: the specific `ctx` does not matter for the comparison
+            let ret = qjs::JS_IsEqual(self.ctx.as_ptr(), self.value, other.value);
+            if ret < 0 {
+                self.ctx.handle_exception(qjs::JS_EXCEPTION)?;
+            }
+            Ok(ret != 0)
+        }
+    }
+
+    /// Strict equality, like the `===` operator
+    pub fn strict_eq(&self, other: &Value<'js>) -> bool {
+        unsafe { qjs::JS_IsStrictEqual(self.ctx.as_ptr(), self.value, other.value) }
+    }
+
+    /// Like [`Value::strict_eq`], but NaNs are equal while positive/negative zero are distinguished.
+    ///
+    /// - Two NaNs are considered `same_value`, but not `strict_eq`.
+    /// - `+0` and `-0` are not considered `same_value`, but _are_ considered `strict_eq`.
+    pub fn same_value(&self, other: &Value<'js>) -> bool {
+        unsafe { qjs::JS_IsSameValue(self.ctx.as_ptr(), self.value, other.value) }
+    }
+
+    /// Like [`Value::strict_eq`], but NaNs are equal.
+    ///
+    /// - Two NaNs are considered `same_value_zero`, but not `strict_eq`.
+    /// - `+0` and `-0` are considered both `same_value_zero` and `strict_eq`.
+    pub fn same_value_zero(&self, other: &Value<'js>) -> bool {
+        unsafe { qjs::JS_IsSameValueZero(self.ctx.as_ptr(), self.value, other.value) }
     }
 
     /// Returns the raw C library JavaScript value.
@@ -805,6 +849,76 @@ void_types! {
 #[cfg(test)]
 mod test {
     use crate::*;
+
+    #[test]
+    fn equality() {
+        test_with(|ctx| {
+            // Expected results: loose, strict, SameValue, SameValueZero.
+            for (source, expected) in [
+                ("[1, '1']", [true, false, false, false]),
+                ("[1, 2]", [false; 4]),
+                ("[null, undefined]", [true, false, false, false]),
+                ("[NaN, NaN]", [false, false, true, true]),
+                ("[0, -0]", [true, true, false, true]),
+                ("['abc', ['a', 'b', 'c'].join('')]", [true; 4]),
+                ("['abc', 'def']", [false; 4]),
+                ("[1n, 1]", [true, false, false, false]),
+                ("[12345678901234567890n, 12345678901234567890n]", [true; 4]),
+                ("[{}, {}]", [false; 4]),
+                ("(() => { const x = {}; return [x, x]; })()", [true; 4]),
+                ("[Symbol('x'), Symbol('x')]", [false; 4]),
+                ("[Symbol.for('x'), Symbol.for('x')]", [true; 4]),
+                (
+                    "[{ valueOf() { return 1; } }, 1]",
+                    [true, false, false, false],
+                ),
+            ] {
+                let pair: Array = ctx.eval(source).unwrap();
+                let a: Value = pair.get(0).unwrap();
+                let b: Value = pair.get(1).unwrap();
+                for (a, b) in [(&a, &b), (&b, &a)] {
+                    assert_eq!(
+                        [
+                            a.loose_eq(b).unwrap(),
+                            a.strict_eq(b),
+                            a.same_value(b),
+                            a.same_value_zero(b),
+                        ],
+                        expected,
+                        "{source}",
+                    );
+                }
+            }
+        });
+    }
+
+    #[test]
+    fn equality_errors() {
+        test_with(|ctx| {
+            for (source, thrown) in [
+                ("({ valueOf() { throw 42; } })", Some(42)),
+                ("({ [Symbol.toPrimitive]() { throw 42; } })", Some(42)),
+                ("({ [Symbol.toPrimitive]() { return {}; } })", None),
+            ] {
+                let object: Value = ctx.eval(source).unwrap();
+                let number = Value::new_int(ctx.clone(), 1);
+                for (a, b) in [(&object, &number), (&number, &object)] {
+                    // These comparisons don't coerce and are infallible.
+                    assert!(!a.strict_eq(b));
+                    assert!(!a.same_value(b));
+                    assert!(!a.same_value_zero(b));
+                    assert!(matches!(a.loose_eq(b), Err(Error::Exception)));
+                    let exception = ctx.catch();
+                    if let Some(thrown) = thrown {
+                        assert_eq!(exception.as_int(), Some(thrown));
+                    } else {
+                        let name: StdString = exception.as_object().unwrap().get("name").unwrap();
+                        assert_eq!(name, "TypeError");
+                    }
+                }
+            }
+        });
+    }
 
     #[test]
     fn type_matches() {

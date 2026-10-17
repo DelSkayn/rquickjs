@@ -76,6 +76,36 @@ impl TestClass {
         "test"
     }
 
+    #[qjs(enumerable)]
+    pub fn describe(&self) -> u32 {
+        self.value
+    }
+
+    #[qjs(writable = false, configurable = false)]
+    pub fn frozen(&self) -> u32 {
+        self.value
+    }
+
+    #[qjs(static, enumerable, writable = false)]
+    pub fn create() -> u32 {
+        0
+    }
+
+    #[qjs(set, rename = "sink", configurable)]
+    pub fn set_sink(&mut self, v: u32) {
+        self.value = v
+    }
+
+    #[qjs(get, rename = "pair", enumerable)]
+    pub fn get_pair(&self) -> u32 {
+        self.value
+    }
+
+    #[qjs(set, rename = "pair", configurable, enumerable = true)]
+    pub fn set_pair(&mut self, v: u32) {
+        self.value = v
+    }
+
     #[qjs(rename = PredefinedAtom::SymbolIterator)]
     pub fn iterate<'js>(&self, ctx: Ctx<'js>) -> Result<Object<'js>> {
         let res = Object::new(ctx)?;
@@ -185,6 +215,35 @@ pub fn main() {
             }
             if(proto.defaultValue !== undefined){
                 throw new Error(18)
+            }
+            let describeDesc = Object.getOwnPropertyDescriptor(proto, "describe");
+            if(describeDesc.enumerable !== true || describeDesc.writable !== true || describeDesc.configurable !== true){
+                throw new Error(19)
+            }
+            let iterDesc = Object.getOwnPropertyDescriptor(proto, Symbol.iterator);
+            if(iterDesc.enumerable !== false || iterDesc.writable !== true || iterDesc.configurable !== true){
+                throw new Error(20)
+            }
+            let frozenDesc = Object.getOwnPropertyDescriptor(proto, "frozen");
+            if(frozenDesc.enumerable !== false || frozenDesc.writable !== false || frozenDesc.configurable !== false){
+                throw new Error(21)
+            }
+            let createDesc = Object.getOwnPropertyDescriptor(TestClass, "create");
+            if(createDesc.enumerable !== true || createDesc.writable !== false || createDesc.configurable !== true){
+                throw new Error(22)
+            }
+            let sinkDesc = Object.getOwnPropertyDescriptor(proto, "sink");
+            if(sinkDesc.get !== undefined || typeof sinkDesc.set !== "function" || sinkDesc.configurable !== true || sinkDesc.enumerable !== false){
+                throw new Error(23)
+            }
+            let sinkTarget = new TestClass(1);
+            sinkTarget.sink = 5;
+            if(sinkTarget.value !== 5){
+                throw new Error(24)
+            }
+            let pairDesc = Object.getOwnPropertyDescriptor(proto, "pair");
+            if(pairDesc.configurable !== true || pairDesc.enumerable !== true){
+                throw new Error(25)
             }
         "#,
         )
