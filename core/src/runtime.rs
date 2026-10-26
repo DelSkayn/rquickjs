@@ -44,6 +44,13 @@ pub type RejectionTracker = Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>, Value<'a>, bo
 pub type RejectionTracker =
     Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>, Value<'a>, bool) + Send + 'static>;
 
+/// The type of the job error handler.
+#[cfg(not(feature = "parallel"))]
+pub type JobErrorHandler = Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>) + 'static>;
+/// The type of the job error handler.
+#[cfg(feature = "parallel")]
+pub type JobErrorHandler = Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>) + Send + 'static>;
+
 /// The type of the interrupt handler.
 #[cfg(not(feature = "parallel"))]
 pub type InterruptHandler = Box<dyn FnMut() -> bool + 'static>;

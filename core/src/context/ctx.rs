@@ -6,6 +6,7 @@ use core::{
     any::Any,
     ffi::{c_char, CStr},
     mem::{self, MaybeUninit},
+    panic::AssertUnwindSafe,
     ptr::NonNull,
     result::Result as StdResult,
 };
@@ -283,16 +284,29 @@ impl<'js> Ctx<'js> {
         unsafe { self.get_opaque() }.take_job_error()
     }
 
+    /// Returns the number of job failures that could not be retained for
+    /// [`Ctx::take_pending_job_error`] because an earlier failure was still
+    /// retained, since the previous call. The count is reset to 0.
+    ///
+    /// Counting is independent of the job error handler, which reports
+    /// every failure individually; without a handler this count is the
+    /// only record of failures beyond the first.
+    pub fn take_pending_job_error_overflow(&self) -> u64 {
+        unsafe { self.get_opaque() }.take_job_error_overflow()
+    }
+
     /// Handle a job that failed in a drain; `self` is the context the job ran
     /// in, which need not be the context the drain was started on.
     ///
     /// If the failure's exception is the synthetic value thrown for a stashed
     /// Rust panic (norm tag `JS_TAG_EXCEPTION`, which JS cannot fabricate),
     /// the stash is attributed to this failure: its payload is resumed and
-    /// never returns. Any other failure's exception is retained, first-wins,
-    /// for [`Ctx::take_pending_job_error`]. A synthetic exception caught by
-    /// JS is considered handled by JS; its payload lingers in the stash until
-    /// overwritten or dropped with the runtime and is never resumed.
+    /// never returns. Any other failure is first reported to the job error
+    /// handler, if one is set, with a borrowed view of its exception, then
+    /// retained, first-wins, for [`Ctx::take_pending_job_error`]. A
+    /// synthetic exception caught by JS is considered handled by JS; its
+    /// payload lingers in the stash until overwritten or dropped with the
+    /// runtime and is never resumed.
     pub(crate) fn handle_failed_job(&self) {
         // Take the exception out of the engine's pending-exception slot so
         // unrelated code can't later mistake it for a fresh one (e.g. the
@@ -311,7 +325,17 @@ impl<'js> Ctx<'js> {
             }
         }
         // A sentinel failure with an empty stash is practically unreachable;
-        // retain the value like any other failure.
+        // report and retain its value like any other failure. The handler's
+        // value is a borrowed dup that dies with the call; the owned `raw`
+        // is retained afterwards.
+        let handler_call = crate::util::catch_unwind(AssertUnwindSafe(|| {
+            opaque.run_job_error_handler(self.clone(), unsafe {
+                Value::from_js_value_const(self.clone(), raw)
+            });
+        }));
+        if let Err(panic) = handler_call {
+            opaque.set_panic(panic);
+        }
         opaque.retain_job_error(unsafe { Value::from_js_value(self.clone(), raw) });
     }
 
@@ -644,6 +668,87 @@ mod test {
             while ctx.execute_pending_job() {}
 
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_calls_job_error_handler_in_order() {
+        use crate::{Context, Runtime};
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let runtime = Runtime::new().unwrap();
+        {
+            let seen = seen.clone();
+            runtime.set_job_error_handler(Some(Box::new(move |_, error| {
+                seen.lock().unwrap().push(error.as_int());
+            })));
+        }
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw 1; });
+                 queueMicrotask(() => { throw 2; });",
+            )
+            .unwrap();
+
+            while ctx.execute_pending_job() {}
+
+            // Every failure is reported, in order; retention stays first-wins.
+            assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2)]);
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+            assert_eq!(ctx.take_pending_job_error_overflow(), 1);
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_counts_dropped_failures() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw 1; });
+                 queueMicrotask(() => { throw 2; });
+                 queueMicrotask(() => { throw 3; });",
+            )
+            .unwrap();
+
+            while ctx.execute_pending_job() {}
+
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+            // The two later failures could not be retained.
+            assert_eq!(ctx.take_pending_job_error_overflow(), 2);
+            // Both takes reset.
+            assert!(ctx.take_pending_job_error().is_none());
+            assert_eq!(ctx.take_pending_job_error_overflow(), 0);
+        })
+    }
+
+    #[test]
+    fn job_error_handler_panic_is_stashed_not_unwound() {
+        use crate::{Context, Runtime};
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let runtime = Runtime::new().unwrap();
+        runtime.set_job_error_handler(Some(Box::new(|_, _| panic!("handler boom"))));
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap();
+
+            // The panicking handler is caught: the drain completes and the
+            // failure is retained as usual.
+            while ctx.execute_pending_job() {}
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+
+            // The stashed payload is resumed by the next host error path.
+            let payload = catch_unwind(AssertUnwindSafe(|| {
+                let _ = ctx.eval::<(), _>("throw 2");
+            }))
+            .expect_err("a host error should resume the stashed handler panic");
+            assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
         })
     }
 

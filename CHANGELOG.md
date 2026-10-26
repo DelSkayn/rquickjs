@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - `Ctx::take_pending_job_error` to observe the exception of a job that failed while a job drain executed it
+- `Runtime::set_job_error_handler` and `AsyncRuntime::set_job_error_handler` to register a callback invoked with each job that fails in an internal job drain
+- `Ctx::take_pending_job_error_overflow` returning the count of job failures that could not be retained since the previous take
 
 ### Changed
 
@@ -23,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed job errors being silently discarded by `Ctx::execute_pending_job`, the `async_with` driver, and the `AsyncRuntime::drive` future; the first failure of a drain is retained instead and observable via `Ctx::take_pending_job_error`
+- Job failures beyond the first per drain window are now counted instead of discarded without trace, observable via `Ctx::take_pending_job_error_overflow`; first-wins retention semantics are unchanged
 - `Ctx::execute_pending_job`, the `async_with` driver, and the `AsyncRuntime::drive` future now resume a Rust panic stashed by a panicking callback when the failing job's exception is that panic's synthetic exception; a synthetic exception caught by JS is treated as handled by JS and never resumed
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
 - Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter

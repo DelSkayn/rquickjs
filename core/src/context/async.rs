@@ -279,6 +279,38 @@ mod test {
     }
 
     #[tokio::test]
+    async fn async_with_calls_job_error_handler() {
+        use std::sync::{Arc, Mutex};
+
+        let rt = AsyncRuntime::new().unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        {
+            let seen = seen.clone();
+            rt.set_job_error_handler(Some(Box::new(move |_, error| {
+                seen.lock().unwrap().push(error.as_int());
+            })))
+            .await;
+        }
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+        ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw 1; });
+                 queueMicrotask(() => { throw 2; });",
+            )
+            .unwrap();
+
+            // Yield once so the driver's job drain runs the failing jobs.
+            tokio::task::yield_now().await;
+
+            // Every failure is reported, in order; retention stays first-wins.
+            assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2)]);
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+            assert_eq!(ctx.take_pending_job_error_overflow(), 1);
+        })
+        .await;
+    }
+
+    #[tokio::test]
     async fn async_with_never_resumes_caught_panic() {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();

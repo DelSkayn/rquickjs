@@ -6,7 +6,8 @@ use crate::{
 use super::{
     exotic::ExoticMethodsHolder,
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
+    InterruptHandler, JobErrorHandler, PromiseHook, PromiseHookType, RejectionTracker,
+    UserDataError,
 };
 use alloc::boxed::Box;
 use core::{
@@ -50,6 +51,13 @@ pub(crate) struct Opaque<'js> {
     /// pending-exception slot. [`crate::Ctx::take_pending_job_error`] takes it.
     job_error: UnsafeCell<Option<Value<'js>>>,
 
+    /// The user provided job error handler, if any.
+    job_error_handler: UnsafeCell<Option<JobErrorHandler>>,
+
+    /// Count of job failures dropped because `job_error` was occupied.
+    /// [`crate::Ctx::take_pending_job_error_overflow`] takes it.
+    job_error_overflow: Cell<u64>,
+
     /// The class id for rust classes.
     class_id: qjs::JSClassID,
     /// The class id for rust classes which can be called.
@@ -81,6 +89,10 @@ impl<'js> Opaque<'js> {
             interrupt_handler: UnsafeCell::new(None),
 
             job_error: UnsafeCell::new(None),
+
+            job_error_handler: UnsafeCell::new(None),
+
+            job_error_overflow: Cell::new(0),
 
             class_id: qjs::JS_INVALID_CLASS_ID,
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
@@ -156,16 +168,27 @@ impl<'js> Opaque<'js> {
 
     /// Retain a failed job's exception, first-wins. The caller must have
     /// taken the value out of the pending-exception slot (e.g. `Ctx::catch`).
+    /// Failures arriving while the slot is occupied are counted in
+    /// `job_error_overflow` instead of retained.
     pub fn retain_job_error(&self, error: Value<'js>) {
         let slot = unsafe { &mut *self.job_error.get() };
         if slot.is_none() {
             *slot = Some(error);
+        } else {
+            self.job_error_overflow
+                .set(self.job_error_overflow.get() + 1);
         }
     }
 
     /// Take the retained job error, leaving the slot empty.
     pub fn take_job_error(&self) -> Option<Value<'js>> {
         unsafe { (*self.job_error.get()).take() }
+    }
+
+    /// Take the count of job failures dropped because the slot was occupied,
+    /// resetting it to 0.
+    pub fn take_job_error_overflow(&self) -> u64 {
+        self.job_error_overflow.replace(0)
     }
 
     #[cfg(feature = "futures")]
@@ -252,6 +275,18 @@ impl<'js> Opaque<'js> {
         }
     }
 
+    pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
+        unsafe { (*self.job_error_handler.get()) = handler }
+    }
+
+    pub fn run_job_error_handler<'a>(&self, ctx: Ctx<'a>, error: Value<'a>) {
+        unsafe {
+            if let Some(handler) = (*self.job_error_handler.get()).as_mut() {
+                handler(ctx, error)
+            }
+        }
+    }
+
     pub fn set_interrupt_handler(&self, interupt: Option<InterruptHandler>) {
         unsafe { (*self.interrupt_handler.get()) = interupt }
     }
@@ -304,6 +339,7 @@ impl<'js> Opaque<'js> {
     /// runtime.
     pub fn clear(&mut self) {
         self.rejection_tracker.get_mut().take();
+        self.job_error_handler.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
         self.prototypes.get_mut().clear();

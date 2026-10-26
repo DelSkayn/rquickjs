@@ -14,7 +14,7 @@ use async_lock::Mutex;
 
 use super::{
     opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
-    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    InterruptHandler, JobErrorHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
@@ -156,6 +156,29 @@ impl AsyncRuntime {
                 .runtime
                 .set_host_promise_rejection_tracker(tracker);
         }
+    }
+
+    /// Set a closure which is called when a job fails in an internal job
+    /// drain ([`Ctx::execute_pending_job`], the `async_with` driver, or the
+    /// [`AsyncRuntime::drive`] future), before the failure is retained for
+    /// [`Ctx::take_pending_job_error`].
+    ///
+    /// The closure is called with the failed job's context and a borrowed
+    /// view of its exception which is only valid for the duration of the
+    /// call. It is not called when the failure was a stashed Rust panic;
+    /// that panic is resumed instead. A panicking closure is caught and
+    /// stashed, never unwound through the drain.
+    ///
+    /// The closure runs synchronously mid-drain with the runtime lock held;
+    /// it must not call runtime-locking APIs (`Context::with`,
+    /// [`AsyncContext::async_with`], etc.), which would deadlock.
+    #[inline]
+    pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
+        self.inner
+            .lock()
+            .await
+            .runtime
+            .set_job_error_handler(handler);
     }
 
     /// Set a closure which is called when a promise is created, resolved, or chained.
@@ -489,6 +512,48 @@ mod test {
             }
         }
         assert!(found, "the drive future did not run the failing job");
+
+    });
+
+    async_test_case!(drive_calls_job_error_handler => (rt,ctx){
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        {
+            let seen = seen.clone();
+            rt.set_job_error_handler(Some(Box::new(move |_, error| {
+                seen.lock().unwrap().push(error.as_int());
+            }))).await;
+        }
+
+        #[cfg(feature = "parallel")]
+        tokio::spawn(rt.drive());
+        #[cfg(not(feature = "parallel"))]
+        tokio::task::spawn_local(rt.drive());
+
+        ctx.async_with(async |ctx|{
+            ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
+            // Wake the drive task so its drain observes the queued job.
+            ctx.spawn(async move {});
+        }).await;
+
+        // Wait for the drive future to drain the job, bounded so a
+        // regression fails instead of hanging.
+        let mut found = false;
+        for _ in 0..100 {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            ctx.async_with(async |ctx|{
+                if let Some(error) = ctx.take_pending_job_error() {
+                    assert_eq!(error.as_int(), Some(5));
+                    found = true;
+                }
+            }).await;
+            if found {
+                break;
+            }
+        }
+        assert!(found, "the drive future did not run the failing job");
+        assert_eq!(*seen.lock().unwrap(), vec![Some(5)]);
 
     });
 

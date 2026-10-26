@@ -1,7 +1,8 @@
 //! QuickJS runtime related types.
 
 use super::{
-    opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    opaque::Opaque, raw::RawRuntime, InterruptHandler, JobErrorHandler, MemoryUsage, PromiseHook,
+    RejectionTracker,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
@@ -115,6 +116,25 @@ impl Runtime {
                 .lock()
                 .set_host_promise_rejection_tracker(tracker);
         }
+    }
+
+    /// Set a closure which is called when a job fails in an internal job
+    /// drain ([`crate::Ctx::execute_pending_job`], the `async_with` driver,
+    /// or the [`crate::AsyncRuntime::drive`] future), before the failure is
+    /// retained for [`crate::Ctx::take_pending_job_error`].
+    ///
+    /// The closure is called with the failed job's context and a borrowed
+    /// view of its exception which is only valid for the duration of the
+    /// call. It is not called when the failure was a stashed Rust panic;
+    /// that panic is resumed instead. A panicking closure is caught and
+    /// stashed, never unwound through the drain.
+    ///
+    /// The closure runs synchronously mid-drain with the runtime lock held;
+    /// it must not call runtime-locking APIs ([`Context::with`],
+    /// `async_with`, etc.), which would deadlock.
+    #[inline]
+    pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
+        self.inner.lock().set_job_error_handler(handler);
     }
 
     /// Set a closure which is regularly called by the engine when it is executing code.
