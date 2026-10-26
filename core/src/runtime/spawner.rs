@@ -119,20 +119,14 @@ impl Future for DriveFuture {
                     Ok(true) => continue,
                     Ok(false) => {}
                     Err(ctx) => {
-                        // Retain the failed job's exception; see
-                        // `Opaque::job_error`. The drain continues after the
-                        // failure.
-                        //
                         // Safety: the runtime lock is held for the whole
-                        // poll, so viewing the failed job's context is sound;
-                        // `catch` clears the slot, making the retained value
-                        // the failure's only copy.
+                        // poll, so viewing the failed job's context is sound.
                         let job_ctx = unsafe {
                             Ctx::from_raw(
                                 NonNull::new(ctx).expect("QuickJS returned null ptr for job error"),
                             )
                         };
-                        lock.runtime.get_opaque().retain_job_error(job_ctx.catch());
+                        job_ctx.handle_failed_job();
                     }
                 }
 

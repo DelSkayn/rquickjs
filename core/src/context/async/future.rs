@@ -138,20 +138,15 @@ where
                     Ok(false) => break,
                     Ok(true) => made_progress = true,
                     Err(ctx) => {
-                        // Retain the failed job's exception; see
-                        // `Opaque::job_error`. The drain continues after the
-                        // failure.
-                        //
                         // Safety: the runtime lock is held for the driver's
                         // whole poll, so viewing the failed job's context is
-                        // sound; `catch` clears the slot, making the retained
-                        // value the failure's only copy.
+                        // sound.
                         let job_ctx = unsafe {
                             Ctx::from_raw(
                                 NonNull::new(ctx).expect("QuickJS returned null ptr for job error"),
                             )
                         };
-                        lock.runtime.get_opaque().retain_job_error(job_ctx.catch());
+                        job_ctx.handle_failed_job();
                         made_progress = true;
                     }
                 }

@@ -350,6 +350,10 @@ impl AsyncRuntime {
     /// Returns a future that completes when the runtime is dropped.
     /// If the future is polled it will drive futures spawned inside the runtime completing them
     /// even if runtime is currently not in use.
+    ///
+    /// If a job driven by the returned future fails because a Rust callback
+    /// panicked, the stashed panic is resumed out of the future's poll,
+    /// killing the driving task.
     pub fn drive(&self) -> DriveFuture {
         DriveFuture::new(self.weak())
     }
@@ -485,6 +489,73 @@ mod test {
             }
         }
         assert!(found, "the drive future did not run the failing job");
+
+    });
+
+    async_test_case!(drive_never_resumes_caught_panic => (rt,ctx){
+        #[cfg(feature = "parallel")]
+        let handle = tokio::spawn(rt.drive());
+        #[cfg(not(feature = "parallel"))]
+        let handle = tokio::task::spawn_local(rt.drive());
+
+        ctx.async_with(async |ctx|{
+            ctx.globals().set(
+                "rustPanic",
+                Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+            ).unwrap();
+            // Job A panics, but JS catches the synthetic exception: the panic
+            // is handled by JS and must never be resumed.
+            ctx.eval::<(),_>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });").unwrap();
+            // Job B fails unrelatedly.
+            ctx.eval::<(),_>("queueMicrotask(() => { throw 1; });").unwrap();
+            // Wake the drive task so its drain observes the queued jobs.
+            ctx.spawn(async move {});
+        }).await;
+
+        // Wait for the drive future to drain the jobs, bounded so a
+        // regression fails instead of hanging.
+        let mut found = false;
+        for _ in 0..100 {
+            tokio::time::sleep(Duration::from_millis(1)).await;
+            ctx.async_with(async |ctx|{
+                if let Some(error) = ctx.take_pending_job_error() {
+                    assert_eq!(error.as_int(), Some(1));
+                    found = true;
+                }
+            }).await;
+            if found {
+                break;
+            }
+        }
+        assert!(found, "the drive future did not run the failing job");
+
+        // The caught panic was never resumed: the drive task survives.
+        assert!(!handle.is_finished());
+
+    });
+
+    async_test_case!(drive_resumes_pending_panic => (rt,ctx){
+        #[cfg(feature = "parallel")]
+        let handle = tokio::spawn(rt.drive());
+        #[cfg(not(feature = "parallel"))]
+        let handle = tokio::task::spawn_local(rt.drive());
+
+        ctx.async_with(async |ctx|{
+            ctx.globals().set(
+                "rustPanic",
+                Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+            ).unwrap();
+            ctx.eval::<(),_>("queueMicrotask(rustPanic);").unwrap();
+            // Wake the drive task so its drain observes the queued job even
+            // if it already polled once.
+            ctx.spawn(async move {});
+        }).await;
+
+        // The drive task's drain resumes the stashed panic; tokio catches
+        // the unwind at the task boundary and the task dies with the
+        // payload.
+        let err = handle.await.expect_err("the drive task should have panicked");
+        assert_eq!(*err.into_panic().downcast_ref::<&str>().unwrap(), "rust boom");
 
     });
 

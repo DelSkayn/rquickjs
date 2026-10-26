@@ -175,6 +175,10 @@ impl AsyncContext {
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
+    /// If a job executed by the driver fails because a Rust callback
+    /// panicked, the stashed panic is resumed out of the returned future's
+    /// poll.
+    ///
     /// # Example
     ///
     /// ```
@@ -245,7 +249,7 @@ unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]
 mod test {
-    use crate::{AsyncContext, AsyncRuntime};
+    use crate::{AsyncContext, AsyncRuntime, Function};
 
     #[tokio::test]
     async fn base_asyc_context() {
@@ -270,6 +274,74 @@ mod test {
             tokio::task::yield_now().await;
 
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(7));
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn async_with_never_resumes_caught_panic() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+        ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+
+            // Job A panics, but JS catches the synthetic exception: the panic
+            // is handled by JS and must never be resumed.
+            ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
+                .unwrap();
+            // Job B fails unrelatedly.
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap();
+
+            // Yield once so the driver's job drain runs both jobs.
+            tokio::task::yield_now().await;
+
+            // Only job B's failure is retained.
+            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn async_with_resumes_pending_panic() {
+        use std::panic::AssertUnwindSafe;
+
+        use futures_rs::future::FutureExt;
+
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        let res = AssertUnwindSafe(ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+
+            // Yield once so the driver's job drain runs the panicking job;
+            // the drain resumes the stashed panic out of the poll.
+            tokio::task::yield_now().await;
+        }))
+        .catch_unwind()
+        .await;
+
+        let payload = res.expect_err("the driver should have resumed the stashed panic");
+        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+        // The runtime remains usable.
+        ctx.async_with(async |ctx| {
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
         })
         .await;
     }
