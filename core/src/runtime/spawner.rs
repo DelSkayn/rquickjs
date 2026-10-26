@@ -119,13 +119,18 @@ impl Future for DriveFuture {
                     Ok(true) => continue,
                     Ok(false) => {}
                     Err(ctx) => {
+                        let Some(ctx) = NonNull::new(ctx) else {
+                            // A failed job reported with a null context is
+                            // practically unreachable; there is no exception to
+                            // retain, so count it as overflow instead of
+                            // dropping it silently.
+                            debug_assert!(false, "QuickJS returned null ptr for job error");
+                            lock.runtime.get_opaque().count_job_error_overflow();
+                            continue;
+                        };
                         // Safety: the runtime lock is held for the whole
                         // poll, so viewing the failed job's context is sound.
-                        let job_ctx = unsafe {
-                            Ctx::from_raw(
-                                NonNull::new(ctx).expect("QuickJS returned null ptr for job error"),
-                            )
-                        };
+                        let job_ctx = unsafe { Ctx::from_raw(ctx) };
                         job_ctx.handle_failed_job();
                     }
                 }

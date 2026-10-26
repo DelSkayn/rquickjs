@@ -138,14 +138,20 @@ where
                     Ok(false) => break,
                     Ok(true) => made_progress = true,
                     Err(ctx) => {
+                        let Some(ctx) = NonNull::new(ctx) else {
+                            // A failed job reported with a null context is
+                            // practically unreachable; there is no exception to
+                            // retain, so count it as overflow instead of
+                            // dropping it silently.
+                            debug_assert!(false, "QuickJS returned null ptr for job error");
+                            lock.runtime.get_opaque().count_job_error_overflow();
+                            made_progress = true;
+                            continue;
+                        };
                         // Safety: the runtime lock is held for the driver's
                         // whole poll, so viewing the failed job's context is
                         // sound.
-                        let job_ctx = unsafe {
-                            Ctx::from_raw(
-                                NonNull::new(ctx).expect("QuickJS returned null ptr for job error"),
-                            )
-                        };
+                        let job_ctx = unsafe { Ctx::from_raw(ctx) };
                         job_ctx.handle_failed_job();
                         made_progress = true;
                     }

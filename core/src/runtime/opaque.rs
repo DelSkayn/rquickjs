@@ -180,6 +180,13 @@ impl<'js> Opaque<'js> {
         }
     }
 
+    /// Count a job failure that cannot be retained because the engine
+    /// reported it with a null context, leaving no exception to take.
+    pub fn count_job_error_overflow(&self) {
+        self.job_error_overflow
+            .set(self.job_error_overflow.get() + 1);
+    }
+
     /// Take the retained job error, leaving the slot empty.
     pub fn take_job_error(&self) -> Option<Value<'js>> {
         unsafe { (*self.job_error.get()).take() }

@@ -285,8 +285,9 @@ impl<'js> Ctx<'js> {
     }
 
     /// Returns the number of job failures that could not be retained for
-    /// [`Ctx::take_pending_job_error`] because an earlier failure was still
-    /// retained, since the previous call. The count is reset to 0.
+    /// [`Ctx::take_pending_job_error`] since the previous call, either
+    /// because an earlier failure was still retained or because the engine
+    /// reported the failure without a context. The count is reset to 0.
     ///
     /// Counting is independent of the job error handler, which reports
     /// every failure individually; without a handler this count is the
@@ -476,8 +477,16 @@ impl<'js> Ctx<'js> {
             // leaves the exception pending on the context it ran in (`*ptr`,
             // which need not be `self` in a multi-context runtime) instead of
             // surfacing it here.
-            let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
-            ctx.handle_failed_job();
+            if let Some(ctx) = NonNull::new(unsafe { ptr.assume_init() }) {
+                let ctx = unsafe { Self::from_ptr(ctx.as_ptr()) };
+                ctx.handle_failed_job();
+            } else {
+                // A failed job reported with a null context is practically
+                // unreachable; there is no exception to retain, so count it
+                // as overflow instead of dropping it silently.
+                debug_assert!(false, "QuickJS returned null ptr for job error");
+                unsafe { self.get_opaque() }.count_job_error_overflow();
+            }
         }
         res != 0
     }
