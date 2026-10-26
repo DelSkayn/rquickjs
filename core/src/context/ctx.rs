@@ -78,6 +78,20 @@ impl Default for EvalOptions {
     }
 }
 
+/// The kind of internal job drain handing a failed job to
+/// [`Ctx::handle_failed_job`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum JobDrain {
+    /// [`Ctx::execute_pending_job`]: the engine's pending-exception slot is
+    /// left clear after the failure is handled.
+    Sync,
+    /// A drain driving futures (the `async_with` driver, the
+    /// `AsyncRuntime::drive` future, `AsyncRuntime::idle`): an uncatchable
+    /// error is left pending in the engine after the failure is handled.
+    #[cfg_attr(not(feature = "futures"), allow(dead_code))]
+    Async,
+}
+
 /// Context in use, passed to [`Context::with`].
 #[derive(Debug)]
 pub struct Ctx<'js> {
@@ -275,47 +289,92 @@ impl<'js> Ctx<'js> {
     }
 
     /// Takes the exception of the first job that failed in an internal job
-    /// drain (the `async_with` driver, the [`crate::AsyncRuntime::drive`]
-    /// future, or [`Ctx::execute_pending_job`]) since the previous take.
+    /// drain (the `async_with` driver, the `AsyncRuntime::drive` future,
+    /// `AsyncRuntime::idle`, or [`Ctx::execute_pending_job`]) since the
+    /// previous take, leaving nothing retained. A job that failed without an
+    /// exception value (e.g. a Rust callback returned [`Error::Exception`]
+    /// without throwing) is retained as `undefined`.
+    ///
+    /// Retention and the job error handler (`Runtime::set_job_error_handler`
+    /// or `AsyncRuntime::set_job_error_handler`) are alternatives: a failure
+    /// that occurs while a handler is set is handed to the handler only and
+    /// is never retained.
+    ///
+    /// The retained error is runtime-wide, not per context: the returned
+    /// value belongs to the context the failed job ran in, which may be
+    /// another context of the same runtime. Until it is taken, the retained
+    /// value keeps its object graph and that context alive. It is dropped
+    /// with the runtime if never taken.
     ///
     /// Failures surfaced by the runtime's own `execute_pending_job` methods
-    /// are handed to the caller instead and not retained.
+    /// are handed to the caller instead and not retained. Failures of jobs
+    /// run while the runtime is being dropped (e.g. drained by the `Drop` of
+    /// a spawned future or of userdata) are discarded: neither retained nor
+    /// counted.
     pub fn take_pending_job_error(&self) -> Option<Value<'js>> {
         unsafe { self.get_opaque() }.take_job_error()
     }
 
     /// Returns the number of job failures that could not be retained for
-    /// [`Ctx::take_pending_job_error`] since the previous call, either
-    /// because an earlier failure was still retained or because the engine
-    /// reported the failure without a context. The count is reset to 0.
+    /// [`Ctx::take_pending_job_error`] because an earlier failure was still
+    /// retained, since the previous call. The count saturates at `u64::MAX`
+    /// and is reset to 0.
     ///
-    /// Counting is independent of the job error handler, which reports
-    /// every failure individually; without a handler this count is the
-    /// only record of failures beyond the first.
+    /// Like the retained error, the count is runtime-wide.
+    ///
+    /// A failure handed to the job error handler is neither retained nor
+    /// counted; without a handler this count is the only record of failures
+    /// beyond the first.
     pub fn take_pending_job_error_overflow(&self) -> u64 {
         unsafe { self.get_opaque() }.take_job_error_overflow()
     }
 
     /// Handle a job that failed in a drain; `self` is the context the job ran
-    /// in, which need not be the context the drain was started on.
+    /// in, which need not be the context the drain was started on, and
+    /// `drain` is the kind of drain that ran it.
     ///
-    /// If the failure's exception is the synthetic value thrown for a stashed
-    /// Rust panic (norm tag `JS_TAG_EXCEPTION`, which JS cannot fabricate),
-    /// the stash is attributed to this failure: its payload is resumed and
-    /// never returns. Any other failure is first reported to the job error
-    /// handler, if one is set, with a borrowed view of its exception, then
-    /// retained, first-wins, for [`Ctx::take_pending_job_error`]. A
-    /// synthetic exception caught by JS is considered handled by JS; its
-    /// payload lingers in the stash until overwritten or dropped with the
-    /// runtime and is never resumed.
-    pub(crate) fn handle_failed_job(&self) {
+    /// The failure's exception is taken out of the engine's pending-exception
+    /// slot. If it is the synthetic value thrown for a stashed Rust panic
+    /// (norm tag `JS_TAG_EXCEPTION`) and a panic is stashed, the stash is
+    /// attributed to this failure: its payload is resumed and this function
+    /// never returns. JS cannot construct that value, but it can capture one
+    /// with `catch` and rethrow it later; such a rethrow resumes whichever
+    /// payload is stashed at that moment, which need not be the one the
+    /// value was originally thrown for. This matches the crate's existing
+    /// host-error crossings, which resume any stashed payload.
+    ///
+    /// Any other failure is reported as its exception, or as `undefined` if
+    /// the job failed without one (e.g. a Rust callback returned
+    /// [`Error::Exception`] without throwing, or JS rethrew a captured
+    /// synthetic panic value whose payload was already consumed). If a job
+    /// error handler is set, the failure is handed to it only. Otherwise it
+    /// is retained, first-wins, for [`Ctx::take_pending_job_error`], or
+    /// counted for [`Ctx::take_pending_job_error_overflow`] if an earlier
+    /// failure is still retained.
+    ///
+    /// For [`JobDrain::Async`], an uncatchable error (e.g. raised by the
+    /// interrupt handler) is then thrown back into the pending-exception slot
+    /// so that a `PromiseFuture` awaiting a promise the failed job never
+    /// settled still observes it and returns an error instead of waiting
+    /// forever. For [`JobDrain::Sync`] the slot is left clear.
+    ///
+    /// If the handler panics, the payload is resumed out of this function
+    /// (and so out of the drain) after the above; the panic stash is not
+    /// touched.
+    ///
+    /// The drain does not resume a panic whose synthetic exception JS caught
+    /// and did not rethrow; that payload stays stashed and is resumed at the
+    /// next host error crossing (e.g. a later `eval` that throws), or
+    /// dropped with the runtime.
+    pub(crate) fn handle_failed_job(&self, drain: JobDrain) {
         // Take the exception out of the engine's pending-exception slot so
         // unrelated code can't later mistake it for a fresh one (e.g. the
         // module loader's "is a module already loaded" check).
         let raw = unsafe { qjs::JS_GetException(self.as_ptr()) };
         // Safety: the caller holds the runtime lock for the whole drain.
         let opaque = unsafe { self.get_opaque() };
-        if unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) } == qjs::JS_TAG_EXCEPTION {
+        let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) };
+        if tag == qjs::JS_TAG_EXCEPTION {
             if let Some(payload) = opaque.take_panic() {
                 // Safety: the runtime lock is held for the whole drain and
                 // the engine is quiescent between jobs with the
@@ -325,19 +384,37 @@ impl<'js> Ctx<'js> {
                 crate::util::resume_unwind(payload);
             }
         }
-        // A sentinel failure with an empty stash is practically unreachable;
-        // report and retain its value like any other failure. The handler's
-        // value is a borrowed dup that dies with the call; the owned `raw`
-        // is retained afterwards.
-        let handler_call = crate::util::catch_unwind(AssertUnwindSafe(|| {
-            opaque.run_job_error_handler(self.clone(), unsafe {
-                Value::from_js_value_const(self.clone(), raw)
-            });
-        }));
-        if let Err(panic) = handler_call {
-            opaque.set_panic(panic);
+        // `JS_TAG_UNINITIALIZED` means no exception was pending; a sentinel
+        // with an empty stash (JS rethrowing a captured sentinel after the
+        // stash was consumed) carries no value either. Neither is a usable
+        // JS value, and neither is reference counted, so `raw` needs no free.
+        let error = if tag == qjs::JS_TAG_UNINITIALIZED || tag == qjs::JS_TAG_EXCEPTION {
+            Value::new_undefined(self.clone())
+        } else {
+            unsafe { Value::from_js_value(self.clone(), raw) }
+        };
+        // The handler gets its own handle to the error, so it may re-enter a
+        // drain; the handler and retention are alternatives.
+        let handler_panic = match crate::util::catch_unwind(AssertUnwindSafe(|| {
+            opaque.run_job_error_handler(self.clone(), error.clone())
+        })) {
+            Ok(true) => None,
+            Ok(false) => {
+                opaque.retain_job_error(error.clone());
+                None
+            }
+            Err(payload) => Some(payload),
+        };
+        if drain == JobDrain::Async && error.is_uncatchable_error() {
+            // Leave the uncatchable error pending, as the engine reported it,
+            // so `PromiseFuture` bails out on it.
+            self.throw(error);
         }
-        opaque.retain_job_error(unsafe { Value::from_js_value(self.clone(), raw) });
+        if let Some(payload) = handler_panic {
+            // Safety: as above; the handler has returned and the bookkeeping
+            // for this failure is complete.
+            crate::util::resume_unwind(payload);
+        }
     }
 
     /// Parse json into a JavaScript value.
@@ -466,27 +543,27 @@ impl<'js> Ctx<'js> {
     /// Returns wether a job was actually executed.
     /// If this function returned false, no job was pending.
     ///
-    /// If a job failed because a Rust callback panicked, the stashed panic is
-    /// resumed and this function does not return.
+    /// The job may belong to any context of the runtime. If it fails, its
+    /// exception is taken out of the engine and handed to the job error
+    /// handler if one is set, or otherwise retained for
+    /// [`Ctx::take_pending_job_error`]; it is not left pending. If it
+    /// failed because a Rust callback panicked, the stashed panic is resumed
+    /// and this function does not return. A panic in the job error handler
+    /// also propagates out of this function.
     pub fn execute_pending_job(&self) -> bool {
         let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
         let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
         if res < 0 {
             // A negative result means the job threw, and `JS_ExecutePendingJob`
-            // leaves the exception pending on the context it ran in (`*ptr`,
-            // which need not be `self` in a multi-context runtime) instead of
-            // surfacing it here.
-            if let Some(ctx) = NonNull::new(unsafe { ptr.assume_init() }) {
-                let ctx = unsafe { Self::from_ptr(ctx.as_ptr()) };
-                ctx.handle_failed_job();
-            } else {
-                // A failed job reported with a null context is practically
-                // unreachable; there is no exception to retain, so count it
-                // as overflow instead of dropping it silently.
-                debug_assert!(false, "QuickJS returned null ptr for job error");
-                unsafe { self.get_opaque() }.count_job_error_overflow();
-            }
+            // leaves the exception pending in the runtime-wide exception slot
+            // and reports the context the job ran in (`*ptr`, which need not
+            // be `self` in a multi-context runtime) instead of surfacing it
+            // here.
+            let ctx = NonNull::new(unsafe { ptr.assume_init() })
+                .expect("executing pending job returned a null context on error");
+            let ctx = unsafe { Self::from_raw(ctx) };
+            ctx.handle_failed_job(JobDrain::Sync);
         }
         res != 0
     }
@@ -703,10 +780,108 @@ mod test {
 
             while ctx.execute_pending_job() {}
 
-            // Every failure is reported, in order; retention stays first-wins.
+            // Every failure is reported, in order, and handed to the handler
+            // only: nothing is retained or counted.
             assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2)]);
-            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
-            assert_eq!(ctx.take_pending_job_error_overflow(), 1);
+            assert!(ctx.take_pending_job_error().is_none());
+            assert_eq!(ctx.take_pending_job_error_overflow(), 0);
+            assert!(!ctx.has_exception());
+        })
+    }
+
+    #[test]
+    fn reentrant_job_error_handler_reports_every_failure_in_order() {
+        use crate::{Context, Runtime};
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let runtime = Runtime::new().unwrap();
+        {
+            let seen = seen.clone();
+            runtime.set_job_error_handler(Some(Box::new(move |ctx, error| {
+                seen.lock().unwrap().push(error.as_int());
+                // Re-enter the drain from inside the handler.
+                while ctx.execute_pending_job() {}
+            })));
+        }
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw 1; });
+                 queueMicrotask(() => { throw 2; });
+                 queueMicrotask(() => { throw 3; });",
+            )
+            .unwrap();
+
+            while ctx.execute_pending_job() {}
+
+            assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2), Some(3)]);
+            assert!(ctx.take_pending_job_error().is_none());
+            assert_eq!(ctx.take_pending_job_error_overflow(), 0);
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_retains_valueless_failure_as_undefined() {
+        use crate::{Context, Error, Function, Result, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            // A Rust callback reporting an exception without throwing one.
+            ctx.globals()
+                .set(
+                    "failSilently",
+                    Function::new(ctx.clone(), || -> Result<()> { Err(Error::Exception) }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(failSilently);").unwrap();
+
+            while ctx.execute_pending_job() {}
+
+            assert!(ctx.take_pending_job_error().unwrap().is_undefined());
+            assert!(!ctx.has_exception());
+        })
+    }
+
+    #[test]
+    fn execute_pending_job_retains_rethrown_consumed_sentinel_as_undefined() {
+        use crate::{Context, Function, Runtime};
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            // JS captures the synthetic exception of a panic (the trailing
+            // `undefined` keeps it from becoming the script's result)...
+            ctx.eval::<(), _>(
+                "try { rustPanic(); } catch (e) { globalThis.sentinel = e; } undefined;",
+            )
+            .unwrap();
+            // ...whose payload a later host error crossing consumes.
+            let payload = catch_unwind(AssertUnwindSafe(|| {
+                let _ = ctx.eval::<(), _>("throw 1");
+            }))
+            .expect_err("a host error should resume the stashed panic");
+            assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+            // Rethrowing the captured value in a job fails it with a sentinel
+            // and an empty stash: it is retained as `undefined`.
+            ctx.eval::<(), _>("queueMicrotask(() => { throw globalThis.sentinel; });")
+                .unwrap();
+            while ctx.execute_pending_job() {}
+
+            assert!(ctx.take_pending_job_error().unwrap().is_undefined());
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
         })
     }
 
@@ -736,8 +911,8 @@ mod test {
     }
 
     #[test]
-    fn job_error_handler_panic_is_stashed_not_unwound() {
-        use crate::{Context, Runtime};
+    fn job_error_handler_panic_propagates_out_of_drain() {
+        use crate::{Context, Error, Runtime};
         use std::panic::{catch_unwind, AssertUnwindSafe};
 
         let runtime = Runtime::new().unwrap();
@@ -747,22 +922,30 @@ mod test {
             ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
                 .unwrap();
 
-            // The panicking handler is caught: the drain completes and the
-            // failure is retained as usual.
-            while ctx.execute_pending_job() {}
-            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
-
-            // The stashed payload is resumed by the next host error path.
-            let payload = catch_unwind(AssertUnwindSafe(|| {
-                let _ = ctx.eval::<(), _>("throw 2");
-            }))
-            .expect_err("a host error should resume the stashed handler panic");
+            // The handler's panic unwinds out of the drain with its payload.
+            let payload = catch_unwind(AssertUnwindSafe(|| while ctx.execute_pending_job() {}))
+                .expect_err("the handler panic should propagate out of the drain");
             assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
+
+            // The failure went to the handler only, and the failed job's
+            // exception was not left pending.
+            assert!(ctx.take_pending_job_error().is_none());
+            assert!(!ctx.has_exception());
+
+            // The panic was not stashed: a later host error is a plain
+            // exception, and the runtime remains usable.
+            assert!(matches!(
+                ctx.eval::<(), _>("throw 2"),
+                Err(Error::Exception)
+            ));
+            assert_eq!(ctx.catch().as_int(), Some(2));
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
         })
     }
 
     #[test]
-    fn execute_pending_job_never_resumes_caught_panic() {
+    fn execute_pending_job_drain_skips_caught_panic() {
         use crate::{Context, Function, Runtime};
 
         let runtime = Runtime::new().unwrap();
@@ -775,8 +958,9 @@ mod test {
                 )
                 .unwrap();
 
-            // Job A panics, but JS catches the synthetic exception: the panic
-            // is handled by JS and must never be resumed.
+            // Job A panics, but JS catches the synthetic exception: job A
+            // does not fail, so the drain must not resume the panic. (The
+            // payload stays stashed for the next host error crossing.)
             ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
                 .unwrap();
             // Job B fails unrelatedly.

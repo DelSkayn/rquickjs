@@ -10,6 +10,7 @@ use core::{
 use async_lock::futures::Lock;
 
 use crate::{
+    context::JobDrain,
     markers::ParallelSend,
     runtime::{schedular::SchedularPoll, InnerRuntime},
     AsyncContext, Ctx,
@@ -138,21 +139,13 @@ where
                     Ok(false) => break,
                     Ok(true) => made_progress = true,
                     Err(ctx) => {
-                        let Some(ctx) = NonNull::new(ctx) else {
-                            // A failed job reported with a null context is
-                            // practically unreachable; there is no exception to
-                            // retain, so count it as overflow instead of
-                            // dropping it silently.
-                            debug_assert!(false, "QuickJS returned null ptr for job error");
-                            lock.runtime.get_opaque().count_job_error_overflow();
-                            made_progress = true;
-                            continue;
-                        };
+                        let ctx = NonNull::new(ctx)
+                            .expect("executing pending job returned a null context on error");
                         // Safety: the runtime lock is held for the driver's
                         // whole poll, so viewing the failed job's context is
                         // sound.
                         let job_ctx = unsafe { Ctx::from_raw(ctx) };
-                        job_ctx.handle_failed_job();
+                        job_ctx.handle_failed_job(JobDrain::Async);
                         made_progress = true;
                     }
                 }

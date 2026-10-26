@@ -2,7 +2,7 @@ use super::{
     schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
 };
-use crate::{AsyncRuntime, Ctx};
+use crate::{context::JobDrain, AsyncRuntime, Ctx};
 use alloc::vec::Vec;
 use core::{
     future::Future,
@@ -119,19 +119,15 @@ impl Future for DriveFuture {
                     Ok(true) => continue,
                     Ok(false) => {}
                     Err(ctx) => {
-                        let Some(ctx) = NonNull::new(ctx) else {
-                            // A failed job reported with a null context is
-                            // practically unreachable; there is no exception to
-                            // retain, so count it as overflow instead of
-                            // dropping it silently.
-                            debug_assert!(false, "QuickJS returned null ptr for job error");
-                            lock.runtime.get_opaque().count_job_error_overflow();
-                            continue;
-                        };
+                        let ctx = NonNull::new(ctx)
+                            .expect("executing pending job returned a null context on error");
                         // Safety: the runtime lock is held for the whole
                         // poll, so viewing the failed job's context is sound.
                         let job_ctx = unsafe { Ctx::from_raw(ctx) };
-                        job_ctx.handle_failed_job();
+                        job_ctx.handle_failed_job(JobDrain::Async);
+                        // The failed job was consumed; keep draining rather
+                        // than parking with jobs still queued.
+                        continue;
                     }
                 }
 

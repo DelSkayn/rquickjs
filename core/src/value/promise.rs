@@ -136,6 +136,10 @@ impl<'js> Promise<'js> {
     /// indicating that no more work can be done at the moment.
     ///
     /// This function only drives the quickjs job queue, futures are not polled.
+    ///
+    /// Jobs are executed with [`Ctx::execute_pending_job`], so they may
+    /// belong to any context of the runtime; a failing job is handled as
+    /// described there, including resuming a Rust panic stashed by it.
     pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {
         loop {
             if let Some(x) = self.result() {

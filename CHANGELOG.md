@@ -12,12 +12,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
-- `Ctx::take_pending_job_error` to observe the exception of a job that failed while a job drain executed it
-- `Runtime::set_job_error_handler` and `AsyncRuntime::set_job_error_handler` to register a callback invoked with each job that fails in an internal job drain
-- `Ctx::take_pending_job_error_overflow` returning the count of job failures that could not be retained since the previous take
+- `Ctx::take_pending_job_error` to take the exception of the first job that failed in an internal job drain (`Ctx::execute_pending_job`, and so `Promise::finish`; the `async_with` driver; the `AsyncRuntime::drive` future; `AsyncRuntime::idle`) since the previous take, while no job error handler is set; the retained error is runtime-wide, and a job that failed without an exception value is retained as `undefined`
+- `Ctx::take_pending_job_error_overflow` returning the number of job failures that could not be retained since the previous call; failures handed to a job error handler are not counted
+- `Runtime::set_job_error_handler` and `AsyncRuntime::set_job_error_handler` to register a callback invoked with each job that fails in an internal job drain, as an alternative to `Ctx::take_pending_job_error`: while a handler is set, failures are handed to it only and not retained. A job that failed without an exception value is reported as `undefined`, and a panic in the handler propagates out of the drain
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 
 ### Changed
+
+- `Ctx::execute_pending_job` (and so `Promise::finish`), the `async_with` driver, the `AsyncRuntime::drive` future, and `AsyncRuntime::idle` now resume a Rust panic stashed by a panicking callback when a job fails with that panic's synthetic exception, so they can now unwind; for the drive future this ends the driving task. A panic in a promise reaction (e.g. a `.then` callback or an async function) still rejects the promise rather than failing the job and is not resumed by the drain
+- The `async_with` driver and the `AsyncRuntime::drive` future no longer leave a failed job's exception pending in the engine, except for an uncatchable error (e.g. raised by the interrupt handler), which is still left pending so that awaiting a promise the failed job never settled returns an error
+- `AsyncRuntime::idle` no longer prints a failed job's error to stdout (with the `std` feature); it handles the failure like the other internal job drains, and now leaves an uncatchable error pending in the engine as they do
 
 ### Deprecated
 
@@ -25,9 +29,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed job errors being silently discarded by `Ctx::execute_pending_job`, the `async_with` driver, and the `AsyncRuntime::drive` future; the first failure of a drain is retained instead and observable via `Ctx::take_pending_job_error`
-- Job failures beyond the first per drain window are now counted instead of discarded without trace, observable via `Ctx::take_pending_job_error_overflow`; first-wins retention semantics are unchanged
-- `Ctx::execute_pending_job`, the `async_with` driver, and the `AsyncRuntime::drive` future now resume a Rust panic stashed by a panicking callback when the failing job's exception is that panic's synthetic exception; a synthetic exception caught by JS is treated as handled by JS and never resumed
+- Fixed job errors being silently discarded by `Ctx::execute_pending_job`, the `async_with` driver, and the `AsyncRuntime::drive` future, and only printed by `AsyncRuntime::idle`; they are now reported to the job error handler if one is set, or retained for `Ctx::take_pending_job_error` otherwise
+- Fixed the `AsyncRuntime::drive` future and `AsyncRuntime::idle` stopping after a failed job with further jobs still queued: the drive future left them unrun until its task was woken again, and `idle` could return before they ran
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
 - Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
 - Fixed `Promise::result` and `Promise::into_future` leaving an already rejected promise unhandled, which made the host promise rejection tracker report a false unhandled rejection
