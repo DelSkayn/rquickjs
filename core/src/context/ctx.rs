@@ -942,6 +942,89 @@ mod test {
     }
 
     #[test]
+    fn execute_pending_job_handles_failure_in_job_context() {
+        use crate::{Context, Runtime};
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let runtime = Runtime::new().unwrap();
+        {
+            let seen = seen.clone();
+            runtime.set_job_error_handler(Some(Box::new(move |ctx, error| {
+                let tag: String = ctx.globals().get("__ctxTag").unwrap();
+                seen.lock().unwrap().push((tag, error.as_int()));
+            })));
+        }
+        let ctx_a = Context::full(&runtime).unwrap();
+        let ctx_b = Context::full(&runtime).unwrap();
+        ctx_a.with(|ctx| ctx.eval::<(), _>("globalThis.__ctxTag = 'A';").unwrap());
+        ctx_b.with(|ctx| ctx.eval::<(), _>("globalThis.__ctxTag = 'B';").unwrap());
+
+        // The job is queued in B but drained from A.
+        ctx_b.with(|ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap()
+        });
+        ctx_a.with(|ctx| {
+            while ctx.execute_pending_job() {}
+            assert!(!ctx.has_exception());
+        });
+        assert_eq!(*seen.lock().unwrap(), vec![("B".to_string(), Some(1))]);
+
+        // Without a handler, the retained value belongs to B.
+        runtime.set_job_error_handler(None);
+        ctx_b.with(|ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap()
+        });
+        ctx_a.with(|ctx| {
+            while ctx.execute_pending_job() {}
+            assert!(!ctx.has_exception());
+
+            let error = ctx.take_pending_job_error().unwrap();
+            assert_eq!(error.as_int(), Some(1));
+            let tag: String = error.ctx().globals().get("__ctxTag").unwrap();
+            assert_eq!(tag, "B");
+        });
+        assert_eq!(seen.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn execute_pending_job_clears_interrupted_job_error() {
+        use crate::{Context, Runtime};
+        use std::sync::{
+            atomic::{AtomicBool, Ordering::SeqCst},
+            Arc,
+        };
+
+        let armed = Arc::new(AtomicBool::new(false));
+        let runtime = Runtime::new().unwrap();
+        {
+            let armed = armed.clone();
+            // Interrupt once, then disarm so no later code is interrupted.
+            runtime.set_interrupt_handler(Some(Box::new(move || armed.swap(false, SeqCst))));
+        }
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>("Promise.resolve().then(() => { for (;;) {} });")
+                .unwrap();
+
+            // Arm only once the job is queued, so only the job is interrupted.
+            armed.store(true, SeqCst);
+            while ctx.execute_pending_job() {}
+            assert!(!armed.load(SeqCst));
+
+            // The sync drain retains the uncatchable error but does not
+            // leave it pending.
+            assert!(ctx.take_pending_job_error().unwrap().is_uncatchable_error());
+            assert!(!ctx.has_exception());
+
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+    }
+
+    #[test]
     fn eval() {
         use crate::{Context, Runtime};
 
