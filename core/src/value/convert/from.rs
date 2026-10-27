@@ -369,7 +369,7 @@ impl<'js> FromJs<'js> for f32 {
 }
 
 #[allow(dead_code)]
-fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>) -> Result<i64> {
+fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>, to: &'static str) -> Result<i64> {
     let global = ctx.globals();
     let date_ctor: Object = global.get("Date")?;
 
@@ -381,13 +381,17 @@ fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>) -> Result<i64> {
 
     let get_time_fn: crate::Function = value.get("getTime")?;
 
-    get_time_fn.call((crate::function::This(value),))
+    let millis: Value = get_time_fn.call((crate::function::This(value),))?;
+    if millis.as_float().is_some_and(f64::is_nan) {
+        return Err(Error::new_from_js_message("Date", to, "Invalid Date"));
+    }
+    i64::from_js(ctx, millis)
 }
 
 #[cfg(feature = "std")]
 impl<'js> FromJs<'js> for SystemTime {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
-        let millis = date_to_millis(ctx, value)?;
+        let millis = date_to_millis(ctx, value, "SystemTime")?;
 
         if millis >= 0 {
             // since unix epoch
@@ -415,7 +419,7 @@ macro_rules! chrono_from_js_impls {
                 fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::$type>> {
                     use chrono::TimeZone;
 
-                    let millis = date_to_millis(ctx, value)?;
+                    let millis = date_to_millis(ctx, value, "chrono::DateTime")?;
 
                     chrono::$type.timestamp_millis_opt(millis).single()
                         .ok_or_else(|| {
@@ -448,6 +452,8 @@ mod test {
                 Duration::from_millis(123456789),
                 res.duration_since(SystemTime::UNIX_EPOCH).unwrap()
             );
+
+            assert!(ctx.eval::<SystemTime, _>("new Date(NaN)").is_err());
 
             #[cfg(not(target_arch = "wasm32"))]
             {
@@ -505,6 +511,10 @@ mod test {
                 .eval("new Date('Fri Jun 03 2022 23:16:50 GMT-0300')")
                 .unwrap();
             assert_eq!(1654309010000, res.timestamp_millis());
+        });
+
+        ctx.with(|ctx| {
+            assert!(ctx.eval::<DateTime<Utc>, _>("new Date(NaN)").is_err());
         });
     }
 }
