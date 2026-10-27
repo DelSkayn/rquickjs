@@ -3,7 +3,6 @@ use core::{
     future::Future,
     mem::{self, ManuallyDrop},
     pin::Pin,
-    ptr::NonNull,
     task::{ready, Context, Poll},
 };
 
@@ -139,11 +138,8 @@ where
                     Ok(false) => break,
                     Ok(true) => made_progress = true,
                     Err(ctx) => {
-                        let ctx = NonNull::new(ctx)
-                            .expect("executing pending job returned a null context on error");
                         // Safety: the runtime is locked for this poll.
-                        let job_ctx = unsafe { Ctx::from_raw(ctx) };
-                        job_ctx.handle_failed_job(JobDrain::Async);
+                        unsafe { Ctx::handle_failed_job_ptr(ctx, JobDrain::Async) };
                         made_progress = true;
                     }
                 }

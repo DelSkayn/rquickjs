@@ -7,7 +7,6 @@ use alloc::vec::Vec;
 use core::{
     future::Future,
     pin::Pin,
-    ptr::NonNull,
     task::{ready, Context, Poll, Waker},
 };
 
@@ -119,11 +118,8 @@ impl Future for DriveFuture {
                     Ok(true) => continue,
                     Ok(false) => {}
                     Err(ctx) => {
-                        let ctx = NonNull::new(ctx)
-                            .expect("executing pending job returned a null context on error");
                         // Safety: the runtime is locked for this poll.
-                        let job_ctx = unsafe { Ctx::from_raw(ctx) };
-                        job_ctx.handle_failed_job(JobDrain::Async);
+                        unsafe { Ctx::handle_failed_job_ptr(ctx, JobDrain::Async) };
                         continue;
                     }
                 }

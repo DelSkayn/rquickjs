@@ -370,6 +370,21 @@ impl<'js> Ctx<'js> {
         }
     }
 
+    /// Handle a failed job given the raw context pointer reported by
+    /// `JS_ExecutePendingJob`, via [`Ctx::handle_failed_job`].
+    ///
+    /// # Safety
+    /// The runtime owning `ctx` must be locked for the duration of the call,
+    /// and `ctx` must be the context reported by a failed
+    /// `JS_ExecutePendingJob`.
+    pub(crate) unsafe fn handle_failed_job_ptr(ctx: *mut qjs::JSContext, drain: JobDrain) {
+        let ctx =
+            NonNull::new(ctx).expect("executing pending job returned a null context on error");
+        // Safety: guaranteed by the caller. `from_raw` dups the context and
+        // the temporary `Ctx` frees it on drop.
+        unsafe { Ctx::from_raw(ctx) }.handle_failed_job(drain);
+    }
+
     /// Parse json into a JavaScript value.
     pub fn json_parse<S>(&self, json: S) -> Result<Value<'js>>
     where
@@ -507,10 +522,9 @@ impl<'js> Ctx<'js> {
         let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
         if res < 0 {
             // QuickJS reports the failed job's context, which need not be `self`.
-            let ctx = NonNull::new(unsafe { ptr.assume_init() })
-                .expect("executing pending job returned a null context on error");
-            let ctx = unsafe { Self::from_raw(ctx) };
-            ctx.handle_failed_job(JobDrain::Sync);
+            // Safety: the runtime is locked through `self`, and `ptr` was
+            // initialized by the failed `JS_ExecutePendingJob`.
+            unsafe { Self::handle_failed_job_ptr(ptr.assume_init(), JobDrain::Sync) };
         }
         res != 0
     }
