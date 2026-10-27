@@ -151,6 +151,13 @@ impl<'js> Promise<'js> {
     }
 
     /// Wrap the promise into a struct which can be polled as a rust future.
+    ///
+    /// If a job fails with an uncatchable error, such as an interrupt, in an
+    /// async job drain, the next promise future polled while its promise is
+    /// unsettled returns [`Error::Exception`] with that error pending, instead
+    /// of waiting for a promise the job may never settle.
+    /// See [`AsyncRuntime::set_job_error_handler`](crate::AsyncRuntime::set_job_error_handler)
+    /// for the scope.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[cfg(feature = "futures")]
     pub fn into_future<T>(self) -> PromiseFuture<'js, T>
@@ -202,6 +209,15 @@ where
                 this.promise.ctx.throw(exc);
                 return Poll::Ready(Err(Error::Exception));
             }
+        }
+
+        // An async job drain interrupted a job since the last observation, so
+        // this promise may never settle. The first unsettled future polled
+        // takes the error, which may belong to an unrelated job.
+        // Safety: polling a promise future requires the runtime lock.
+        let interrupted = unsafe { this.promise.ctx.get_opaque() }.take_interrupted_job();
+        if let Some(error) = interrupted {
+            return Poll::Ready(Err(this.promise.ctx.throw(error)));
         }
 
         if this.state.is_none() {

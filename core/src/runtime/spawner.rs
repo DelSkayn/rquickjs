@@ -38,6 +38,18 @@ impl Spawner {
         self.wakeup.push(wake);
     }
 
+    /// Queue every spawned future to be polled again, returning the wakers of
+    /// the drains waiting on the spawner, which the caller must wake once it
+    /// no longer borrows the spawner.
+    pub fn requeue_all(&mut self) -> Vec<Waker> {
+        // Safety: the spawner is only accessed with the runtime lock held,
+        // and never while it is being polled.
+        unsafe { self.schedular.requeue_all() };
+        let mut wakers = core::mem::take(&mut self.wakeup);
+        wakers.extend(self.schedular.take_waker());
+        wakers
+    }
+
     pub fn is_empty(&mut self) -> bool {
         self.schedular.is_empty()
     }

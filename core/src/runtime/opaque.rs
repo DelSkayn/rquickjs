@@ -58,6 +58,11 @@ pub(crate) struct Opaque<'js> {
     /// Prevents retaining errors from destructors during runtime teardown.
     job_error_closed: Cell<bool>,
 
+    /// The most recent uncatchable error from a job that failed in an async
+    /// job drain, until a promise future observes it.
+    #[cfg(feature = "futures")]
+    interrupted_job: UnsafeCell<Option<Value<'js>>>,
+
     /// The class id for rust classes.
     class_id: qjs::JSClassID,
     /// The class id for rust classes which can be called.
@@ -95,6 +100,9 @@ impl<'js> Opaque<'js> {
             job_error_overflow: Cell::new(0),
 
             job_error_closed: Cell::new(false),
+
+            #[cfg(feature = "futures")]
+            interrupted_job: UnsafeCell::new(None),
 
             class_id: qjs::JS_INVALID_CLASS_ID,
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
@@ -197,6 +205,44 @@ impl<'js> Opaque<'js> {
     /// resetting it to 0.
     pub fn take_job_error_overflow(&self) -> u64 {
         self.job_error_overflow.replace(0)
+    }
+
+    /// Record the uncatchable error of a job that failed in an async drain
+    /// for the next promise future polled while its promise is unsettled,
+    /// replacing any unobserved one, then wake spawned futures so pending
+    /// observers are polled again. Discard errors during teardown.
+    #[cfg(feature = "futures")]
+    pub fn record_interrupted_job(&self, error: Value<'js>) {
+        if self.job_error_closed.get() {
+            return;
+        }
+        // Drop the old error only after the slot holds the new one: its
+        // finalizers may re-enter.
+        let old = unsafe { (*self.interrupted_job.get()).replace(error) };
+        drop(old);
+        self.wake_spawned();
+    }
+
+    /// Take the unobserved interrupted job error, if any.
+    #[cfg(feature = "futures")]
+    pub fn take_interrupted_job(&self) -> Option<Value<'js>> {
+        unsafe { (*self.interrupted_job.get()).take() }
+    }
+
+    /// Queue every spawned future to be polled again and wake the drains
+    /// waiting on them. Does nothing during teardown or without a spawner.
+    #[cfg(feature = "futures")]
+    fn wake_spawned(&self) {
+        if self.job_error_closed.get() {
+            return;
+        }
+        let Some(spawner) = self.spawner.as_ref() else {
+            return;
+        };
+        let wakers = unsafe { (*spawner.get()).requeue_all() };
+        // Wakers may run arbitrary executor code, so wake them only once the
+        // spawner is no longer borrowed.
+        wakers.into_iter().for_each(Waker::wake);
     }
 
     #[cfg(feature = "futures")]
@@ -371,5 +417,10 @@ impl<'js> Opaque<'js> {
         // may re-enter `retain_job_error`.
         let job_error = self.job_error.get_mut().take();
         drop(job_error);
+        #[cfg(feature = "futures")]
+        {
+            let interrupted_job = self.interrupted_job.get_mut().take();
+            drop(interrupted_job);
+        }
     }
 }

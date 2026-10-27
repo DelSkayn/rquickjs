@@ -179,17 +179,29 @@ impl AsyncRuntime {
     /// It may re-enter the drain using the given context, but must not acquire
     /// the runtime lock again (e.g. by blocking on [`AsyncContext::async_with`]),
     /// which deadlocks. Catch or clear any exceptions raised by the closure
-    /// before returning; otherwise they remain pending unless replaced by an
-    /// uncatchable job error.
+    /// before returning; otherwise they remain pending.
     ///
-    /// Async drains leave uncatchable job errors pending after reporting or
-    /// retaining them, so a promise future can observe an interrupted job
-    /// even if its promise never settles. This is best effort: the error is
-    /// lost if a later job or host code throws or catches an exception before
-    /// the future is polled, and a promise future already pending inside a
-    /// spawned future is not woken. Bound promise futures with your own
-    /// timeout. [`Ctx::execute_pending_job`] clears the failed job's exception
-    /// instead.
+    /// Async drains clear failed jobs' exceptions from the engine, but after
+    /// reporting or retaining an uncatchable job error (e.g. an interrupt)
+    /// they also record it for promise futures, replacing any unobserved one,
+    /// and wake the runtime's spawned futures. The next promise future polled
+    /// while its promise is unsettled, whether already pending or created
+    /// later, takes the error and returns [`Error::Exception`] with it
+    /// pending, so a promise left unsettled by the interrupted job does not
+    /// hang. Later jobs and host code that throw or catch do not affect the
+    /// recorded error.
+    ///
+    /// The scope is coarse: a recorded error fails at most one promise future,
+    /// which need not be the one awaiting the interrupted job, and unobserved
+    /// errors collapse into the most recent one. With several promise futures
+    /// pending at once, the others keep waiting. A promise future pending
+    /// outside the runtime's spawned futures (e.g. in another task's
+    /// [`AsyncContext::async_with`]) is not woken, but observes the error when
+    /// next polled. Futures whose promise has settled are unaffected.
+    /// [`Ctx::execute_pending_job`] clears the failed job's exception without
+    /// recording it.
+    ///
+    /// [`Error::Exception`]: crate::Error::Exception
     #[inline]
     pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner
@@ -344,8 +356,8 @@ impl AsyncRuntime {
     ///
     /// Job failures are handled by [`AsyncRuntime::set_job_error_handler`] or
     /// retained for [`Ctx::take_pending_job_error`], and draining continues.
-    /// Uncatchable errors are left pending for promise futures on a best
-    /// effort basis (see [`AsyncRuntime::set_job_error_handler`]). Rust panics
+    /// Uncatchable errors are also recorded for promise futures (see
+    /// [`AsyncRuntime::set_job_error_handler`]). Rust panics
     /// from failing callbacks or the handler propagate out of this future,
     /// leaving remaining work for another drain.
     #[inline]
@@ -432,6 +444,9 @@ macro_rules! async_test_case {
     }
     };
 }
+
+#[cfg(test)]
+mod interrupt_test;
 
 #[cfg(test)]
 mod test {
@@ -568,13 +583,14 @@ mod test {
 
     });
 
-    async_test_case!(drive_leaves_interrupted_job_error_pending => (rt,ctx){
+    async_test_case!(drive_records_interrupted_job_error_for_later_future => (rt,ctx){
         use std::sync::{Arc, Mutex, atomic::{AtomicBool, Ordering}};
 
         let armed = Arc::new(AtomicBool::new(false));
         {
             let armed = armed.clone();
-            rt.set_interrupt_handler(Some(Box::new(move || armed.load(Ordering::SeqCst)))).await;
+            // Interrupt once, then disarm so no later code is interrupted.
+            rt.set_interrupt_handler(Some(Box::new(move || armed.swap(false, Ordering::SeqCst)))).await;
         }
         let seen = Arc::new(Mutex::new(Vec::new()));
         {
@@ -605,14 +621,18 @@ mod test {
             }
         }
         assert_eq!(*seen.lock().unwrap(), vec![true]);
+        assert!(!armed.load(Ordering::SeqCst));
 
-        // The uncatchable error was left pending, so a future awaiting the
-        // promise the job never settled bails out instead of hanging.
+        // The uncatchable error was recorded outside the engine, so a future
+        // created later and awaiting the promise the job never settled bails
+        // out instead of hanging.
         tokio::time::timeout(Duration::from_secs(5), ctx.async_with(async |ctx|{
+            assert!(!ctx.has_exception());
             let promise: Promise = ctx.globals().get("p").unwrap();
             let res = promise.into_future::<()>().await;
             assert!(matches!(res, Err(Error::Exception)));
             assert!(ctx.catch().is_uncatchable_error());
+            assert!(!ctx.has_exception());
         }))
         .await
         .expect("the promise future hung on an interrupted job");

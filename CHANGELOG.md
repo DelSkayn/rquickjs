@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Internal job drains (`Ctx::execute_pending_job`, including `Promise::finish`; `async_with`; `AsyncRuntime::drive`; `AsyncRuntime::idle`) now resume stashed Rust panics when a job fails with a synthetic panic exception. Panics caught by promise reactions still reject the promise instead
-- Async job drains clear failed jobs' exceptions, except for uncatchable errors, which remain pending so promise futures can observe interrupted jobs. This is best effort: the error is lost if a later job or host code throws or catches before the promise future is polled, and a promise future already pending inside a spawned future is not woken, so bound promise futures with a timeout
+- Async job drains clear failed jobs' exceptions from the engine. Uncatchable errors (e.g. interrupts) are instead recorded outside it and spawned futures are woken, so the next promise future polled while its promise is unsettled fails with the error. The scope is coarse: a recorded error fails at most one promise future, which need not be the one awaiting the interrupted job
 - `AsyncRuntime::idle` now reports or retains failed jobs' errors instead of printing them to stdout
 
 ### Deprecated
@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fixed internal job drains discarding failures; errors are now reported to the job error handler or retained for `Ctx::take_pending_job_error`
 - Fixed `AsyncRuntime::drive` and `AsyncRuntime::idle` stopping after a failed job while further jobs remained queued
+- Fixed promise futures hanging on a promise left unsettled by an interrupted job if a later job or host code threw or caught an exception first, or if the future was pending inside a spawned future
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
 - Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
 - Fixed `Promise::result` and `Promise::into_future` leaving an already rejected promise unhandled, which made the host promise rejection tracker report a false unhandled rejection
