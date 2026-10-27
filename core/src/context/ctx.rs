@@ -327,8 +327,11 @@ impl<'js> Ctx<'js> {
     /// later host error, as in `handle_exception`.
     ///
     /// Async drains restore uncatchable errors so a `PromiseFuture` can
-    /// observe an interrupted job even if its promise never settles. Handler
-    /// panics propagate after this bookkeeping, without touching the stash.
+    /// observe an interrupted job even if its promise never settles. This is
+    /// best effort: a later job or host code that throws or catches before the
+    /// future is polled loses the error, and a `PromiseFuture` already pending
+    /// inside a spawned future is not woken. Handler panics propagate after
+    /// this bookkeeping, without touching the stash.
     pub(crate) fn handle_failed_job(&self, drain: JobDrain) {
         // Take the exception out of the engine's pending-exception slot so
         // unrelated code can't later mistake it for a fresh one (e.g. the

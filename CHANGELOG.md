@@ -20,7 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Internal job drains (`Ctx::execute_pending_job`, including `Promise::finish`; `async_with`; `AsyncRuntime::drive`; `AsyncRuntime::idle`) now resume stashed Rust panics when a job fails with a synthetic panic exception. Panics caught by promise reactions still reject the promise instead
-- Async job drains clear failed jobs' exceptions, except for uncatchable errors, which remain pending so promise futures can observe interrupted jobs
+- Async job drains clear failed jobs' exceptions, except for uncatchable errors, which remain pending so promise futures can observe interrupted jobs. This is best effort: the error is lost if a later job or host code throws or catches before the promise future is polled, and a promise future already pending inside a spawned future is not woken, so bound promise futures with a timeout
 - `AsyncRuntime::idle` now reports or retains failed jobs' errors instead of printing them to stdout
 
 ### Deprecated

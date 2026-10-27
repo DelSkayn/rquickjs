@@ -183,9 +183,13 @@ impl AsyncRuntime {
     /// uncatchable job error.
     ///
     /// Async drains leave uncatchable job errors pending after reporting or
-    /// retaining them, so promise futures observe interrupted jobs even if
-    /// their promises never settle. [`Ctx::execute_pending_job`] clears the
-    /// failed job's exception instead.
+    /// retaining them, so a promise future can observe an interrupted job
+    /// even if its promise never settles. This is best effort: the error is
+    /// lost if a later job or host code throws or catches an exception before
+    /// the future is polled, and a promise future already pending inside a
+    /// spawned future is not woken. Bound promise futures with your own
+    /// timeout. [`Ctx::execute_pending_job`] clears the failed job's exception
+    /// instead.
     #[inline]
     pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner
@@ -340,7 +344,8 @@ impl AsyncRuntime {
     ///
     /// Job failures are handled by [`AsyncRuntime::set_job_error_handler`] or
     /// retained for [`Ctx::take_pending_job_error`], and draining continues.
-    /// Uncatchable errors remain pending for promise futures. Rust panics
+    /// Uncatchable errors are left pending for promise futures on a best
+    /// effort basis (see [`AsyncRuntime::set_job_error_handler`]). Rust panics
     /// from failing callbacks or the handler propagate out of this future,
     /// leaving remaining work for another drain.
     #[inline]
