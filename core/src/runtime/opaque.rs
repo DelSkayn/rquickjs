@@ -59,7 +59,7 @@ pub(crate) struct Opaque<'js> {
     job_error_closed: Cell<bool>,
 
     /// The most recent uncatchable error from a job that failed in an async
-    /// job drain, until a promise future observes it.
+    /// job drain, until a promise future in that job's context observes it.
     #[cfg(feature = "futures")]
     interrupted_job: UnsafeCell<Option<Value<'js>>>,
 
@@ -208,9 +208,9 @@ impl<'js> Opaque<'js> {
     }
 
     /// Record the uncatchable error of a job that failed in an async drain
-    /// for the next promise future polled while its promise is unsettled,
-    /// replacing any unobserved one, then wake spawned futures so pending
-    /// observers are polled again. Discard errors during teardown.
+    /// for the next promise future polled in its context while its promise is
+    /// unsettled, replacing any unobserved one, then wake spawned futures so
+    /// pending observers are polled again. Discard errors during teardown.
     #[cfg(feature = "futures")]
     pub fn record_interrupted_job(&self, error: Value<'js>) {
         if self.job_error_closed.get() {
@@ -223,10 +223,14 @@ impl<'js> Opaque<'js> {
         self.wake_spawned();
     }
 
-    /// Take the unobserved interrupted job error, if any.
+    /// Take the unobserved interrupted job error if it belongs to `ctx`.
     #[cfg(feature = "futures")]
-    pub fn take_interrupted_job(&self) -> Option<Value<'js>> {
-        unsafe { (*self.interrupted_job.get()).take() }
+    pub fn take_interrupted_job(&self, ctx: &Ctx<'js>) -> Option<Value<'js>> {
+        let slot = unsafe { &mut *self.interrupted_job.get() };
+        match slot {
+            Some(error) if error.ctx().as_ptr() == ctx.as_ptr() => slot.take(),
+            _ => None,
+        }
     }
 
     /// Queue every spawned future to be polled again and wake the drains
@@ -409,7 +413,6 @@ impl<'js> Opaque<'js> {
         self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
-        self.prototypes.get_mut().clear();
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();
@@ -422,5 +425,13 @@ impl<'js> Opaque<'js> {
             let interrupted_job = self.interrupted_job.get_mut().take();
             drop(interrupted_job);
         }
+        // The drops above run arbitrary destructors, which may register new
+        // class prototypes. Those hold both a JS value and a context, so they
+        // must be freed before the runtime is.
+        self.prototypes.get_mut().clear();
+        debug_assert!(
+            unsafe { (*self.prototypes.get()).is_empty() },
+            "a destructor registered a class prototype during teardown"
+        );
     }
 }

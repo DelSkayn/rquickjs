@@ -191,10 +191,11 @@ impl AsyncRuntime {
     /// hang. Later jobs and host code that throw or catch do not affect the
     /// recorded error.
     ///
-    /// The scope is coarse: a recorded error fails at most one promise future,
-    /// which need not be the one awaiting the interrupted job, and unobserved
-    /// errors collapse into the most recent one. With several promise futures
-    /// pending at once, the others keep waiting. A promise future pending
+    /// The scope is per context: a recorded error fails at most one unsettled
+    /// promise future in the context the interrupted job ran in, which need
+    /// not be the one awaiting that job, and unobserved errors collapse into
+    /// the most recent one. Other futures in that context keep waiting, and
+    /// futures in other contexts are unaffected. A promise future pending
     /// outside the runtime's spawned futures (e.g. in another task's
     /// [`AsyncContext::async_with`]) is not woken, but observes the error when
     /// next polled. Futures whose promise has settled are unaffected.
@@ -328,6 +329,10 @@ impl AsyncRuntime {
             let job_res = lock.runtime.execute_pending_job().map_err(|e| {
                 let ptr = NonNull::new(e)
                     .expect("executing pending job returned a null context on error");
+                let ctx = unsafe { Ctx::from_raw(ptr) };
+                if let Some(payload) = ctx.take_job_panic() {
+                    crate::util::resume_unwind(payload);
+                }
                 // JS_ExecutePendingJob returns a borrowed context pointer;
                 // dup it so AsyncContext can own a reference.
                 unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
@@ -770,6 +775,28 @@ mod test {
         }).await;
         drop(ctx);
         drop(rt);
+    });
+
+    async_test_case!(execute_pending_job_resumes_pending_panic => (rt,ctx){
+        use futures_rs::FutureExt;
+        use std::panic::AssertUnwindSafe;
+
+        ctx.with(|ctx| {
+            ctx.globals().set(
+                "rustPanic",
+                Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+            ).unwrap();
+            ctx.eval::<(),_>("queueMicrotask(rustPanic);").unwrap();
+        }).await;
+
+        let res = AssertUnwindSafe(rt.execute_pending_job()).catch_unwind().await;
+        let payload = res.expect_err("the drain should resume the stashed panic");
+        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+        ctx.with(|ctx| {
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        }).await;
     });
 
     async_test_case!(no_drive => (rt,ctx){

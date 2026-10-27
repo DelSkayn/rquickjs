@@ -548,3 +548,37 @@ async_test_case!(handler_panic_still_records_interrupt => (rt, ctx) {
     .await
     .expect("the promise future hung on an interrupted job");
 });
+
+/// An interrupted job in one context does not fail a promise future in
+/// another.
+#[tokio::test]
+async fn interrupted_job_does_not_fail_promise_future_in_another_context() {
+    use core::{
+        future::Future,
+        pin::Pin,
+        task::{Context as TaskContext, Poll, Waker},
+    };
+
+    let rt = AsyncRuntime::new().unwrap();
+    let interrupted = AsyncContext::full(&rt).await.unwrap();
+    let waiting = AsyncContext::full(&rt).await.unwrap();
+    let armed = one_shot_interrupt(&rt).await;
+
+    interrupted
+        .async_with(async |ctx| {
+            ctx.eval::<(), _>(LOOPING_JOB).unwrap();
+            armed.store(true, SeqCst);
+            // Yield once so the driver's drain interrupts the job.
+            tokio::task::yield_now().await;
+        })
+        .await;
+
+    waiting
+        .async_with(async |ctx| {
+            let (promise, _resolve, _reject) = Promise::new(&ctx).unwrap();
+            let mut future = promise.into_future::<()>();
+            let mut cx = TaskContext::from_waker(Waker::noop());
+            assert!(matches!(Pin::new(&mut future).poll(&mut cx), Poll::Pending));
+        })
+        .await;
+}

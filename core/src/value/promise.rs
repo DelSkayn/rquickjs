@@ -122,6 +122,12 @@ impl<'js> Promise<'js> {
                     // The rejection is surfaced as an `Err`, so it is no longer unhandled.
                     qjs::JS_PromiseMarkAsHandled(self.ctx().as_ptr(), self.as_js_value());
                     let v = qjs::JS_PromiseResult(self.ctx().as_ptr(), self.as_js_value());
+                    if qjs::JS_VALUE_GET_NORM_TAG(v) == qjs::JS_TAG_EXCEPTION {
+                        // The reaction stored the panic sentinel as the value.
+                        if let Some(payload) = self.ctx().get_opaque().take_panic() {
+                            crate::util::resume_unwind(payload);
+                        }
+                    }
                     qjs::JS_Throw(self.ctx().as_ptr(), v);
                 };
                 Some(Err(Error::Exception))
@@ -153,9 +159,10 @@ impl<'js> Promise<'js> {
     /// Wrap the promise into a struct which can be polled as a rust future.
     ///
     /// If a job fails with an uncatchable error, such as an interrupt, in an
-    /// async job drain, the next promise future polled while its promise is
-    /// unsettled returns [`Error::Exception`] with that error pending, instead
-    /// of waiting for a promise the job may never settle.
+    /// async job drain, the next promise future polled in that job's context
+    /// while its promise is unsettled returns [`Error::Exception`] with that
+    /// error pending, instead of waiting for a promise the job may never
+    /// settle.
     /// See [`AsyncRuntime::set_job_error_handler`](crate::AsyncRuntime::set_job_error_handler)
     /// for the scope.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
@@ -211,11 +218,11 @@ where
             }
         }
 
-        // An async job drain interrupted a job since the last observation, so
-        // this promise may never settle. The first unsettled future polled
-        // takes the error, which may belong to an unrelated job.
+        // An async job drain interrupted a job in this context since the last
+        // observation, so this promise may never settle.
         // Safety: polling a promise future requires the runtime lock.
-        let interrupted = unsafe { this.promise.ctx.get_opaque() }.take_interrupted_job();
+        let interrupted =
+            unsafe { this.promise.ctx.get_opaque() }.take_interrupted_job(&this.promise.ctx);
         if let Some(error) = interrupted {
             return Poll::Ready(Err(this.promise.ctx.throw(error)));
         }
@@ -624,6 +631,35 @@ mod test {
             assert!(result.is_err(), "should fail due to interrupt");
         })
         .await
+    }
+
+    #[test]
+    fn rejected_promise_resumes_reaction_panic() {
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("reaction boom") }),
+                )
+                .unwrap();
+            let promise: Promise = ctx.eval("Promise.resolve().then(rustPanic)").unwrap();
+
+            let payload = catch_unwind(AssertUnwindSafe(|| {
+                let _ = promise.finish::<()>();
+            }))
+            .expect_err("observing the rejected promise should resume the panic");
+            assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "reaction boom");
+
+            assert!(matches!(
+                ctx.eval::<(), _>("throw 1"),
+                Err(crate::Error::Exception)
+            ));
+            assert_eq!(ctx.catch().as_int(), Some(1));
+        })
     }
 
     #[test]

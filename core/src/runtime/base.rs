@@ -7,7 +7,7 @@ use super::{
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{qjs, result::JobException, Context, Mut, Ref, Result, Weak};
+use crate::{qjs, result::JobException, Context, Ctx, Mut, Ref, Result, Weak};
 use alloc::{ffi::CString, vec::Vec};
 use core::{ptr::NonNull, result::Result as StdResult};
 #[cfg(feature = "parallel")]
@@ -240,18 +240,26 @@ impl Runtime {
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     ///
     /// Failures are returned to the caller without invoking the job error
-    /// handler, retaining the exception, or resuming stashed Rust panics.
+    /// handler or retaining the exception. A stashed Rust panic is resumed.
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
         let mut lock = self.inner.lock();
         lock.update_stack_top();
-        lock.execute_pending_job().map_err(|e| {
+        let mut panic = None;
+        let res = lock.execute_pending_job().map_err(|e| {
             let ptr = NonNull::new(e).expect("QuickJS returned null ptr for job error");
+            panic = unsafe { Ctx::from_raw(ptr) }.take_job_panic();
             // JS_ExecutePendingJob returns a borrowed context pointer;
             // dup it so Context can own a reference.
             unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
             JobException(unsafe { Context::from_raw(ptr, self.clone()) })
-        })
+        });
+        // Unwinding under the lock would poison the runtime.
+        drop(lock);
+        if let Some(payload) = panic {
+            crate::util::resume_unwind(payload);
+        }
+        res
     }
 }
 
@@ -332,6 +340,64 @@ mod test {
         ctx.with(|ctx| {
             ctx.eval::<i32, _>("1 + 1").unwrap();
         });
+    }
+
+    #[test]
+    fn execute_pending_job_resumes_pending_panic() {
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let rt = Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    crate::Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+        });
+
+        let payload = catch_unwind(AssertUnwindSafe(|| {
+            let _ = rt.execute_pending_job();
+        }))
+        .expect_err("the drain should resume the stashed panic");
+        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+        ctx.with(|ctx| {
+            assert!(matches!(
+                ctx.eval::<(), _>("throw 1"),
+                Err(crate::Error::Exception)
+            ));
+            assert_eq!(ctx.catch().as_int(), Some(1));
+            let sum: i32 = ctx.eval::<i32, _>("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        });
+    }
+
+    #[test]
+    fn prototypes_registered_during_teardown_are_dropped() {
+        use crate::{Ctx, Function, JsLifetime};
+
+        struct RegistersPrototype<'js>(Ctx<'js>);
+
+        unsafe impl<'js> JsLifetime<'js> for RegistersPrototype<'js> {
+            type Changed<'to> = RegistersPrototype<'to>;
+        }
+
+        impl Drop for RegistersPrototype<'_> {
+            fn drop(&mut self) {
+                Function::new(self.0.clone(), || 1).unwrap();
+            }
+        }
+
+        let rt = Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.store_userdata(RegistersPrototype(ctx.clone())).unwrap();
+        });
+        drop(ctx);
+        drop(rt);
     }
 
     #[test]

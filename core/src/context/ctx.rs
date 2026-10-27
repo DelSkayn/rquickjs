@@ -387,6 +387,25 @@ impl<'js> Ctx<'js> {
         unsafe { Ctx::from_raw(ctx) }.handle_failed_job(drain);
     }
 
+    /// Take a failed job's stashed Rust panic if the pending exception is its
+    /// sentinel, otherwise leave the exception pending. Returned rather than
+    /// resumed so the callers can release the runtime lock first.
+    pub(crate) fn take_job_panic(&self) -> Option<Box<dyn Any + Send + 'static>> {
+        let raw = unsafe { qjs::JS_GetException(self.as_ptr()) };
+        let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) };
+        if tag == qjs::JS_TAG_UNINITIALIZED {
+            return None;
+        }
+        if tag == qjs::JS_TAG_EXCEPTION {
+            if let Some(payload) = unsafe { self.get_opaque() }.take_panic() {
+                return Some(payload);
+            }
+        }
+        // Leave the exception pending for the caller.
+        unsafe { qjs::JS_Throw(self.as_ptr(), raw) };
+        None
+    }
+
     /// Parse json into a JavaScript value.
     pub fn json_parse<S>(&self, json: S) -> Result<Value<'js>>
     where
