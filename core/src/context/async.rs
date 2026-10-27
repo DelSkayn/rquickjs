@@ -175,10 +175,8 @@ impl AsyncContext {
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
-    /// If a job executed by the driver fails because a Rust callback
-    /// panicked, the stashed panic is resumed out of the returned future's
-    /// poll; so is a panic in the job error handler (see
-    /// [`AsyncRuntime::set_job_error_handler`]).
+    /// Rust panics from failing jobs or the job error handler propagate out
+    /// of the returned future's poll. See [`AsyncRuntime::set_job_error_handler`].
     ///
     /// # Example
     ///
@@ -303,8 +301,6 @@ mod test {
             // Yield once so the driver's job drain runs the failing jobs.
             tokio::task::yield_now().await;
 
-            // Every failure is reported, in order, and handed to the handler
-            // only: nothing is retained or counted.
             assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2)]);
             assert!(ctx.take_pending_job_error().is_none());
             assert_eq!(ctx.take_pending_job_error_overflow(), 0);
@@ -328,8 +324,7 @@ mod test {
             ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
                 .unwrap();
 
-            // Yield once so the driver's job drain runs the failing job; the
-            // handler's panic unwinds out of the poll.
+            // Yield so the driver runs the failing job.
             tokio::task::yield_now().await;
         }))
         .catch_unwind()
@@ -338,7 +333,7 @@ mod test {
         let payload = res.expect_err("the handler panic should propagate out of the driver");
         assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
 
-        // The panic was not stashed and the runtime remains usable.
+        // The handler panic must not be stashed for a later eval.
         ctx.async_with(async |ctx| {
             assert!(ctx.take_pending_job_error().is_none());
             assert!(!ctx.has_exception());
@@ -374,7 +369,6 @@ mod test {
         }
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        // Bounded so a regression fails instead of hanging.
         tokio::time::timeout(
             Duration::from_secs(5),
             ctx.async_with(async |ctx| {
@@ -388,7 +382,6 @@ mod test {
                 let res = promise.into_future::<()>().await;
                 assert!(matches!(res, Err(Error::Exception)));
                 assert!(ctx.catch().is_uncatchable_error());
-                // Without a handler, the failure is also retained.
                 assert!(ctx.take_pending_job_error().unwrap().is_uncatchable_error());
             }),
         )
@@ -408,19 +401,16 @@ mod test {
                 )
                 .unwrap();
 
-            // Job A panics, but JS catches the synthetic exception: job A
-            // does not fail, so the drain must not resume the panic. (The
-            // payload stays stashed for the next host error crossing.)
+            // Catching the panic sentinel leaves its payload stashed, but the
+            // unrelated job failure below must not resume it.
             ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
                 .unwrap();
-            // Job B fails unrelatedly.
             ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
                 .unwrap();
 
             // Yield once so the driver's job drain runs both jobs.
             tokio::task::yield_now().await;
 
-            // Only job B's failure is retained.
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
 
             let sum: i32 = ctx.eval("1 + 1").unwrap();

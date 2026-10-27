@@ -120,33 +120,24 @@ impl Runtime {
 
     /// Set a closure which is called when a job fails in an internal job
     /// drain ([`crate::Ctx::execute_pending_job`], the `async_with` driver,
-    /// the `AsyncRuntime::drive` future, or `AsyncRuntime::idle`). Failures
-    /// surfaced by [`Runtime::execute_pending_job`] are handed to its caller
-    /// instead and do not reach this closure.
+    /// the `AsyncRuntime::drive` future, or `AsyncRuntime::idle`).
     ///
-    /// The closure and [`crate::Ctx::take_pending_job_error`] are
-    /// alternatives: while a closure is set, each failure is handed to it
-    /// only and is neither retained for
+    /// While a closure is set, failures are neither retained for
     /// [`crate::Ctx::take_pending_job_error`] nor counted by
-    /// [`crate::Ctx::take_pending_job_error_overflow`]. Pass `None` to go
-    /// back to retention.
+    /// [`crate::Ctx::take_pending_job_error_overflow`]. Pass `None` to restore
+    /// retention. Errors returned by [`Runtime::execute_pending_job`] do not
+    /// reach this closure.
     ///
-    /// The closure is called with the failed job's context and its own
-    /// handle to the exception, bound to the lifetime of the call; a job that
-    /// failed without an exception value (e.g. a Rust callback returned
-    /// [`crate::Error::Exception`] without throwing) is reported as
-    /// `undefined`. It is not called when the failure was a stashed Rust
-    /// panic; that panic is resumed instead. If the closure panics, the
-    /// panic propagates out of the drain (e.g. out of
-    /// [`crate::Ctx::execute_pending_job`]) with its payload.
+    /// The closure receives the failed job's context and an owned exception
+    /// handle, or `undefined` if no exception value was thrown. If the job
+    /// failed with a synthetic Rust panic exception, its stashed panic is
+    /// resumed instead. Panics in the closure also propagate out of the drain.
     ///
     /// The closure runs synchronously mid-drain with the runtime lock held.
-    /// It may run further jobs with the context it is given (e.g.
-    /// [`crate::Ctx::execute_pending_job`]), which may call it again.
-    /// Re-entering the runtime lock (e.g. [`Context::with`]) is unsupported:
-    /// it panics, or deadlocks with the `parallel` feature. An exception the
-    /// closure leaves pending (e.g. from an ignored failed `eval`) stays
-    /// pending after the drain; catch or clear it before returning.
+    /// It may re-enter the drain using the given context, but must not acquire
+    /// the runtime lock again (e.g. through [`Context::with`]): doing so panics,
+    /// or deadlocks with the `parallel` feature. Catch or clear any exceptions
+    /// raised by the closure before returning; otherwise they remain pending.
     #[inline]
     pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner.lock().set_job_error_handler(handler);
@@ -248,10 +239,8 @@ impl Runtime {
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     ///
-    /// A failure is handed to the caller as-is: it is not reported to the
-    /// job error handler, not retained for
-    /// [`crate::Ctx::take_pending_job_error`], and a Rust panic stashed by
-    /// the failing job is not resumed here.
+    /// Failures are returned to the caller without invoking the job error
+    /// handler, retaining the exception, or resuming stashed Rust panics.
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
         let mut lock = self.inner.lock();
@@ -297,8 +286,6 @@ mod test {
     fn job_failing_in_userdata_drop_does_not_outlive_runtime() {
         use crate::{Context, Ctx, JsLifetime};
 
-        // Userdata is dropped while the runtime is torn down; a job failing
-        // in its `Drop` must not be retained past `JS_FreeRuntime`.
         struct DrainOnDrop<'js>(Ctx<'js>);
 
         unsafe impl<'js> JsLifetime<'js> for DrainOnDrop<'js> {
@@ -311,8 +298,6 @@ mod test {
                     .eval::<(), _>("queueMicrotask(() => { throw { late: true }; })")
                     .unwrap();
                 while self.0.execute_pending_job() {}
-                // Discarded, not retained (or counted) for a take that can
-                // no longer happen.
                 assert!(self.0.take_pending_job_error().is_none());
                 assert_eq!(self.0.take_pending_job_error_overflow(), 0);
             }

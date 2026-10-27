@@ -121,12 +121,9 @@ impl Future for DriveFuture {
                     Err(ctx) => {
                         let ctx = NonNull::new(ctx)
                             .expect("executing pending job returned a null context on error");
-                        // Safety: the runtime lock is held for the whole
-                        // poll, so viewing the failed job's context is sound.
+                        // Safety: the runtime is locked for this poll.
                         let job_ctx = unsafe { Ctx::from_raw(ctx) };
                         job_ctx.handle_failed_job(JobDrain::Async);
-                        // The failed job was consumed; keep draining rather
-                        // than parking with jobs still queued.
                         continue;
                     }
                 }

@@ -162,41 +162,30 @@ impl AsyncRuntime {
 
     /// Set a closure which is called when a job fails in an internal job
     /// drain ([`Ctx::execute_pending_job`], the `async_with` driver, the
-    /// [`AsyncRuntime::drive`] future, or [`AsyncRuntime::idle`]). Failures
-    /// surfaced by [`AsyncRuntime::execute_pending_job`] are handed to its
-    /// caller instead and do not reach this closure.
+    /// [`AsyncRuntime::drive`] future, or [`AsyncRuntime::idle`]).
     ///
-    /// The closure and [`Ctx::take_pending_job_error`] are alternatives:
-    /// while a closure is set, each failure is handed to it only and is
-    /// neither retained for [`Ctx::take_pending_job_error`] nor counted by
-    /// [`Ctx::take_pending_job_error_overflow`]. Pass `None` to go back to
-    /// retention.
+    /// While a closure is set, failures are neither retained for
+    /// [`Ctx::take_pending_job_error`] nor counted by
+    /// [`Ctx::take_pending_job_error_overflow`]. Pass `None` to restore
+    /// retention. Errors returned by [`AsyncRuntime::execute_pending_job`] do
+    /// not reach this closure.
     ///
-    /// The closure is called with the failed job's context and its own
-    /// handle to the exception, bound to the lifetime of the call; a job that
-    /// failed without an exception value (e.g. a Rust callback returned
-    /// [`crate::Error::Exception`] without throwing) is reported as
-    /// `undefined`. It is not called when the failure was a stashed Rust
-    /// panic; that panic is resumed instead. If the closure panics, the
-    /// panic propagates out of the drain (e.g. out of the `async_with`,
-    /// drive, or [`AsyncRuntime::idle`] future's poll) with its payload.
+    /// The closure receives the failed job's context and an owned exception
+    /// handle, or `undefined` if no exception value was thrown. If the job
+    /// failed with a synthetic Rust panic exception, its stashed panic is
+    /// resumed instead. Panics in the closure also propagate out of the drain.
     ///
-    /// The closure is synchronous and runs mid-drain with the runtime lock
-    /// held. It may run further jobs with the context it is given (e.g.
-    /// [`Ctx::execute_pending_job`]), which may call it again. Re-entering
-    /// the runtime lock (e.g. blocking on [`AsyncContext::async_with`]) is
-    /// unsupported and deadlocks. An exception the closure leaves pending
-    /// (e.g. from an ignored failed `eval`) stays pending after the drain,
-    /// unless the async drains replace it with an uncatchable error as
-    /// described below; catch or clear it before returning.
+    /// The closure runs synchronously mid-drain with the runtime lock held.
+    /// It may re-enter the drain using the given context, but must not acquire
+    /// the runtime lock again (e.g. by blocking on [`AsyncContext::async_with`]),
+    /// which deadlocks. Catch or clear any exceptions raised by the closure
+    /// before returning; otherwise they remain pending unless replaced by an
+    /// uncatchable job error.
     ///
-    /// In the `async_with` driver, the drive future, and
-    /// [`AsyncRuntime::idle`], a failure with an uncatchable error (e.g.
-    /// raised by the interrupt handler) is left pending in the engine after
-    /// it is reported or retained, so that a future awaiting a promise the
-    /// failed job never settled returns an error instead of waiting forever.
-    /// [`Ctx::execute_pending_job`] never leaves the failed job's exception
-    /// pending.
+    /// Async drains leave uncatchable job errors pending after reporting or
+    /// retaining them, so promise futures observe interrupted jobs even if
+    /// their promises never settle. [`Ctx::execute_pending_job`] clears the
+    /// failed job's exception instead.
     #[inline]
     pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner
@@ -311,9 +300,8 @@ impl AsyncRuntime {
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     ///
-    /// A failure is handed to the caller as-is: it is not reported to the
-    /// job error handler, not retained for [`Ctx::take_pending_job_error`],
-    /// and a Rust panic stashed by the failing job is not resumed here.
+    /// Failures are returned to the caller without invoking the job error
+    /// handler, retaining the exception, or resuming stashed Rust panics.
     #[inline]
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.inner.lock().await;
@@ -350,14 +338,11 @@ impl AsyncRuntime {
 
     /// Run all futures and jobs in the runtime until all are finished.
     ///
-    /// A job that fails is handed to the job error handler if one is set
-    /// (see [`AsyncRuntime::set_job_error_handler`]), or otherwise retained
-    /// for [`Ctx::take_pending_job_error`], and draining continues with the
-    /// remaining jobs; an uncatchable error is also left pending in the
-    /// engine, as described there. If a job fails because a Rust callback panicked, the
-    /// stashed panic is resumed out of the returned future; so is a panic in
-    /// the job error handler. Jobs and futures left in the runtime are then
-    /// not run until another drain runs.
+    /// Job failures are handled by [`AsyncRuntime::set_job_error_handler`] or
+    /// retained for [`Ctx::take_pending_job_error`], and draining continues.
+    /// Uncatchable errors remain pending for promise futures. Rust panics
+    /// from failing callbacks or the handler propagate out of this future,
+    /// leaving remaining work for another drain.
     #[inline]
     pub async fn idle(&self) {
         let mut lock = self.inner.lock().await;
@@ -372,12 +357,9 @@ impl AsyncRuntime {
                     Err(ctx) => {
                         let ctx = NonNull::new(ctx)
                             .expect("executing pending job returned a null context on error");
-                        // Safety: the runtime lock is held for the whole
-                        // poll, so viewing the failed job's context is sound.
+                        // Safety: the runtime is locked for this poll.
                         let job_ctx = unsafe { Ctx::from_raw(ctx) };
                         job_ctx.handle_failed_job(JobDrain::Async);
-                        // The failed job was consumed; keep draining rather
-                        // than returning with jobs still queued.
                         continue;
                     }
                 }
@@ -401,12 +383,9 @@ impl AsyncRuntime {
     /// If the future is polled it will drive futures spawned inside the runtime completing them
     /// even if runtime is currently not in use.
     ///
-    /// If a job driven by the returned future fails because a Rust callback
-    /// panicked, the stashed panic is resumed out of the future's poll,
-    /// killing the driving task; so is a panic in the job error handler (see
-    /// [`AsyncRuntime::set_job_error_handler`]). Futures spawned in the
-    /// runtime are then no longer driven by it until another drain (e.g.
-    /// `async_with`) runs.
+    /// Rust panics from failing jobs or the job error handler propagate out
+    /// of the future's poll, terminating the driving task. Remaining work
+    /// requires another drain, such as [`AsyncContext::async_with`].
     pub fn drive(&self) -> DriveFuture {
         DriveFuture::new(self.weak())
     }
@@ -579,7 +558,6 @@ mod test {
         }
         assert_eq!(*seen.lock().unwrap(), vec![Some(5)]);
 
-        // The failure was handed to the handler only.
         ctx.async_with(async |ctx|{
             assert!(ctx.take_pending_job_error().is_none());
             assert_eq!(ctx.take_pending_job_error_overflow(), 0);
@@ -596,7 +574,6 @@ mod test {
             let armed = armed.clone();
             rt.set_interrupt_handler(Some(Box::new(move || armed.load(Ordering::SeqCst)))).await;
         }
-        // Record failures so the test knows when the drive future ran the job.
         let seen = Arc::new(Mutex::new(Vec::new()));
         {
             let seen = seen.clone();
@@ -618,8 +595,7 @@ mod test {
             ctx.spawn(async move {});
         }).await;
 
-        // Wait for the drive future to run the interrupted job, bounded so a
-        // regression fails instead of hanging.
+        // Observe the drive task without draining jobs from this task.
         for _ in 0..100 {
             tokio::time::sleep(Duration::from_millis(1)).await;
             if !seen.lock().unwrap().is_empty() {
@@ -652,11 +628,9 @@ mod test {
                 "rustPanic",
                 Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
             ).unwrap();
-            // Job A panics, but JS catches the synthetic exception: job A
-            // does not fail, so the drain must not resume the panic. (The
-            // payload stays stashed for the next host error crossing.)
+            // Catching the panic sentinel leaves its payload stashed, but the
+            // unrelated job failure below must not resume it.
             ctx.eval::<(),_>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });").unwrap();
-            // Job B fails unrelatedly.
             ctx.eval::<(),_>("queueMicrotask(() => { throw 1; });").unwrap();
             // Wake the drive task so its drain observes the queued jobs.
             ctx.spawn(async move {});
@@ -679,7 +653,6 @@ mod test {
         }
         assert!(found, "the drive future did not run the failing job");
 
-        // The drain did not resume the caught panic: the drive task survives.
         assert!(!handle.is_finished());
 
     });
@@ -736,8 +709,7 @@ mod test {
             ctx.spawn(async move {});
         }).await;
 
-        // Wait for the drive future to drain every job, bounded so a
-        // regression fails instead of hanging. Nothing else drains jobs here.
+        // Observe the drive task without draining jobs from this task.
         for _ in 0..100 {
             tokio::time::sleep(Duration::from_millis(1)).await;
             if seen.lock().unwrap().len() == 3 && !rt.is_job_pending().await {
@@ -746,7 +718,6 @@ mod test {
         }
         assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2), Some(3)]);
         assert!(!rt.is_job_pending().await);
-        // `with` does not drain jobs, so this observes the drive future's work.
         ctx.with(|ctx| {
             let ran_last: bool = ctx.globals().get("ranLast").unwrap();
             assert!(ran_last);
@@ -755,9 +726,6 @@ mod test {
     });
 
     async_test_case!(job_failing_in_spawned_future_drop_does_not_outlive_runtime => (rt,ctx){
-        // Spawned futures are dropped while the runtime is torn down; a job
-        // failing in their `Drop` must not be retained past
-        // `JS_FreeRuntime`.
         struct DrainOnDrop<'js>(Ctx<'js>);
 
         impl Drop for DrainOnDrop<'_> {
@@ -766,8 +734,6 @@ mod test {
                     .eval::<(), _>("queueMicrotask(() => { throw { late: true }; })")
                     .unwrap();
                 while self.0.execute_pending_job() {}
-                // Discarded, not retained (or counted) for a take that can
-                // no longer happen.
                 assert!(self.0.take_pending_job_error().is_none());
                 assert_eq!(self.0.take_pending_job_error_overflow(), 0);
             }
@@ -840,7 +806,6 @@ mod test {
             .expect("idle hung");
 
         assert_eq!(*seen.lock().unwrap(), vec![Some(5)]);
-        // The failure was handed to the handler only.
         ctx.with(|ctx| {
             assert!(ctx.take_pending_job_error().is_none());
             assert_eq!(ctx.take_pending_job_error_overflow(), 0);
@@ -861,10 +826,7 @@ mod test {
             .await
             .expect("idle hung");
 
-        // `idle` did not return with jobs still pending.
         assert!(!rt.is_job_pending().await);
-        // `with` does not drain jobs, so this observes `idle`'s work. Without
-        // a handler the first failure is retained and the second counted.
         ctx.with(|ctx| {
             let ran_last: bool = ctx.globals().get("ranLast").unwrap();
             assert!(ran_last);
@@ -895,7 +857,6 @@ mod test {
         let payload = res.expect_err("idle should resume the stashed panic");
         assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
 
-        // The unwind released the runtime lock; the runtime remains usable.
         ctx.with(|ctx| {
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
