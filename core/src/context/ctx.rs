@@ -297,8 +297,10 @@ impl<'js> Ctx<'js> {
     /// its object graph alive until taken or the runtime is dropped.
     ///
     /// Failures surfaced by the runtime's own `execute_pending_job` methods
-    /// are returned to the caller instead. Failures during runtime teardown
-    /// are discarded without being retained or counted.
+    /// are returned to the caller instead. JS failures during runtime teardown
+    /// are discarded without being retained, counted, or reported to the job
+    /// error handler; Rust panics from failing callbacks still propagate, as
+    /// from any destructor.
     pub fn take_pending_job_error(&self) -> Option<Value<'js>> {
         unsafe { self.get_opaque() }.take_job_error()
     }

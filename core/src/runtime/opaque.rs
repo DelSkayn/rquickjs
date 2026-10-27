@@ -284,7 +284,10 @@ impl<'js> Opaque<'js> {
     }
 
     pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
-        unsafe { (*self.job_error_handler.get()) = handler }
+        // Drop the old handler only after the slot holds the new one: its
+        // destructor may drain jobs and read the slot.
+        let old = unsafe { core::mem::replace(&mut *self.job_error_handler.get(), handler) };
+        drop(old);
     }
 
     /// Call the job error handler, returning whether one was set.
@@ -354,8 +357,10 @@ impl<'js> Opaque<'js> {
         // Destructors below may drain jobs. Prevent their errors from being
         // retained past `JS_FreeRuntime`.
         self.job_error_closed.set(true);
-        self.rejection_tracker.get_mut().take();
+        // Empty the handler slot before anything else drops, so drains from
+        // destructors below (including the handler's own) find no handler.
         self.job_error_handler.get_mut().take();
+        self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
         self.prototypes.get_mut().clear();
