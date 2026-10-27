@@ -158,13 +158,38 @@ impl<'js> Promise<'js> {
 
     /// Wrap the promise into a struct which can be polled as a rust future.
     ///
-    /// If a job fails with an uncatchable error, such as an interrupt, in an
-    /// async job drain, the next promise future polled in that job's context
-    /// while its promise is unsettled returns [`Error::Exception`] with that
-    /// error pending, instead of waiting for a promise the job may never
-    /// settle.
-    /// See [`AsyncRuntime::set_job_error_handler`](crate::AsyncRuntime::set_job_error_handler)
-    /// for the scope.
+    /// # Interrupted jobs
+    ///
+    /// When a job fails with an uncatchable error, such as an interrupt, in
+    /// an async job drain (the `async_with` driver,
+    /// [`AsyncRuntime::drive`](crate::AsyncRuntime::drive), or
+    /// [`AsyncRuntime::idle`](crate::AsyncRuntime::idle)), the drain records
+    /// the error, replacing any unobserved one, and wakes the runtime's
+    /// spawned futures. The next promise future polled in the interrupted
+    /// job's context while its promise is unsettled, whether already pending
+    /// or created later, takes the error and returns [`Error::Exception`]
+    /// with it pending, instead of waiting for a promise the interrupted job
+    /// may never settle. Later jobs and host code that throw or catch do not
+    /// affect the recorded error.
+    ///
+    /// The scope is per context:
+    /// - The future that takes the error need not be the one awaiting the
+    ///   interrupted job, but runs in the same context. Futures in other
+    ///   contexts are unaffected.
+    /// - The taken error stays pending until caught, so other unsettled
+    ///   promise futures in that context polled before then fail with it
+    ///   too, such as the rest of a `join!`. Catch it promptly to keep the
+    ///   failure contained.
+    /// - A promise future pending outside the runtime's spawned futures (e.g.
+    ///   in another task's [`AsyncContext::async_with`](crate::AsyncContext::async_with))
+    ///   is not woken, but observes the error when next polled.
+    /// - Futures whose promise has settled are unaffected.
+    ///
+    /// Until observed, the recorded error keeps the failed job's context
+    /// alive. Once the failure has been handled and the affected work
+    /// abandoned, [`Ctx::take_interrupted_job_error`] discards the error, on
+    /// the context it was recorded for, so it cannot fail a promise future
+    /// in that context later.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[cfg(feature = "futures")]
     pub fn into_future<T>(self) -> PromiseFuture<'js, T>

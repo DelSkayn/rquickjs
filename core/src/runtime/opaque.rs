@@ -59,7 +59,8 @@ pub(crate) struct Opaque<'js> {
     job_error_closed: Cell<bool>,
 
     /// The most recent uncatchable error from a job that failed in an async
-    /// job drain, until a promise future in that job's context observes it.
+    /// job drain, until a promise future in that job's context observes it or
+    /// the host takes it.
     #[cfg(feature = "futures")]
     interrupted_job: UnsafeCell<Option<Value<'js>>>,
 
@@ -410,14 +411,10 @@ impl<'js> Opaque<'js> {
         // Empty the handler slot before anything else drops, so drains from
         // destructors below (including the handler's own) find no handler.
         self.job_error_handler.get_mut().take();
-        self.rejection_tracker.get_mut().take();
-        self.interrupt_handler.get_mut().take();
-        self.panic.take();
-        #[cfg(feature = "futures")]
-        self.spawner.take();
-        self.userdata.clear();
-        // Release the slot borrow before dropping the value: its finalizers
-        // may re-enter `retain_job_error`.
+        // Release retained errors while the rest of this state is intact:
+        // they may keep the failed job's context and objects alive, whose
+        // finalizers may use it. Release each slot borrow before dropping its
+        // value, as finalizers may re-enter.
         let job_error = self.job_error.get_mut().take();
         drop(job_error);
         #[cfg(feature = "futures")]
@@ -425,6 +422,12 @@ impl<'js> Opaque<'js> {
             let interrupted_job = self.interrupted_job.get_mut().take();
             drop(interrupted_job);
         }
+        self.rejection_tracker.get_mut().take();
+        self.interrupt_handler.get_mut().take();
+        self.panic.take();
+        #[cfg(feature = "futures")]
+        self.spawner.take();
+        self.userdata.clear();
         // The drops above run arbitrary destructors, which may register new
         // class prototypes. Those hold both a JS value and a context, so they
         // must be freed before the runtime is.

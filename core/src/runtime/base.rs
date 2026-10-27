@@ -321,6 +321,53 @@ mod test {
     }
 
     #[test]
+    fn retained_job_error_is_released_before_userdata() {
+        use crate::{Context, Ctx, Function, JsLifetime};
+        use std::{cell::Cell, rc::Rc};
+
+        struct Marker;
+
+        unsafe impl<'js> JsLifetime<'js> for Marker {
+            type Changed<'to> = Marker;
+        }
+
+        /// Records whether userdata was still available when dropped.
+        struct CheckOnDrop<'js>(Ctx<'js>, Rc<Cell<Option<bool>>>);
+
+        impl Drop for CheckOnDrop<'_> {
+            fn drop(&mut self) {
+                self.1.set(Some(self.0.userdata::<Marker>().is_some()));
+            }
+        }
+
+        let saw_userdata = Rc::new(Cell::new(None));
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.store_userdata(Marker).unwrap();
+            let guard = CheckOnDrop(ctx.clone(), saw_userdata.clone());
+            let f = Function::new(ctx.clone(), move || {
+                let _guard = &guard;
+            })
+            .unwrap();
+            ctx.globals().set("f", f).unwrap();
+            // Leave the function reachable only from the retained job error.
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { const f = globalThis.f; delete globalThis.f; throw f; });",
+            )
+            .unwrap();
+            while ctx.execute_pending_job() {}
+        });
+        assert_eq!(saw_userdata.get(), None);
+
+        // Never taking the error leaves its release to runtime teardown,
+        // which must happen while userdata is still available.
+        drop(ctx);
+        drop(rt);
+        assert_eq!(saw_userdata.get(), Some(true));
+    }
+
+    #[test]
     fn set_max_stack_size_large_values() {
         let rt = Runtime::new().unwrap();
         rt.set_max_stack_size(usize::MAX);

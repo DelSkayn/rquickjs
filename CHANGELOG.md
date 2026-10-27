@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Ctx::take_pending_job_error` to take the first failed job's exception retained by an internal job drain; retention is runtime-wide and failures without an exception value are retained as `undefined`
 - `Ctx::take_pending_job_error_overflow` returning the number of job failures that could not be retained since the previous call; failures handed to a job error handler are not counted
 - `Runtime::set_job_error_handler` and `AsyncRuntime::set_job_error_handler` to report internal job failures instead of retaining them; failures without an exception value are reported as `undefined`, and handler panics propagate out of the drain
+- `Ctx::take_interrupted_job_error` to discard an uncatchable job error recorded for promise futures in the interrupted job's context, once the host has handled the failure
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 
 ### Changed

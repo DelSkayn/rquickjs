@@ -6,7 +6,6 @@ use core::{
     any::Any,
     ffi::{c_char, CStr},
     mem::{self, MaybeUninit},
-    panic::AssertUnwindSafe,
     ptr::NonNull,
     result::Result as StdResult,
 };
@@ -315,6 +314,28 @@ impl<'js> Ctx<'js> {
         unsafe { self.get_opaque() }.take_job_error_overflow()
     }
 
+    /// Takes the uncatchable error (e.g. an interrupt) that an async job
+    /// drain recorded for promise futures in this context, if no promise
+    /// future has observed it yet.
+    ///
+    /// Until observed or taken, the recorded error fails the next unsettled
+    /// promise future polled in this context, which may await unrelated work
+    /// (see [`Promise::into_future`]). Once the host has handled the failure,
+    /// e.g. through the job error handler or
+    /// [`Ctx::take_pending_job_error`], and abandoned the affected work, take
+    /// the recorded error so it cannot fail a later operation.
+    ///
+    /// The recorded error belongs to the context the interrupted job ran in,
+    /// so take it on that context: the job error handler runs in it, and the
+    /// error returned by [`Ctx::take_pending_job_error`] carries it
+    /// ([`Value::ctx`]). It keeps that context and its object graph alive
+    /// until observed, taken, or the runtime is dropped.
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub fn take_interrupted_job_error(&self) -> Option<Value<'js>> {
+        unsafe { self.get_opaque() }.take_interrupted_job(self)
+    }
+
     /// Handle a failed job in its own context, which may differ from the
     /// context the drain was started on.
     ///
@@ -326,11 +347,12 @@ impl<'js> Ctx<'js> {
     /// stashed payload. A caught sentinel otherwise leaves the payload for a
     /// later host error, as in `handle_exception`.
     ///
-    /// Async drains also record uncatchable errors in the runtime's opaque
+    /// Async drains first record uncatchable errors in the runtime's opaque
     /// state, outside the engine's volatile pending-exception slot, and wake
     /// spawned futures, so a `PromiseFuture` observes an interrupted job even
-    /// if its promise never settles. Handler panics propagate after this
-    /// bookkeeping, without touching the stash.
+    /// if its promise never settles. Recording before the handler runs keeps
+    /// a handler panic from skipping it. Handler panics propagate without
+    /// being stashed.
     pub(crate) fn handle_failed_job(&self, drain: JobDrain) {
         // Take the exception out of the engine's pending-exception slot so
         // unrelated code can't later mistake it for a fresh one (e.g. the
@@ -352,23 +374,17 @@ impl<'js> Ctx<'js> {
         } else {
             unsafe { Value::from_js_value(self.clone(), raw) }
         };
-        let handler_result = crate::util::catch_unwind(AssertUnwindSafe(|| {
-            opaque.run_job_error_handler(self.clone(), error.clone())
-        }));
-        if let Ok(false) = handler_result {
-            opaque.retain_job_error(error.clone());
-        }
         match drain {
             JobDrain::Sync => {}
             #[cfg(feature = "futures")]
             JobDrain::Async => {
                 if error.is_uncatchable_error() {
-                    opaque.record_interrupted_job(error);
+                    opaque.record_interrupted_job(error.clone());
                 }
             }
         }
-        if let Err(payload) = handler_result {
-            crate::util::resume_unwind(payload);
+        if !opaque.run_job_error_handler(self.clone(), error.clone()) {
+            opaque.retain_job_error(error);
         }
     }
 

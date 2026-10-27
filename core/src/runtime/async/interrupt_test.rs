@@ -8,17 +8,15 @@ use std::{
     panic::AssertUnwindSafe,
     sync::{
         atomic::{AtomicBool, Ordering::SeqCst},
-        Arc, Mutex,
+        Arc,
     },
-    time::Duration,
 };
 
 use futures_rs::{poll, FutureExt};
-use tokio::sync::{oneshot, Notify};
+use tokio::sync::oneshot;
 
+use super::test_util::{report_job_errors, spawn_drive, TIMEOUT};
 use crate::{promise::PromiseFuture, AsyncContext, AsyncRuntime, Ctx, Error, Module, Promise};
-
-const TIMEOUT: Duration = Duration::from_secs(5);
 
 /// A job that never settles its promise unless it is interrupted.
 const LOOPING_JOB: &str = "Promise.resolve().then(() => { for (;;) {} })";
@@ -71,29 +69,6 @@ async fn one_shot_interrupt(rt: &AsyncRuntime) -> Arc<AtomicBool> {
     rt.set_interrupt_handler(Some(Box::new(move || handler_armed.swap(false, SeqCst))))
         .await;
     armed
-}
-
-/// Report job failures as whether they were uncatchable, notifying on each.
-async fn report_job_errors(rt: &AsyncRuntime) -> (Arc<Mutex<Vec<bool>>>, Arc<Notify>) {
-    let seen = Arc::new(Mutex::new(Vec::new()));
-    let reported = Arc::new(Notify::new());
-    {
-        let seen = seen.clone();
-        let reported = reported.clone();
-        rt.set_job_error_handler(Some(Box::new(move |_, error| {
-            seen.lock().unwrap().push(error.is_uncatchable_error());
-            reported.notify_one();
-        })))
-        .await;
-    }
-    (seen, reported)
-}
-
-fn spawn_drive(rt: &AsyncRuntime) {
-    #[cfg(feature = "parallel")]
-    tokio::spawn(rt.drive());
-    #[cfg(not(feature = "parallel"))]
-    tokio::task::spawn_local(rt.drive());
 }
 
 /// Queue the looping job, then `later`, keeping the looping job's promise in
@@ -152,7 +127,7 @@ async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
 /// The drive task interrupts the job before the observer exists.
 async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     let armed = one_shot_interrupt(rt).await;
-    let (seen, reported) = report_job_errors(rt).await;
+    let (seen, reported) = report_job_errors(rt, |error| error.is_uncatchable_error()).await;
     spawn_drive(rt);
 
     ctx.async_with(async |ctx| {
@@ -412,6 +387,8 @@ async_test_case!(observed_interrupt_does_not_poison_later_futures => (rt, ctx) {
             let promise: Promise = ctx.eval(LOOPING_JOB).unwrap();
             armed.store(true, SeqCst);
             assert_observes_interrupt(&ctx, promise.into_future()).await;
+            // Observing the interrupt consumed it.
+            assert!(ctx.take_interrupted_job_error().is_none());
 
             // Created and awaited after the interrupt was observed, and
             // pending when first polled.
@@ -460,7 +437,8 @@ async_test_case!(unobserved_interrupt_fails_at_most_one_later_future => (rt, ctx
             assert_eq!(promise.into_future::<i32>().await.unwrap(), 5);
 
             // The first pending promise future observes the interrupt, even
-            // though its own promise is unrelated (the documented coarse scope).
+            // though its own promise is unrelated (the documented
+            // per-context scope).
             let promise: Promise = ctx.eval("Promise.resolve().then(() => 1)").unwrap();
             assert!(matches!(promise.into_future::<i32>().await, Err(Error::Exception)));
             assert!(ctx.catch().is_uncatchable_error());
@@ -474,6 +452,82 @@ async_test_case!(unobserved_interrupt_fails_at_most_one_later_future => (rt, ctx
     .await
     .expect("a promise future hung");
 });
+
+async_test_case!(taken_interrupt_does_not_fail_later_futures => (rt, ctx) {
+    let armed = one_shot_interrupt(&rt).await;
+    ctx.with(|ctx| {
+        ctx.eval::<(), _>(LOOPING_JOB).unwrap();
+        armed.store(true, SeqCst);
+    })
+    .await;
+    tokio::time::timeout(TIMEOUT, rt.idle())
+        .await
+        .expect("idle hung");
+    assert!(!armed.load(SeqCst));
+
+    tokio::time::timeout(
+        TIMEOUT,
+        ctx.async_with(async |ctx| {
+            // The host handles the failure and abandons the interrupted work.
+            assert_retained_once(&ctx, 0);
+            assert!(ctx.take_interrupted_job_error().unwrap().is_uncatchable_error());
+            assert!(ctx.take_interrupted_job_error().is_none());
+
+            // An unrelated promise future, pending when first polled, is
+            // unaffected.
+            let promise: Promise = ctx.eval("Promise.resolve().then(() => 1)").unwrap();
+            assert_eq!(promise.into_future::<i32>().await.unwrap(), 1);
+            assert!(!ctx.has_exception());
+        }),
+    )
+    .await
+    .expect("a promise future hung");
+});
+
+/// Taking the recorded error is scoped to the interrupted job's context.
+#[tokio::test]
+async fn taken_interrupt_is_scoped_to_the_interrupted_jobs_context() {
+    let rt = AsyncRuntime::new().unwrap();
+    let interrupted = AsyncContext::full(&rt).await.unwrap();
+    let other = AsyncContext::full(&rt).await.unwrap();
+    let armed = one_shot_interrupt(&rt).await;
+
+    interrupted
+        .with(|ctx| {
+            ctx.eval::<(), _>(LOOPING_JOB).unwrap();
+            armed.store(true, SeqCst);
+        })
+        .await;
+    tokio::time::timeout(TIMEOUT, rt.idle())
+        .await
+        .expect("idle hung");
+    assert!(!armed.load(SeqCst));
+
+    // A host in another context cannot discard it.
+    other
+        .async_with(async |ctx| {
+            assert!(ctx.take_interrupted_job_error().is_none());
+        })
+        .await;
+
+    // The interrupted job's context can, before a promise future observes it.
+    interrupted
+        .async_with(async |ctx| {
+            assert_retained_once(&ctx, 0);
+            assert!(ctx
+                .take_interrupted_job_error()
+                .unwrap()
+                .is_uncatchable_error());
+            assert!(ctx.take_interrupted_job_error().is_none());
+
+            // An unrelated promise future, pending when first polled, is
+            // unaffected.
+            let promise: Promise = ctx.eval("Promise.resolve().then(() => 1)").unwrap();
+            assert_eq!(promise.into_future::<i32>().await.unwrap(), 1);
+            assert!(!ctx.has_exception());
+        })
+        .await;
+}
 
 async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
     let script = "globalThis.ok = Promise.resolve().then(() => 42);
