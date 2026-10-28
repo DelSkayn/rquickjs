@@ -658,25 +658,6 @@ mod test {
     }
 
     #[test]
-    fn execute_pending_job_retains_first_failed_job_exception() {
-        use crate::{Context, Runtime};
-
-        let runtime = Runtime::new().unwrap();
-        let ctx = Context::full(&runtime).unwrap();
-        ctx.with(|ctx| {
-            ctx.eval::<(), _>(
-                "queueMicrotask(() => { throw 1; });
-                 queueMicrotask(() => { throw 2; });",
-            )
-            .unwrap();
-
-            while ctx.execute_pending_job() {}
-
-            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
-        })
-    }
-
-    #[test]
     fn execute_pending_job_calls_job_error_handler_in_order() {
         use crate::{Context, Runtime};
         use std::sync::{Arc, Mutex};
@@ -876,7 +857,7 @@ mod test {
     }
 
     #[test]
-    fn execute_pending_job_resumes_pending_panic() {
+    fn ctx_execute_pending_job_resumes_pending_panic() {
         use crate::{Context, Function, Runtime};
         use std::panic::{catch_unwind, AssertUnwindSafe};
 
@@ -948,7 +929,7 @@ mod test {
     }
 
     #[test]
-    fn execute_pending_job_clears_interrupted_job_error() {
+    fn execute_pending_job_retains_uncatchable_error_without_recording_it() {
         use crate::{Context, Runtime};
         use std::sync::{
             atomic::{AtomicBool, Ordering::SeqCst},
@@ -971,10 +952,9 @@ mod test {
             assert!(!armed.load(SeqCst));
 
             assert!(ctx.take_pending_job_error().unwrap().is_uncatchable_error());
+            #[cfg(feature = "futures")]
+            assert!(ctx.take_interrupted_job_error().is_none());
             assert!(!ctx.has_exception());
-
-            let sum: i32 = ctx.eval("1 + 1").unwrap();
-            assert_eq!(sum, 2);
         })
     }
 

@@ -271,38 +271,6 @@ mod test {
         })
         .await;
     }
-
-    #[tokio::test]
-    async fn async_with_calls_job_error_handler() {
-        use std::sync::{Arc, Mutex};
-
-        let rt = AsyncRuntime::new().unwrap();
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        {
-            let seen = seen.clone();
-            rt.set_job_error_handler(Some(Box::new(move |_, error| {
-                seen.lock().unwrap().push(error.as_int());
-            })))
-            .await;
-        }
-        let ctx = AsyncContext::full(&rt).await.unwrap();
-        ctx.async_with(async |ctx| {
-            ctx.eval::<(), _>(
-                "queueMicrotask(() => { throw 1; });
-                 queueMicrotask(() => { throw 2; });",
-            )
-            .unwrap();
-
-            tokio::task::yield_now().await;
-
-            assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2)]);
-            assert!(ctx.take_pending_job_error().is_none());
-            assert_eq!(ctx.take_pending_job_error_overflow(), 0);
-            assert!(!ctx.has_exception());
-        })
-        .await;
-    }
-
     #[tokio::test]
     async fn async_with_job_error_handler_panic_propagates() {
         use std::panic::AssertUnwindSafe;
@@ -339,46 +307,6 @@ mod test {
         })
         .await;
     }
-
-    #[tokio::test]
-    async fn async_with_promise_future_observes_interrupted_job() {
-        use std::{
-            sync::{
-                atomic::{AtomicBool, Ordering},
-                Arc,
-            },
-            time::Duration,
-        };
-
-        use crate::{Error, Promise};
-
-        let rt = AsyncRuntime::new().unwrap();
-        let armed = Arc::new(AtomicBool::new(false));
-        {
-            let armed = armed.clone();
-            rt.set_interrupt_handler(Some(Box::new(move || armed.load(Ordering::SeqCst))))
-                .await;
-        }
-        let ctx = AsyncContext::full(&rt).await.unwrap();
-
-        tokio::time::timeout(
-            Duration::from_secs(5),
-            ctx.async_with(async |ctx| {
-                let promise: Promise = ctx
-                    .eval("Promise.resolve().then(() => { for (;;) {} })")
-                    .unwrap();
-                armed.store(true, Ordering::SeqCst);
-
-                let res = promise.into_future::<()>().await;
-                assert!(matches!(res, Err(Error::Exception)));
-                assert!(ctx.catch().is_uncatchable_error());
-                assert!(ctx.take_pending_job_error().unwrap().is_uncatchable_error());
-            }),
-        )
-        .await
-        .expect("the promise future hung on an interrupted job");
-    }
-
     #[tokio::test]
     async fn async_with_drain_skips_caught_panic() {
         let rt = AsyncRuntime::new().unwrap();

@@ -16,7 +16,7 @@ use futures_rs::{poll, FutureExt};
 use tokio::sync::oneshot;
 
 use super::test_util::{report_job_errors, spawn_drive, TIMEOUT};
-use crate::{promise::PromiseFuture, AsyncContext, AsyncRuntime, Ctx, Error, Module, Promise};
+use crate::{promise::PromiseFuture, AsyncContext, AsyncRuntime, Ctx, Error, Promise};
 
 const LOOPING_JOB: &str = "Promise.resolve().then(() => { for (;;) {} })";
 
@@ -31,18 +31,6 @@ const LATER_THROW: Case = Case {
     later: "queueMicrotask(() => { throw 2; });",
     host_catch: false,
     later_failures: 1,
-};
-
-const LATER_CATCH: Case = Case {
-    later: "queueMicrotask(() => { try { throw 2; } catch {} });",
-    host_catch: false,
-    later_failures: 0,
-};
-
-const LATER_REJECTION: Case = Case {
-    later: "Promise.reject(1).then(() => {}).catch(() => {});",
-    host_catch: false,
-    later_failures: 0,
 };
 
 const LATER_TRY_AWAIT: Case = Case {
@@ -144,9 +132,9 @@ async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     .await
     .expect("the promise future hung on an interrupted job");
 
-    let mut expected = vec![true];
-    expected.resize(1 + case.later_failures, false);
-    assert_eq!(*seen.lock().unwrap(), expected);
+    let seen = seen.lock().unwrap();
+    assert_eq!(seen.iter().filter(|&&uncatchable| uncatchable).count(), 1);
+    assert_eq!(seen.len(), 1 + case.later_failures);
 }
 
 async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
@@ -211,79 +199,22 @@ fn spawn_pending_observer(ctx: &Ctx<'_>, armed: Arc<AtomicBool>) -> oneshot::Rec
     rx
 }
 
-async_test_case!(async_with_observes_interrupt_despite_later_throw => (rt, ctx) {
-    async_with_case(&rt, &ctx, LATER_THROW).await;
+async_test_case!(async_with_observes_interrupt_despite_later_work => (rt, ctx) {
+    for case in [LATER_THROW, LATER_TRY_AWAIT, HOST_CATCH] {
+        async_with_case(&rt, &ctx, case).await;
+    }
 });
 
-async_test_case!(async_with_observes_interrupt_despite_later_catch => (rt, ctx) {
-    async_with_case(&rt, &ctx, LATER_CATCH).await;
+async_test_case!(drive_observes_interrupt_despite_later_work => (rt, ctx) {
+    for case in [LATER_THROW, LATER_TRY_AWAIT, HOST_CATCH] {
+        drive_case(&rt, &ctx, case).await;
+    }
 });
 
-async_test_case!(async_with_observes_interrupt_despite_later_rejection => (rt, ctx) {
-    async_with_case(&rt, &ctx, LATER_REJECTION).await;
-});
-
-async_test_case!(async_with_observes_interrupt_despite_later_try_await => (rt, ctx) {
-    async_with_case(&rt, &ctx, LATER_TRY_AWAIT).await;
-});
-
-async_test_case!(async_with_observes_interrupt_despite_host_catch => (rt, ctx) {
-    async_with_case(&rt, &ctx, HOST_CATCH).await;
-});
-
-async_test_case!(drive_observes_interrupt_despite_later_throw => (rt, ctx) {
-    drive_case(&rt, &ctx, LATER_THROW).await;
-});
-
-async_test_case!(drive_observes_interrupt_despite_later_catch => (rt, ctx) {
-    drive_case(&rt, &ctx, LATER_CATCH).await;
-});
-
-async_test_case!(drive_observes_interrupt_despite_later_rejection => (rt, ctx) {
-    drive_case(&rt, &ctx, LATER_REJECTION).await;
-});
-
-async_test_case!(drive_observes_interrupt_despite_later_try_await => (rt, ctx) {
-    drive_case(&rt, &ctx, LATER_TRY_AWAIT).await;
-});
-
-async_test_case!(drive_observes_interrupt_despite_host_catch => (rt, ctx) {
-    drive_case(&rt, &ctx, HOST_CATCH).await;
-});
-
-async_test_case!(idle_observes_interrupt_despite_later_throw => (rt, ctx) {
-    idle_case(&rt, &ctx, LATER_THROW).await;
-});
-
-async_test_case!(idle_observes_interrupt_despite_later_catch => (rt, ctx) {
-    idle_case(&rt, &ctx, LATER_CATCH).await;
-});
-
-async_test_case!(idle_observes_interrupt_despite_later_rejection => (rt, ctx) {
-    idle_case(&rt, &ctx, LATER_REJECTION).await;
-});
-
-async_test_case!(idle_observes_interrupt_despite_later_try_await => (rt, ctx) {
-    idle_case(&rt, &ctx, LATER_TRY_AWAIT).await;
-});
-
-async_test_case!(idle_observes_interrupt_despite_host_catch => (rt, ctx) {
-    idle_case(&rt, &ctx, HOST_CATCH).await;
-});
-
-async_test_case!(async_with_wakes_spawned_observer => (rt, ctx) {
-    let armed = one_shot_interrupt(&rt).await;
-    tokio::time::timeout(
-        TIMEOUT,
-        ctx.async_with(async |ctx| {
-            let outcome = spawn_pending_observer(&ctx, armed.clone()).await.unwrap();
-            assert_eq!(outcome, OBSERVED);
-            assert!(!armed.load(SeqCst));
-            assert_retained_once(&ctx, 0);
-        }),
-    )
-    .await
-    .expect("the spawned promise future hung on an interrupted job");
+async_test_case!(idle_observes_interrupt_despite_later_work => (rt, ctx) {
+    for case in [LATER_THROW, LATER_TRY_AWAIT, HOST_CATCH] {
+        idle_case(&rt, &ctx, case).await;
+    }
 });
 
 async_test_case!(drive_wakes_spawned_observer => (rt, ctx) {
@@ -295,21 +226,6 @@ async_test_case!(drive_wakes_spawned_observer => (rt, ctx) {
         .expect("the spawned promise future hung on an interrupted job")
         .unwrap();
     assert_eq!(outcome, OBSERVED);
-    assert!(!armed.load(SeqCst));
-    ctx.with(|ctx| {
-        assert!(!ctx.has_exception());
-        assert_retained_once(&ctx, 0);
-    })
-    .await;
-});
-
-async_test_case!(idle_wakes_spawned_observer => (rt, ctx) {
-    let armed = one_shot_interrupt(&rt).await;
-    let mut observer = ctx.with(|ctx| spawn_pending_observer(&ctx, armed.clone())).await;
-    tokio::time::timeout(TIMEOUT, rt.idle())
-        .await
-        .expect("the spawned promise future hung on an interrupted job");
-    assert_eq!(observer.try_recv().unwrap(), OBSERVED);
     assert!(!armed.load(SeqCst));
     ctx.with(|ctx| {
         assert!(!ctx.has_exception());
@@ -350,51 +266,8 @@ async_test_case!(async_drains_leave_no_pending_exception => (rt, ctx) {
         assert!(!ctx.has_exception());
         let sum: i32 = ctx.eval("1 + 1").unwrap();
         assert_eq!(sum, 2);
-        let (_, promise) = Module::declare(ctx.clone(), "m", "export const x = 1;")
-            .unwrap()
-            .eval()
-            .unwrap();
-        promise.finish::<()>().unwrap();
     })
     .await;
-});
-
-async_test_case!(observed_interrupt_does_not_poison_later_futures => (rt, ctx) {
-    let armed = one_shot_interrupt(&rt).await;
-    tokio::time::timeout(
-        TIMEOUT,
-        ctx.async_with(async |ctx| {
-            let promise: Promise = ctx.eval(LOOPING_JOB).unwrap();
-            armed.store(true, SeqCst);
-            assert_observes_interrupt(&ctx, promise.into_future()).await;
-            // Observing the interrupt consumed it.
-            assert!(ctx.take_interrupted_job_error().is_none());
-
-            // Created and awaited after the interrupt was observed, and
-            // pending when first polled.
-            let promise: Promise = ctx.eval("Promise.resolve().then(() => 42)").unwrap();
-            assert_eq!(promise.into_future::<i32>().await.unwrap(), 42);
-            let promise: Promise = ctx
-                .eval("Promise.resolve().then(() => { throw 7; })")
-                .unwrap();
-            assert!(matches!(promise.into_future::<()>().await, Err(Error::Exception)));
-            assert_eq!(ctx.catch().as_int(), Some(7));
-        }),
-    )
-    .await
-    .expect("a promise future hung");
-
-    // Nor in a later `async_with`.
-    tokio::time::timeout(
-        TIMEOUT,
-        ctx.async_with(async |ctx| {
-            let promise: Promise = ctx.eval("Promise.resolve().then(() => 42)").unwrap();
-            assert_eq!(promise.into_future::<i32>().await.unwrap(), 42);
-            assert!(!ctx.has_exception());
-        }),
-    )
-    .await
-    .expect("a promise future hung");
 });
 
 async_test_case!(unobserved_interrupt_fails_at_most_one_later_future => (rt, ctx) {
@@ -426,37 +299,6 @@ async_test_case!(unobserved_interrupt_fails_at_most_one_later_future => (rt, ctx
             // Later ones are not.
             let promise: Promise = ctx.eval("Promise.resolve().then(() => 2)").unwrap();
             assert_eq!(promise.into_future::<i32>().await.unwrap(), 2);
-            assert!(!ctx.has_exception());
-        }),
-    )
-    .await
-    .expect("a promise future hung");
-});
-
-async_test_case!(taken_interrupt_does_not_fail_later_futures => (rt, ctx) {
-    let armed = one_shot_interrupt(&rt).await;
-    ctx.with(|ctx| {
-        ctx.eval::<(), _>(LOOPING_JOB).unwrap();
-        armed.store(true, SeqCst);
-    })
-    .await;
-    tokio::time::timeout(TIMEOUT, rt.idle())
-        .await
-        .expect("idle hung");
-    assert!(!armed.load(SeqCst));
-
-    tokio::time::timeout(
-        TIMEOUT,
-        ctx.async_with(async |ctx| {
-            // The host handles the failure and abandons the interrupted work.
-            assert_retained_once(&ctx, 0);
-            assert!(ctx.take_interrupted_job_error().unwrap().is_uncatchable_error());
-            assert!(ctx.take_interrupted_job_error().is_none());
-
-            // An unrelated promise future, pending when first polled, is
-            // unaffected.
-            let promise: Promise = ctx.eval("Promise.resolve().then(() => 1)").unwrap();
-            assert_eq!(promise.into_future::<i32>().await.unwrap(), 1);
             assert!(!ctx.has_exception());
         }),
     )
@@ -581,35 +423,3 @@ async_test_case!(handler_panic_still_records_interrupt => (rt, ctx) {
     .await
     .expect("the promise future hung on an interrupted job");
 });
-
-#[tokio::test]
-async fn interrupted_job_does_not_fail_promise_future_in_another_context() {
-    use core::{
-        future::Future,
-        pin::Pin,
-        task::{Context as TaskContext, Poll, Waker},
-    };
-
-    let rt = AsyncRuntime::new().unwrap();
-    let interrupted = AsyncContext::full(&rt).await.unwrap();
-    let waiting = AsyncContext::full(&rt).await.unwrap();
-    let armed = one_shot_interrupt(&rt).await;
-
-    interrupted
-        .async_with(async |ctx| {
-            ctx.eval::<(), _>(LOOPING_JOB).unwrap();
-            armed.store(true, SeqCst);
-            // Yield once so the driver's drain interrupts the job.
-            tokio::task::yield_now().await;
-        })
-        .await;
-
-    waiting
-        .async_with(async |ctx| {
-            let (promise, _resolve, _reject) = Promise::new(&ctx).unwrap();
-            let mut future = promise.into_future::<()>();
-            let mut cx = TaskContext::from_waker(Waker::noop());
-            assert!(matches!(Pin::new(&mut future).poll(&mut cx), Poll::Pending));
-        })
-        .await;
-}

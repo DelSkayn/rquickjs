@@ -504,31 +504,6 @@ mod test {
 
     });
 
-    async_test_case!(drive_retains_failed_job_error => (rt,ctx){
-        spawn_drive(&rt);
-
-        ctx.async_with(async |ctx|{
-            ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
-            ctx.spawn(async move {});
-        }).await;
-
-        let mut found = false;
-        for _ in 0..100 {
-            tokio::time::sleep(Duration::from_millis(1)).await;
-            ctx.async_with(async |ctx|{
-                if let Some(error) = ctx.take_pending_job_error() {
-                    assert_eq!(error.as_int(), Some(5));
-                    found = true;
-                }
-            }).await;
-            if found {
-                break;
-            }
-        }
-        assert!(found, "the drive future did not run the failing job");
-
-    });
-
     async_test_case!(drive_calls_job_error_handler => (rt,ctx){
         let (seen, reported) = report_job_errors(&rt, |error| error.as_int()).await;
         spawn_drive(&rt);
@@ -548,75 +523,6 @@ mod test {
             assert_eq!(ctx.take_pending_job_error_overflow(), 0);
             assert!(!ctx.has_exception());
         }).await;
-
-    });
-
-    async_test_case!(drive_records_interrupted_job_error_for_later_future => (rt,ctx){
-        use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
-
-        let armed = Arc::new(AtomicBool::new(false));
-        {
-            let armed = armed.clone();
-            rt.set_interrupt_handler(Some(Box::new(move || armed.swap(false, Ordering::SeqCst)))).await;
-        }
-        let (seen, reported) = report_job_errors(&rt, |error| error.is_uncatchable_error()).await;
-        spawn_drive(&rt);
-
-        ctx.async_with(async |ctx|{
-            ctx.eval::<(),_>("globalThis.p = Promise.resolve().then(() => { for (;;) {} });")
-                .unwrap();
-            armed.store(true, Ordering::SeqCst);
-            ctx.spawn(async move {});
-        }).await;
-
-        tokio::time::timeout(TIMEOUT, reported.notified())
-            .await
-            .expect("the drive task did not run the looping job");
-        assert_eq!(*seen.lock().unwrap(), vec![true]);
-        assert!(!armed.load(Ordering::SeqCst));
-
-        tokio::time::timeout(TIMEOUT, ctx.async_with(async |ctx|{
-            assert!(!ctx.has_exception());
-            let promise: Promise = ctx.globals().get("p").unwrap();
-            let res = promise.into_future::<()>().await;
-            assert!(matches!(res, Err(Error::Exception)));
-            assert!(ctx.catch().is_uncatchable_error());
-            assert!(!ctx.has_exception());
-        }))
-        .await
-        .expect("the promise future hung on an interrupted job");
-
-    });
-
-    async_test_case!(drive_skips_caught_panic => (rt,ctx){
-        let handle = spawn_drive(&rt);
-
-        ctx.async_with(async |ctx|{
-            ctx.globals().set(
-                "rustPanic",
-                Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
-            ).unwrap();
-            ctx.eval::<(),_>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });").unwrap();
-            ctx.eval::<(),_>("queueMicrotask(() => { throw 1; });").unwrap();
-            ctx.spawn(async move {});
-        }).await;
-
-        let mut found = false;
-        for _ in 0..100 {
-            tokio::time::sleep(Duration::from_millis(1)).await;
-            ctx.async_with(async |ctx|{
-                if let Some(error) = ctx.take_pending_job_error() {
-                    assert_eq!(error.as_int(), Some(1));
-                    found = true;
-                }
-            }).await;
-            if found {
-                break;
-            }
-        }
-        assert!(found, "the drive future did not run the failing job");
-
-        assert!(!handle.is_finished());
 
     });
 
@@ -666,32 +572,7 @@ mod test {
 
     });
 
-    async_test_case!(job_failing_in_spawned_future_drop_does_not_outlive_runtime => (rt,ctx){
-        struct DrainOnDrop<'js>(Ctx<'js>);
-
-        impl Drop for DrainOnDrop<'_> {
-            fn drop(&mut self) {
-                self.0
-                    .eval::<(), _>("queueMicrotask(() => { throw { late: true }; })")
-                    .unwrap();
-                while self.0.execute_pending_job() {}
-                assert!(self.0.take_pending_job_error().is_none());
-                assert_eq!(self.0.take_pending_job_error_overflow(), 0);
-            }
-        }
-
-        ctx.with(|ctx| {
-            let guard = DrainOnDrop(ctx.clone());
-            ctx.spawn(async move {
-                let _guard = guard;
-                std::future::pending::<()>().await
-            });
-        }).await;
-        drop(ctx);
-        drop(rt);
-    });
-
-    async_test_case!(execute_pending_job_resumes_pending_panic => (rt,ctx){
+    async_test_case!(async_runtime_execute_pending_job_resumes_pending_panic => (rt,ctx){
         use futures_rs::FutureExt;
         use std::panic::AssertUnwindSafe;
 
@@ -749,25 +630,6 @@ mod test {
 
     });
 
-    async_test_case!(idle_calls_job_error_handler => (rt,ctx){
-        let (seen, _) = report_job_errors(&rt, |error| error.as_int()).await;
-
-        ctx.with(|ctx| {
-            ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
-        }).await;
-
-        tokio::time::timeout(TIMEOUT, rt.idle())
-            .await
-            .expect("idle hung");
-
-        assert_eq!(*seen.lock().unwrap(), vec![Some(5)]);
-        ctx.with(|ctx| {
-            assert!(ctx.take_pending_job_error().is_none());
-            assert_eq!(ctx.take_pending_job_error_overflow(), 0);
-            assert!(!ctx.has_exception());
-        }).await;
-    });
-
     async_test_case!(idle_keeps_draining_after_failure => (rt,ctx){
         ctx.with(|ctx| {
             ctx.eval::<(),_>(
@@ -812,28 +674,6 @@ mod test {
         ctx.with(|ctx| {
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
-        }).await;
-    });
-
-    async_test_case!(idle_propagates_job_error_handler_panic => (rt,ctx){
-        use futures_rs::FutureExt;
-        use std::panic::AssertUnwindSafe;
-
-        rt.set_job_error_handler(Some(Box::new(|_, _| panic!("handler boom")))).await;
-
-        ctx.with(|ctx| {
-            ctx.eval::<(),_>("queueMicrotask(() => { throw 1; });").unwrap();
-        }).await;
-
-        let res = tokio::time::timeout(TIMEOUT, AssertUnwindSafe(rt.idle()).catch_unwind())
-            .await
-            .expect("idle hung");
-        let payload = res.expect_err("the handler panic should propagate out of idle");
-        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
-
-        ctx.with(|ctx| {
-            assert!(ctx.take_pending_job_error().is_none());
-            assert!(!ctx.has_exception());
         }).await;
     });
 

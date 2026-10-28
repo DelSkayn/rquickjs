@@ -363,7 +363,7 @@ mod test {
     }
 
     #[test]
-    fn execute_pending_job_resumes_pending_panic() {
+    fn runtime_execute_pending_job_resumes_pending_panic() {
         use std::panic::{catch_unwind, AssertUnwindSafe};
 
         let rt = Runtime::new().unwrap();
