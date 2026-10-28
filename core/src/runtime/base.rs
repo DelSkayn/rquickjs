@@ -119,25 +119,12 @@ impl Runtime {
     }
 
     /// Set a closure which is called when a job fails in an internal job
-    /// drain ([`crate::Ctx::execute_pending_job`], the `async_with` driver,
-    /// the `AsyncRuntime::drive` future, or `AsyncRuntime::idle`).
+    /// drain; while set, failures are reported to it instead of being retained
+    /// for [`Ctx::take_pending_job_error`]. Pass `None` to restore retention.
     ///
-    /// While a closure is set, failures are neither retained for
-    /// [`crate::Ctx::take_pending_job_error`] nor counted by
-    /// [`crate::Ctx::take_pending_job_error_overflow`]. Pass `None` to restore
-    /// retention. Errors returned by [`Runtime::execute_pending_job`] do not
-    /// reach this closure.
-    ///
-    /// The closure receives the failed job's context and an owned exception
-    /// handle, or `undefined` if no exception value was thrown. If the job
-    /// failed with a synthetic Rust panic exception, its stashed panic is
-    /// resumed instead. Panics in the closure also propagate out of the drain.
-    ///
-    /// The closure runs synchronously mid-drain with the runtime lock held.
-    /// It may re-enter the drain using the given context, but must not acquire
-    /// the runtime lock again (e.g. through [`Context::with`]): doing so panics,
-    /// or deadlocks with the `parallel` feature. Catch or clear any exceptions
-    /// raised by the closure before returning; otherwise they remain pending.
+    /// It runs mid-drain with the runtime lock held and must not acquire that
+    /// lock again (e.g. through [`Context::with`]). Its panics propagate out of
+    /// the drain, and any exception it throws stays pending.
     #[inline]
     pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner.lock().set_job_error_handler(handler);
@@ -420,6 +407,38 @@ mod test {
             let sum: i32 = ctx.eval::<i32, _>("1 + 1").unwrap();
             assert_eq!(sum, 2);
         });
+    }
+
+    #[test]
+    fn job_panicking_during_teardown_does_not_unwind() {
+        use crate::{Ctx, Function, JsLifetime};
+
+        struct DrainOnDrop<'js>(Ctx<'js>);
+
+        unsafe impl<'js> JsLifetime<'js> for DrainOnDrop<'js> {
+            type Changed<'to> = DrainOnDrop<'to>;
+        }
+
+        impl Drop for DrainOnDrop<'_> {
+            fn drop(&mut self) {
+                self.0.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+                while self.0.execute_pending_job() {}
+            }
+        }
+
+        let rt = Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.store_userdata(DrainOnDrop(ctx.clone())).unwrap();
+        });
+        drop(ctx);
+        drop(rt);
     }
 
     #[test]

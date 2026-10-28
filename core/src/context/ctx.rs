@@ -282,77 +282,45 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
-    /// Takes the exception of the first job that failed in an internal job
-    /// drain (the `async_with` driver, the `AsyncRuntime::drive` future,
-    /// `AsyncRuntime::idle`, or [`Ctx::execute_pending_job`]) since the
-    /// previous take. A failure without an exception value is retained as
-    /// `undefined`.
+    /// Takes the first exception retained by an internal job drain (the
+    /// `async_with` driver, `AsyncRuntime::drive`, `AsyncRuntime::idle`, or
+    /// [`Ctx::execute_pending_job`]) since the previous take.
     ///
-    /// Failures handled by [`crate::Runtime::set_job_error_handler`] or
-    /// `AsyncRuntime::set_job_error_handler` are not retained.
-    ///
-    /// The retained error is runtime-wide: it belongs to the context the job
-    /// ran in, which may differ from this context. It keeps that context and
-    /// its object graph alive until taken or the runtime is dropped.
-    ///
-    /// Failures surfaced by the runtime's own `execute_pending_job` methods
-    /// are returned to the caller instead. JS failures during runtime teardown
-    /// are discarded without being retained, counted, or reported to the job
-    /// error handler; Rust panics from failing callbacks still propagate, as
-    /// from any destructor.
+    /// A failure without an exception value is retained as `undefined`.
+    /// Failures given to the job error handler, or returned by the runtime's
+    /// own `execute_pending_job` methods, are not retained. The value is
+    /// runtime-wide and keeps its job's context alive until taken or dropped
+    /// with the runtime.
     pub fn take_pending_job_error(&self) -> Option<Value<'js>> {
         unsafe { self.get_opaque() }.take_job_error()
     }
 
-    /// Takes the number of job failures that could not be retained because
-    /// an earlier failure was still held for [`Ctx::take_pending_job_error`].
-    ///
-    /// The count is runtime-wide, saturates at `u64::MAX`, and resets to 0.
-    ///
-    /// Failures handed to the job error handler are not counted.
+    /// Takes the number of failures dropped because an earlier failure was
+    /// still held. Saturates at `u64::MAX` and resets to 0.
     pub fn take_pending_job_error_overflow(&self) -> u64 {
         unsafe { self.get_opaque() }.take_job_error_overflow()
     }
 
-    /// Takes the uncatchable error (e.g. an interrupt) that an async job
-    /// drain recorded for promise futures in this context, if no promise
-    /// future has observed it yet.
+    /// Takes the uncatchable error (e.g. an interrupt) an async drain
+    /// recorded for promise futures in this context, if none has observed it
+    /// yet.
     ///
-    /// Until observed or taken, the recorded error fails the next unsettled
-    /// promise future polled in this context, which may await unrelated work
-    /// (see [`Promise::into_future`]). Once the host has handled the failure,
-    /// e.g. through the job error handler or
-    /// [`Ctx::take_pending_job_error`], and abandoned the affected work, take
-    /// the recorded error so it cannot fail a later operation.
-    ///
-    /// The recorded error belongs to the context the interrupted job ran in,
-    /// so take it on that context: the job error handler runs in it, and the
-    /// error returned by [`Ctx::take_pending_job_error`] may carry it
-    /// ([`Value::ctx`]). It keeps that context and its object graph alive
-    /// until observed, taken, or the runtime is dropped.
+    /// Take it once the failure has been handled so it cannot fail an
+    /// unrelated future later. It keeps its context alive until observed,
+    /// taken, or dropped with the runtime.
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub fn take_interrupted_job_error(&self) -> Option<Value<'js>> {
         unsafe { self.get_opaque() }.take_interrupted_job(self)
     }
 
-    /// Handle a failed job in its own context, which may differ from the
-    /// context the drain was started on.
+    /// Handles a failed job in its own context, which may differ from the
+    /// drain's.
     ///
-    /// Resume a stashed Rust panic only if the job failed with a synthetic
-    /// panic exception. Otherwise, report the failure to the handler or
-    /// retain it for [`Ctx::take_pending_job_error`].
-    ///
-    /// JS can rethrow a captured panic sentinel, which resumes the currently
-    /// stashed payload. A caught sentinel otherwise leaves the payload for a
-    /// later host error, as in `handle_exception`.
-    ///
-    /// Async drains first record uncatchable errors in the runtime's opaque
-    /// state, outside the engine's volatile pending-exception slot, and wake
-    /// spawned futures, so a `PromiseFuture` observes an interrupted job even
-    /// if its promise never settles. Recording before the handler runs keeps
-    /// a handler panic from skipping it. Handler panics propagate without
-    /// being stashed.
+    /// Resumes a stashed Rust panic when the job failed with its sentinel,
+    /// otherwise reports the error to the job error handler or retains it.
+    /// Async drains also record uncatchable errors for promise futures,
+    /// before the handler runs so a handler panic cannot skip it.
     pub(crate) fn handle_failed_job(&self, drain: JobDrain) {
         // Take the exception out of the engine's pending-exception slot so
         // unrelated code can't later mistake it for a fresh one (e.g. the
@@ -363,8 +331,10 @@ impl<'js> Ctx<'js> {
         let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) };
         if tag == qjs::JS_TAG_EXCEPTION {
             if let Some(payload) = opaque.take_panic() {
-                // The job has returned, so the unwind does not cross QuickJS.
-                crate::util::resume_unwind(payload);
+                // Never unwind out of a destructor during teardown.
+                if !opaque.is_closed() {
+                    crate::util::resume_unwind(payload);
+                }
             }
         }
         // Missing exceptions and rethrown panic sentinels with a consumed
@@ -388,13 +358,10 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Handle a failed job given the raw context pointer reported by
-    /// `JS_ExecutePendingJob`, via [`Ctx::handle_failed_job`].
+    /// Handles the failed job context returned by `JS_ExecutePendingJob`.
     ///
     /// # Safety
-    /// The runtime owning `ctx` must be locked for the duration of the call,
-    /// and `ctx` must be the context reported by a failed
-    /// `JS_ExecutePendingJob`.
+    /// The runtime must be locked, and `ctx` must be the failed job's context.
     pub(crate) unsafe fn handle_failed_job_ptr(ctx: *mut qjs::JSContext, drain: JobDrain) {
         let ctx =
             NonNull::new(ctx).expect("executing pending job returned a null context on error");
@@ -545,14 +512,11 @@ impl<'js> Ctx<'js> {
 
     /// Executes a quickjs job.
     ///
-    /// Returns whether a job was executed, or false if no job was pending.
+    /// Executes a quickjs job, which may belong to any context of the runtime.
     ///
-    /// The job may belong to any context of the runtime. If it fails, its
-    /// exception is taken out of the engine and handed to the job error
-    /// handler if one is set, or otherwise retained for
-    /// [`Ctx::take_pending_job_error`]. The failed job's exception is cleared.
-    /// Rust panics from a failing callback or the job error handler propagate
-    /// out of this function.
+    /// Returns whether a job was executed, or false if none was pending. A
+    /// failure is reported to the job error handler or retained for
+    /// [`Ctx::take_pending_job_error`]; panics propagate.
     pub fn execute_pending_job(&self) -> bool {
         let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };

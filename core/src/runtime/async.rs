@@ -161,34 +161,18 @@ impl AsyncRuntime {
     }
 
     /// Set a closure which is called when a job fails in an internal job
-    /// drain ([`Ctx::execute_pending_job`], the `async_with` driver, the
-    /// [`AsyncRuntime::drive`] future, or [`AsyncRuntime::idle`]).
+    /// drain; while set, failures are reported to it instead of being retained
+    /// for [`Ctx::take_pending_job_error`]. Pass `None` to restore retention.
     ///
-    /// While a closure is set, failures are neither retained for
-    /// [`Ctx::take_pending_job_error`] nor counted by
-    /// [`Ctx::take_pending_job_error_overflow`]. Pass `None` to restore
-    /// retention. Errors returned by [`AsyncRuntime::execute_pending_job`] do
-    /// not reach this closure.
+    /// It runs mid-drain with the runtime lock held and must not acquire that
+    /// lock again (e.g. by blocking on [`AsyncContext::async_with`]). Its
+    /// panics propagate out of the drain, and any exception it throws stays
+    /// pending.
     ///
-    /// The closure receives the failed job's context and an owned exception
-    /// handle, or `undefined` if no exception value was thrown. If the job
-    /// failed with a synthetic Rust panic exception, its stashed panic is
-    /// resumed instead. Panics in the closure also propagate out of the drain.
-    ///
-    /// The closure runs synchronously mid-drain with the runtime lock held.
-    /// It may re-enter the drain using the given context, but must not acquire
-    /// the runtime lock again (e.g. by blocking on [`AsyncContext::async_with`]),
-    /// which deadlocks. Catch or clear any exceptions raised by the closure
-    /// before returning; otherwise they remain pending.
-    ///
-    /// Async drains clear failed jobs' exceptions from the engine. Before
-    /// reporting or retaining an uncatchable job error (e.g. an interrupt),
-    /// they also record it, so a promise future awaiting a promise the
-    /// interrupted job never settles fails instead of hanging. See
-    /// [`Promise::into_future`] for which promise futures fail with the
-    /// recorded error, and [`Ctx::take_interrupted_job_error`] to discard it
-    /// once the failure has been handled. [`Ctx::execute_pending_job`] clears
-    /// the failed job's exception without recording it.
+    /// Async drains also record an uncatchable error (e.g. an interrupt) and
+    /// wake spawned futures, so the next unsettled promise future polled in
+    /// that job's context fails instead of hanging; see
+    /// [`Promise::into_future`].
     ///
     /// [`Promise::into_future`]: crate::Promise::into_future
     #[inline]
@@ -305,8 +289,8 @@ impl AsyncRuntime {
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
     ///
-    /// Failures are returned to the caller without invoking the job error
-    /// handler, retaining the exception, or resuming stashed Rust panics.
+    /// Failures are returned to the caller rather than reported to the job
+    /// error handler or retained. A stashed Rust panic is resumed.
     #[inline]
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.inner.lock().await;
@@ -347,12 +331,10 @@ impl AsyncRuntime {
 
     /// Run all futures and jobs in the runtime until all are finished.
     ///
-    /// Job failures are handled by [`AsyncRuntime::set_job_error_handler`] or
+    /// Failed jobs are reported to [`AsyncRuntime::set_job_error_handler`] or
     /// retained for [`Ctx::take_pending_job_error`], and draining continues.
-    /// Uncatchable errors are also recorded for promise futures (see
-    /// [`Promise::into_future`](crate::Promise::into_future)). Rust panics
-    /// from failing callbacks or the handler propagate out of this future,
-    /// leaving remaining work for another drain.
+    /// A panic in a callback or the handler propagates out of this future and
+    /// leaves remaining work for another drain.
     #[inline]
     pub async fn idle(&self) {
         let mut lock = self.inner.lock().await;
@@ -390,9 +372,8 @@ impl AsyncRuntime {
     /// If the future is polled it will drive futures spawned inside the runtime completing them
     /// even if runtime is currently not in use.
     ///
-    /// Rust panics from failing jobs or the job error handler propagate out
-    /// of the future's poll, terminating the driving task. Remaining work
-    /// requires another drain, such as [`AsyncContext::async_with`].
+    /// A panic from a failing job or the job error handler propagates out of
+    /// the future's poll, ending the driving task.
     pub fn drive(&self) -> DriveFuture {
         DriveFuture::new(self.weak())
     }

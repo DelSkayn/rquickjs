@@ -58,9 +58,8 @@ pub(crate) struct Opaque<'js> {
     /// Prevents retaining errors from destructors during runtime teardown.
     job_error_closed: Cell<bool>,
 
-    /// The most recent uncatchable error from a job that failed in an async
-    /// job drain, until a promise future in that job's context observes it or
-    /// the host takes it.
+    /// The latest uncatchable error from an async drain, until observed or
+    /// taken.
     #[cfg(feature = "futures")]
     interrupted_job: UnsafeCell<Option<Value<'js>>>,
 
@@ -177,11 +176,8 @@ impl<'js> Opaque<'js> {
         &*(qjs::JS_GetRuntimeOpaque(rt).cast::<Self>())
     }
 
-    /// Retain a failed job's exception if the slot is empty, or count it in
-    /// `job_error_overflow` otherwise. Discard failures during teardown.
-    ///
-    /// The caller must clear the pending exception and call this only when
-    /// no job error handler is set.
+    /// Retain a failed job's exception if the slot is empty, otherwise count
+    /// it. Discards failures during teardown.
     pub fn retain_job_error(&self, error: Value<'js>) {
         if self.job_error_closed.get() {
             return;
@@ -208,10 +204,14 @@ impl<'js> Opaque<'js> {
         self.job_error_overflow.replace(0)
     }
 
-    /// Record the uncatchable error of a job that failed in an async drain
-    /// for the next promise future polled in its context while its promise is
-    /// unsettled, replacing any unobserved one, then wake spawned futures so
-    /// pending observers are polled again. Discard errors during teardown.
+    /// Whether the runtime is tearing down and failures must be discarded.
+    pub fn is_closed(&self) -> bool {
+        self.job_error_closed.get()
+    }
+
+    /// Record an uncatchable error for the next promise future polled in the
+    /// job's context, replacing any unobserved one, and wake spawned futures.
+    /// Discards errors during teardown.
     #[cfg(feature = "futures")]
     pub fn record_interrupted_job(&self, error: Value<'js>) {
         if self.job_error_closed.get() {
@@ -235,7 +235,7 @@ impl<'js> Opaque<'js> {
     }
 
     /// Queue every spawned future to be polled again and wake the drains
-    /// waiting on them. Does nothing during teardown or without a spawner.
+    /// waiting on them.
     #[cfg(feature = "futures")]
     fn wake_spawned(&self) {
         if self.job_error_closed.get() {
@@ -405,16 +405,14 @@ impl<'js> Opaque<'js> {
     /// Called before dropping the runtime to ensure that we drop everything before freeing the
     /// runtime.
     pub fn clear(&mut self) {
-        // Destructors below may drain jobs. Prevent their errors from being
-        // retained past `JS_FreeRuntime`.
+        // Destructors below may drain jobs; their failures must not outlive
+        // the runtime.
         self.job_error_closed.set(true);
-        // Empty the handler slot before anything else drops, so drains from
-        // destructors below (including the handler's own) find no handler.
+        // Empty the handler slot first, so teardown drains find no handler.
         self.job_error_handler.get_mut().take();
-        // Release retained errors while the rest of this state is intact:
-        // they may keep the failed job's context and objects alive, whose
-        // finalizers may use it. Release each slot borrow before dropping its
-        // value, as finalizers may re-enter.
+        // Retained errors may keep a context alive; drop them while the rest
+        // of this state is intact, releasing each slot borrow first as
+        // finalizers may re-enter.
         let job_error = self.job_error.get_mut().take();
         drop(job_error);
         #[cfg(feature = "futures")]
@@ -428,9 +426,8 @@ impl<'js> Opaque<'js> {
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();
-        // The drops above run arbitrary destructors, which may register new
-        // class prototypes. Those hold both a JS value and a context, so they
-        // must be freed before the runtime is.
+        // Destructors above may register class prototypes, which hold a JS
+        // value and a context; free them before the runtime is.
         self.prototypes.get_mut().clear();
         debug_assert!(
             unsafe { (*self.prototypes.get()).is_empty() },

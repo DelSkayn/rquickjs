@@ -127,11 +127,10 @@ impl Schedular {
         self.len.set(self.len.get() - 1);
     }
 
-    /// Queue every pending task to be polled again, as if each had been
-    /// woken, without waking the parent waker.
+    /// Queue every pending task to be polled again.
     ///
     /// # Safety
-    /// Must not be called concurrently with [`Schedular::poll`] or
+    /// Must not run concurrently with [`Schedular::poll`] or
     /// [`Schedular::clear`].
     pub unsafe fn requeue_all(&self) {
         let mut cur = self.all_next.get();

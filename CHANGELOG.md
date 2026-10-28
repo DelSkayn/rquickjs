@@ -36,6 +36,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed promise futures hanging on a promise left unsettled by an interrupted job if a later job or host code threw or caught an exception first, or if the future was pending inside a spawned future
 - Fixed an interrupted job failing an unrelated promise future in another context
 - Fixed class prototypes registered by destructors during runtime teardown being freed after `JS_FreeRuntime`, which leaked the context and used freed memory
+- Fixed a job that panics while a destructor drains it during runtime teardown unwinding out of the runtime drop
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
 - Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
 - Fixed `Promise::result` and `Promise::into_future` leaving an already rejected promise unhandled, which made the host promise rejection tracker report a false unhandled rejection
