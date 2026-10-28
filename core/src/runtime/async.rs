@@ -190,15 +190,6 @@ impl AsyncRuntime {
     /// once the failure has been handled. [`Ctx::execute_pending_job`] clears
     /// the failed job's exception without recording it.
     ///
-    /// The scope is per context: a recorded error fails at most one unsettled
-    /// promise future in the context the interrupted job ran in, which need
-    /// not be the one awaiting that job, and unobserved errors collapse into
-    /// the most recent one. Other futures in that context keep waiting, and
-    /// futures in other contexts are unaffected. A promise future pending
-    /// outside the runtime's spawned futures (e.g. in another task's
-    /// [`AsyncContext::async_with`]) is not woken, but observes the error when
-    /// next polled. Futures whose promise has settled are unaffected.
-    ///
     /// [`Promise::into_future`]: crate::Promise::into_future
     #[inline]
     pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {

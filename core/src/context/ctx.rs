@@ -327,7 +327,7 @@ impl<'js> Ctx<'js> {
     ///
     /// The recorded error belongs to the context the interrupted job ran in,
     /// so take it on that context: the job error handler runs in it, and the
-    /// error returned by [`Ctx::take_pending_job_error`] carries it
+    /// error returned by [`Ctx::take_pending_job_error`] may carry it
     /// ([`Value::ctx`]). It keeps that context and its object graph alive
     /// until observed, taken, or the runtime is dropped.
     #[cfg(feature = "futures")]

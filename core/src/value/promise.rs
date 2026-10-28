@@ -172,14 +172,14 @@ impl<'js> Promise<'js> {
     /// may never settle. Later jobs and host code that throw or catch do not
     /// affect the recorded error.
     ///
-    /// The scope is per context:
-    /// - The future that takes the error need not be the one awaiting the
-    ///   interrupted job, but runs in the same context. Futures in other
-    ///   contexts are unaffected.
-    /// - The taken error stays pending until caught, so other unsettled
-    ///   promise futures in that context polled before then fail with it
-    ///   too, such as the rest of a `join!`. Catch it promptly to keep the
-    ///   failure contained.
+    /// The recorded error is scoped to the interrupted job's context:
+    /// - The future that takes it need not be the one awaiting the
+    ///   interrupted job, but is polled in that context. A future in
+    ///   another context never takes it.
+    /// - The taken error stays pending until caught, and pending exceptions
+    ///   are runtime-wide, so other unsettled promise futures polled before
+    ///   then fail with it too, in any context, such as the rest of a
+    ///   `join!`. Catch it promptly to keep the failure contained.
     /// - A promise future pending outside the runtime's spawned futures (e.g.
     ///   in another task's [`AsyncContext::async_with`](crate::AsyncContext::async_with))
     ///   is not woken, but observes the error when next polled.
