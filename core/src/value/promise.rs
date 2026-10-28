@@ -108,7 +108,8 @@ impl<'js> Promise<'js> {
     ///
     /// Returns None if the promise has not yet been completed, Ok if the promise was resolved, and
     /// [`Error::Exception`] if the promise rejected with the rejected value as the thrown
-    /// value retrievable via [`Ctx::catch`].
+    /// value retrievable via [`Ctx::catch`]. A rejected reaction that stashed a Rust panic
+    /// resumes it instead.
     pub fn result<T: FromJs<'js>>(&self) -> Option<Result<T>> {
         match self.state() {
             PromiseState::Pending => None,

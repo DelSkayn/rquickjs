@@ -118,6 +118,7 @@ impl Runtime {
         }
     }
 
+    /// Runs mid-drain with the runtime lock held; do not acquire it again.
     #[inline]
     pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner.lock().set_job_error_handler(handler);
@@ -218,6 +219,8 @@ impl Runtime {
     /// Execute first pending job
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
+    ///
+    /// A failure is returned to the caller; a stashed Rust panic is resumed.
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
         let mut lock = self.inner.lock();

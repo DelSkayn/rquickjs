@@ -160,6 +160,7 @@ impl AsyncRuntime {
         }
     }
 
+    /// Runs mid-drain with the runtime lock held; do not acquire it again.
     #[inline]
     pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner
@@ -273,6 +274,8 @@ impl AsyncRuntime {
     /// Execute first pending job
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
+    ///
+    /// A failure is returned to the caller; a stashed Rust panic is resumed.
     #[inline]
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.inner.lock().await;

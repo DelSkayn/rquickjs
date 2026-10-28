@@ -55,8 +55,9 @@ pub(crate) struct Opaque<'js> {
     /// Count of job failures dropped because `job_error` was occupied.
     job_error_overflow: Cell<u64>,
 
-    /// Prevents retaining errors from destructors during runtime teardown.
-    job_error_closed: Cell<bool>,
+    /// Set while the runtime is torn down; drains then discard failures
+    /// instead of retaining, recording or resuming them.
+    closed: Cell<bool>,
 
     /// The latest uncatchable error from an async drain, until observed or
     /// taken.
@@ -99,7 +100,7 @@ impl<'js> Opaque<'js> {
 
             job_error_overflow: Cell::new(0),
 
-            job_error_closed: Cell::new(false),
+            closed: Cell::new(false),
 
             #[cfg(feature = "futures")]
             interrupted_job: UnsafeCell::new(None),
@@ -177,7 +178,7 @@ impl<'js> Opaque<'js> {
     }
 
     pub fn retain_job_error(&self, error: Value<'js>) {
-        if self.job_error_closed.get() {
+        if self.is_closed() {
             return;
         }
         // Dropping `error` may run finalizers that re-enter this function,
@@ -200,12 +201,12 @@ impl<'js> Opaque<'js> {
     }
 
     pub fn is_closed(&self) -> bool {
-        self.job_error_closed.get()
+        self.closed.get()
     }
 
     #[cfg(feature = "futures")]
     pub fn record_interrupted_job(&self, error: Value<'js>) {
-        if self.job_error_closed.get() {
+        if self.is_closed() {
             return;
         }
         // Drop the old error only after the slot holds the new one: its
@@ -226,9 +227,6 @@ impl<'js> Opaque<'js> {
 
     #[cfg(feature = "futures")]
     fn wake_spawned(&self) {
-        if self.job_error_closed.get() {
-            return;
-        }
         let Some(spawner) = self.spawner.as_ref() else {
             return;
         };
@@ -394,12 +392,12 @@ impl<'js> Opaque<'js> {
     pub fn clear(&mut self) {
         // Destructors below may drain jobs; their failures must not outlive
         // the runtime.
-        self.job_error_closed.set(true);
+        self.closed.set(true);
         // Empty the handler slot first, so teardown drains find no handler.
         self.job_error_handler.get_mut().take();
         // Retained errors may keep a context alive; drop them while the rest
-        // of this state is intact, releasing each slot borrow first as
-        // finalizers may re-enter.
+        // of this state is intact, and outside the slots as finalizers may
+        // re-enter.
         let job_error = self.job_error.get_mut().take();
         drop(job_error);
         #[cfg(feature = "futures")]

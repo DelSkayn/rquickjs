@@ -478,6 +478,9 @@ impl<'js> Ctx<'js> {
     ///
     /// Returns wether a job was actually executed.
     /// If this function returned false, no job was pending.
+    ///
+    /// A failure is reported to the job error handler or retained for
+    /// [`Ctx::take_pending_job_error`]; a stashed Rust panic is resumed.
     pub fn execute_pending_job(&self) -> bool {
         let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };

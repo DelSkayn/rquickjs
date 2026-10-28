@@ -271,6 +271,7 @@ mod test {
         })
         .await;
     }
+
     #[tokio::test]
     async fn async_with_job_error_handler_panic_propagates() {
         use std::panic::AssertUnwindSafe;
@@ -307,6 +308,7 @@ mod test {
         })
         .await;
     }
+
     #[tokio::test]
     async fn async_with_drain_skips_caught_panic() {
         let rt = AsyncRuntime::new().unwrap();

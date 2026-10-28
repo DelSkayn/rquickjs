@@ -16,11 +16,10 @@ use futures_rs::{poll, FutureExt};
 use tokio::sync::oneshot;
 
 use super::test_util::{report_job_errors, spawn_drive, TIMEOUT};
-use crate::{promise::PromiseFuture, AsyncContext, AsyncRuntime, Ctx, Error, Promise};
+use crate::{promise::PromiseFuture, AsyncContext, AsyncRuntime, Ctx, Error, Module, Promise};
 
 const LOOPING_JOB: &str = "Promise.resolve().then(() => { for (;;) {} })";
 
-#[derive(Clone, Copy)]
 struct Case {
     later: &'static str,
     host_catch: bool,
@@ -133,6 +132,7 @@ async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     .expect("the promise future hung on an interrupted job");
 
     let seen = seen.lock().unwrap();
+    assert_eq!(seen.first(), Some(&true));
     assert_eq!(seen.iter().filter(|&&uncatchable| uncatchable).count(), 1);
     assert_eq!(seen.len(), 1 + case.later_failures);
 }
@@ -165,54 +165,26 @@ async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     .expect("the promise future hung on an interrupted job");
 }
 
-#[derive(Debug, PartialEq)]
-struct Outcome {
-    exception: bool,
-    uncatchable: bool,
-    pending_after_catch: bool,
-}
-
-const OBSERVED: Outcome = Outcome {
-    exception: true,
-    uncatchable: true,
-    pending_after_catch: false,
-};
-
-fn spawn_pending_observer(ctx: &Ctx<'_>, armed: Arc<AtomicBool>) -> oneshot::Receiver<Outcome> {
-    let (tx, rx) = oneshot::channel();
-    let observer_ctx = ctx.clone();
-    ctx.spawn(async move {
-        let ctx = observer_ctx;
-        let promise: Promise = ctx.eval(LOOPING_JOB).unwrap();
-        let mut future = promise.into_future::<()>();
-        assert!(poll!(&mut future).is_pending());
-        armed.store(true, SeqCst);
-        let res = future.await;
-        let exception = matches!(res, Err(Error::Exception));
-        let uncatchable = ctx.catch().is_uncatchable_error();
-        let _ = tx.send(Outcome {
-            exception,
-            uncatchable,
-            pending_after_catch: ctx.has_exception(),
-        });
-    });
-    rx
-}
-
-async_test_case!(async_with_observes_interrupt_despite_later_work => (rt, ctx) {
+async_test_case!(async_with_observes_interrupt_despite_later_work => (_rt, _ctx) {
     for case in [LATER_THROW, LATER_TRY_AWAIT, HOST_CATCH] {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
         async_with_case(&rt, &ctx, case).await;
     }
 });
 
-async_test_case!(drive_observes_interrupt_despite_later_work => (rt, ctx) {
+async_test_case!(drive_observes_interrupt_despite_later_work => (_rt, _ctx) {
     for case in [LATER_THROW, LATER_TRY_AWAIT, HOST_CATCH] {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
         drive_case(&rt, &ctx, case).await;
     }
 });
 
-async_test_case!(idle_observes_interrupt_despite_later_work => (rt, ctx) {
+async_test_case!(idle_observes_interrupt_despite_later_work => (_rt, _ctx) {
     for case in [LATER_THROW, LATER_TRY_AWAIT, HOST_CATCH] {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
         idle_case(&rt, &ctx, case).await;
     }
 });
@@ -220,18 +192,28 @@ async_test_case!(idle_observes_interrupt_despite_later_work => (rt, ctx) {
 async_test_case!(drive_wakes_spawned_observer => (rt, ctx) {
     let armed = one_shot_interrupt(&rt).await;
     spawn_drive(&rt);
-    let observer = ctx.with(|ctx| spawn_pending_observer(&ctx, armed.clone())).await;
-    let outcome = tokio::time::timeout(TIMEOUT, observer)
+    let (tx, rx) = oneshot::channel();
+    ctx.with(|ctx| {
+        let observer = ctx.clone();
+        let armed = armed.clone();
+        ctx.spawn(async move {
+            let promise: Promise = observer.eval(LOOPING_JOB).unwrap();
+            let mut future = promise.into_future::<()>();
+            assert!(poll!(&mut future).is_pending());
+            armed.store(true, SeqCst);
+            assert!(matches!(future.await, Err(Error::Exception)));
+            assert!(observer.catch().is_uncatchable_error());
+            assert!(!observer.has_exception());
+            let _ = tx.send(());
+        });
+    })
+    .await;
+    tokio::time::timeout(TIMEOUT, rx)
         .await
         .expect("the spawned promise future hung on an interrupted job")
         .unwrap();
-    assert_eq!(outcome, OBSERVED);
     assert!(!armed.load(SeqCst));
-    ctx.with(|ctx| {
-        assert!(!ctx.has_exception());
-        assert_retained_once(&ctx, 0);
-    })
-    .await;
+    ctx.with(|ctx| assert_retained_once(&ctx, 0)).await;
 });
 
 async_test_case!(async_drains_leave_no_pending_exception => (rt, ctx) {
@@ -270,7 +252,7 @@ async_test_case!(async_drains_leave_no_pending_exception => (rt, ctx) {
     .await;
 });
 
-async_test_case!(unobserved_interrupt_fails_at_most_one_later_future => (rt, ctx) {
+async_test_case!(unobserved_interrupt_fails_one_later_future => (rt, ctx) {
     let armed = one_shot_interrupt(&rt).await;
     ctx.with(|ctx| {
         ctx.eval::<(), _>(LOOPING_JOB).unwrap();
@@ -349,6 +331,26 @@ async fn taken_interrupt_is_scoped_to_the_interrupted_jobs_context() {
         })
         .await;
 }
+
+async_test_case!(module_load_after_failed_job => (rt, ctx) {
+    ctx.with(|ctx| {
+        ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+            .unwrap();
+    })
+    .await;
+    tokio::time::timeout(TIMEOUT, rt.idle())
+        .await
+        .expect("idle hung");
+
+    ctx.with(|ctx| {
+        let (_, promise) = Module::declare(ctx.clone(), "m", "export const x = 1;")
+            .unwrap()
+            .eval()
+            .unwrap();
+        promise.finish::<()>().unwrap();
+    })
+    .await;
+});
 
 async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
     let script = "globalThis.ok = Promise.resolve().then(() => 42);
