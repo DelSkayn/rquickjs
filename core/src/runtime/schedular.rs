@@ -127,8 +127,6 @@ impl Schedular {
         self.len.set(self.len.get() - 1);
     }
 
-    /// Queue every pending task to be polled again.
-    ///
     /// # Safety
     /// Must not run concurrently with [`Schedular::poll`] or
     /// [`Schedular::clear`].
@@ -149,7 +147,6 @@ impl Schedular {
         }
     }
 
-    /// Take the parent waker registered by the last [`Schedular::poll`].
     pub fn take_waker(&self) -> Option<Waker> {
         self.should_poll.waker().take()
     }

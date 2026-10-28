@@ -157,13 +157,6 @@ impl<'js> Promise<'js> {
     }
 
     /// Wrap the promise into a struct which can be polled as a rust future.
-    ///
-    /// An uncatchable job failure (e.g. an interrupt) recorded in this
-    /// promise's context fails the future with [`Error::Exception`] and the
-    /// error pending, instead of waiting on a promise that can never settle.
-    /// Catch it promptly: pending exceptions are runtime-wide, so other
-    /// unsettled futures polled before then fail too. A record that is no
-    /// longer wanted can be discarded with [`Ctx::take_interrupted_job_error`].
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[cfg(feature = "futures")]
     pub fn into_future<T>(self) -> PromiseFuture<'js, T>

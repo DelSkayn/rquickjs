@@ -38,8 +38,6 @@ impl Spawner {
         self.wakeup.push(wake);
     }
 
-    /// Queue every spawned future to be polled again, returning wakers to
-    /// wake once the spawner is no longer borrowed.
     pub fn requeue_all(&mut self) -> Vec<Waker> {
         // Safety: the spawner is only accessed with the runtime lock held,
         // and never while it is being polled.

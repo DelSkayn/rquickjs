@@ -118,13 +118,6 @@ impl Runtime {
         }
     }
 
-    /// Set a closure which is called when a job fails in an internal job
-    /// drain; while set, failures are reported to it instead of being retained
-    /// for [`Ctx::take_pending_job_error`]. Pass `None` to restore retention.
-    ///
-    /// It runs mid-drain with the runtime lock held and must not acquire that
-    /// lock again (e.g. through [`Context::with`]). Its panics propagate out of
-    /// the drain, and any exception it throws stays pending.
     #[inline]
     pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner.lock().set_job_error_handler(handler);
@@ -225,9 +218,6 @@ impl Runtime {
     /// Execute first pending job
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    ///
-    /// Failures are returned to the caller without invoking the job error
-    /// handler or retaining the exception. A stashed Rust panic is resumed.
     #[inline]
     pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
         let mut lock = self.inner.lock();
@@ -318,7 +308,6 @@ mod test {
             type Changed<'to> = Marker;
         }
 
-        /// Records whether userdata was still available when dropped.
         struct CheckOnDrop<'js>(Ctx<'js>, Rc<Cell<Option<bool>>>);
 
         impl Drop for CheckOnDrop<'_> {
@@ -338,7 +327,6 @@ mod test {
             })
             .unwrap();
             ctx.globals().set("f", f).unwrap();
-            // Leave the function reachable only from the retained job error.
             ctx.eval::<(), _>(
                 "queueMicrotask(() => { const f = globalThis.f; delete globalThis.f; throw f; });",
             )
@@ -347,8 +335,6 @@ mod test {
         });
         assert_eq!(saw_userdata.get(), None);
 
-        // Never taking the error leaves its release to runtime teardown,
-        // which must happen while userdata is still available.
         drop(ctx);
         drop(rt);
         assert_eq!(saw_userdata.get(), Some(true));

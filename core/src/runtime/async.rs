@@ -160,21 +160,6 @@ impl AsyncRuntime {
         }
     }
 
-    /// Set a closure which is called when a job fails in an internal job
-    /// drain; while set, failures are reported to it instead of being retained
-    /// for [`Ctx::take_pending_job_error`]. Pass `None` to restore retention.
-    ///
-    /// It runs mid-drain with the runtime lock held and must not acquire that
-    /// lock again (e.g. by blocking on [`AsyncContext::async_with`]). Its
-    /// panics propagate out of the drain, and any exception it throws stays
-    /// pending.
-    ///
-    /// Async drains also record an uncatchable error (e.g. an interrupt) and
-    /// wake spawned futures, so the next unsettled promise future polled in
-    /// that job's context fails instead of hanging; see
-    /// [`Promise::into_future`].
-    ///
-    /// [`Promise::into_future`]: crate::Promise::into_future
     #[inline]
     pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.inner
@@ -288,9 +273,6 @@ impl AsyncRuntime {
     /// Execute first pending job
     ///
     /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    ///
-    /// Failures are returned to the caller rather than reported to the job
-    /// error handler or retained. A stashed Rust panic is resumed.
     #[inline]
     pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
         let mut lock = self.inner.lock().await;
@@ -330,11 +312,6 @@ impl AsyncRuntime {
     }
 
     /// Run all futures and jobs in the runtime until all are finished.
-    ///
-    /// Failed jobs are reported to [`AsyncRuntime::set_job_error_handler`] or
-    /// retained for [`Ctx::take_pending_job_error`], and draining continues.
-    /// A panic in a callback or the handler propagates out of this future and
-    /// leaves remaining work for another drain.
     #[inline]
     pub async fn idle(&self) {
         let mut lock = self.inner.lock().await;
@@ -371,9 +348,6 @@ impl AsyncRuntime {
     /// Returns a future that completes when the runtime is dropped.
     /// If the future is polled it will drive futures spawned inside the runtime completing them
     /// even if runtime is currently not in use.
-    ///
-    /// A panic from a failing job or the job error handler propagates out of
-    /// the future's poll, ending the driving task.
     pub fn drive(&self) -> DriveFuture {
         DriveFuture::new(self.weak())
     }
@@ -430,10 +404,8 @@ mod test_util {
 
     use crate::{AsyncRuntime, Value};
 
-    /// Bounds waits in tests, so a regression fails instead of hanging.
     pub(super) const TIMEOUT: Duration = Duration::from_secs(5);
 
-    /// Spawn the runtime's drive future on the test executor.
     pub(super) fn spawn_drive(rt: &AsyncRuntime) -> JoinHandle<()> {
         #[cfg(feature = "parallel")]
         {
@@ -445,8 +417,6 @@ mod test_util {
         }
     }
 
-    /// Install a job error handler that records `report(error)` for each
-    /// failure and notifies after each one.
     pub(super) async fn report_job_errors<T: Send + 'static>(
         rt: &AsyncRuntime,
         report: fn(&Value<'_>) -> T,
@@ -538,14 +508,10 @@ mod test {
         spawn_drive(&rt);
 
         ctx.async_with(async |ctx|{
-            // A raw job's failure would otherwise be unobservable.
             ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
-            // Wake the drive task so its drain observes the queued job.
             ctx.spawn(async move {});
         }).await;
 
-        // Wait for the drive future to drain the job, bounded so a
-        // regression fails instead of hanging.
         let mut found = false;
         for _ in 0..100 {
             tokio::time::sleep(Duration::from_millis(1)).await;
@@ -569,7 +535,6 @@ mod test {
 
         ctx.async_with(async |ctx|{
             ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
-            // Wake the drive task so its drain observes the queued job.
             ctx.spawn(async move {});
         }).await;
 
@@ -592,7 +557,6 @@ mod test {
         let armed = Arc::new(AtomicBool::new(false));
         {
             let armed = armed.clone();
-            // Interrupt once, then disarm so no later code is interrupted.
             rt.set_interrupt_handler(Some(Box::new(move || armed.swap(false, Ordering::SeqCst)))).await;
         }
         let (seen, reported) = report_job_errors(&rt, |error| error.is_uncatchable_error()).await;
@@ -602,20 +566,15 @@ mod test {
             ctx.eval::<(),_>("globalThis.p = Promise.resolve().then(() => { for (;;) {} });")
                 .unwrap();
             armed.store(true, Ordering::SeqCst);
-            // Wake the drive task so its drain observes the queued job.
             ctx.spawn(async move {});
         }).await;
 
-        // Observe the drive task without draining jobs from this task.
         tokio::time::timeout(TIMEOUT, reported.notified())
             .await
             .expect("the drive task did not run the looping job");
         assert_eq!(*seen.lock().unwrap(), vec![true]);
         assert!(!armed.load(Ordering::SeqCst));
 
-        // The uncatchable error was recorded outside the engine, so a future
-        // created later and awaiting the promise the job never settled bails
-        // out instead of hanging.
         tokio::time::timeout(TIMEOUT, ctx.async_with(async |ctx|{
             assert!(!ctx.has_exception());
             let promise: Promise = ctx.globals().get("p").unwrap();
@@ -637,16 +596,11 @@ mod test {
                 "rustPanic",
                 Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
             ).unwrap();
-            // Catching the panic sentinel leaves its payload stashed, but the
-            // unrelated job failure below must not resume it.
             ctx.eval::<(),_>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });").unwrap();
             ctx.eval::<(),_>("queueMicrotask(() => { throw 1; });").unwrap();
-            // Wake the drive task so its drain observes the queued jobs.
             ctx.spawn(async move {});
         }).await;
 
-        // Wait for the drive future to drain the jobs, bounded so a
-        // regression fails instead of hanging.
         let mut found = false;
         for _ in 0..100 {
             tokio::time::sleep(Duration::from_millis(1)).await;
@@ -675,15 +629,9 @@ mod test {
                 Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
             ).unwrap();
             ctx.eval::<(),_>("queueMicrotask(rustPanic);").unwrap();
-            // Wake the drive task so its drain observes the queued job even
-            // if it already polled once.
             ctx.spawn(async move {});
         }).await;
 
-        // The drive task's drain resumes the stashed panic; tokio catches
-        // the unwind at the task boundary and the task dies with the
-        // payload. Without the panic, the drive task would run until the
-        // runtime is dropped.
         let err = tokio::time::timeout(TIMEOUT, handle)
             .await
             .expect("the drive task did not resume the stashed panic")
@@ -703,16 +651,12 @@ mod test {
                  queueMicrotask(() => { throw 3; });
                  queueMicrotask(() => { globalThis.ranLast = true; });",
             ).unwrap();
-            // Wake the drive task so its drain observes the queued jobs.
             ctx.spawn(async move {});
         }).await;
 
-        // Observe the drive task without draining jobs from this task.
         tokio::time::timeout(TIMEOUT, reported.notified())
             .await
             .expect("the drive task did not run the failing jobs");
-        // The handler runs mid-drain with the runtime lock held, so taking
-        // the lock waits for the drive task to finish the drain.
         assert!(!rt.is_job_pending().await);
         assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2), Some(3)]);
         ctx.with(|ctx| {

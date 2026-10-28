@@ -77,11 +77,8 @@ impl Default for EvalOptions {
     }
 }
 
-/// How an internal job drain handles uncatchable errors.
 pub(crate) enum JobDrain {
-    /// Clear the pending exception.
     Sync,
-    /// Also record uncatchable errors for promise futures.
     #[cfg(feature = "futures")]
     Async,
 }
@@ -282,49 +279,22 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
-    /// Takes the first exception retained by an internal job drain (the
-    /// `async_with` driver, `AsyncRuntime::drive`, `AsyncRuntime::idle`, or
-    /// [`Ctx::execute_pending_job`]) since the previous take.
-    ///
-    /// A failure without an exception value is retained as `undefined`.
-    /// Failures given to the job error handler, or returned by the runtime's
-    /// own `execute_pending_job` methods, are not retained. The value is
-    /// runtime-wide and keeps its job's context alive until taken or dropped
-    /// with the runtime.
     pub fn take_pending_job_error(&self) -> Option<Value<'js>> {
         unsafe { self.get_opaque() }.take_job_error()
     }
 
-    /// Takes the number of failures dropped because an earlier failure was
-    /// still held. Saturates at `u64::MAX` and resets to 0.
     pub fn take_pending_job_error_overflow(&self) -> u64 {
         unsafe { self.get_opaque() }.take_job_error_overflow()
     }
 
-    /// Takes the uncatchable error (e.g. an interrupt) an async drain
-    /// recorded for promise futures in this context, if none has observed it
-    /// yet.
-    ///
-    /// Take it once the failure has been handled so it cannot fail an
-    /// unrelated future later. It keeps its context alive until observed,
-    /// taken, or dropped with the runtime.
     #[cfg(feature = "futures")]
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     pub fn take_interrupted_job_error(&self) -> Option<Value<'js>> {
         unsafe { self.get_opaque() }.take_interrupted_job(self)
     }
 
-    /// Handles a failed job in its own context, which may differ from the
-    /// drain's.
-    ///
-    /// Resumes a stashed Rust panic when the job failed with its sentinel,
-    /// otherwise reports the error to the job error handler or retains it.
-    /// Async drains also record uncatchable errors for promise futures,
-    /// before the handler runs so a handler panic cannot skip it.
     pub(crate) fn handle_failed_job(&self, drain: JobDrain) {
-        // Take the exception out of the engine's pending-exception slot so
-        // unrelated code can't later mistake it for a fresh one (e.g. the
-        // module loader's "is a module already loaded" check).
+        // Clear the engine's slot so unrelated code can't trip over it.
         let raw = unsafe { qjs::JS_GetException(self.as_ptr()) };
         // Safety: the caller holds the runtime lock for the whole drain.
         let opaque = unsafe { self.get_opaque() };
@@ -337,8 +307,7 @@ impl<'js> Ctx<'js> {
                 }
             }
         }
-        // Missing exceptions and rethrown panic sentinels with a consumed
-        // payload are not usable JS values. Neither tag is reference counted.
+        // Neither tag is a reference counted value.
         let error = if tag == qjs::JS_TAG_UNINITIALIZED || tag == qjs::JS_TAG_EXCEPTION {
             Value::new_undefined(self.clone())
         } else {
@@ -358,8 +327,6 @@ impl<'js> Ctx<'js> {
         }
     }
 
-    /// Handles the failed job context returned by `JS_ExecutePendingJob`.
-    ///
     /// # Safety
     /// The runtime must be locked, and `ctx` must be the failed job's context.
     pub(crate) unsafe fn handle_failed_job_ptr(ctx: *mut qjs::JSContext, drain: JobDrain) {
@@ -370,9 +337,6 @@ impl<'js> Ctx<'js> {
         unsafe { Ctx::from_raw(ctx) }.handle_failed_job(drain);
     }
 
-    /// Take a failed job's stashed Rust panic if the pending exception is its
-    /// sentinel, otherwise leave the exception pending. Returned rather than
-    /// resumed so the callers can release the runtime lock first.
     pub(crate) fn take_job_panic(&self) -> Option<Box<dyn Any + Send + 'static>> {
         let raw = unsafe { qjs::JS_GetException(self.as_ptr()) };
         let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) };
@@ -512,17 +476,13 @@ impl<'js> Ctx<'js> {
 
     /// Executes a quickjs job.
     ///
-    /// Executes a quickjs job, which may belong to any context of the runtime.
-    ///
-    /// Returns whether a job was executed, or false if none was pending. A
-    /// failure is reported to the job error handler or retained for
-    /// [`Ctx::take_pending_job_error`]; panics propagate.
+    /// Returns wether a job was actually executed.
+    /// If this function returned false, no job was pending.
     pub fn execute_pending_job(&self) -> bool {
         let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
         let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
         if res < 0 {
-            // QuickJS reports the failed job's context, which need not be `self`.
             // Safety: the runtime is locked through `self`, and `ptr` was
             // initialized by the failed `JS_ExecutePendingJob`.
             unsafe { Self::handle_failed_job_ptr(ptr.assume_init(), JobDrain::Sync) };
@@ -687,14 +647,12 @@ mod test {
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            // A raw job's failure would otherwise be unobservable.
             ctx.eval::<(), _>("queueMicrotask(() => { throw 42; });")
                 .unwrap();
 
             while ctx.execute_pending_job() {}
 
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(42));
-            // Taking the retained error clears it.
             assert!(ctx.take_pending_job_error().is_none());
         })
     }
@@ -712,7 +670,6 @@ mod test {
             )
             .unwrap();
 
-            // Both jobs fail, but only the earliest failure is retained.
             while ctx.execute_pending_job() {}
 
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
@@ -818,12 +775,10 @@ mod test {
                     Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
                 )
                 .unwrap();
-            // The trailing `undefined` keeps the panic sentinel out of the eval result.
             ctx.eval::<(), _>(
                 "try { rustPanic(); } catch (e) { globalThis.sentinel = e; } undefined;",
             )
             .unwrap();
-            // Consume the panic payload before rethrowing the captured sentinel.
             let payload = catch_unwind(AssertUnwindSafe(|| {
                 let _ = ctx.eval::<(), _>("throw 1");
             }))
@@ -857,9 +812,7 @@ mod test {
             while ctx.execute_pending_job() {}
 
             assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
-            // The two later failures could not be retained.
             assert_eq!(ctx.take_pending_job_error_overflow(), 2);
-            // Both takes reset.
             assert!(ctx.take_pending_job_error().is_none());
             assert_eq!(ctx.take_pending_job_error_overflow(), 0);
         })
@@ -884,7 +837,6 @@ mod test {
             assert!(ctx.take_pending_job_error().is_none());
             assert!(!ctx.has_exception());
 
-            // The handler panic must not be stashed for a later eval.
             assert!(matches!(
                 ctx.eval::<(), _>("throw 2"),
                 Err(Error::Exception)
@@ -909,8 +861,6 @@ mod test {
                 )
                 .unwrap();
 
-            // Catching the panic sentinel leaves its payload stashed, but the
-            // unrelated job failure below must not resume it.
             ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
                 .unwrap();
             ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
@@ -933,8 +883,6 @@ mod test {
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            // A panicking Rust callback inside a job: the payload is stashed
-            // and the job fails with a synthetic exception.
             ctx.globals()
                 .set(
                     "rustPanic",
@@ -943,13 +891,10 @@ mod test {
                 .unwrap();
             ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
 
-            // The drain itself resumes the stashed panic, with its original
-            // payload.
             let payload = catch_unwind(AssertUnwindSafe(|| while ctx.execute_pending_job() {}))
                 .expect_err("the drain should have resumed the stashed panic");
             assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
 
-            // A second drain is a no-op; the context remains usable.
             while ctx.execute_pending_job() {}
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
@@ -975,7 +920,6 @@ mod test {
         ctx_a.with(|ctx| ctx.eval::<(), _>("globalThis.__ctxTag = 'A';").unwrap());
         ctx_b.with(|ctx| ctx.eval::<(), _>("globalThis.__ctxTag = 'B';").unwrap());
 
-        // The job is queued in B but drained from A.
         ctx_b.with(|ctx| {
             ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
                 .unwrap()
@@ -986,7 +930,6 @@ mod test {
         });
         assert_eq!(*seen.lock().unwrap(), vec![("B".to_string(), Some(1))]);
 
-        // Without a handler, the retained value belongs to B.
         runtime.set_job_error_handler(None);
         ctx_b.with(|ctx| {
             ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
@@ -1016,7 +959,6 @@ mod test {
         let runtime = Runtime::new().unwrap();
         {
             let armed = armed.clone();
-            // Interrupt once, then disarm so no later code is interrupted.
             runtime.set_interrupt_handler(Some(Box::new(move || armed.swap(false, SeqCst))));
         }
         let ctx = Context::full(&runtime).unwrap();
@@ -1024,13 +966,10 @@ mod test {
             ctx.eval::<(), _>("Promise.resolve().then(() => { for (;;) {} });")
                 .unwrap();
 
-            // Arm only once the job is queued, so only the job is interrupted.
             armed.store(true, SeqCst);
             while ctx.execute_pending_job() {}
             assert!(!armed.load(SeqCst));
 
-            // The sync drain retains the uncatchable error but does not
-            // leave it pending.
             assert!(ctx.take_pending_job_error().unwrap().is_uncatchable_error());
             assert!(!ctx.has_exception());
 

@@ -176,8 +176,6 @@ impl<'js> Opaque<'js> {
         &*(qjs::JS_GetRuntimeOpaque(rt).cast::<Self>())
     }
 
-    /// Retain a failed job's exception if the slot is empty, otherwise count
-    /// it. Discards failures during teardown.
     pub fn retain_job_error(&self, error: Value<'js>) {
         if self.job_error_closed.get() {
             return;
@@ -193,25 +191,18 @@ impl<'js> Opaque<'js> {
         }
     }
 
-    /// Take the retained job error, leaving the slot empty.
     pub fn take_job_error(&self) -> Option<Value<'js>> {
         unsafe { (*self.job_error.get()).take() }
     }
 
-    /// Take the count of job failures dropped because the slot was occupied,
-    /// resetting it to 0.
     pub fn take_job_error_overflow(&self) -> u64 {
         self.job_error_overflow.replace(0)
     }
 
-    /// Whether the runtime is tearing down and failures must be discarded.
     pub fn is_closed(&self) -> bool {
         self.job_error_closed.get()
     }
 
-    /// Record an uncatchable error for the next promise future polled in the
-    /// job's context, replacing any unobserved one, and wake spawned futures.
-    /// Discards errors during teardown.
     #[cfg(feature = "futures")]
     pub fn record_interrupted_job(&self, error: Value<'js>) {
         if self.job_error_closed.get() {
@@ -224,7 +215,6 @@ impl<'js> Opaque<'js> {
         self.wake_spawned();
     }
 
-    /// Take the unobserved interrupted job error if it belongs to `ctx`.
     #[cfg(feature = "futures")]
     pub fn take_interrupted_job(&self, ctx: &Ctx<'js>) -> Option<Value<'js>> {
         let slot = unsafe { &mut *self.interrupted_job.get() };
@@ -234,8 +224,6 @@ impl<'js> Opaque<'js> {
         }
     }
 
-    /// Queue every spawned future to be polled again and wake the drains
-    /// waiting on them.
     #[cfg(feature = "futures")]
     fn wake_spawned(&self) {
         if self.job_error_closed.get() {
@@ -341,7 +329,6 @@ impl<'js> Opaque<'js> {
         drop(old);
     }
 
-    /// Call the job error handler, returning whether one was set.
     pub fn run_job_error_handler<'a>(&self, ctx: Ctx<'a>, error: Value<'a>) -> bool {
         unsafe {
             // The handler may re-enter the drain, so only borrow it shared.

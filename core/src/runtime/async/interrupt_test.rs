@@ -18,17 +18,12 @@ use tokio::sync::oneshot;
 use super::test_util::{report_job_errors, spawn_drive, TIMEOUT};
 use crate::{promise::PromiseFuture, AsyncContext, AsyncRuntime, Ctx, Error, Module, Promise};
 
-/// A job that never settles its promise unless it is interrupted.
 const LOOPING_JOB: &str = "Promise.resolve().then(() => { for (;;) {} })";
 
-/// What runs between the interrupted job and the promise future's next poll.
 #[derive(Clone, Copy)]
 struct Case {
-    /// Jobs queued behind the looping job, run by the same drain.
     later: &'static str,
-    /// Whether host code throws and catches before awaiting the promise.
     host_catch: bool,
-    /// How many of the later jobs fail.
     later_failures: usize,
 }
 
@@ -62,7 +57,6 @@ const HOST_CATCH: Case = Case {
     later_failures: 0,
 };
 
-/// Install an interrupt handler that interrupts once when armed.
 async fn one_shot_interrupt(rt: &AsyncRuntime) -> Arc<AtomicBool> {
     let armed = Arc::new(AtomicBool::new(false));
     let handler_armed = armed.clone();
@@ -71,8 +65,6 @@ async fn one_shot_interrupt(rt: &AsyncRuntime) -> Arc<AtomicBool> {
     armed
 }
 
-/// Queue the looping job, then `later`, keeping the looping job's promise in
-/// `globalThis.p`.
 fn script(later: &str) -> String {
     format!("globalThis.p = {LOOPING_JOB}; {later} p")
 }
@@ -81,8 +73,6 @@ fn host_throw_and_catch(ctx: &Ctx<'_>) {
     let _ = ctx.eval::<(), _>("throw 1").map_err(|_| ctx.catch());
 }
 
-/// Await a promise that an interrupted job never settles. It must fail with
-/// the uncatchable error and leave nothing pending once caught.
 async fn assert_observes_interrupt<'js>(ctx: &Ctx<'js>, future: PromiseFuture<'js, ()>) {
     let res = future.await;
     assert!(matches!(res, Err(Error::Exception)));
@@ -92,14 +82,11 @@ async fn assert_observes_interrupt<'js>(ctx: &Ctx<'js>, future: PromiseFuture<'j
     assert_eq!(sum, 2);
 }
 
-/// The interrupt is retained exactly once, ahead of any later failures.
 fn assert_retained_once(ctx: &Ctx<'_>, later_failures: usize) {
     assert!(ctx.take_pending_job_error().unwrap().is_uncatchable_error());
     assert_eq!(ctx.take_pending_job_error_overflow(), later_failures as u64);
 }
 
-/// The observer is already pending in the `async_with` future when the
-/// driver's drain interrupts the job.
 async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     let armed = one_shot_interrupt(rt).await;
     tokio::time::timeout(
@@ -124,7 +111,6 @@ async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     .expect("the promise future hung on an interrupted job");
 }
 
-/// The drive task interrupts the job before the observer exists.
 async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     let armed = one_shot_interrupt(rt).await;
     let (seen, reported) = report_job_errors(rt, |error| error.is_uncatchable_error()).await;
@@ -163,7 +149,6 @@ async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     assert_eq!(*seen.lock().unwrap(), expected);
 }
 
-/// `idle` interrupts the job before the observer exists.
 async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     let armed = one_shot_interrupt(rt).await;
     ctx.with(|ctx| {
@@ -192,7 +177,6 @@ async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     .expect("the promise future hung on an interrupted job");
 }
 
-/// Outcome reported by a spawned observer.
 #[derive(Debug, PartialEq)]
 struct Outcome {
     exception: bool,
@@ -206,10 +190,6 @@ const OBSERVED: Outcome = Outcome {
     pending_after_catch: false,
 };
 
-/// Spawn a future that queues the looping job and polls a promise future for
-/// it once before arming the interrupt, so the promise future is already
-/// pending inside a spawned future when the job is interrupted. No later job
-/// settles anything or wakes the spawned future.
 fn spawn_pending_observer(ctx: &Ctx<'_>, armed: Arc<AtomicBool>) -> oneshot::Receiver<Outcome> {
     let (tx, rx) = oneshot::channel();
     let observer_ctx = ctx.clone();
@@ -484,7 +464,6 @@ async_test_case!(taken_interrupt_does_not_fail_later_futures => (rt, ctx) {
     .expect("a promise future hung");
 });
 
-/// Taking the recorded error is scoped to the interrupted job's context.
 #[tokio::test]
 async fn taken_interrupt_is_scoped_to_the_interrupted_jobs_context() {
     let rt = AsyncRuntime::new().unwrap();
@@ -603,8 +582,6 @@ async_test_case!(handler_panic_still_records_interrupt => (rt, ctx) {
     .expect("the promise future hung on an interrupted job");
 });
 
-/// An interrupted job in one context does not fail a promise future in
-/// another.
 #[tokio::test]
 async fn interrupted_job_does_not_fail_promise_future_in_another_context() {
     use core::{

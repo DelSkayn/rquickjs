@@ -469,7 +469,6 @@ impl RawRuntime {
         self.get_opaque().set_interrupt_handler(handler);
     }
 
-    /// Set a closure which is called when a job fails in an internal job drain.
     pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
         self.get_opaque().set_job_error_handler(handler);
     }
