@@ -369,7 +369,7 @@ impl<'js> FromJs<'js> for f32 {
 }
 
 #[allow(dead_code)]
-fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>, to: &'static str) -> Result<i64> {
+fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>) -> Result<i64> {
     let global = ctx.globals();
     let date_ctor: Object = global.get("Date")?;
 
@@ -383,7 +383,7 @@ fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>, to: &'static str) -> R
 
     let millis: Value = get_time_fn.call((crate::function::This(value),))?;
     if millis.as_float().is_some_and(f64::is_nan) {
-        return Err(Error::new_from_js_message("Date", to, "Invalid Date"));
+        return Err(Error::new_from_js_message("Date", "i64", "Invalid Date"));
     }
     i64::from_js(ctx, millis)
 }
@@ -391,7 +391,7 @@ fn date_to_millis<'js>(ctx: &Ctx<'js>, value: Value<'js>, to: &'static str) -> R
 #[cfg(feature = "std")]
 impl<'js> FromJs<'js> for SystemTime {
     fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<SystemTime> {
-        let millis = date_to_millis(ctx, value, "SystemTime")?;
+        let millis = date_to_millis(ctx, value)?;
 
         if millis >= 0 {
             // since unix epoch
@@ -419,7 +419,7 @@ macro_rules! chrono_from_js_impls {
                 fn from_js(ctx: &Ctx<'js>, value: Value<'js>) -> Result<chrono::DateTime<chrono::$type>> {
                     use chrono::TimeZone;
 
-                    let millis = date_to_millis(ctx, value, "chrono::DateTime")?;
+                    let millis = date_to_millis(ctx, value)?;
 
                     chrono::$type.timestamp_millis_opt(millis).single()
                         .ok_or_else(|| {
