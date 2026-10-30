@@ -441,7 +441,9 @@ mod test {
             assert_eq!(c.type_of(), Type::Undefined);
         });
         assert!(rt.is_job_pending());
-        rt.execute_pending_job().unwrap();
+        ctx.with(|ctx| {
+            ctx.drain_jobs();
+        });
         ctx.with(|ctx| {
             let g = ctx.globals();
             let c: Value = g.get("called").unwrap();

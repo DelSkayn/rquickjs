@@ -31,7 +31,7 @@ pub(crate) use safe_ref::*;
 pub mod runtime;
 pub use runtime::Runtime;
 pub mod context;
-pub use context::{Context, Ctx};
+pub use context::{Context, Ctx, JobErrors};
 pub mod class;
 pub use class::Class;
 pub use js_lifetime::JsLifetime;

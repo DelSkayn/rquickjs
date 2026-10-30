@@ -144,15 +144,17 @@ impl<'js> Promise<'js> {
     ///
     /// This function only drives the quickjs job queue, futures are not polled.
     ///
-    /// Job failures and Rust panics are handled as in [`Ctx::execute_pending_job`].
+    /// Job failures and Rust panics are handled as in [`Ctx::drain_jobs`].
     pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {
         loop {
             if let Some(x) = self.result() {
                 return x;
             }
 
-            if !self.ctx.execute_pending_job() {
-                return Err(Error::WouldBlock);
+            match self.ctx.step_job() {
+                Ok(true) => {}
+                Ok(false) => return Err(Error::WouldBlock),
+                Err(exception) => return Err(self.ctx.throw(exception)),
             }
         }
     }
@@ -163,7 +165,7 @@ impl<'js> Promise<'js> {
     /// drain fails the next unsettled future polled there, which need not be
     /// the future awaiting that job. Pending exceptions are runtime-wide, so
     /// other futures polled before it is caught fail too; the record can be
-    /// discarded with [`Ctx::take_interrupted_job_error`].
+    /// discarded with [`Ctx::take_job_errors`].
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[cfg(feature = "futures")]
     pub fn into_future<T>(self) -> PromiseFuture<'js, T>
@@ -566,7 +568,7 @@ mod test {
             resolve.call::<_, ()>(("FOO",)).unwrap();
             assert_eq!(promise.state(), PromiseState::Resolved);
 
-            while ctx.execute_pending_job() {}
+            ctx.drain_jobs();
 
             assert!(DID_EXECUTE.load(Ordering::SeqCst));
         })

@@ -177,6 +177,7 @@ impl<'js> Opaque<'js> {
         &*(qjs::JS_GetRuntimeOpaque(rt).cast::<Self>())
     }
 
+    #[cfg(feature = "futures")]
     pub fn retain_job_error(&self, error: Value<'js>) {
         if self.is_closed() {
             return;
@@ -327,6 +328,7 @@ impl<'js> Opaque<'js> {
         drop(old);
     }
 
+    #[cfg(feature = "futures")]
     pub fn run_job_error_handler<'a>(&self, ctx: Ctx<'a>, error: Value<'a>) -> bool {
         unsafe {
             // The handler may re-enter the drain, so only borrow it shared.

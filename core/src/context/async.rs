@@ -267,7 +267,7 @@ mod test {
 
             tokio::task::yield_now().await;
 
-            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(7));
+            assert_eq!(ctx.take_job_errors().exception.unwrap().as_int(), Some(7));
         })
         .await;
     }
@@ -296,7 +296,9 @@ mod test {
         assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
 
         ctx.async_with(async |ctx| {
-            assert!(ctx.take_pending_job_error().is_none());
+            let errors = ctx.take_job_errors();
+            assert!(errors.exception.is_none());
+            assert_eq!(errors.dropped, 0);
             assert!(!ctx.has_exception());
             assert!(matches!(
                 ctx.eval::<(), _>("throw 2"),
@@ -328,7 +330,7 @@ mod test {
 
             tokio::task::yield_now().await;
 
-            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(1));
+            assert_eq!(ctx.take_job_errors().exception.unwrap().as_int(), Some(1));
 
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);

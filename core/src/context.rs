@@ -24,9 +24,7 @@ pub trait MultiWith<'js> {
 
 pub use base::Context;
 pub use builder::{intrinsic, ContextBuilder, Intrinsic};
-#[cfg(feature = "futures")]
-pub(crate) use ctx::JobDrain;
-pub use ctx::{Ctx, EvalOptions};
+pub use ctx::{Ctx, EvalOptions, JobErrors};
 
 #[cfg(feature = "futures")]
 pub use r#async::AsyncContext;

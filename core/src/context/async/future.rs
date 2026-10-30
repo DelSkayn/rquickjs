@@ -9,7 +9,6 @@ use core::{
 use async_lock::futures::Lock;
 
 use crate::{
-    context::JobDrain,
     markers::ParallelSend,
     runtime::{schedular::SchedularPoll, InnerRuntime},
     AsyncContext, Ctx,
@@ -139,7 +138,7 @@ where
                     Ok(true) => made_progress = true,
                     Err(ctx) => {
                         // Safety: the runtime is locked for this poll.
-                        unsafe { Ctx::handle_failed_job_ptr(ctx, JobDrain::Async) };
+                        unsafe { Ctx::handle_failed_job_ptr(ctx) };
                         made_progress = true;
                     }
                 }

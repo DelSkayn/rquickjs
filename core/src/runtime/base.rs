@@ -1,15 +1,17 @@
 //! QuickJS runtime related types.
 
 use super::{
-    opaque::Opaque, raw::RawRuntime, InterruptHandler, JobErrorHandler, MemoryUsage, PromiseHook,
-    RejectionTracker,
+    opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{qjs, result::JobException, Context, Ctx, Mut, Ref, Result, Weak};
+#[cfg(feature = "parallel")]
+use crate::qjs;
+use crate::{Mut, Ref, Result, Weak};
 use alloc::{ffi::CString, vec::Vec};
-use core::{ptr::NonNull, result::Result as StdResult};
+#[cfg(feature = "parallel")]
+use core::ptr::NonNull;
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Sender};
 
@@ -118,12 +120,6 @@ impl Runtime {
         }
     }
 
-    /// Runs mid-drain with the runtime lock held; do not acquire it again.
-    #[inline]
-    pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
-        self.inner.lock().set_job_error_handler(handler);
-    }
-
     /// Set a closure which is regularly called by the engine when it is executing code.
     /// If the provided closure returns `true` the interpreter will raise and uncatchable
     /// exception and return control flow to the caller.
@@ -215,32 +211,6 @@ impl Runtime {
     pub fn is_job_pending(&self) -> bool {
         self.inner.lock().is_job_pending()
     }
-
-    /// Execute first pending job
-    ///
-    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    ///
-    /// A failure is returned to the caller; a stashed Rust panic is resumed.
-    #[inline]
-    pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        let mut lock = self.inner.lock();
-        lock.update_stack_top();
-        let mut panic = None;
-        let res = lock.execute_pending_job().map_err(|e| {
-            let ptr = NonNull::new(e).expect("QuickJS returned null ptr for job error");
-            panic = unsafe { Ctx::from_raw(ptr) }.take_job_panic();
-            // JS_ExecutePendingJob returns a borrowed context pointer;
-            // dup it so Context can own a reference.
-            unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
-            JobException(unsafe { Context::from_raw(ptr, self.clone()) })
-        });
-        // Unwinding under the lock would poison the runtime.
-        drop(lock);
-        if let Some(payload) = panic {
-            crate::util::resume_unwind(payload);
-        }
-        res
-    }
 }
 
 // Since all functions which use runtime are behind a mutex
@@ -271,7 +241,7 @@ mod test {
     }
 
     #[test]
-    fn job_failing_in_userdata_drop_does_not_outlive_runtime() {
+    fn job_failing_in_userdata_drop_is_discarded() {
         use crate::{Context, Ctx, JsLifetime};
 
         struct DrainOnDrop<'js>(Ctx<'js>);
@@ -285,9 +255,7 @@ mod test {
                 self.0
                     .eval::<(), _>("queueMicrotask(() => { throw { late: true }; })")
                     .unwrap();
-                while self.0.execute_pending_job() {}
-                assert!(self.0.take_pending_job_error().is_none());
-                assert_eq!(self.0.take_pending_job_error_overflow(), 0);
+                assert!(self.0.drain_jobs().is_some());
             }
         }
 
@@ -298,49 +266,6 @@ mod test {
         });
         drop(ctx);
         drop(rt);
-    }
-
-    #[test]
-    fn retained_job_error_is_released_before_userdata() {
-        use crate::{Context, Ctx, Function, JsLifetime};
-        use std::{cell::Cell, rc::Rc};
-
-        struct Marker;
-
-        unsafe impl<'js> JsLifetime<'js> for Marker {
-            type Changed<'to> = Marker;
-        }
-
-        struct CheckOnDrop<'js>(Ctx<'js>, Rc<Cell<Option<bool>>>);
-
-        impl Drop for CheckOnDrop<'_> {
-            fn drop(&mut self) {
-                self.1.set(Some(self.0.userdata::<Marker>().is_some()));
-            }
-        }
-
-        let saw_userdata = Rc::new(Cell::new(None));
-        let rt = Runtime::new().unwrap();
-        let ctx = Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
-            ctx.store_userdata(Marker).unwrap();
-            let guard = CheckOnDrop(ctx.clone(), saw_userdata.clone());
-            let f = Function::new(ctx.clone(), move || {
-                let _guard = &guard;
-            })
-            .unwrap();
-            ctx.globals().set("f", f).unwrap();
-            ctx.eval::<(), _>(
-                "queueMicrotask(() => { const f = globalThis.f; delete globalThis.f; throw f; });",
-            )
-            .unwrap();
-            while ctx.execute_pending_job() {}
-        });
-        assert_eq!(saw_userdata.get(), None);
-
-        drop(ctx);
-        drop(rt);
-        assert_eq!(saw_userdata.get(), Some(true));
     }
 
     #[test]
@@ -366,39 +291,6 @@ mod test {
     }
 
     #[test]
-    fn runtime_execute_pending_job_resumes_pending_panic() {
-        use std::panic::{catch_unwind, AssertUnwindSafe};
-
-        let rt = Runtime::new().unwrap();
-        let ctx = crate::Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
-            ctx.globals()
-                .set(
-                    "rustPanic",
-                    crate::Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
-                )
-                .unwrap();
-            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
-        });
-
-        let payload = catch_unwind(AssertUnwindSafe(|| {
-            let _ = rt.execute_pending_job();
-        }))
-        .expect_err("the drain should resume the stashed panic");
-        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
-
-        ctx.with(|ctx| {
-            assert!(matches!(
-                ctx.eval::<(), _>("throw 1"),
-                Err(crate::Error::Exception)
-            ));
-            assert_eq!(ctx.catch().as_int(), Some(1));
-            let sum: i32 = ctx.eval::<i32, _>("1 + 1").unwrap();
-            assert_eq!(sum, 2);
-        });
-    }
-
-    #[test]
     fn job_panicking_during_teardown_does_not_unwind() {
         use crate::{Ctx, Function, JsLifetime};
 
@@ -411,7 +303,7 @@ mod test {
         impl Drop for DrainOnDrop<'_> {
             fn drop(&mut self) {
                 self.0.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
-                while self.0.execute_pending_job() {}
+                assert!(self.0.drain_jobs().is_some());
             }
         }
 

@@ -69,9 +69,10 @@ async fn assert_observes_interrupt<'js>(ctx: &Ctx<'js>, future: PromiseFuture<'j
     assert_eq!(sum, 2);
 }
 
-fn assert_retained_once(ctx: &Ctx<'_>, later_failures: usize) {
-    assert!(ctx.take_pending_job_error().unwrap().is_uncatchable_error());
-    assert_eq!(ctx.take_pending_job_error_overflow(), later_failures as u64);
+fn assert_retained_once(ctx: &Ctx<'_>, later_failures: u64) {
+    let errors = ctx.take_job_errors();
+    assert!(errors.exception.unwrap().is_uncatchable_error());
+    assert_eq!(errors.dropped, later_failures);
 }
 
 async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
@@ -91,7 +92,7 @@ async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
             }
             assert_observes_interrupt(&ctx, future).await;
             assert!(!armed.load(SeqCst));
-            assert_retained_once(&ctx, case.later_failures);
+            assert_retained_once(&ctx, case.later_failures as u64);
         }),
     )
     .await
@@ -158,7 +159,7 @@ async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
             }
             let promise: Promise = ctx.globals().get("p").unwrap();
             assert_observes_interrupt(&ctx, promise.into_future()).await;
-            assert_retained_once(&ctx, case.later_failures);
+            assert_retained_once(&ctx, case.later_failures as u64);
         }),
     )
     .await
@@ -306,22 +307,21 @@ async fn taken_interrupt_is_scoped_to_the_interrupted_jobs_context() {
         .expect("idle hung");
     assert!(!armed.load(SeqCst));
 
-    // A host in another context cannot discard it.
+    // The retained error is runtime-wide, but the recorded interrupt is not.
     other
         .async_with(async |ctx| {
-            assert!(ctx.take_interrupted_job_error().is_none());
+            let errors = ctx.take_job_errors();
+            assert!(errors.exception.is_some());
+            assert!(errors.interrupted.is_none());
         })
         .await;
 
-    // The interrupted job's context can, before a promise future observes it.
+    // The interrupted job's context can discard it before a future observes it.
     interrupted
         .async_with(async |ctx| {
-            assert_retained_once(&ctx, 0);
-            assert!(ctx
-                .take_interrupted_job_error()
-                .unwrap()
-                .is_uncatchable_error());
-            assert!(ctx.take_interrupted_job_error().is_none());
+            let errors = ctx.take_job_errors();
+            assert!(errors.interrupted.unwrap().is_uncatchable_error());
+            assert!(ctx.take_job_errors().interrupted.is_none());
 
             // An unrelated promise future, pending when first polled, is
             // unaffected.
@@ -370,7 +370,7 @@ async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
             assert!(matches!(err.into_future::<()>().await, Err(Error::Exception)));
             assert_eq!(ctx.catch().as_int(), Some(7));
             assert!(!ctx.has_exception());
-            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(2));
+            assert_eq!(ctx.take_job_errors().exception.unwrap().as_int(), Some(2));
         }),
     )
     .await
@@ -390,7 +390,7 @@ async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
             let err: Promise = ctx.globals().get("err").unwrap();
             assert!(matches!(err.into_future::<()>().await, Err(Error::Exception)));
             assert_eq!(ctx.catch().as_int(), Some(7));
-            assert_eq!(ctx.take_pending_job_error().unwrap().as_int(), Some(2));
+            assert_eq!(ctx.take_job_errors().exception.unwrap().as_int(), Some(2));
         }),
     )
     .await

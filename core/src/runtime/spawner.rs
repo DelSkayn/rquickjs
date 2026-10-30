@@ -2,7 +2,7 @@ use super::{
     schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
 };
-use crate::{context::JobDrain, AsyncRuntime, Ctx};
+use crate::{AsyncRuntime, Ctx};
 use alloc::vec::Vec;
 use core::{
     future::Future,
@@ -128,7 +128,7 @@ impl Future for DriveFuture {
                     Ok(false) => {}
                     Err(ctx) => {
                         // Safety: the runtime is locked for this poll.
-                        unsafe { Ctx::handle_failed_job_ptr(ctx, JobDrain::Async) };
+                        unsafe { Ctx::handle_failed_job_ptr(ctx) };
                         continue;
                     }
                 }
