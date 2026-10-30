@@ -165,7 +165,7 @@ impl<'js> Promise<'js> {
     /// drain fails the next unsettled future polled there, which need not be
     /// the future awaiting that job. Pending exceptions are runtime-wide, so
     /// other futures polled before it is caught fail too; the record can be
-    /// discarded with [`Ctx::take_job_errors`].
+    /// discarded with [`Ctx::take_interrupted_job_error`].
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[cfg(feature = "futures")]
     pub fn into_future<T>(self) -> PromiseFuture<'js, T>

@@ -258,18 +258,28 @@ mod test {
     }
 
     #[tokio::test]
-    async fn async_with_retains_failed_job_error() {
+    async fn async_with_reports_failed_job() {
+        use std::sync::{Arc, Mutex};
+
         let rt = AsyncRuntime::new().unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        {
+            let seen = seen.clone();
+            rt.set_job_error_handler(Some(Box::new(move |_, error| {
+                seen.lock().unwrap().push(error.as_int());
+            })))
+            .await;
+        }
         let ctx = AsyncContext::full(&rt).await.unwrap();
         ctx.async_with(async |ctx| {
             ctx.eval::<(), _>("queueMicrotask(() => { throw 7; });")
                 .unwrap();
 
             tokio::task::yield_now().await;
-
-            assert_eq!(ctx.take_job_errors().exception.unwrap().as_int(), Some(7));
+            assert!(!ctx.has_exception());
         })
         .await;
+        assert_eq!(*seen.lock().unwrap(), vec![Some(7)]);
     }
 
     #[tokio::test]
@@ -296,9 +306,6 @@ mod test {
         assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
 
         ctx.async_with(async |ctx| {
-            let errors = ctx.take_job_errors();
-            assert!(errors.exception.is_none());
-            assert_eq!(errors.dropped, 0);
             assert!(!ctx.has_exception());
             assert!(matches!(
                 ctx.eval::<(), _>("throw 2"),
@@ -330,8 +337,7 @@ mod test {
 
             tokio::task::yield_now().await;
 
-            assert_eq!(ctx.take_job_errors().exception.unwrap().as_int(), Some(1));
-
+            assert!(!ctx.has_exception());
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
         })

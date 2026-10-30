@@ -46,17 +46,11 @@ pub(crate) struct Opaque<'js> {
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
 
-    /// The first failed job's exception retained while no job error handler is set.
-    job_error: UnsafeCell<Option<Value<'js>>>,
-
     /// The user provided job error handler, if any.
     job_error_handler: UnsafeCell<Option<JobErrorHandler>>,
 
-    /// Count of job failures dropped because `job_error` was occupied.
-    job_error_overflow: Cell<u64>,
-
     /// Set while the runtime is torn down; drains then discard failures
-    /// instead of retaining, recording or resuming them.
+    /// instead of recording or resuming them.
     closed: Cell<bool>,
 
     /// The latest uncatchable error from an async drain, until observed or
@@ -94,11 +88,7 @@ impl<'js> Opaque<'js> {
 
             interrupt_handler: UnsafeCell::new(None),
 
-            job_error: UnsafeCell::new(None),
-
             job_error_handler: UnsafeCell::new(None),
-
-            job_error_overflow: Cell::new(0),
 
             closed: Cell::new(false),
 
@@ -175,30 +165,6 @@ impl<'js> Opaque<'js> {
 
     pub unsafe fn from_runtime_ptr<'a>(rt: *mut qjs::JSRuntime) -> &'a Self {
         &*(qjs::JS_GetRuntimeOpaque(rt).cast::<Self>())
-    }
-
-    #[cfg(feature = "futures")]
-    pub fn retain_job_error(&self, error: Value<'js>) {
-        if self.is_closed() {
-            return;
-        }
-        // Dropping `error` may run finalizers that re-enter this function,
-        // so do not hold a borrow of the slot across the drop.
-        let occupied = unsafe { (*self.job_error.get()).is_some() };
-        if occupied {
-            self.job_error_overflow
-                .set(self.job_error_overflow.get().saturating_add(1));
-        } else {
-            unsafe { *self.job_error.get() = Some(error) };
-        }
-    }
-
-    pub fn take_job_error(&self) -> Option<Value<'js>> {
-        unsafe { (*self.job_error.get()).take() }
-    }
-
-    pub fn take_job_error_overflow(&self) -> u64 {
-        self.job_error_overflow.replace(0)
     }
 
     pub fn is_closed(&self) -> bool {
@@ -397,11 +363,8 @@ impl<'js> Opaque<'js> {
         self.closed.set(true);
         // Empty the handler slot first, so teardown drains find no handler.
         self.job_error_handler.get_mut().take();
-        // Retained errors may keep a context alive; drop them while the rest
-        // of this state is intact, and outside the slots as finalizers may
-        // re-enter.
-        let job_error = self.job_error.get_mut().take();
-        drop(job_error);
+        // The recorded interrupt may keep its context alive; drop it outside
+        // the slot as finalizers may re-enter.
         #[cfg(feature = "futures")]
         {
             let interrupted_job = self.interrupted_job.get_mut().take();

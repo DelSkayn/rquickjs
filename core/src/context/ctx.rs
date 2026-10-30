@@ -77,18 +77,6 @@ impl Default for EvalOptions {
     }
 }
 
-/// Failures collected from an internal job drain.
-#[derive(Debug)]
-pub struct JobErrors<'js> {
-    /// The first failure retained while no job error handler was set.
-    pub exception: Option<Value<'js>>,
-    /// Failures dropped because `exception` was already held.
-    pub dropped: u64,
-    /// The uncatchable error an async drain recorded for this context.
-    #[cfg(feature = "futures")]
-    pub interrupted: Option<Value<'js>>,
-}
-
 /// Context in use, passed to [`Context::with`].
 #[derive(Debug)]
 pub struct Ctx<'js> {
@@ -285,17 +273,12 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
-    /// Takes everything an internal drain collected since the previous call:
-    /// the retained failure, how many were dropped, and the uncatchable error
-    /// an async drain recorded for this context.
-    pub fn take_job_errors(&self) -> JobErrors<'js> {
-        let opaque = unsafe { self.get_opaque() };
-        JobErrors {
-            exception: opaque.take_job_error(),
-            dropped: opaque.take_job_error_overflow(),
-            #[cfg(feature = "futures")]
-            interrupted: opaque.take_interrupted_job(self),
-        }
+    /// Discards the uncatchable error an async drain recorded for this context,
+    /// so it cannot fail a later promise future.
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub fn take_interrupted_job_error(&self) -> Option<Value<'js>> {
+        unsafe { self.get_opaque() }.take_interrupted_job(self)
     }
 
     #[cfg(feature = "futures")]
@@ -317,9 +300,7 @@ impl<'js> Ctx<'js> {
         if error.is_uncatchable_error() {
             opaque.record_interrupted_job(error.clone());
         }
-        if !opaque.run_job_error_handler(self.clone(), error.clone()) {
-            opaque.retain_job_error(error);
-        }
+        opaque.run_job_error_handler(self.clone(), error);
     }
 
     /// # Safety

@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Ctx::execute_pending_job` is replaced by `Ctx::drain_jobs`, which runs until the queue is empty, stops at the first failure and returns its exception. Synchronous drains no longer report to a job error handler or retain failures
 - `Runtime::execute_pending_job` and `AsyncRuntime::execute_pending_job` are removed; drain jobs through `Ctx::drain_jobs`, `AsyncRuntime::idle` or `AsyncRuntime::drive`
-- `Ctx::take_pending_job_error`, `Ctx::take_pending_job_error_overflow` and `Ctx::take_interrupted_job_error` are replaced by `Ctx::take_job_errors`
+- `Ctx::take_pending_job_error` and `Ctx::take_pending_job_error_overflow` are removed; asynchronous drains report failures to the job error handler instead of retaining them
 - `Runtime::set_job_error_handler` is removed; `AsyncRuntime::set_job_error_handler` remains for drains that have no caller to return to
 - `JobException` and `AsyncJobException` are removed
 - `Promise::finish` returns a failed job's exception as `Error::Exception` instead of `Error::WouldBlock`
@@ -19,17 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - `Ctx::drain_jobs` runs pending jobs until the queue is empty, stopping at the first failure and returning its exception. A job failing without an exception value returns `undefined`
-- `Ctx::take_job_errors` returns the failures an asynchronous drain collected: the first retained exception, how many were dropped, and the uncatchable error recorded for this context
-- `AsyncRuntime::set_job_error_handler` reports asynchronous drain failures instead of retaining them; failures without an exception value are reported as `undefined`, and handler panics propagate out of the drain
+- `AsyncRuntime::set_job_error_handler` reports asynchronous drain failures; failures without an exception value are reported as `undefined`, and handler panics propagate out of the drain. Without a handler those failures are discarded
+- `Ctx::take_interrupted_job_error` discards an uncatchable job error recorded for promise futures in the interrupted job's context, once the host has handled the failure
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 
 ### Changed
 
 - Job drains (`Ctx::drain_jobs`, `Promise::finish`, `async_with`, `AsyncRuntime::drive`, `AsyncRuntime::idle`) resume a stashed Rust panic when a job fails with a synthetic panic exception. Panics in promise reactions still reject the promise; observing the result resumes the panic
-- Async job drains clear failed jobs' exceptions from the engine. Uncatchable errors (e.g. interrupts) are instead recorded outside it, keyed by the failed job's context, and spawned futures are woken, so the next promise future polled in that context while its promise is unsettled fails with the error. That future need not be the one awaiting the interrupted job; futures in other contexts do not take the recorded error, but until it is caught, other unsettled promise futures polled before then fail with it too, in any context
+- Async job drains clear failed jobs' exceptions from the engine and pass them to the job error handler. Uncatchable errors (e.g. interrupts) are also recorded outside the engine, keyed by the failed job's context, and spawned futures are woken, so the next promise future polled in that context while its promise is unsettled fails with the error. That future need not be the one awaiting the interrupted job; futures in other contexts do not take the recorded error, but until it is caught, other unsettled promise futures polled before then fail with it too, in any context
 - `Promise::result` resumes a stashed Rust panic instead of leaving it armed
-- `AsyncRuntime::idle` reports or retains failed jobs' errors instead of printing them to stdout
+- `AsyncRuntime::idle` reports failed jobs' errors instead of printing them to stdout
 
 ### Deprecated
 
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed internal job drains discarding failures; synchronous drains return them from `Ctx::drain_jobs`, asynchronous drains report or retain them
+- Fixed internal job drains discarding failures; synchronous drains return them from `Ctx::drain_jobs`, asynchronous drains report them to the job error handler
 - Fixed `AsyncRuntime::drive` and `AsyncRuntime::idle` stopping after a failed job while further jobs remained queued
 - Fixed promise futures hanging on a promise left unsettled by an interrupted job if a later job or host code threw or caught an exception first, or if the future was pending inside a spawned future
 - Fixed an interrupted job failing an unrelated promise future in another context
