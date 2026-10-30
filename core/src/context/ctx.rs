@@ -273,6 +273,63 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
+    /// Discards the uncatchable error an async drain recorded for this context,
+    /// so it cannot fail a later promise future.
+    #[cfg(feature = "futures")]
+    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
+    pub fn take_interrupted_job_error(&self) -> Option<Value<'js>> {
+        unsafe { self.get_opaque() }.take_interrupted_job(self)
+    }
+
+    #[cfg(feature = "futures")]
+    pub(crate) fn handle_failed_job(&self) {
+        // Clear the engine's slot so unrelated code can't trip over it.
+        let raw = unsafe { qjs::JS_GetException(self.as_ptr()) };
+        // Safety: the caller holds the runtime lock for the whole drain.
+        let opaque = unsafe { self.get_opaque() };
+        let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) };
+        if tag == qjs::JS_TAG_EXCEPTION {
+            if let Some(payload) = opaque.take_panic() {
+                // Never unwind out of a destructor during teardown.
+                if !opaque.is_closed() {
+                    crate::util::resume_unwind(payload);
+                }
+            }
+        }
+        let error = self.exception_value(raw);
+        if error.is_uncatchable_error() {
+            opaque.record_interrupted_job(error.clone());
+        }
+        opaque.run_job_error_handler(self.clone(), error);
+    }
+
+    /// # Safety
+    /// The runtime must be locked, and `ctx` must be the failed job's context.
+    #[cfg(feature = "futures")]
+    pub(crate) unsafe fn handle_failed_job_ptr(ctx: *mut qjs::JSContext) {
+        let ctx =
+            NonNull::new(ctx).expect("executing pending job returned a null context on error");
+        // Safety: guaranteed by the caller. `from_raw` dups the context and
+        // the temporary `Ctx` frees it on drop.
+        unsafe { Ctx::from_raw(ctx) }.handle_failed_job();
+    }
+
+    pub(crate) fn take_job_panic(&self) -> Option<Box<dyn Any + Send + 'static>> {
+        let raw = unsafe { qjs::JS_GetException(self.as_ptr()) };
+        let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) };
+        if tag == qjs::JS_TAG_UNINITIALIZED {
+            return None;
+        }
+        if tag == qjs::JS_TAG_EXCEPTION {
+            if let Some(payload) = unsafe { self.get_opaque() }.take_panic() {
+                return Some(payload);
+            }
+        }
+        // Leave the exception pending for the caller.
+        unsafe { qjs::JS_Throw(self.as_ptr(), raw) };
+        None
+    }
+
     /// Parse json into a JavaScript value.
     pub fn json_parse<S>(&self, json: S) -> Result<Value<'js>>
     where
@@ -394,25 +451,46 @@ impl<'js> Ctx<'js> {
         })
     }
 
-    /// Executes a quickjs job.
-    ///
-    /// Returns wether a job was actually executed.
-    /// If this function returned false, no job was pending.
-    pub fn execute_pending_job(&self) -> bool {
+    /// Runs pending jobs until the queue is empty, stopping at the first
+    /// failure and returning its exception. Nothing is retained or reported.
+    pub fn drain_jobs(&self) -> Option<Value<'js>> {
+        loop {
+            match self.step_job() {
+                Ok(false) => return None,
+                Ok(true) => {}
+                Err(exception) => return Some(exception),
+            }
+        }
+    }
+
+    pub(crate) fn step_job(&self) -> StdResult<bool, Value<'js>> {
         let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
         let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
-        if res < 0 {
-            // A negative result means the job threw, and `JS_ExecutePendingJob`
-            // leaves the exception pending on the context it ran in (`*ptr`,
-            // which need not be `self` in a multi-context runtime) instead of
-            // surfacing it here. Drain it so it can't be mistaken for a real
-            // exception later by unrelated code that checks for one (e.g. the
-            // module loader's "is a module already loaded" check).
-            let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
-            ctx.catch();
+        if res >= 0 {
+            return Ok(res != 0);
         }
-        res != 0
+        let ptr = NonNull::new(unsafe { ptr.assume_init() })
+            .expect("QuickJS returned a null context for a failed job");
+        // Safety: the runtime is locked through `self`.
+        let job = unsafe { Self::from_raw(ptr) };
+        if let Some(payload) = job.take_job_panic() {
+            if !unsafe { job.get_opaque() }.is_closed() {
+                crate::util::resume_unwind(payload);
+            }
+        }
+        let raw = unsafe { qjs::JS_GetException(job.as_ptr()) };
+        Err(job.exception_value(raw))
+    }
+
+    /// Normalises the panic sentinel and "nothing pending" to `undefined`.
+    fn exception_value(&self, raw: qjs::JSValue) -> Value<'js> {
+        let tag = unsafe { qjs::JS_VALUE_GET_NORM_TAG(raw) };
+        if tag == qjs::JS_TAG_UNINITIALIZED || tag == qjs::JS_TAG_EXCEPTION {
+            Value::new_undefined(self.clone())
+        } else {
+            unsafe { Value::from_js_value(self.clone(), raw) }
+        }
     }
 
     pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
@@ -543,25 +621,130 @@ mod test {
     }
 
     #[test]
-    fn execute_pending_job_clears_exception_from_failed_job() {
+    fn drain_jobs_clears_the_failed_jobs_exception() {
         use crate::{Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
         let ctx = Context::full(&runtime).unwrap();
         ctx.with(|ctx| {
-            // Schedule a job that throws when it runs.
-            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('boom'); });")
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 42; });")
                 .unwrap();
 
-            // Run it: the job throws, but that must not leave a pending
-            // exception on the context for unrelated code to trip over later.
-            while ctx.execute_pending_job() {}
-
+            assert_eq!(ctx.drain_jobs().unwrap().as_int(), Some(42));
             assert!(!ctx.has_exception());
+            assert!(ctx.drain_jobs().is_none());
+        })
+    }
 
-            // The context must still be perfectly usable afterwards.
+    #[test]
+    fn drain_jobs_stops_at_the_first_failure() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw 1; });
+                 queueMicrotask(() => { throw 2; });",
+            )
+            .unwrap();
+
+            assert_eq!(ctx.drain_jobs().unwrap().as_int(), Some(1));
+            assert_eq!(ctx.drain_jobs().unwrap().as_int(), Some(2));
+            assert!(ctx.drain_jobs().is_none());
+            assert!(!ctx.has_exception());
+        })
+    }
+
+    #[test]
+    fn drain_jobs_reports_the_jobs_own_context() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx_a = Context::full(&runtime).unwrap();
+        let ctx_b = Context::full(&runtime).unwrap();
+        ctx_a.with(|ctx| ctx.eval::<(), _>("globalThis.tag = 'A';").unwrap());
+        ctx_b.with(|ctx| {
+            ctx.eval::<(), _>("globalThis.tag = 'B'; queueMicrotask(() => { throw 5; });")
+                .unwrap();
+        });
+
+        ctx_a.with(|ctx| {
+            let error = ctx.drain_jobs().unwrap();
+            assert_eq!(error.as_int(), Some(5));
+            let tag: String = error.ctx().globals().get("tag").unwrap();
+            assert_eq!(tag, "B");
+            assert!(ctx.drain_jobs().is_none());
+            assert!(!ctx.has_exception());
+        });
+    }
+
+    #[test]
+    fn drain_jobs_resumes_pending_panic() {
+        use crate::{Context, Function, Runtime};
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+
+            let payload = catch_unwind(AssertUnwindSafe(|| {
+                ctx.drain_jobs();
+            }))
+            .expect_err("the drain should resume the stashed panic");
+            assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
             let sum: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(sum, 2);
+        })
+    }
+
+    #[test]
+    fn drain_jobs_skips_caught_panic() {
+        use crate::{Context, Function, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
+                .unwrap();
+
+            assert!(ctx.drain_jobs().is_none());
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+    }
+
+    #[test]
+    fn drain_jobs_reports_undefined_for_a_valueless_failure() {
+        use crate::{Context, Error, Function, Result, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "failSilently",
+                    Function::new(ctx.clone(), || -> Result<()> { Err(Error::Exception) }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(failSilently);").unwrap();
+
+            assert!(ctx.drain_jobs().unwrap().is_undefined());
+            assert!(!ctx.has_exception());
         })
     }
 

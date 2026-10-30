@@ -6,7 +6,8 @@ use crate::{
 use super::{
     exotic::ExoticMethodsHolder,
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
+    InterruptHandler, JobErrorHandler, PromiseHook, PromiseHookType, RejectionTracker,
+    UserDataError,
 };
 use alloc::boxed::Box;
 use core::{
@@ -45,6 +46,18 @@ pub(crate) struct Opaque<'js> {
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
 
+    /// The user provided job error handler, if any.
+    job_error_handler: UnsafeCell<Option<JobErrorHandler>>,
+
+    /// Set while the runtime is torn down; drains then discard failures
+    /// instead of recording or resuming them.
+    closed: Cell<bool>,
+
+    /// The latest uncatchable error from an async drain, until observed or
+    /// taken.
+    #[cfg(feature = "futures")]
+    interrupted_job: UnsafeCell<Option<Value<'js>>>,
+
     /// The class id for rust classes.
     class_id: qjs::JSClassID,
     /// The class id for rust classes which can be called.
@@ -74,6 +87,13 @@ impl<'js> Opaque<'js> {
             rejection_tracker: UnsafeCell::new(None),
 
             interrupt_handler: UnsafeCell::new(None),
+
+            job_error_handler: UnsafeCell::new(None),
+
+            closed: Cell::new(false),
+
+            #[cfg(feature = "futures")]
+            interrupted_job: UnsafeCell::new(None),
 
             class_id: qjs::JS_INVALID_CLASS_ID,
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
@@ -145,6 +165,42 @@ impl<'js> Opaque<'js> {
 
     pub unsafe fn from_runtime_ptr<'a>(rt: *mut qjs::JSRuntime) -> &'a Self {
         &*(qjs::JS_GetRuntimeOpaque(rt).cast::<Self>())
+    }
+
+    pub fn is_closed(&self) -> bool {
+        self.closed.get()
+    }
+
+    #[cfg(feature = "futures")]
+    pub fn record_interrupted_job(&self, error: Value<'js>) {
+        if self.is_closed() {
+            return;
+        }
+        // Drop the old error only after the slot holds the new one: its
+        // finalizers may re-enter.
+        let old = unsafe { (*self.interrupted_job.get()).replace(error) };
+        drop(old);
+        self.wake_spawned();
+    }
+
+    #[cfg(feature = "futures")]
+    pub fn take_interrupted_job(&self, ctx: &Ctx<'js>) -> Option<Value<'js>> {
+        let slot = unsafe { &mut *self.interrupted_job.get() };
+        match slot {
+            Some(error) if error.ctx().as_ptr() == ctx.as_ptr() => slot.take(),
+            _ => None,
+        }
+    }
+
+    #[cfg(feature = "futures")]
+    fn wake_spawned(&self) {
+        let Some(spawner) = self.spawner.as_ref() else {
+            return;
+        };
+        let wakers = unsafe { (*spawner.get()).requeue_all() };
+        // Wakers may run arbitrary executor code, so wake them only once the
+        // spawner is no longer borrowed.
+        wakers.into_iter().for_each(Waker::wake);
     }
 
     #[cfg(feature = "futures")]
@@ -231,6 +287,26 @@ impl<'js> Opaque<'js> {
         }
     }
 
+    pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
+        // Drop the old handler only after the slot holds the new one: its
+        // destructor may drain jobs and read the slot.
+        let old = unsafe { core::mem::replace(&mut *self.job_error_handler.get(), handler) };
+        drop(old);
+    }
+
+    #[cfg(feature = "futures")]
+    pub fn run_job_error_handler<'a>(&self, ctx: Ctx<'a>, error: Value<'a>) -> bool {
+        unsafe {
+            // The handler may re-enter the drain, so only borrow it shared.
+            if let Some(handler) = (*self.job_error_handler.get()).as_ref() {
+                handler(ctx, error);
+                true
+            } else {
+                false
+            }
+        }
+    }
+
     pub fn set_interrupt_handler(&self, interupt: Option<InterruptHandler>) {
         unsafe { (*self.interrupt_handler.get()) = interupt }
     }
@@ -282,12 +358,30 @@ impl<'js> Opaque<'js> {
     /// Called before dropping the runtime to ensure that we drop everything before freeing the
     /// runtime.
     pub fn clear(&mut self) {
+        // Destructors below may drain jobs; their failures must not outlive
+        // the runtime.
+        self.closed.set(true);
+        // Empty the handler slot first, so teardown drains find no handler.
+        self.job_error_handler.get_mut().take();
+        // The recorded interrupt may keep its context alive; drop it outside
+        // the slot as finalizers may re-enter.
+        #[cfg(feature = "futures")]
+        {
+            let interrupted_job = self.interrupted_job.get_mut().take();
+            drop(interrupted_job);
+        }
         self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
-        self.prototypes.get_mut().clear();
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();
+        // Destructors above may register class prototypes, which hold a JS
+        // value and a context; free them before the runtime is.
+        self.prototypes.get_mut().clear();
+        debug_assert!(
+            unsafe { (*self.prototypes.get()).is_empty() },
+            "a destructor registered a class prototype during teardown"
+        );
     }
 }

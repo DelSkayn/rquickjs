@@ -6,9 +6,12 @@ use super::{
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{qjs, result::JobException, Context, Mut, Ref, Result, Weak};
+#[cfg(feature = "parallel")]
+use crate::qjs;
+use crate::{Mut, Ref, Result, Weak};
 use alloc::{ffi::CString, vec::Vec};
-use core::{ptr::NonNull, result::Result as StdResult};
+#[cfg(feature = "parallel")]
+use core::ptr::NonNull;
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Sender};
 
@@ -208,22 +211,6 @@ impl Runtime {
     pub fn is_job_pending(&self) -> bool {
         self.inner.lock().is_job_pending()
     }
-
-    /// Execute first pending job
-    ///
-    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    #[inline]
-    pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        let mut lock = self.inner.lock();
-        lock.update_stack_top();
-        lock.execute_pending_job().map_err(|e| {
-            let ptr = NonNull::new(e).expect("QuickJS returned null ptr for job error");
-            // JS_ExecutePendingJob returns a borrowed context pointer;
-            // dup it so Context can own a reference.
-            unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
-            JobException(unsafe { Context::from_raw(ptr, self.clone()) })
-        })
-    }
 }
 
 // Since all functions which use runtime are behind a mutex
@@ -254,6 +241,34 @@ mod test {
     }
 
     #[test]
+    fn job_failing_in_userdata_drop_is_discarded() {
+        use crate::{Context, Ctx, JsLifetime};
+
+        struct DrainOnDrop<'js>(Ctx<'js>);
+
+        unsafe impl<'js> JsLifetime<'js> for DrainOnDrop<'js> {
+            type Changed<'to> = DrainOnDrop<'to>;
+        }
+
+        impl Drop for DrainOnDrop<'_> {
+            fn drop(&mut self) {
+                self.0
+                    .eval::<(), _>("queueMicrotask(() => { throw { late: true }; })")
+                    .unwrap();
+                assert!(self.0.drain_jobs().is_some());
+            }
+        }
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.store_userdata(DrainOnDrop(ctx.clone())).unwrap();
+        });
+        drop(ctx);
+        drop(rt);
+    }
+
+    #[test]
     fn set_max_stack_size_large_values() {
         let rt = Runtime::new().unwrap();
         rt.set_max_stack_size(usize::MAX);
@@ -273,6 +288,63 @@ mod test {
         ctx.with(|ctx| {
             ctx.eval::<i32, _>("1 + 1").unwrap();
         });
+    }
+
+    #[test]
+    fn job_panicking_during_teardown_does_not_unwind() {
+        use crate::{Ctx, Function, JsLifetime};
+
+        struct DrainOnDrop<'js>(Ctx<'js>);
+
+        unsafe impl<'js> JsLifetime<'js> for DrainOnDrop<'js> {
+            type Changed<'to> = DrainOnDrop<'to>;
+        }
+
+        impl Drop for DrainOnDrop<'_> {
+            fn drop(&mut self) {
+                self.0.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+                assert!(self.0.drain_jobs().is_some());
+            }
+        }
+
+        let rt = Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.store_userdata(DrainOnDrop(ctx.clone())).unwrap();
+        });
+        drop(ctx);
+        drop(rt);
+    }
+
+    #[test]
+    fn prototypes_registered_during_teardown_are_dropped() {
+        use crate::{Ctx, Function, JsLifetime};
+
+        struct RegistersPrototype<'js>(Ctx<'js>);
+
+        unsafe impl<'js> JsLifetime<'js> for RegistersPrototype<'js> {
+            type Changed<'to> = RegistersPrototype<'to>;
+        }
+
+        impl Drop for RegistersPrototype<'_> {
+            fn drop(&mut self) {
+                Function::new(self.0.clone(), || 1).unwrap();
+            }
+        }
+
+        let rt = Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.store_userdata(RegistersPrototype(ctx.clone())).unwrap();
+        });
+        drop(ctx);
+        drop(rt);
     }
 
     #[test]

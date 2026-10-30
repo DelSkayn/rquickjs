@@ -245,7 +245,7 @@ unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]
 mod test {
-    use crate::{AsyncContext, AsyncRuntime};
+    use crate::{AsyncContext, AsyncRuntime, Function};
 
     #[tokio::test]
     async fn base_asyc_context() {
@@ -253,6 +253,126 @@ mod test {
         let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
         ctx.async_with(async |ctx| {
             ctx.globals();
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn async_with_reports_failed_job() {
+        use std::sync::{Arc, Mutex};
+
+        let rt = AsyncRuntime::new().unwrap();
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        {
+            let seen = seen.clone();
+            rt.set_job_error_handler(Some(Box::new(move |_, error| {
+                seen.lock().unwrap().push(error.as_int());
+            })))
+            .await;
+        }
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+        ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 7; });")
+                .unwrap();
+
+            tokio::task::yield_now().await;
+            assert!(!ctx.has_exception());
+        })
+        .await;
+        assert_eq!(*seen.lock().unwrap(), vec![Some(7)]);
+    }
+
+    #[tokio::test]
+    async fn async_with_job_error_handler_panic_propagates() {
+        use std::panic::AssertUnwindSafe;
+
+        use futures_rs::future::FutureExt;
+
+        let rt = AsyncRuntime::new().unwrap();
+        rt.set_job_error_handler(Some(Box::new(|_, _| panic!("handler boom"))))
+            .await;
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        let res = AssertUnwindSafe(ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap();
+
+            tokio::task::yield_now().await;
+        }))
+        .catch_unwind()
+        .await;
+
+        let payload = res.expect_err("the handler panic should propagate out of the driver");
+        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
+
+        ctx.async_with(async |ctx| {
+            assert!(!ctx.has_exception());
+            assert!(matches!(
+                ctx.eval::<(), _>("throw 2"),
+                Err(crate::Error::Exception)
+            ));
+            assert_eq!(ctx.catch().as_int(), Some(2));
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn async_with_drain_skips_caught_panic() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+        ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+
+            ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap();
+
+            tokio::task::yield_now().await;
+
+            assert!(!ctx.has_exception());
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn async_with_resumes_pending_panic() {
+        use std::panic::AssertUnwindSafe;
+
+        use futures_rs::future::FutureExt;
+
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        let res = AssertUnwindSafe(ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+
+            tokio::task::yield_now().await;
+        }))
+        .catch_unwind()
+        .await;
+
+        let payload = res.expect_err("the driver should have resumed the stashed panic");
+        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+        ctx.async_with(async |ctx| {
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
         })
         .await;
     }

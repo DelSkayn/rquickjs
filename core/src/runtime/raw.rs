@@ -14,7 +14,10 @@ use crate::{
     Ctx, Error, Result, Value,
 };
 
-use super::{opaque::Opaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker};
+use super::{
+    opaque::Opaque, InterruptHandler, JobErrorHandler, PromiseHook, PromiseHookType,
+    RejectionTracker,
+};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;
@@ -464,6 +467,10 @@ impl RawRuntime {
             qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()),
         );
         self.get_opaque().set_interrupt_handler(handler);
+    }
+
+    pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
+        self.get_opaque().set_job_error_handler(handler);
     }
 
     fn add_dump_flags(rt: *mut rquickjs_sys::JSRuntime) {

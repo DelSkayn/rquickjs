@@ -2,7 +2,7 @@ use super::{
     schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
 };
-use crate::AsyncRuntime;
+use crate::{AsyncRuntime, Ctx};
 use alloc::vec::Vec;
 use core::{
     future::Future,
@@ -36,6 +36,15 @@ impl Spawner {
 
     pub fn listen(&mut self, wake: Waker) {
         self.wakeup.push(wake);
+    }
+
+    pub fn requeue_all(&mut self) -> Vec<Waker> {
+        // Safety: the spawner is only accessed with the runtime lock held,
+        // and never while it is being polled.
+        unsafe { self.schedular.requeue_all() };
+        let mut wakers = core::mem::take(&mut self.wakeup);
+        wakers.extend(self.schedular.take_waker());
+        wakers
     }
 
     pub fn is_empty(&mut self) -> bool {
@@ -114,12 +123,16 @@ impl Future for DriveFuture {
             lock.runtime.get_opaque().listen(cx.waker().clone());
 
             loop {
-                // TODO: Handle error.
-                if let Ok(true) = lock.runtime.execute_pending_job() {
-                    continue;
+                match lock.runtime.execute_pending_job() {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(ctx) => {
+                        // Safety: the runtime is locked for this poll.
+                        unsafe { Ctx::handle_failed_job_ptr(ctx) };
+                        continue;
+                    }
                 }
 
-                // TODO: Handle error.
                 match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
                         break

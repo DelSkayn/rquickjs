@@ -5,7 +5,7 @@ use core::{
     mem::offset_of,
     pin::Pin,
     sync::atomic::Ordering,
-    task::{Context, Poll},
+    task::{Context, Poll, Waker},
 };
 
 mod atomic_waker;
@@ -125,6 +125,30 @@ impl Schedular {
         // drop the ownership of the all list,
         // Task is now dropped or only owned by wakers or
         self.len.set(self.len.get() - 1);
+    }
+
+    /// # Safety
+    /// Must not run concurrently with [`Schedular::poll`] or
+    /// [`Schedular::clear`].
+    pub unsafe fn requeue_all(&self) {
+        let mut cur = self.all_next.get();
+        while let Some(task) = cur {
+            cur = task.body().next.get();
+            if task
+                .body()
+                .queued
+                .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+                .is_ok()
+            {
+                // The queue owns a reference count while the task is queued.
+                task.task_incr();
+                Pin::new_unchecked(&*self.should_poll).push(task.as_node_ptr());
+            }
+        }
+    }
+
+    pub fn take_waker(&self) -> Option<Waker> {
+        self.should_poll.waker().take()
     }
 
     pub unsafe fn poll(&self, cx: &mut Context) -> SchedularPoll {

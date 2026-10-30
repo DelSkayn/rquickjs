@@ -136,8 +136,9 @@ where
                 match lock.runtime.execute_pending_job() {
                     Ok(false) => break,
                     Ok(true) => made_progress = true,
-                    Err(_ctx) => {
-                        // TODO figure out what to do with a job error.
+                    Err(ctx) => {
+                        // Safety: the runtime is locked for this poll.
+                        unsafe { Ctx::handle_failed_job_ptr(ctx) };
                         made_progress = true;
                     }
                 }
