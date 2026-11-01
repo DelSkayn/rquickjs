@@ -148,7 +148,6 @@ fn main() {
     defines.push(("NDEBUG".into(), None));
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap();
-    let target_env = env::var("CARGO_CFG_TARGET_ENV").unwrap();
 
     let mut builder = cc::Build::new();
     builder
@@ -184,13 +183,13 @@ fn main() {
     let mut bindgen_cflags = vec![];
 
     if target_os == "windows" {
-        if target_env == "msvc" {
-            env::set_var(
-                "CFLAGS",
-                "/DWIN32_LEAN_AND_MEAN /std:c11 /experimental:c11atomics",
-            );
+        // The flags follow the compiler, not the target: plain clang targeting MSVC (`CC=clang`)
+        // takes GNU-style flags, and reads `/std:c11` as a file name.
+        builder.define("WIN32_LEAN_AND_MEAN", None);
+        if builder.get_compiler().is_like_msvc() {
+            builder.flag("/std:c11").flag("/experimental:c11atomics");
         } else {
-            env::set_var("CFLAGS", "-DWIN32_LEAN_AND_MEAN -std=c11");
+            builder.flag("-std=c11");
         }
     }
 
