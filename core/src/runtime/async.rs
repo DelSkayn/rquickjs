@@ -1,4 +1,5 @@
 use alloc::{
+    boxed::Box,
     ffi::CString,
     sync::{Arc, Weak},
     vec::Vec,
@@ -14,21 +15,40 @@ use async_lock::Mutex;
 
 use super::{
     opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
-    InterruptHandler, JobErrorHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
 use crate::allocator::Allocator;
+use crate::context::take_failed_job_ptr;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
 #[cfg(feature = "parallel")]
 use crate::qjs;
 #[cfg(feature = "parallel")]
 use crate::util::{AssertSendFuture, AssertSyncFuture};
-use crate::{util::ManualPoll, Ctx, Result};
+use crate::{util::ManualPoll, Ctx, Result, Value};
 
 #[derive(Debug)]
 pub(crate) struct InnerRuntime {
     pub runtime: RawRuntime,
 }
+
+/// Callback for job failures found while driving the runtime.
+#[cfg(not(feature = "parallel"))]
+pub trait JobErrorCallback: for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static {}
+#[cfg(not(feature = "parallel"))]
+impl<T> JobErrorCallback for T where T: for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static {}
+
+/// Callback for job failures found while driving the runtime.
+#[cfg(feature = "parallel")]
+pub trait JobErrorCallback: for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static {}
+#[cfg(feature = "parallel")]
+impl<T> JobErrorCallback for T where T: for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static {}
+
+#[cfg(not(feature = "parallel"))]
+pub(crate) type BoxedJobErrorCallback = Box<dyn for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static>;
+#[cfg(feature = "parallel")]
+pub(crate) type BoxedJobErrorCallback =
+    Box<dyn for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static>;
 
 #[cfg(feature = "parallel")]
 unsafe impl Send for InnerRuntime {}
@@ -158,17 +178,6 @@ impl AsyncRuntime {
         }
     }
 
-    /// Runs mid-drain with the runtime lock held; do not acquire it again.
-    /// Without a handler, asynchronous drains discard failed jobs.
-    #[inline]
-    pub async fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
-        self.inner
-            .lock()
-            .await
-            .runtime
-            .set_job_error_handler(handler);
-    }
-
     /// Set a closure which is called when a promise is created, resolved, or chained.
     #[inline]
     pub async fn set_promise_hook(&self, tracker: Option<PromiseHook>) {
@@ -270,9 +279,13 @@ impl AsyncRuntime {
         lock.runtime.is_job_pending() || !lock.runtime.get_opaque().spawner_is_empty()
     }
 
-    /// Run all futures and jobs in the runtime until all are finished.
+    /// Run all futures and jobs in the runtime until all are finished,
+    /// calling `on_error` with the context and exception of each failed job.
     #[inline]
-    pub async fn idle(&self) {
+    pub async fn idle<F>(&self, mut on_error: F)
+    where
+        F: JobErrorCallback,
+    {
         let mut lock = self.inner.lock().await;
         lock.runtime.update_stack_top();
         lock.runtime.drain_pending_free();
@@ -284,7 +297,8 @@ impl AsyncRuntime {
                     Ok(false) => {}
                     Err(ctx) => {
                         // Safety: the runtime is locked for this poll.
-                        unsafe { Ctx::handle_failed_job_ptr(ctx) };
+                        let error = unsafe { take_failed_job_ptr(ctx) };
+                        on_error(error.ctx().clone(), error);
                         continue;
                     }
                 }
@@ -307,8 +321,14 @@ impl AsyncRuntime {
     /// Returns a future that completes when the runtime is dropped.
     /// If the future is polled it will drive futures spawned inside the runtime completing them
     /// even if runtime is currently not in use.
-    pub fn drive(&self) -> DriveFuture {
-        DriveFuture::new(self.weak())
+    ///
+    /// Failed jobs are passed to `on_error`.
+    pub fn drive<F>(&self, on_error: F) -> DriveFuture
+    where
+        F: JobErrorCallback,
+    {
+        let on_error: BoxedJobErrorCallback = Box::new(on_error);
+        DriveFuture::new(self.weak(), on_error)
     }
 }
 
@@ -354,44 +374,26 @@ macro_rules! async_test_case {
 
 #[cfg(test)]
 mod test_util {
-    use std::{
-        sync::{Arc, Mutex},
-        time::Duration,
-    };
+    use std::time::Duration;
 
-    use tokio::{sync::Notify, task::JoinHandle};
+    use tokio::task::JoinHandle;
 
-    use crate::{AsyncRuntime, Value};
+    use crate::{AsyncRuntime, JobErrorCallback};
 
     pub(super) const TIMEOUT: Duration = Duration::from_secs(5);
 
-    pub(super) fn spawn_drive(rt: &AsyncRuntime) -> JoinHandle<()> {
+    pub(super) fn spawn_drive<F>(rt: &AsyncRuntime, on_error: F) -> JoinHandle<()>
+    where
+        F: JobErrorCallback,
+    {
         #[cfg(feature = "parallel")]
         {
-            tokio::spawn(rt.drive())
+            tokio::spawn(rt.drive(on_error))
         }
         #[cfg(not(feature = "parallel"))]
         {
-            tokio::task::spawn_local(rt.drive())
+            tokio::task::spawn_local(rt.drive(on_error))
         }
-    }
-
-    pub(super) async fn report_job_errors<T: Send + 'static>(
-        rt: &AsyncRuntime,
-        report: fn(&Value<'_>) -> T,
-    ) -> (Arc<Mutex<Vec<T>>>, Arc<Notify>) {
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        let reported = Arc::new(Notify::new());
-        {
-            let seen = seen.clone();
-            let reported = reported.clone();
-            rt.set_job_error_handler(Some(Box::new(move |_, error| {
-                seen.lock().unwrap().push(report(&error));
-                reported.notify_one();
-            })))
-            .await;
-        }
-        (seen, reported)
     }
 }
 
@@ -406,7 +408,7 @@ mod test {
 
     use self::context::EvalOptions;
 
-    use super::test_util::{report_job_errors, spawn_drive, TIMEOUT};
+    use super::test_util::{spawn_drive, TIMEOUT};
 
     async_test_case!(basic => (_rt,ctx){
         ctx.async_with(async |ctx|{
@@ -433,9 +435,9 @@ mod test {
         use std::sync::{Arc, atomic::{Ordering,AtomicUsize}};
 
         #[cfg(feature = "parallel")]
-        tokio::spawn(rt.drive());
+        tokio::spawn(rt.drive(|_, _| {}));
         #[cfg(not(feature = "parallel"))]
-        tokio::task::spawn_local(rt.drive());
+        tokio::task::spawn_local(rt.drive(|_, _| {}));
 
         // Give drive time to start.
         tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
@@ -463,9 +465,19 @@ mod test {
 
     });
 
-    async_test_case!(drive_calls_job_error_handler => (rt,ctx){
-        let (seen, reported) = report_job_errors(&rt, |error| error.as_int()).await;
-        spawn_drive(&rt);
+    async_test_case!(drive_reports_failed_job => (rt,ctx){
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let reported = Arc::new(tokio::sync::Notify::new());
+        {
+            let seen = seen.clone();
+            let reported = reported.clone();
+            spawn_drive(&rt, move |_, error| {
+                seen.lock().unwrap().push(error.as_int());
+                reported.notify_one();
+            });
+        }
 
         ctx.async_with(async |ctx|{
             ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
@@ -477,14 +489,11 @@ mod test {
             .expect("the drive task did not run the failing job");
         assert_eq!(*seen.lock().unwrap(), vec![Some(5)]);
 
-        ctx.async_with(async |ctx|{
-            assert!(!ctx.has_exception());
-        }).await;
-
+        ctx.async_with(async |ctx| assert!(!ctx.has_exception())).await;
     });
 
     async_test_case!(drive_resumes_pending_panic => (rt,ctx){
-        let handle = spawn_drive(&rt);
+        let handle = spawn_drive(&rt, |_, _| {});
 
         ctx.async_with(async |ctx|{
             ctx.globals().set(
@@ -504,8 +513,18 @@ mod test {
     });
 
     async_test_case!(drive_keeps_draining_after_failure => (rt,ctx){
-        let (seen, reported) = report_job_errors(&rt, |error| error.as_int()).await;
-        spawn_drive(&rt);
+        use std::sync::{Arc, Mutex};
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let reported = Arc::new(tokio::sync::Notify::new());
+        {
+            let seen = seen.clone();
+            let reported = reported.clone();
+            spawn_drive(&rt, move |_, error| {
+                seen.lock().unwrap().push(error.as_int());
+                reported.notify_one();
+            });
+        }
 
         ctx.async_with(async |ctx|{
             ctx.eval::<(),_>(
@@ -517,16 +536,19 @@ mod test {
             ctx.spawn(async move {});
         }).await;
 
-        tokio::time::timeout(TIMEOUT, reported.notified())
-            .await
-            .expect("the drive task did not run the failing jobs");
+        tokio::time::timeout(TIMEOUT, async {
+            while seen.lock().unwrap().len() < 3 {
+                reported.notified().await;
+            }
+        })
+        .await
+        .expect("the drive task did not run the failing jobs");
         assert!(!rt.is_job_pending().await);
         assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2), Some(3)]);
         ctx.with(|ctx| {
             let ran_last: bool = ctx.globals().get("ranLast").unwrap();
             assert!(ran_last);
         }).await;
-
     });
 
     async_test_case!(no_drive => (rt,ctx){
@@ -560,12 +582,14 @@ mod test {
             });
         }).await;
         assert_eq!(number.load(Ordering::SeqCst),0);
-        rt.idle().await;
+        rt.idle(|_, _| {}).await;
         assert_eq!(number.load(Ordering::SeqCst),1);
 
     });
 
-    async_test_case!(idle_keeps_draining_after_failure => (rt,ctx){
+    async_test_case!(idle_reports_and_keeps_draining => (rt,ctx){
+        use std::sync::{Arc, Mutex};
+
         ctx.with(|ctx| {
             ctx.eval::<(),_>(
                 "queueMicrotask(() => { throw 1; });
@@ -574,11 +598,19 @@ mod test {
             ).unwrap();
         }).await;
 
-        tokio::time::timeout(TIMEOUT, rt.idle())
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        {
+            let seen = seen.clone();
+            tokio::time::timeout(
+                TIMEOUT,
+                rt.idle(move |_, error| seen.lock().unwrap().push(error.as_int())),
+            )
             .await
             .expect("idle hung");
+        }
 
         assert!(!rt.is_job_pending().await);
+        assert_eq!(*seen.lock().unwrap(), vec![Some(1), Some(2)]);
         ctx.with(|ctx| {
             let ran_last: bool = ctx.globals().get("ranLast").unwrap();
             assert!(ran_last);
@@ -598,7 +630,7 @@ mod test {
             ctx.eval::<(),_>("queueMicrotask(rustPanic);").unwrap();
         }).await;
 
-        let res = tokio::time::timeout(TIMEOUT, AssertUnwindSafe(rt.idle()).catch_unwind())
+        let res = tokio::time::timeout(TIMEOUT, AssertUnwindSafe(rt.idle(|_, _| {})).catch_unwind())
             .await
             .expect("idle hung");
         let payload = res.expect_err("idle should resume the stashed panic");
@@ -713,7 +745,7 @@ mod test {
         })
         .await;
 
-        rt.idle().await;
+        rt.idle(|_, _| {}).await;
 
         assert_eq!(COUNT.load(Ordering::Relaxed),2);
     });
@@ -741,7 +773,7 @@ mod test {
         // This previously caused an assertion failure in gc_decref_child
         // due to the interrupt handler corrupting reference counts during
         // pending job execution.
-        rt.idle().await;
+        rt.idle(|_, _| {}).await;
     });
 
     #[cfg(feature = "parallel")]
@@ -759,10 +791,10 @@ mod test {
     async fn ensure_types_are_send_sync() {
         let rt = AsyncRuntime::new().unwrap();
 
-        std::mem::drop(assert_is_sync(rt.idle()));
-        std::mem::drop(assert_is_sync(rt.drive()));
+        std::mem::drop(assert_is_sync(rt.idle(|_, _| {})));
+        std::mem::drop(assert_is_sync(rt.drive(|_, _| {})));
 
-        std::mem::drop(assert_is_send(rt.idle()));
-        std::mem::drop(assert_is_send(rt.drive()));
+        std::mem::drop(assert_is_send(rt.idle(|_, _| {})));
+        std::mem::drop(assert_is_send(rt.drive(|_, _| {})));
     }
 }

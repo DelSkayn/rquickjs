@@ -2,7 +2,9 @@ use super::{
     schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
 };
-use crate::{AsyncRuntime, Ctx};
+use crate::context::take_failed_job_ptr;
+use crate::runtime::r#async::BoxedJobErrorCallback;
+use crate::AsyncRuntime;
 use alloc::vec::Vec;
 use core::{
     future::Future,
@@ -68,6 +70,7 @@ enum DriveFutureState {
 pub struct DriveFuture {
     rt: AsyncWeakRuntime,
     state: DriveFutureState,
+    on_error: BoxedJobErrorCallback,
 }
 
 #[cfg(feature = "parallel")]
@@ -76,10 +79,11 @@ unsafe impl Send for DriveFuture {}
 unsafe impl Sync for DriveFuture {}
 
 impl DriveFuture {
-    pub(crate) fn new(rt: AsyncWeakRuntime) -> Self {
+    pub(crate) fn new(rt: AsyncWeakRuntime, on_error: BoxedJobErrorCallback) -> Self {
         Self {
             rt,
             state: DriveFutureState::Initial,
+            on_error,
         }
     }
 }
@@ -128,7 +132,8 @@ impl Future for DriveFuture {
                     Ok(false) => {}
                     Err(ctx) => {
                         // Safety: the runtime is locked for this poll.
-                        unsafe { Ctx::handle_failed_job_ptr(ctx) };
+                        let error = unsafe { take_failed_job_ptr(ctx) };
+                        (this.on_error)(error.ctx().clone(), error);
                         continue;
                     }
                 }

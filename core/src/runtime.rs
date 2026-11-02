@@ -22,7 +22,7 @@ pub use userdata::{UserDataError, UserDataGuard};
 #[cfg(feature = "futures")]
 pub(crate) use r#async::InnerRuntime;
 #[cfg(feature = "futures")]
-pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
+pub use r#async::{AsyncRuntime, AsyncWeakRuntime, JobErrorCallback};
 
 use crate::value::promise::PromiseHookType;
 use crate::{Ctx, Value};
@@ -43,13 +43,6 @@ pub type RejectionTracker = Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>, Value<'a>, bo
 #[cfg(feature = "parallel")]
 pub type RejectionTracker =
     Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>, Value<'a>, bool) + Send + 'static>;
-
-/// The type of the job error handler.
-#[cfg(not(feature = "parallel"))]
-pub type JobErrorHandler = Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>) + 'static>;
-/// The type of the job error handler.
-#[cfg(feature = "parallel")]
-pub type JobErrorHandler = Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>) + Send + 'static>;
 
 /// The type of the interrupt handler.
 #[cfg(not(feature = "parallel"))]

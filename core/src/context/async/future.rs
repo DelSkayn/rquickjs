@@ -138,7 +138,7 @@ where
                     Ok(true) => made_progress = true,
                     Err(ctx) => {
                         // Safety: the runtime is locked for this poll.
-                        unsafe { Ctx::handle_failed_job_ptr(ctx) };
+                        drop(unsafe { crate::context::take_failed_job_ptr(ctx) });
                         made_progress = true;
                     }
                 }

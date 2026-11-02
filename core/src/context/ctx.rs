@@ -282,7 +282,7 @@ impl<'js> Ctx<'js> {
     }
 
     #[cfg(feature = "futures")]
-    pub(crate) fn handle_failed_job(&self) {
+    pub(crate) fn take_failed_job(&self) -> Value<'js> {
         // Clear the engine's slot so unrelated code can't trip over it.
         let raw = unsafe { qjs::JS_GetException(self.as_ptr()) };
         // Safety: the caller holds the runtime lock for the whole drain.
@@ -300,18 +300,7 @@ impl<'js> Ctx<'js> {
         if error.is_uncatchable_error() {
             opaque.record_interrupted_job(error.clone());
         }
-        opaque.run_job_error_handler(self.clone(), error);
-    }
-
-    /// # Safety
-    /// The runtime must be locked, and `ctx` must be the failed job's context.
-    #[cfg(feature = "futures")]
-    pub(crate) unsafe fn handle_failed_job_ptr(ctx: *mut qjs::JSContext) {
-        let ctx =
-            NonNull::new(ctx).expect("executing pending job returned a null context on error");
-        // Safety: guaranteed by the caller. `from_raw` dups the context and
-        // the temporary `Ctx` frees it on drop.
-        unsafe { Ctx::from_raw(ctx) }.handle_failed_job();
+        error
     }
 
     pub(crate) fn take_job_panic(&self) -> Option<Box<dyn Any + Send + 'static>> {
@@ -597,6 +586,15 @@ impl<'js> Ctx<'js> {
     pub fn as_raw(&self) -> NonNull<qjs::JSContext> {
         self.ctx
     }
+}
+
+/// # Safety
+/// The runtime must be locked and `ctx` must be the failed job's context.
+#[cfg(feature = "futures")]
+pub(crate) unsafe fn take_failed_job_ptr<'js>(ctx: *mut qjs::JSContext) -> Value<'js> {
+    let ctx = NonNull::new(ctx).expect("executing pending job returned a null context on error");
+    // Safety: guaranteed by the caller.
+    unsafe { Ctx::from_raw(ctx) }.take_failed_job()
 }
 
 #[cfg(test)]

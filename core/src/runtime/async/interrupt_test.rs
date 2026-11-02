@@ -15,7 +15,7 @@ use std::{
 use futures_rs::{poll, FutureExt};
 use tokio::sync::oneshot;
 
-use super::test_util::{report_job_errors, spawn_drive, TIMEOUT};
+use super::test_util::{spawn_drive, TIMEOUT};
 use crate::{promise::PromiseFuture, AsyncContext, AsyncRuntime, Ctx, Error, Module, Promise};
 
 const LOOPING_JOB: &str = "Promise.resolve().then(() => { for (;;) {} })";
@@ -23,25 +23,21 @@ const LOOPING_JOB: &str = "Promise.resolve().then(() => { for (;;) {} })";
 struct Case {
     later: &'static str,
     host_catch: bool,
-    later_failures: usize,
 }
 
 const LATER_THROW: Case = Case {
     later: "queueMicrotask(() => { throw 2; });",
     host_catch: false,
-    later_failures: 1,
 };
 
 const LATER_TRY_AWAIT: Case = Case {
     later: "(async () => { try { await Promise.reject(1); } catch {} })();",
     host_catch: false,
-    later_failures: 0,
 };
 
 const HOST_CATCH: Case = Case {
     later: "",
     host_catch: true,
-    later_failures: 0,
 };
 
 async fn one_shot_interrupt(rt: &AsyncRuntime) -> Arc<AtomicBool> {
@@ -102,8 +98,15 @@ async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
 
 async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     let armed = one_shot_interrupt(rt).await;
-    let (seen, reported) = report_job_errors(rt, |error| error.is_uncatchable_error()).await;
-    spawn_drive(rt);
+    let reported = Arc::new(tokio::sync::Notify::new());
+    {
+        let reported = reported.clone();
+        spawn_drive(rt, move |_, error| {
+            if error.is_uncatchable_error() {
+                reported.notify_one();
+            }
+        });
+    }
 
     ctx.async_with(async |ctx| {
         ctx.eval::<(), _>(script(case.later)).unwrap();
@@ -113,8 +116,6 @@ async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     })
     .await;
 
-    // The handler runs mid-drain with the runtime lock held, so the drive
-    // task finishes the later jobs before the observer below can run.
     tokio::time::timeout(TIMEOUT, reported.notified())
         .await
         .expect("the drive task did not run the looping job");
@@ -132,11 +133,6 @@ async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     )
     .await
     .expect("the promise future hung on an interrupted job");
-
-    let seen = seen.lock().unwrap();
-    assert_eq!(seen.first(), Some(&true));
-    assert_eq!(seen.iter().filter(|&&uncatchable| uncatchable).count(), 1);
-    assert_eq!(seen.len(), 1 + case.later_failures);
 }
 
 async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
@@ -147,7 +143,7 @@ async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     })
     .await;
 
-    tokio::time::timeout(TIMEOUT, rt.idle())
+    tokio::time::timeout(TIMEOUT, rt.idle(|_, _| {}))
         .await
         .expect("idle hung");
     assert!(!armed.load(SeqCst));
@@ -192,7 +188,7 @@ async_test_case!(idle_observes_interrupt_despite_later_work => (_rt, _ctx) {
 
 async_test_case!(drive_wakes_spawned_observer => (rt, ctx) {
     let armed = one_shot_interrupt(&rt).await;
-    spawn_drive(&rt);
+    spawn_drive(&rt, |_, _| {});
     let (tx, rx) = oneshot::channel();
     ctx.with(|ctx| {
         let observer = ctx.clone();
@@ -239,7 +235,7 @@ async_test_case!(async_drains_leave_no_pending_exception => (rt, ctx) {
         armed.store(true, SeqCst);
     })
     .await;
-    tokio::time::timeout(TIMEOUT, rt.idle())
+    tokio::time::timeout(TIMEOUT, rt.idle(|_, _| {}))
         .await
         .expect("idle hung");
     assert!(!armed.load(SeqCst));
@@ -259,7 +255,7 @@ async_test_case!(unobserved_interrupt_fails_one_later_future => (rt, ctx) {
         armed.store(true, SeqCst);
     })
     .await;
-    tokio::time::timeout(TIMEOUT, rt.idle())
+    tokio::time::timeout(TIMEOUT, rt.idle(|_, _| {}))
         .await
         .expect("idle hung");
     assert!(!armed.load(SeqCst));
@@ -301,7 +297,7 @@ async fn taken_interrupt_is_scoped_to_the_interrupted_jobs_context() {
             armed.store(true, SeqCst);
         })
         .await;
-    tokio::time::timeout(TIMEOUT, rt.idle())
+    tokio::time::timeout(TIMEOUT, rt.idle(|_, _| {}))
         .await
         .expect("idle hung");
     assert!(!armed.load(SeqCst));
@@ -333,7 +329,7 @@ async_test_case!(module_load_after_failed_job => (rt, ctx) {
             .unwrap();
     })
     .await;
-    tokio::time::timeout(TIMEOUT, rt.idle())
+    tokio::time::timeout(TIMEOUT, rt.idle(|_, _| {}))
         .await
         .expect("idle hung");
 
@@ -372,7 +368,7 @@ async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
 
     // `idle`, then a later `async_with`.
     ctx.with(|ctx| ctx.eval::<(), _>(script).unwrap()).await;
-    tokio::time::timeout(TIMEOUT, rt.idle())
+    tokio::time::timeout(TIMEOUT, rt.idle(|_, _| {}))
         .await
         .expect("idle hung");
     tokio::time::timeout(
@@ -390,23 +386,23 @@ async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
     .expect("a promise future hung");
 });
 
-async_test_case!(handler_panic_still_records_interrupt => (rt, ctx) {
+async_test_case!(callback_panic_still_records_interrupt => (rt, ctx) {
     let armed = one_shot_interrupt(&rt).await;
-    rt.set_job_error_handler(Some(Box::new(|_, _| panic!("handler boom"))))
-        .await;
     ctx.with(|ctx| {
         ctx.eval::<(), _>(script("")).unwrap();
         armed.store(true, SeqCst);
     })
     .await;
 
-    let res = tokio::time::timeout(TIMEOUT, AssertUnwindSafe(rt.idle()).catch_unwind())
-        .await
-        .expect("idle hung");
-    let payload = res.expect_err("the handler panic should propagate out of idle");
-    assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
+    let res = tokio::time::timeout(
+        TIMEOUT,
+        AssertUnwindSafe(rt.idle(|_, _| panic!("callback boom"))).catch_unwind(),
+    )
+    .await
+    .expect("idle hung");
+    let payload = res.expect_err("the callback panic should propagate out of idle");
+    assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "callback boom");
     assert!(!armed.load(SeqCst));
-    rt.set_job_error_handler(None).await;
 
     tokio::time::timeout(
         TIMEOUT,

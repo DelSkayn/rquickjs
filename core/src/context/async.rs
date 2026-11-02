@@ -63,7 +63,7 @@ use future::WithFuture;
 /// }).await;
 /// assert_eq!(some_var,2);
 ///
-/// rt.idle().await
+/// rt.idle(|_, _| {}).await
 /// # }
 /// ```
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
@@ -175,6 +175,10 @@ impl AsyncContext {
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
+    /// Job failures drained by this driver are discarded. Use
+    /// [`Ctx::drain_jobs`] to handle a job's exception, or [`crate::AsyncRuntime::idle`] and
+    /// [`crate::AsyncRuntime::drive`], which take a job error callback.
+    ///
     /// # Example
     ///
     /// ```
@@ -253,67 +257,6 @@ mod test {
         let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
         ctx.async_with(async |ctx| {
             ctx.globals();
-        })
-        .await;
-    }
-
-    #[tokio::test]
-    async fn async_with_reports_failed_job() {
-        use std::sync::{Arc, Mutex};
-
-        let rt = AsyncRuntime::new().unwrap();
-        let seen = Arc::new(Mutex::new(Vec::new()));
-        {
-            let seen = seen.clone();
-            rt.set_job_error_handler(Some(Box::new(move |_, error| {
-                seen.lock().unwrap().push(error.as_int());
-            })))
-            .await;
-        }
-        let ctx = AsyncContext::full(&rt).await.unwrap();
-        ctx.async_with(async |ctx| {
-            ctx.eval::<(), _>("queueMicrotask(() => { throw 7; });")
-                .unwrap();
-
-            tokio::task::yield_now().await;
-            assert!(!ctx.has_exception());
-        })
-        .await;
-        assert_eq!(*seen.lock().unwrap(), vec![Some(7)]);
-    }
-
-    #[tokio::test]
-    async fn async_with_job_error_handler_panic_propagates() {
-        use std::panic::AssertUnwindSafe;
-
-        use futures_rs::future::FutureExt;
-
-        let rt = AsyncRuntime::new().unwrap();
-        rt.set_job_error_handler(Some(Box::new(|_, _| panic!("handler boom"))))
-            .await;
-        let ctx = AsyncContext::full(&rt).await.unwrap();
-
-        let res = AssertUnwindSafe(ctx.async_with(async |ctx| {
-            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
-                .unwrap();
-
-            tokio::task::yield_now().await;
-        }))
-        .catch_unwind()
-        .await;
-
-        let payload = res.expect_err("the handler panic should propagate out of the driver");
-        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "handler boom");
-
-        ctx.async_with(async |ctx| {
-            assert!(!ctx.has_exception());
-            assert!(matches!(
-                ctx.eval::<(), _>("throw 2"),
-                Err(crate::Error::Exception)
-            ));
-            assert_eq!(ctx.catch().as_int(), Some(2));
-            let sum: i32 = ctx.eval("1 + 1").unwrap();
-            assert_eq!(sum, 2);
         })
         .await;
     }

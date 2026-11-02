@@ -24,6 +24,8 @@ pub trait MultiWith<'js> {
 
 pub use base::Context;
 pub use builder::{intrinsic, ContextBuilder, Intrinsic};
+#[cfg(feature = "futures")]
+pub(crate) use ctx::take_failed_job_ptr;
 pub use ctx::{Ctx, EvalOptions};
 
 #[cfg(feature = "futures")]

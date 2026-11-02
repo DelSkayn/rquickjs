@@ -6,8 +6,7 @@ use crate::{
 use super::{
     exotic::ExoticMethodsHolder,
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, JobErrorHandler, PromiseHook, PromiseHookType, RejectionTracker,
-    UserDataError,
+    InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
 };
 use alloc::boxed::Box;
 use core::{
@@ -45,9 +44,6 @@ pub(crate) struct Opaque<'js> {
 
     /// The user provided interrupt handler, if any.
     interrupt_handler: UnsafeCell<Option<InterruptHandler>>,
-
-    /// The user provided job error handler, if any.
-    job_error_handler: UnsafeCell<Option<JobErrorHandler>>,
 
     /// Set while the runtime is torn down; drains then discard failures
     /// instead of recording or resuming them.
@@ -87,8 +83,6 @@ impl<'js> Opaque<'js> {
             rejection_tracker: UnsafeCell::new(None),
 
             interrupt_handler: UnsafeCell::new(None),
-
-            job_error_handler: UnsafeCell::new(None),
 
             closed: Cell::new(false),
 
@@ -287,26 +281,6 @@ impl<'js> Opaque<'js> {
         }
     }
 
-    pub fn set_job_error_handler(&self, handler: Option<JobErrorHandler>) {
-        // Drop the old handler only after the slot holds the new one: its
-        // destructor may drain jobs and read the slot.
-        let old = unsafe { core::mem::replace(&mut *self.job_error_handler.get(), handler) };
-        drop(old);
-    }
-
-    #[cfg(feature = "futures")]
-    pub fn run_job_error_handler<'a>(&self, ctx: Ctx<'a>, error: Value<'a>) -> bool {
-        unsafe {
-            // The handler may re-enter the drain, so only borrow it shared.
-            if let Some(handler) = (*self.job_error_handler.get()).as_ref() {
-                handler(ctx, error);
-                true
-            } else {
-                false
-            }
-        }
-    }
-
     pub fn set_interrupt_handler(&self, interupt: Option<InterruptHandler>) {
         unsafe { (*self.interrupt_handler.get()) = interupt }
     }
@@ -361,8 +335,6 @@ impl<'js> Opaque<'js> {
         // Destructors below may drain jobs; their failures must not outlive
         // the runtime.
         self.closed.set(true);
-        // Empty the handler slot first, so teardown drains find no handler.
-        self.job_error_handler.get_mut().take();
         // The recorded interrupt may keep its context alive; drop it outside
         // the slot as finalizers may re-enter.
         #[cfg(feature = "futures")]
