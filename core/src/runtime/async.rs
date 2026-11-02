@@ -297,7 +297,6 @@ impl AsyncRuntime {
     /// Returns a future that completes when the runtime is dropped.
     /// If the future is polled it will drive futures spawned inside the runtime completing them
     /// even if runtime is currently not in use.
-    ///
     pub fn drive(&self) -> DriveFuture {
         DriveFuture::new(self.weak())
     }

@@ -164,10 +164,9 @@ impl<'js> Promise<'js> {
 
     /// Wrap the promise into a struct which can be polled as a rust future.
     ///
-    /// A job that fails uncatchably in this promise's context during an async
-    /// drain fails the next unsettled future polled there, which need not be
-    /// the future awaiting that job. Pending exceptions are runtime-wide, so
-    /// other futures polled before it is caught fail too.
+    /// A job that fails uncatchably in this promise's context fails the next
+    /// unsettled future polled there. Pending exceptions are runtime-wide, so
+    /// catch it promptly.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[cfg(feature = "futures")]
     pub fn into_future<T>(self) -> PromiseFuture<'js, T>

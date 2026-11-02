@@ -78,9 +78,8 @@ impl JobErrorQueue {
 
 /// A failed job.
 ///
-/// The exception stays in the runtime until [`JobError::into_value`] takes it.
-/// Dropping it releases the exception. Read the value with a context of the
-/// same runtime.
+/// The exception stays in the runtime until [`JobError::into_value`] takes it
+/// with a context of the same runtime.
 pub struct JobError {
     id: u64,
     released: JobErrorQueue,

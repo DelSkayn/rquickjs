@@ -434,7 +434,7 @@ impl<'js> Ctx<'js> {
     }
 
     /// Runs pending jobs until the queue is empty, stopping at the first
-    /// failure and returning its exception. Nothing is retained or reported.
+    /// failure and returning it.
     pub fn drain_jobs(&self) -> StdResult<(), JobError> {
         loop {
             match self.step_job() {
