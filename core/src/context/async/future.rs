@@ -10,7 +10,7 @@ use async_lock::futures::Lock;
 
 use crate::{
     markers::ParallelSend,
-    runtime::{schedular::SchedularPoll, BoxedJobErrorCallback, InnerRuntime, JobErrorCallback},
+    runtime::{schedular::SchedularPoll, InnerRuntime, JobError},
     AsyncContext, Ctx,
 };
 
@@ -18,7 +18,6 @@ pub struct WithFuture<'a, F, R> {
     context: &'a AsyncContext,
     lock_state: LockState<'a>,
     state: WithFutureState<'a, F, R>,
-    on_error: BoxedJobErrorCallback,
 }
 
 enum LockState<'a> {
@@ -49,16 +48,11 @@ where
     F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend,
     R: ParallelSend,
 {
-    pub fn new<H>(context: &'a AsyncContext, on_error: H, f: F) -> Self
-    where
-        H: JobErrorCallback,
-    {
-        let on_error: BoxedJobErrorCallback = Box::new(on_error);
+    pub fn new(context: &'a AsyncContext, f: F) -> Self {
         Self {
             context,
             lock_state: LockState::Initial,
             state: WithFutureState::Initial { closure: f },
-            on_error,
         }
     }
 }
@@ -68,7 +62,7 @@ where
     F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend + 'a,
     R: ParallelSend + 'static,
 {
-    type Output = R;
+    type Output = Result<R, JobError>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // Implementation ensures we don't break pin guarantees.
         let this = unsafe { self.get_unchecked_mut() };
@@ -145,8 +139,7 @@ where
                     Err(ctx) => {
                         // Safety: the runtime is locked for this poll.
                         let error = unsafe { crate::context::take_failed_job_ptr(ctx) };
-                        (this.on_error)(error.ctx().clone(), error);
-                        made_progress = true;
+                        return Poll::Ready(Err(error));
                     }
                 }
             }
@@ -161,7 +154,10 @@ where
         // Manually drop the lock so it isn't accidentally moved into somewhere.
         mem::drop(lock);
 
-        res
+        match res {
+            Poll::Ready(value) => Poll::Ready(Ok(value)),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 

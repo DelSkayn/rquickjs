@@ -3,12 +3,7 @@ use super::{
     owner::{ContextOwner, DropContext},
     ContextBuilder, Intrinsic,
 };
-use crate::{
-    markers::ParallelSend,
-    qjs,
-    runtime::{AsyncRuntime, JobErrorCallback},
-    Ctx, Error, Result,
-};
+use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
 use core::{mem, ptr::NonNull};
 
 mod future;
@@ -45,7 +40,7 @@ use future::WithFuture;
 /// let mut some_var = 1;
 /// // closure always moves, so create a ref.
 /// let some_var_ref = &mut some_var;
-/// async_with!(ctx, |_, error| eprintln!("job failed: {error:?}") => |ctx|{
+/// async_with!(ctx => |ctx|{
 ///     
 ///     // With the macro you can borrow the environment.
 ///     *some_var_ref += 1;
@@ -68,15 +63,15 @@ use future::WithFuture;
 /// }).await;
 /// assert_eq!(some_var,2);
 ///
-/// rt.idle(|_, _| {}).await
+/// rt.idle().await.unwrap()
 /// # }
 /// ```
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
 #[macro_export]
 #[deprecated]
 macro_rules! async_with{
-    ($context:expr, $on_error:expr => |$ctx:ident| { $($t:tt)* }) => {
-        $crate::AsyncContext::async_with(&$context,$on_error,async |$ctx| {
+    ($context:expr => |$ctx:ident| { $($t:tt)* }) => {
+        $crate::AsyncContext::async_with(&$context,async |$ctx| {
             $($t)*
         })
     };
@@ -180,9 +175,7 @@ impl AsyncContext {
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
-    /// The callback receives the context and exception of each failed job the
-    /// driver drains. It runs with the runtime lock held and must not acquire
-    /// it again.
+    /// A failed job stops the driver and is returned as [`crate::JobError`].
     ///
     /// # Example
     ///
@@ -200,9 +193,7 @@ impl AsyncContext {
     /// }
     ///
     /// let ctx = AsyncContext::full(&rt).await.unwrap();
-    /// ctx.async_with(
-    ///     |_, error| eprintln!("job failed: {error:?}"),
-    ///     async |ctx| {
+    /// ctx.async_with(async |ctx| {
     ///
     ///     let delay = Function::new(ctx.clone(),Async(delay))
     ///         .unwrap()
@@ -216,16 +207,15 @@ impl AsyncContext {
     ///             // do something
     ///         })
     ///     "#).unwrap();
-    /// }).await;
+    /// }).await.unwrap();
     /// # }
     /// ```
-    pub fn async_with<H, F, R>(&self, on_error: H, f: F) -> WithFuture<F, R>
+    pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
     where
-        H: JobErrorCallback,
         F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend,
         R: ParallelSend,
     {
-        WithFuture::new(self, on_error, f)
+        WithFuture::new(self, f)
     }
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
@@ -257,18 +247,17 @@ unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]
 mod test {
+    #![allow(unused_must_use)]
+
     use crate::{AsyncContext, AsyncRuntime, Function};
 
     #[tokio::test]
     async fn base_asyc_context() {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
-        ctx.async_with(
-            |_, _| {},
-            async |ctx| {
-                ctx.globals();
-            },
-        )
+        ctx.async_with(async |ctx| {
+            ctx.globals();
+        })
         .await;
     }
 
@@ -276,28 +265,25 @@ mod test {
     async fn async_with_drain_skips_caught_panic() {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
-        ctx.async_with(
-            |_, _| {},
-            async |ctx| {
-                ctx.globals()
-                    .set(
-                        "rustPanic",
-                        Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
-                    )
-                    .unwrap();
+        ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
 
-                ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
-                    .unwrap();
-                ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
-                    .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap();
 
-                tokio::task::yield_now().await;
+            tokio::task::yield_now().await;
 
-                assert!(!ctx.has_exception());
-                let sum: i32 = ctx.eval("1 + 1").unwrap();
-                assert_eq!(sum, 2);
-            },
-        )
+            assert!(!ctx.has_exception());
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
         .await;
     }
 
@@ -310,33 +296,27 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        let res = AssertUnwindSafe(ctx.async_with(
-            |_, _| {},
-            async |ctx| {
-                ctx.globals()
-                    .set(
-                        "rustPanic",
-                        Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
-                    )
-                    .unwrap();
-                ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+        let res = AssertUnwindSafe(ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
 
-                tokio::task::yield_now().await;
-            },
-        ))
+            tokio::task::yield_now().await;
+        }))
         .catch_unwind()
         .await;
 
         let payload = res.expect_err("the driver should have resumed the stashed panic");
         assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
 
-        ctx.async_with(
-            |_, _| {},
-            async |ctx| {
-                let sum: i32 = ctx.eval("1 + 1").unwrap();
-                assert_eq!(sum, 2);
-            },
-        )
+        ctx.async_with(async |ctx| {
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
         .await;
     }
 

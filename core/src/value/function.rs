@@ -442,7 +442,7 @@ mod test {
         });
         assert!(rt.is_job_pending());
         ctx.with(|ctx| {
-            ctx.drain_jobs();
+            let _ = ctx.drain_jobs();
         });
         ctx.with(|ctx| {
             let g = ctx.globals();

@@ -1,6 +1,6 @@
 use super::{
     schedular::{Schedular, SchedularPoll},
-    AsyncWeakRuntime, BoxedJobErrorCallback, InnerRuntime,
+    AsyncWeakRuntime, InnerRuntime, JobError,
 };
 use crate::context::take_failed_job_ptr;
 use crate::AsyncRuntime;
@@ -69,7 +69,6 @@ enum DriveFutureState {
 pub struct DriveFuture {
     rt: AsyncWeakRuntime,
     state: DriveFutureState,
-    on_error: BoxedJobErrorCallback,
 }
 
 #[cfg(feature = "parallel")]
@@ -78,17 +77,16 @@ unsafe impl Send for DriveFuture {}
 unsafe impl Sync for DriveFuture {}
 
 impl DriveFuture {
-    pub(crate) fn new(rt: AsyncWeakRuntime, on_error: BoxedJobErrorCallback) -> Self {
+    pub(crate) fn new(rt: AsyncWeakRuntime) -> Self {
         Self {
             rt,
             state: DriveFutureState::Initial,
-            on_error,
         }
     }
 }
 
 impl Future for DriveFuture {
-    type Output = ();
+    type Output = core::result::Result<(), JobError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> Poll<Self::Output> {
         // Safety: We manually ensure that pinned values remained properly pinned.
@@ -97,7 +95,7 @@ impl Future for DriveFuture {
             let mut lock = match this.state {
                 DriveFutureState::Initial => {
                     let Some(_runtime) = this.rt.try_ref() else {
-                        return Poll::Ready(());
+                        return Poll::Ready(Ok(()));
                     };
 
                     let lock_future = _runtime.inner.lock_arc();
@@ -132,8 +130,7 @@ impl Future for DriveFuture {
                     Err(ctx) => {
                         // Safety: the runtime is locked for this poll.
                         let error = unsafe { take_failed_job_ptr(ctx) };
-                        (this.on_error)(error.ctx().clone(), error);
-                        continue;
+                        return Poll::Ready(Err(error));
                     }
                 }
 

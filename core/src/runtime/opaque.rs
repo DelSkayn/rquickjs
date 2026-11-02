@@ -1,14 +1,15 @@
 use crate::{
     class::{self, ffi::VTable, JsClass},
-    qjs, Ctx, Error, JsLifetime, Object, Value,
+    qjs, Ctx, Error, JsLifetime, Object, Persistent, Value,
 };
 
 use super::{
     exotic::ExoticMethodsHolder,
     userdata::{UserDataGuard, UserDataMap},
-    InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
+    InterruptHandler, JobError, JobErrorQueue, PromiseHook, PromiseHookType, RejectionTracker,
+    UserDataError,
 };
-use alloc::boxed::Box;
+use alloc::{boxed::Box, vec::Vec};
 use core::{
     any::{Any, TypeId},
     cell::{Cell, UnsafeCell},
@@ -54,6 +55,13 @@ pub(crate) struct Opaque<'js> {
     #[cfg(feature = "futures")]
     interrupted_job: UnsafeCell<Option<Value<'js>>>,
 
+    /// Exceptions of failed jobs that were handed out as [`JobError`].
+    job_errors: UnsafeCell<Vec<Option<Persistent<Value<'static>>>>>,
+    /// Slots in `job_errors` that were released and can be reused.
+    free_job_errors: UnsafeCell<Vec<u64>>,
+    /// Slots released by dropping a [`JobError`] off the runtime lock.
+    released_job_errors: JobErrorQueue,
+
     /// The class id for rust classes.
     class_id: qjs::JSClassID,
     /// The class id for rust classes which can be called.
@@ -88,6 +96,10 @@ impl<'js> Opaque<'js> {
 
             #[cfg(feature = "futures")]
             interrupted_job: UnsafeCell::new(None),
+
+            job_errors: UnsafeCell::new(Vec::new()),
+            free_job_errors: UnsafeCell::new(Vec::new()),
+            released_job_errors: JobErrorQueue::new(),
 
             class_id: qjs::JS_INVALID_CLASS_ID,
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
@@ -183,6 +195,47 @@ impl<'js> Opaque<'js> {
         match slot {
             Some(error) if error.ctx().as_ptr() == ctx.as_ptr() => slot.take(),
             _ => None,
+        }
+    }
+
+    pub(crate) fn job_error(&self, value: Value<'js>) -> JobError {
+        let ctx = value.ctx().clone();
+        let persistent = Persistent::save(&ctx, value);
+        let errors = unsafe { &mut *self.job_errors.get() };
+        let id = match unsafe { &mut *self.free_job_errors.get() }.pop() {
+            Some(id) => {
+                errors[id as usize] = Some(persistent);
+                id
+            }
+            None => {
+                let id = errors.len() as u64;
+                errors.push(Some(persistent));
+                id
+            }
+        };
+        JobError::new(id, self.released_job_errors.clone())
+    }
+
+    pub(crate) fn take_job_error(&self, id: u64) -> Option<Persistent<Value<'static>>> {
+        unsafe { &mut *self.job_errors.get() }
+            .get_mut(id as usize)
+            .and_then(Option::take)
+    }
+
+    /// Frees exceptions whose [`JobError`] was dropped without being read.
+    pub(crate) fn drain_released_job_errors(&self) {
+        if self.released_job_errors.is_empty() {
+            return;
+        }
+        let ids = self.released_job_errors.take();
+        let errors = unsafe { &mut *self.job_errors.get() };
+        let free = unsafe { &mut *self.free_job_errors.get() };
+        for id in ids {
+            if let Some(slot) = errors.get_mut(id as usize) {
+                if slot.take().is_some() {
+                    free.push(id);
+                }
+            }
         }
     }
 
@@ -342,14 +395,23 @@ impl<'js> Opaque<'js> {
             let interrupted_job = self.interrupted_job.get_mut().take();
             drop(interrupted_job);
         }
+        {
+            let job_errors = core::mem::take(self.job_errors.get_mut());
+            drop(job_errors);
+        }
         self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();
-        // Destructors above may register class prototypes, which hold a JS
-        // value and a context; free them before the runtime is.
+        // Destructors above may have run failing jobs and registered class
+        // prototypes; both hold JS values and contexts, so free them before
+        // the runtime is.
+        let job_errors = core::mem::take(self.job_errors.get_mut());
+        drop(job_errors);
+        self.free_job_errors.get_mut().clear();
+        self.released_job_errors.take();
         self.prototypes.get_mut().clear();
         debug_assert!(
             unsafe { (*self.prototypes.get()).is_empty() },

@@ -46,7 +46,7 @@ fn eval_json(src: &str) -> String {
             },
         });
         // drain the microtask queue so promise continuations observably run.
-        context.with(|ctx| while ctx.drain_jobs().is_some() {});
+        context.with(|ctx| while ctx.drain_jobs().is_err() {});
         out
     })
 }

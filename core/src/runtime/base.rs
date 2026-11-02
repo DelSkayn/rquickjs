@@ -255,7 +255,7 @@ mod test {
                 self.0
                     .eval::<(), _>("queueMicrotask(() => { throw { late: true }; })")
                     .unwrap();
-                assert!(self.0.drain_jobs().is_some());
+                assert!(self.0.drain_jobs().is_err());
             }
         }
 
@@ -303,7 +303,7 @@ mod test {
         impl Drop for DrainOnDrop<'_> {
             fn drop(&mut self) {
                 self.0.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
-                assert!(self.0.drain_jobs().is_some());
+                assert!(self.0.drain_jobs().is_err());
             }
         }
 
