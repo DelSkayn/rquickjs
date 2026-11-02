@@ -1,9 +1,8 @@
 use super::{
     schedular::{Schedular, SchedularPoll},
-    AsyncWeakRuntime, InnerRuntime,
+    AsyncWeakRuntime, BoxedJobErrorCallback, InnerRuntime,
 };
 use crate::context::take_failed_job_ptr;
-use crate::runtime::r#async::BoxedJobErrorCallback;
 use crate::AsyncRuntime;
 use alloc::vec::Vec;
 use core::{

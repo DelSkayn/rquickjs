@@ -22,7 +22,7 @@ pub use userdata::{UserDataError, UserDataGuard};
 #[cfg(feature = "futures")]
 pub(crate) use r#async::InnerRuntime;
 #[cfg(feature = "futures")]
-pub use r#async::{AsyncRuntime, AsyncWeakRuntime, JobErrorCallback};
+pub use r#async::{AsyncRuntime, AsyncWeakRuntime};
 
 use crate::value::promise::PromiseHookType;
 use crate::{Ctx, Value};
@@ -43,6 +43,24 @@ pub type RejectionTracker = Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>, Value<'a>, bo
 #[cfg(feature = "parallel")]
 pub type RejectionTracker =
     Box<dyn for<'a> Fn(Ctx<'a>, Value<'a>, Value<'a>, bool) + Send + 'static>;
+
+/// Callback for job failures found while driving the runtime.
+#[cfg(all(feature = "futures", not(feature = "parallel")))]
+pub trait JobErrorCallback: for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static {}
+#[cfg(all(feature = "futures", not(feature = "parallel")))]
+impl<T> JobErrorCallback for T where T: for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static {}
+
+/// Callback for job failures found while driving the runtime.
+#[cfg(all(feature = "futures", feature = "parallel"))]
+pub trait JobErrorCallback: for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static {}
+#[cfg(all(feature = "futures", feature = "parallel"))]
+impl<T> JobErrorCallback for T where T: for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static {}
+
+#[cfg(all(feature = "futures", not(feature = "parallel")))]
+pub(crate) type BoxedJobErrorCallback = Box<dyn for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static>;
+#[cfg(all(feature = "futures", feature = "parallel"))]
+pub(crate) type BoxedJobErrorCallback =
+    Box<dyn for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static>;
 
 /// The type of the interrupt handler.
 #[cfg(not(feature = "parallel"))]

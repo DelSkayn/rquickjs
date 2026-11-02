@@ -69,20 +69,23 @@ async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     let armed = one_shot_interrupt(rt).await;
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
-            let promise: Promise = ctx.eval(script(case.later)).unwrap();
-            let mut future = promise.into_future::<()>();
-            assert!(poll!(&mut future).is_pending());
-            armed.store(true, SeqCst);
-            if case.host_catch {
-                // Let the driver drain the jobs before host code catches.
-                tokio::task::yield_now().await;
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                let promise: Promise = ctx.eval(script(case.later)).unwrap();
+                let mut future = promise.into_future::<()>();
+                assert!(poll!(&mut future).is_pending());
+                armed.store(true, SeqCst);
+                if case.host_catch {
+                    // Let the driver drain the jobs before host code catches.
+                    tokio::task::yield_now().await;
+                    assert!(!armed.load(SeqCst));
+                    host_throw_and_catch(&ctx);
+                }
+                assert_observes_interrupt(&ctx, future).await;
                 assert!(!armed.load(SeqCst));
-                host_throw_and_catch(&ctx);
-            }
-            assert_observes_interrupt(&ctx, future).await;
-            assert!(!armed.load(SeqCst));
-        }),
+            },
+        ),
     )
     .await
     .expect("the promise future hung on an interrupted job");
@@ -100,12 +103,15 @@ async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
         });
     }
 
-    ctx.async_with(async |ctx| {
-        ctx.eval::<(), _>(script(case.later)).unwrap();
-        armed.store(true, SeqCst);
-        // Wake the drive task so its drain runs the queued jobs.
-        ctx.spawn(async move {});
-    })
+    ctx.async_with(
+        |_, _| {},
+        async |ctx| {
+            ctx.eval::<(), _>(script(case.later)).unwrap();
+            armed.store(true, SeqCst);
+            // Wake the drive task so its drain runs the queued jobs.
+            ctx.spawn(async move {});
+        },
+    )
     .await;
 
     tokio::time::timeout(TIMEOUT, reported.notified())
@@ -115,13 +121,16 @@ async fn drive_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
 
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
-            if case.host_catch {
-                host_throw_and_catch(&ctx);
-            }
-            let promise: Promise = ctx.globals().get("p").unwrap();
-            assert_observes_interrupt(&ctx, promise.into_future()).await;
-        }),
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                if case.host_catch {
+                    host_throw_and_catch(&ctx);
+                }
+                let promise: Promise = ctx.globals().get("p").unwrap();
+                assert_observes_interrupt(&ctx, promise.into_future()).await;
+            },
+        ),
     )
     .await
     .expect("the promise future hung on an interrupted job");
@@ -142,13 +151,16 @@ async fn idle_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
 
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
-            if case.host_catch {
-                host_throw_and_catch(&ctx);
-            }
-            let promise: Promise = ctx.globals().get("p").unwrap();
-            assert_observes_interrupt(&ctx, promise.into_future()).await;
-        }),
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                if case.host_catch {
+                    host_throw_and_catch(&ctx);
+                }
+                let promise: Promise = ctx.globals().get("p").unwrap();
+                assert_observes_interrupt(&ctx, promise.into_future()).await;
+            },
+        ),
     )
     .await
     .expect("the promise future hung on an interrupted job");
@@ -210,7 +222,7 @@ async_test_case!(async_drains_leave_no_pending_exception => (rt, ctx) {
     // `async_with` driver.
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
+        ctx.async_with(|_, _| {}, async |ctx| {
             ctx.eval::<(), _>(LOOPING_JOB).unwrap();
             armed.store(true, SeqCst);
             tokio::task::yield_now().await;
@@ -254,7 +266,7 @@ async_test_case!(unobserved_interrupt_fails_one_later_future => (rt, ctx) {
 
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
+        ctx.async_with(|_, _| {}, async |ctx| {
             // Settled promises are unaffected and leave the interrupt unobserved.
             let promise: Promise = ctx.eval("Promise.resolve(5)").unwrap();
             assert_eq!(promise.into_future::<i32>().await.unwrap(), 5);
@@ -302,26 +314,32 @@ async fn recorded_interrupt_is_scoped_to_the_interrupted_jobs_context() {
 
     // A promise future in another context does not take the record.
     other
-        .async_with(async |ctx| {
-            let (promise, _resolve, _reject) = Promise::new(&ctx).unwrap();
-            let mut future = promise.into_future::<()>();
-            let mut cx = TaskContext::from_waker(Waker::noop());
-            assert!(matches!(Pin::new(&mut future).poll(&mut cx), Poll::Pending));
-            assert!(!ctx.has_exception());
-        })
+        .async_with(
+            |_, _| {},
+            async |ctx| {
+                let (promise, _resolve, _reject) = Promise::new(&ctx).unwrap();
+                let mut future = promise.into_future::<()>();
+                let mut cx = TaskContext::from_waker(Waker::noop());
+                assert!(matches!(Pin::new(&mut future).poll(&mut cx), Poll::Pending));
+                assert!(!ctx.has_exception());
+            },
+        )
         .await;
 
     // In the interrupted job's context the next unsettled future fails.
     interrupted
-        .async_with(async |ctx| {
-            let promise: Promise = ctx.eval("Promise.resolve().then(() => 1)").unwrap();
-            assert!(matches!(
-                promise.into_future::<i32>().await,
-                Err(Error::Exception)
-            ));
-            assert!(ctx.catch().is_uncatchable_error());
-            assert!(!ctx.has_exception());
-        })
+        .async_with(
+            |_, _| {},
+            async |ctx| {
+                let promise: Promise = ctx.eval("Promise.resolve().then(() => 1)").unwrap();
+                assert!(matches!(
+                    promise.into_future::<i32>().await,
+                    Err(Error::Exception)
+                ));
+                assert!(ctx.catch().is_uncatchable_error());
+                assert!(!ctx.has_exception());
+            },
+        )
         .await;
 }
 
@@ -355,7 +373,7 @@ async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
     // `async_with` driver.
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
+        ctx.async_with(|_, _| {}, async |ctx| {
             ctx.eval::<(), _>(script).unwrap();
             let ok: Promise = ctx.globals().get("ok").unwrap();
             assert_eq!(ok.into_future::<i32>().await.unwrap(), 42);
@@ -375,7 +393,7 @@ async_test_case!(promise_futures_unchanged_without_interrupt => (rt, ctx) {
         .expect("idle hung");
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
+        ctx.async_with(|_, _| {}, async |ctx| {
             assert!(!ctx.has_exception());
             let ok: Promise = ctx.globals().get("ok").unwrap();
             assert_eq!(ok.into_future::<i32>().await.unwrap(), 42);
@@ -408,7 +426,7 @@ async_test_case!(callback_panic_still_records_interrupt => (rt, ctx) {
 
     tokio::time::timeout(
         TIMEOUT,
-        ctx.async_with(async |ctx| {
+        ctx.async_with(|_, _| {}, async |ctx| {
             let promise: Promise = ctx.globals().get("p").unwrap();
             assert_observes_interrupt(&ctx, promise.into_future()).await;
         }),

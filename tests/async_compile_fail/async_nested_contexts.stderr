@@ -1,13 +1,13 @@
 error: lifetime may not live long enough
-  --> tests/async_compile_fail/async_nested_contexts.rs:10:43
+  --> tests/async_compile_fail/async_nested_contexts.rs:10:54
    |
- 8 |           .async_with(async |ctx_1| {
-   |                              ----- lifetime `'2` appears in the type of `ctx_1`
+ 8 |           .async_with(|_, _| {}, async |ctx_1| {
+   |                                         ----- lifetime `'2` appears in the type of `ctx_1`
  9 |               ctx_2
-10 |                   .async_with(async |ctx_2| {
-   |  ____________________________________-----__^
-   | |                                    |
-   | |                                    has type `Ctx<'1>`
+10 |                   .async_with(|_, _| {}, async |ctx_2| {
+   |  _______________________________________________-----__^
+   | |                                               |
+   | |                                               has type `Ctx<'1>`
 11 | |                     // It is disallowed to use multiple ctx object together from different with closures.
 12 | |                     // Lifetime on ctx should be unique.
 13 | |                     ctx_1.globals().set("t", ctx_2.globals());
@@ -15,13 +15,13 @@ error: lifetime may not live long enough
    | |_________________^ returning this value requires that `'1` must outlive `'2`
 
 error: lifetime may not live long enough
-  --> tests/async_compile_fail/async_nested_contexts.rs:10:43
+  --> tests/async_compile_fail/async_nested_contexts.rs:10:54
    |
- 8 |           .async_with(async |ctx_1| {
-   |                              ----- has type `Ctx<'1>`
+ 8 |           .async_with(|_, _| {}, async |ctx_1| {
+   |                                         ----- has type `Ctx<'1>`
  9 |               ctx_2
-10 |                   .async_with(async |ctx_2| {
-   |  ___________________________________________^
+10 |                   .async_with(|_, _| {}, async |ctx_2| {
+   |  ______________________________________________________^
 11 | |                     // It is disallowed to use multiple ctx object together from different with closures.
 12 | |                     // Lifetime on ctx should be unique.
 13 | |                     ctx_1.globals().set("t", ctx_2.globals());

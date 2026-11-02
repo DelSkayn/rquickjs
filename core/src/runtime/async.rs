@@ -15,7 +15,8 @@ use async_lock::Mutex;
 
 use super::{
     opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
-    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    BoxedJobErrorCallback, InterruptHandler, JobErrorCallback, MemoryUsage, PromiseHook,
+    RejectionTracker,
 };
 use crate::allocator::Allocator;
 use crate::context::take_failed_job_ptr;
@@ -25,30 +26,12 @@ use crate::loader::{Loader, Resolver};
 use crate::qjs;
 #[cfg(feature = "parallel")]
 use crate::util::{AssertSendFuture, AssertSyncFuture};
-use crate::{util::ManualPoll, Ctx, Result, Value};
+use crate::{util::ManualPoll, Result};
 
 #[derive(Debug)]
 pub(crate) struct InnerRuntime {
     pub runtime: RawRuntime,
 }
-
-/// Callback for job failures found while driving the runtime.
-#[cfg(not(feature = "parallel"))]
-pub trait JobErrorCallback: for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static {}
-#[cfg(not(feature = "parallel"))]
-impl<T> JobErrorCallback for T where T: for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static {}
-
-/// Callback for job failures found while driving the runtime.
-#[cfg(feature = "parallel")]
-pub trait JobErrorCallback: for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static {}
-#[cfg(feature = "parallel")]
-impl<T> JobErrorCallback for T where T: for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static {}
-
-#[cfg(not(feature = "parallel"))]
-pub(crate) type BoxedJobErrorCallback = Box<dyn for<'js> FnMut(Ctx<'js>, Value<'js>) + 'static>;
-#[cfg(feature = "parallel")]
-pub(crate) type BoxedJobErrorCallback =
-    Box<dyn for<'js> FnMut(Ctx<'js>, Value<'js>) + Send + 'static>;
 
 #[cfg(feature = "parallel")]
 unsafe impl Send for InnerRuntime {}
@@ -411,7 +394,7 @@ mod test {
     use super::test_util::{spawn_drive, TIMEOUT};
 
     async_test_case!(basic => (_rt,ctx){
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             let res: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(res,2i32);
         }).await;
@@ -423,7 +406,7 @@ mod test {
         let a_ref = &mut a;
 
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
             ctx.globals().set("foo","bar").unwrap();
             *a_ref += 1;
@@ -449,7 +432,7 @@ mod test {
         let done = Arc::new(tokio::sync::Notify::new());
         let done_clone = done.clone();
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             ctx.spawn(async move {
                 gate_clone.notified().await;
                 number_clone.store(1,Ordering::SeqCst);
@@ -479,7 +462,7 @@ mod test {
             });
         }
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             ctx.eval::<(),_>("queueMicrotask(() => { throw 5; });").unwrap();
             ctx.spawn(async move {});
         }).await;
@@ -489,13 +472,13 @@ mod test {
             .expect("the drive task did not run the failing job");
         assert_eq!(*seen.lock().unwrap(), vec![Some(5)]);
 
-        ctx.async_with(async |ctx| assert!(!ctx.has_exception())).await;
+        ctx.async_with(|_, _| {}, async |ctx| assert!(!ctx.has_exception())).await;
     });
 
     async_test_case!(drive_resumes_pending_panic => (rt,ctx){
         let handle = spawn_drive(&rt, |_, _| {});
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             ctx.globals().set(
                 "rustPanic",
                 Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
@@ -526,7 +509,7 @@ mod test {
             });
         }
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             ctx.eval::<(),_>(
                 "queueMicrotask(() => { throw 1; });
                  queueMicrotask(() => { throw 2; });
@@ -557,7 +540,7 @@ mod test {
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             ctx.spawn(async move {
                 tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
@@ -575,7 +558,7 @@ mod test {
         let number = Arc::new(AtomicUsize::new(0));
         let number_clone = number.clone();
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             ctx.spawn(async move {
                 tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
@@ -645,7 +628,7 @@ mod test {
     async_test_case!(recursive_spawn => (rt,ctx){
         use tokio::sync::oneshot;
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
             let ctx_clone = ctx.clone();
             let (tx,rx) = oneshot::channel::<()>();
             let (tx2,rx2) = oneshot::channel::<()>();
@@ -714,7 +697,7 @@ mod test {
         }
 
 
-        ctx.async_with(async |ctx|{
+        ctx.async_with(|_, _| {}, async |ctx|{
 
             let res: Result<Promise> = (|| {
                 let globals = ctx.globals();
@@ -759,7 +742,7 @@ mod test {
         rt.set_interrupt_handler(Some(Box::new(move || start_time.elapsed() >= timeout)))
             .await;
 
-        let _ = ctx.async_with(async |ctx| {
+        let _ = ctx.async_with(|_, _| {}, async |ctx| {
             ctx.eval::<(), _>(r#"
                 async function example() {
                     while (true) {

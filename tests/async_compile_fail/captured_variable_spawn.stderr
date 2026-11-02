@@ -5,8 +5,8 @@ error[E0597]: `var` does not live long enough
    |           ------- binding `var` declared here
  8 |       let var_ref = &mut var;
    |                     ^^^^^^^^ borrowed value does not live long enough
- 9 |       ctx.async_with(async |ctx| {
-   |  ________________________________-
+ 9 |       ctx.async_with(|_, _| {}, async |ctx| {
+   |  ___________________________________________-
 10 | |         let func = Func::from(MutFn::from(move || {
 11 | |             *var_ref += 1;
 12 | |         }));

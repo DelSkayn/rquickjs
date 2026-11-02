@@ -421,14 +421,16 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        ctx.async_with(async |ctx| {
-            ctx.globals()
-                .set("setTimeout", Func::from(Async(set_timeout)))
-                .unwrap();
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                ctx.globals()
+                    .set("setTimeout", Func::from(Async(set_timeout)))
+                    .unwrap();
 
-            let func = ctx
-                .eval::<Function, _>(
-                    r"
+                let func = ctx
+                    .eval::<Function, _>(
+                        r"
                     (function(){
                         return new Promise((resolve) => {
                             setTimeout(x => {
@@ -437,15 +439,15 @@ mod test {
                         })
                     })
                     ",
-                )
-                .catch(&ctx)
-                .unwrap();
-            let promise: Promise = func.call(()).unwrap();
-            assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
+                    )
+                    .catch(&ctx)
+                    .unwrap();
+                let promise: Promise = func.call(()).unwrap();
+                assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
 
-            let func = ctx
-                .eval::<Function, _>(
-                    r"
+                let func = ctx
+                    .eval::<Function, _>(
+                        r"
                     (function(){
                         return new Promise((_,reject) => {
                             setTimeout(x => {
@@ -454,18 +456,19 @@ mod test {
                         })
                     })
                     ",
-                )
-                .catch(&ctx)
-                .unwrap();
-            let promise: Promise = func.call(()).unwrap();
-            let err = promise.into_future::<()>().await.catch(&ctx);
-            match err {
-                Err(CaughtError::Value(v)) => {
-                    assert_eq!(v.as_int().unwrap(), 42)
+                    )
+                    .catch(&ctx)
+                    .unwrap();
+                let promise: Promise = func.call(()).unwrap();
+                let err = promise.into_future::<()>().await.catch(&ctx);
+                match err {
+                    Err(CaughtError::Value(v)) => {
+                        assert_eq!(v.as_int().unwrap(), 42)
+                    }
+                    _ => panic!(),
                 }
-                _ => panic!(),
-            }
-        })
+            },
+        )
         .await
     }
 
@@ -477,15 +480,17 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        ctx.async_with(async |ctx| {
-            let promised = Promised::from(async {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                42
-            });
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                let promised = Promised::from(async {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    42
+                });
 
-            let function = ctx
-                .eval::<Function, _>(
-                    r"
+                let function = ctx
+                    .eval::<Function, _>(
+                        r"
                 (async function(v){
                     let val = await v;
                     if(val !== 42){
@@ -493,26 +498,26 @@ mod test {
                     }
                 })
             ",
-                )
-                .catch(&ctx)
-                .unwrap();
+                    )
+                    .catch(&ctx)
+                    .unwrap();
 
-            function
-                .call::<_, Promise>((promised,))
-                .unwrap()
-                .into_future::<()>()
-                .await
-                .unwrap();
+                function
+                    .call::<_, Promise>((promised,))
+                    .unwrap()
+                    .into_future::<()>()
+                    .await
+                    .unwrap();
 
-            let ctx_clone = ctx.clone();
-            let promised = Promised::from(async move {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                Result::<()>::Err(Exception::throw_message(&ctx_clone, "some_message"))
-            });
+                let ctx_clone = ctx.clone();
+                let promised = Promised::from(async move {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    Result::<()>::Err(Exception::throw_message(&ctx_clone, "some_message"))
+                });
 
-            let function = ctx
-                .eval::<Function, _>(
-                    r"
+                let function = ctx
+                    .eval::<Function, _>(
+                        r"
                 (async function(v){
                     try{
                         await v;
@@ -525,17 +530,18 @@ mod test {
                     throw new Error('no error thrown')
                 })
             ",
-                )
-                .catch(&ctx)
-                .unwrap();
+                    )
+                    .catch(&ctx)
+                    .unwrap();
 
-            function
-                .call::<_, Promise>((promised,))
-                .unwrap()
-                .into_future::<()>()
-                .await
-                .unwrap()
-        })
+                function
+                    .call::<_, Promise>((promised,))
+                    .unwrap()
+                    .into_future::<()>()
+                    .await
+                    .unwrap()
+            },
+        )
         .await
     }
 
@@ -579,23 +585,26 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        ctx.async_with(async |ctx| {
-            // Leave a stale JS exception pending
-            let _ = ctx.eval::<(), _>("throw new Error('stale')");
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                // Leave a stale JS exception pending
+                let _ = ctx.eval::<(), _>("throw new Error('stale')");
 
-            let func = ctx
-                .eval::<Function, _>(
-                    r"
+                let func = ctx
+                    .eval::<Function, _>(
+                        r"
                     (function(){
                         return new Promise((resolve) => resolve(42))
                     })
                     ",
-                )
-                .catch(&ctx)
-                .unwrap();
-            let promise: Promise = func.call(()).unwrap();
-            assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
-        })
+                    )
+                    .catch(&ctx)
+                    .unwrap();
+                let promise: Promise = func.call(()).unwrap();
+                assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
+            },
+        )
         .await
     }
 
@@ -612,10 +621,12 @@ mod test {
         .await;
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        ctx.async_with(async |ctx| {
-            let func = ctx
-                .eval::<Function, _>(
-                    r"
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                let func = ctx
+                    .eval::<Function, _>(
+                        r"
                     (function(){
                         return new Promise((resolve) => {
                             while(true){}
@@ -623,13 +634,14 @@ mod test {
                         })
                     })
                     ",
-                )
-                .catch(&ctx)
-                .unwrap();
-            let promise: Promise = func.call(()).catch(&ctx).unwrap();
-            let result = promise.into_future::<i32>().await;
-            assert!(result.is_err(), "should fail due to interrupt");
-        })
+                    )
+                    .catch(&ctx)
+                    .unwrap();
+                let promise: Promise = func.call(()).catch(&ctx).unwrap();
+                let result = promise.into_future::<i32>().await;
+                assert!(result.is_err(), "should fail due to interrupt");
+            },
+        )
         .await
     }
 
@@ -701,11 +713,14 @@ mod test {
         }
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        ctx.async_with(async |ctx| {
-            let promise: Promise = ctx.eval("Promise.reject(7)").unwrap();
-            let res = promise.into_future::<()>().await.catch(&ctx);
-            assert!(matches!(res, Err(CaughtError::Value(v)) if v.as_int() == Some(7)));
-        })
+        ctx.async_with(
+            |_, _| {},
+            async |ctx| {
+                let promise: Promise = ctx.eval("Promise.reject(7)").unwrap();
+                let res = promise.into_future::<()>().await.catch(&ctx);
+                assert!(matches!(res, Err(CaughtError::Value(v)) if v.as_int() == Some(7)));
+            },
+        )
         .await;
 
         assert_eq!(*events.lock().unwrap(), [(Some(7), false), (Some(7), true)]);

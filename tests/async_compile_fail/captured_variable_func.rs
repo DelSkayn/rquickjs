@@ -6,7 +6,7 @@ pub async fn test() {
 
     let mut var = 1u32;
     let var_ref = &mut var;
-    ctx.async_with(async |ctx| {
+    ctx.async_with(|_, _| {}, async |ctx| {
         ctx.spawn(async move {
             *var_ref += 1;
         })
