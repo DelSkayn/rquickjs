@@ -65,14 +65,6 @@ async fn assert_observes_interrupt<'js>(ctx: &Ctx<'js>, future: PromiseFuture<'j
     assert_eq!(sum, 2);
 }
 
-fn assert_interrupt_recorded(ctx: &Ctx<'_>) {
-    assert!(ctx
-        .take_interrupted_job_error()
-        .unwrap()
-        .is_uncatchable_error());
-    assert!(ctx.take_interrupted_job_error().is_none());
-}
-
 async fn async_with_case(rt: &AsyncRuntime, ctx: &AsyncContext, case: Case) {
     let armed = one_shot_interrupt(rt).await;
     tokio::time::timeout(
@@ -285,7 +277,13 @@ async_test_case!(unobserved_interrupt_fails_one_later_future => (rt, ctx) {
 });
 
 #[tokio::test]
-async fn taken_interrupt_is_scoped_to_the_interrupted_jobs_context() {
+async fn recorded_interrupt_is_scoped_to_the_interrupted_jobs_context() {
+    use core::{
+        future::Future,
+        pin::Pin,
+        task::{Context as TaskContext, Poll, Waker},
+    };
+
     let rt = AsyncRuntime::new().unwrap();
     let interrupted = AsyncContext::full(&rt).await.unwrap();
     let other = AsyncContext::full(&rt).await.unwrap();
@@ -302,22 +300,26 @@ async fn taken_interrupt_is_scoped_to_the_interrupted_jobs_context() {
         .expect("idle hung");
     assert!(!armed.load(SeqCst));
 
-    // A host in another context cannot discard it.
+    // A promise future in another context does not take the record.
     other
         .async_with(async |ctx| {
-            assert!(ctx.take_interrupted_job_error().is_none());
+            let (promise, _resolve, _reject) = Promise::new(&ctx).unwrap();
+            let mut future = promise.into_future::<()>();
+            let mut cx = TaskContext::from_waker(Waker::noop());
+            assert!(matches!(Pin::new(&mut future).poll(&mut cx), Poll::Pending));
+            assert!(!ctx.has_exception());
         })
         .await;
 
-    // The interrupted job's context can discard it before a future observes it.
+    // In the interrupted job's context the next unsettled future fails.
     interrupted
         .async_with(async |ctx| {
-            assert_interrupt_recorded(&ctx);
-
-            // An unrelated promise future, pending when first polled, is
-            // unaffected.
             let promise: Promise = ctx.eval("Promise.resolve().then(() => 1)").unwrap();
-            assert_eq!(promise.into_future::<i32>().await.unwrap(), 1);
+            assert!(matches!(
+                promise.into_future::<i32>().await,
+                Err(Error::Exception)
+            ));
+            assert!(ctx.catch().is_uncatchable_error());
             assert!(!ctx.has_exception());
         })
         .await;

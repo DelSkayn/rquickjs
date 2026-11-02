@@ -273,14 +273,6 @@ impl<'js> Ctx<'js> {
         Error::Exception
     }
 
-    /// Discards the uncatchable error an async drain recorded for this context,
-    /// so it cannot fail a later promise future.
-    #[cfg(feature = "futures")]
-    #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
-    pub fn take_interrupted_job_error(&self) -> Option<Value<'js>> {
-        unsafe { self.get_opaque() }.take_interrupted_job(self)
-    }
-
     #[cfg(feature = "futures")]
     pub(crate) fn take_failed_job(&self) -> Value<'js> {
         // Clear the engine's slot so unrelated code can't trip over it.

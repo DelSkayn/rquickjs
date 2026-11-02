@@ -20,7 +20,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Ctx::drain_jobs` runs pending jobs until the queue is empty, stopping at the first failure and returning its exception. A job failing without an exception value returns `undefined`
 - `AsyncRuntime::idle` and `AsyncRuntime::drive` take a job error callback. It runs mid-drain with the runtime lock held and must not acquire it again
-- `Ctx::take_interrupted_job_error` discards an uncatchable job error recorded for promise futures in the interrupted job's context, once the host has handled the failure
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 
