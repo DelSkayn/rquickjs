@@ -1,9 +1,8 @@
-use super::{
-    intrinsic,
-    owner::{ContextOwner, DropContext},
-    ContextBuilder, Intrinsic,
+use super::{intrinsic, owner::ContextOwner, ContextBuilder, Intrinsic};
+use crate::{
+    context::opaque::ContextOpaque, markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error,
+    Result,
 };
-use crate::{markers::ParallelSend, qjs, runtime::AsyncRuntime, Ctx, Error, Result};
 use core::{mem, ptr::NonNull};
 
 mod future;
@@ -77,36 +76,6 @@ macro_rules! async_with{
     };
 }
 
-impl DropContext for AsyncRuntime {
-    unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>) {
-        //TODO
-        let guard = match self.inner.try_lock() {
-            Some(x) => x,
-            None => {
-                #[cfg(not(feature = "parallel"))]
-                {
-                    // `RefCell` is neither `Send` nor `Sync`, so a failed
-                    // `try_borrow_mut` is always this same thread and freeing
-                    // directly is safe.
-                    unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-                    return;
-                }
-                #[cfg(feature = "parallel")]
-                {
-                    self.pending_free
-                        .send(ctx)
-                        .expect("runtime should be alive while contexts life");
-                    return;
-                }
-            }
-        };
-        guard.runtime.update_stack_top();
-        unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard);
-    }
-}
-
 /// An asynchronous single execution context with its own global variables and stack.
 ///
 /// Can share objects with other contexts of the same runtime.
@@ -122,7 +91,7 @@ impl AsyncContext {
     /// The context must also have valid reference count, one which can be decremented when this
     /// object is dropped without going negative.
     pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
-        AsyncContext(ContextOwner::new(ctx, rt))
+        AsyncContext(ContextOwner::new(ctx, ContextOpaque::new(), rt))
     }
 
     /// Creates a base context with only the required functions registered.
@@ -141,7 +110,7 @@ impl AsyncContext {
             .ok_or(Error::Allocation)?;
         unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
-        let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
+        let res = unsafe { ContextOwner::new(ctx, ContextOpaque::new(), runtime.clone()) };
         guard.runtime.drain_pending_free();
         mem::drop(guard);
 
@@ -155,7 +124,7 @@ impl AsyncContext {
         let guard = runtime.inner.lock().await;
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.runtime.rt.as_ptr()) })
             .ok_or(Error::Allocation)?;
-        let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
+        let res = unsafe { ContextOwner::new(ctx, ContextOpaque::new(), runtime.clone()) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         guard.runtime.drain_pending_free();
         mem::drop(guard);

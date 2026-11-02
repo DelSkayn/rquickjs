@@ -16,9 +16,10 @@ use std::{fs, path::Path, string::String as StdString};
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
+    context::opaque::ContextOpaque,
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserDataError, UserDataGuard},
+    runtime::{opaque::RuntimeOpaque, UserDataError, UserDataGuard},
     Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
 };
 
@@ -415,8 +416,12 @@ impl<'js> Ctx<'js> {
         res != 0
     }
 
-    pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
-        Opaque::from_runtime_ptr(qjs::JS_GetRuntime(self.ctx.as_ptr()))
+    pub(crate) unsafe fn get_runtime_opaque(&self) -> &RuntimeOpaque<'js> {
+        RuntimeOpaque::from_runtime_ptr(qjs::JS_GetRuntime(self.ctx.as_ptr()))
+    }
+
+    pub(crate) unsafe fn get_context_opaque(&self) -> &ContextOpaque<'js> {
+        ContextOpaque::from_context_ptr(self.ctx)
     }
 
     /// Spawn future using configured async runtime
@@ -426,7 +431,7 @@ impl<'js> Ctx<'js> {
     where
         F: Future<Output = ()> + 'js,
     {
-        unsafe { self.get_opaque().push(future) }
+        unsafe { self.get_runtime_opaque().push(future) }
     }
 
     /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
@@ -489,7 +494,7 @@ impl<'js> Ctx<'js> {
         U: JsLifetime<'js>,
         U::Changed<'static>: Any,
     {
-        unsafe { self.get_opaque().insert_userdata(data) }
+        unsafe { self.get_runtime_opaque().insert_userdata(data) }
     }
 
     /// Remove the userdata of the given type from the userdata storage.
@@ -501,7 +506,7 @@ impl<'js> Ctx<'js> {
         U: JsLifetime<'js>,
         U::Changed<'static>: Any,
     {
-        unsafe { self.get_opaque().remove_userdata() }
+        unsafe { self.get_runtime_opaque().remove_userdata() }
     }
 
     /// Retrieves a borrow to the userdata of the given type from the userdata storage.
@@ -512,7 +517,7 @@ impl<'js> Ctx<'js> {
         U: JsLifetime<'js>,
         U::Changed<'static>: Any,
     {
-        unsafe { self.get_opaque().get_userdata() }
+        unsafe { self.get_runtime_opaque().get_userdata() }
     }
 
     /// Returns the pointer to the C library context.
