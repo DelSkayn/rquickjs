@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed exotic classes freeing the value passed to `exotic_set_property` twice
 - `Atom::to_value` returns a symbol if the atom represents a symbol, instead of always returning a JS string
 - Fixed converting an invalid JS `Date` into `SystemTime` or `chrono::DateTime` returning the Unix epoch instead of an error
+- Fixed build failures on armhf and other platforms with no native 64-bit atomics.
 
 ### Security
 
