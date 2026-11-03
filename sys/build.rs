@@ -280,6 +280,15 @@ fn main() {
         println!("cargo:rustc-link-search=native={}", vendor_lib.display());
         println!("cargo:rustc-link-lib=static=c");
     }
+
+    // On targets without 64-bit atomics (e.g. armhf), emit `-latomic`,
+    // otherwise __atomic_fetch_sub_8 and friends are undefined.
+    let has_atomic64 = env::var("CARGO_CFG_TARGET_HAS_ATOMIC")
+        .map(|v| v.split(',').any(|s| s == "64"))
+        .unwrap_or(false);
+    if !has_atomic64 && target_os == "linux" {
+        println!("cargo:rustc-link-lib=atomic");
+    }
 }
 
 fn feature_to_cargo(name: impl AsRef<str>) -> String {
