@@ -9,12 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- `Ctx::execute_pending_job` is replaced by `Ctx::drain_jobs`, which runs until the queue is empty, stops at the first failure and returns a `JobError`
+- `Runtime::execute_pending_job` and `AsyncRuntime::execute_pending_job` are removed; drain jobs through `Ctx::drain_jobs`, `AsyncRuntime::idle`, `AsyncRuntime::drive` or `AsyncContext::async_with`
+- `AsyncContext::async_with` now returns `Result<R, JobError>`, and `AsyncRuntime::idle` and `AsyncRuntime::drive` return `Result<(), JobError>`
+- `Ctx::take_pending_job_error`, `Ctx::take_pending_job_error_overflow` and `Ctx::take_interrupted_job_error` are removed
+- `Runtime::set_job_error_handler` and `AsyncRuntime::set_job_error_handler` are removed
+- `JobException` and `AsyncJobException` are removed
+- `Promise::finish` returns a failed job's exception as `Error::Exception` instead of `Error::WouldBlock`
+
 ### Added
 
+- `JobError`, an owned handle to a failed job's exception. `JobError::into_value` takes the exception out of the runtime with a context of the same runtime
+- `Ctx::drain_jobs` runs pending jobs until the queue is empty, stopping at the first failure and returning a `JobError`
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 
 ### Changed
+
+- Job drains (`Ctx::drain_jobs`, `Promise::finish`, `async_with`, `AsyncRuntime::drive`, `AsyncRuntime::idle`) stop at the first failed job and resume a stashed Rust panic when the job failed with its synthetic exception. Panics in promise reactions still reject the promise; observing the result resumes the panic
+- Job drains clear failed jobs' exceptions from the engine and hand them to the caller as a `JobError`. Uncatchable errors (e.g. interrupts) are also recorded outside the engine, keyed by the failed job's context, and spawned futures are woken, so the next promise future polled in that context while its promise is unsettled fails with the error. That future need not be the one awaiting the interrupted job; futures in other contexts do not take the recorded error, but until it is caught, other unsettled promise futures polled before then fail with it too, in any context
+- `Promise::result` resumes a stashed Rust panic instead of leaving it armed
+- `AsyncRuntime::idle` no longer prints failed jobs' errors to stdout
 
 ### Deprecated
 
@@ -22,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Fixed internal job drains discarding failures; every drain now returns them as a `JobError`
+- Fixed `AsyncRuntime::drive` and `AsyncRuntime::idle` stopping after a failed job while further jobs remained queued
+- Fixed promise futures hanging on a promise left unsettled by an interrupted job if a later job or host code threw or caught an exception first, or if the future was pending inside a spawned future
+- Fixed an interrupted job failing an unrelated promise future in another context
+- Fixed class prototypes registered by destructors during runtime teardown being freed after `JS_FreeRuntime`, which leaked the context and used freed memory
+- Fixed a job that panics while a destructor drains it during runtime teardown unwinding out of the runtime drop
 - Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
 - Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
 - Fixed `Promise::result` and `Promise::into_future` leaving an already rejected promise unhandled, which made the host promise rejection tracker report a false unhandled rejection

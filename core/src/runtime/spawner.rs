@@ -1,7 +1,8 @@
 use super::{
     schedular::{Schedular, SchedularPoll},
-    AsyncWeakRuntime, InnerRuntime,
+    AsyncWeakRuntime, InnerRuntime, JobError,
 };
+use crate::context::take_failed_job_ptr;
 use crate::AsyncRuntime;
 use alloc::vec::Vec;
 use core::{
@@ -36,6 +37,15 @@ impl Spawner {
 
     pub fn listen(&mut self, wake: Waker) {
         self.wakeup.push(wake);
+    }
+
+    pub fn requeue_all(&mut self) -> Vec<Waker> {
+        // Safety: the spawner is only accessed with the runtime lock held,
+        // and never while it is being polled.
+        unsafe { self.schedular.requeue_all() };
+        let mut wakers = core::mem::take(&mut self.wakeup);
+        wakers.extend(self.schedular.take_waker());
+        wakers
     }
 
     pub fn is_empty(&mut self) -> bool {
@@ -76,7 +86,7 @@ impl DriveFuture {
 }
 
 impl Future for DriveFuture {
-    type Output = ();
+    type Output = core::result::Result<(), JobError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> Poll<Self::Output> {
         // Safety: We manually ensure that pinned values remained properly pinned.
@@ -85,7 +95,7 @@ impl Future for DriveFuture {
             let mut lock = match this.state {
                 DriveFutureState::Initial => {
                     let Some(_runtime) = this.rt.try_ref() else {
-                        return Poll::Ready(());
+                        return Poll::Ready(Ok(()));
                     };
 
                     let lock_future = _runtime.inner.lock_arc();
@@ -114,12 +124,16 @@ impl Future for DriveFuture {
             lock.runtime.get_opaque().listen(cx.waker().clone());
 
             loop {
-                // TODO: Handle error.
-                if let Ok(true) = lock.runtime.execute_pending_job() {
-                    continue;
+                match lock.runtime.execute_pending_job() {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(ctx) => {
+                        // Safety: the runtime is locked for this poll.
+                        let error = unsafe { take_failed_job_ptr(ctx) };
+                        return Poll::Ready(Err(error));
+                    }
                 }
 
-                // TODO: Handle error.
                 match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
                         break

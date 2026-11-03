@@ -10,7 +10,7 @@ use async_lock::futures::Lock;
 
 use crate::{
     markers::ParallelSend,
-    runtime::{schedular::SchedularPoll, InnerRuntime},
+    runtime::{schedular::SchedularPoll, InnerRuntime, JobError},
     AsyncContext, Ctx,
 };
 
@@ -62,7 +62,7 @@ where
     F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend + 'a,
     R: ParallelSend + 'static,
 {
-    type Output = R;
+    type Output = Result<R, JobError>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // Implementation ensures we don't break pin guarantees.
         let this = unsafe { self.get_unchecked_mut() };
@@ -136,9 +136,10 @@ where
                 match lock.runtime.execute_pending_job() {
                     Ok(false) => break,
                     Ok(true) => made_progress = true,
-                    Err(_ctx) => {
-                        // TODO figure out what to do with a job error.
-                        made_progress = true;
+                    Err(ctx) => {
+                        // Safety: the runtime is locked for this poll.
+                        let error = unsafe { crate::context::take_failed_job_ptr(ctx) };
+                        return Poll::Ready(Err(error));
                     }
                 }
             }
@@ -153,7 +154,10 @@ where
         // Manually drop the lock so it isn't accidentally moved into somewhere.
         mem::drop(lock);
 
-        res
+        match res {
+            Poll::Ready(value) => Poll::Ready(Ok(value)),
+            Poll::Pending => Poll::Pending,
+        }
     }
 }
 

@@ -108,7 +108,8 @@ impl<'js> Promise<'js> {
     ///
     /// Returns None if the promise has not yet been completed, Ok if the promise was resolved, and
     /// [`Error::Exception`] if the promise rejected with the rejected value as the thrown
-    /// value retrievable via [`Ctx::catch`].
+    /// value retrievable via [`Ctx::catch`]. A rejected reaction that stashed a Rust panic
+    /// resumes it instead.
     pub fn result<T: FromJs<'js>>(&self) -> Option<Result<T>> {
         match self.state() {
             PromiseState::Pending => None,
@@ -122,6 +123,12 @@ impl<'js> Promise<'js> {
                     // The rejection is surfaced as an `Err`, so it is no longer unhandled.
                     qjs::JS_PromiseMarkAsHandled(self.ctx().as_ptr(), self.as_js_value());
                     let v = qjs::JS_PromiseResult(self.ctx().as_ptr(), self.as_js_value());
+                    if qjs::JS_VALUE_GET_NORM_TAG(v) == qjs::JS_TAG_EXCEPTION {
+                        // The reaction stored the panic sentinel as the value.
+                        if let Some(payload) = self.ctx().get_opaque().take_panic() {
+                            crate::util::resume_unwind(payload);
+                        }
+                    }
                     qjs::JS_Throw(self.ctx().as_ptr(), v);
                 };
                 Some(Err(Error::Exception))
@@ -136,19 +143,30 @@ impl<'js> Promise<'js> {
     /// indicating that no more work can be done at the moment.
     ///
     /// This function only drives the quickjs job queue, futures are not polled.
+    ///
+    /// Job failures and Rust panics are handled as in [`Ctx::drain_jobs`].
     pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {
         loop {
             if let Some(x) = self.result() {
                 return x;
             }
 
-            if !self.ctx.execute_pending_job() {
-                return Err(Error::WouldBlock);
+            match self.ctx.step_job() {
+                Ok(true) => {}
+                Ok(false) => return Err(Error::WouldBlock),
+                Err(error) => {
+                    let value = error.into_value(&self.ctx)?;
+                    return Err(self.ctx.throw(value));
+                }
             }
         }
     }
 
     /// Wrap the promise into a struct which can be polled as a rust future.
+    ///
+    /// A job that fails uncatchably in this promise's context fails the next
+    /// unsettled future polled there. Pending exceptions are runtime-wide, so
+    /// catch it promptly.
     #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
     #[cfg(feature = "futures")]
     pub fn into_future<T>(self) -> PromiseFuture<'js, T>
@@ -200,6 +218,15 @@ where
                 this.promise.ctx.throw(exc);
                 return Poll::Ready(Err(Error::Exception));
             }
+        }
+
+        // An async job drain interrupted a job in this context since the last
+        // observation, so this promise may never settle.
+        // Safety: polling a promise future requires the runtime lock.
+        let interrupted =
+            unsafe { this.promise.ctx.get_opaque() }.take_interrupted_job(&this.promise.ctx);
+        if let Some(error) = interrupted {
+            return Poll::Ready(Err(this.promise.ctx.throw(error)));
         }
 
         if this.state.is_none() {
@@ -369,6 +396,8 @@ where
 
 #[cfg(test)]
 mod test {
+    #![allow(unused_must_use)]
+
     use std::sync::{
         atomic::{AtomicBool, Ordering},
         Arc, Mutex,
@@ -442,6 +471,7 @@ mod test {
             }
         })
         .await
+        .unwrap()
     }
 
     #[cfg(feature = "futures")]
@@ -512,6 +542,7 @@ mod test {
                 .unwrap()
         })
         .await
+        .unwrap()
     }
 
     #[test]
@@ -542,7 +573,7 @@ mod test {
             resolve.call::<_, ()>(("FOO",)).unwrap();
             assert_eq!(promise.state(), PromiseState::Resolved);
 
-            while ctx.execute_pending_job() {}
+            ctx.drain_jobs();
 
             assert!(DID_EXECUTE.load(Ordering::SeqCst));
         })
@@ -572,6 +603,7 @@ mod test {
             assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
         })
         .await
+        .unwrap()
     }
 
     #[cfg(feature = "futures")]
@@ -606,6 +638,36 @@ mod test {
             assert!(result.is_err(), "should fail due to interrupt");
         })
         .await
+        .unwrap()
+    }
+
+    #[test]
+    fn rejected_promise_resumes_reaction_panic() {
+        use std::panic::{catch_unwind, AssertUnwindSafe};
+
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("reaction boom") }),
+                )
+                .unwrap();
+            let promise: Promise = ctx.eval("Promise.resolve().then(rustPanic)").unwrap();
+
+            let payload = catch_unwind(AssertUnwindSafe(|| {
+                let _ = promise.finish::<()>();
+            }))
+            .expect_err("observing the rejected promise should resume the panic");
+            assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "reaction boom");
+
+            assert!(matches!(
+                ctx.eval::<(), _>("throw 1"),
+                Err(crate::Error::Exception)
+            ));
+            assert_eq!(ctx.catch().as_int(), Some(1));
+        })
     }
 
     #[test]

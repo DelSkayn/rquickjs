@@ -251,6 +251,7 @@ impl RawRuntime {
     }
 
     pub fn execute_pending_job(&mut self) -> StdResult<bool, *mut qjs::JSContext> {
+        self.get_opaque().drain_released_job_errors();
         let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
         let result = unsafe { qjs::JS_ExecutePendingJob(self.rt.as_ptr(), ctx_ptr.as_mut_ptr()) };
         if result == 0 {

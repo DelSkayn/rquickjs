@@ -14,11 +14,9 @@ use alloc::{
 #[cfg(feature = "std")]
 use std::io::Error as IoError;
 
-#[cfg(feature = "futures")]
-use crate::context::AsyncContext;
 use crate::value::array_buffer::AsSliceError;
 use crate::{
-    atom::PredefinedAtom, qjs, runtime::UserDataError, Context, Ctx, Exception, Object, StdResult,
+    atom::PredefinedAtom, qjs, runtime::UserDataError, Ctx, Exception, Object, StdResult,
     StdString, Type, Value,
 };
 
@@ -616,55 +614,6 @@ pub trait ThrowResultExt<'js, T> {
 impl<'js, T> ThrowResultExt<'js, T> for CaughtResult<'js, T> {
     fn throw(self, ctx: &Ctx<'js>) -> Result<T> {
         self.map_err(|e| e.throw(ctx))
-    }
-}
-
-/// A error raised from running a pending job
-/// Contains the context from which the error was raised.
-///
-/// Use `Ctx::catch` to retrieve the error.
-#[derive(Clone)]
-pub struct JobException(pub Context);
-
-impl fmt::Debug for JobException {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.debug_tuple("JobException")
-            .field(&"TODO: Context")
-            .finish()
-    }
-}
-
-impl Display for JobException {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "Job raised an exception")?;
-        // TODO print the error?
-        Ok(())
-    }
-}
-
-/// A error raised from running a pending job
-/// Contains the context from which the error was raised.
-///
-/// Use `Ctx::catch` to retrieve the error.
-#[cfg(feature = "futures")]
-#[derive(Clone)]
-pub struct AsyncJobException(pub AsyncContext);
-
-#[cfg(feature = "futures")]
-impl fmt::Debug for AsyncJobException {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        f.debug_tuple("AsyncJobException")
-            .field(&"TODO: Context")
-            .finish()
-    }
-}
-
-#[cfg(feature = "futures")]
-impl Display for AsyncJobException {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        write!(f, "Async job raised an exception")?;
-        // TODO print the error?
-        Ok(())
     }
 }
 

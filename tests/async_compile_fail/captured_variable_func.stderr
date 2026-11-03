@@ -1,17 +1,17 @@
-error[E0597]: `var` does not live long enough
-  --> tests/async_compile_fail/captured_variable_func.rs:8:19
+error[E0308]: mismatched types
+  --> tests/async_compile_fail/captured_variable_func.rs:9:5
    |
- 7 |       let mut var = 1u32;
-   |           ------- binding `var` declared here
- 8 |       let var_ref = &mut var;
-   |                     ^^^^^^^^ borrowed value does not live long enough
- 9 |       ctx.async_with(async |ctx| {
-   |  ________________________________-
+ 9 | /     ctx.async_with(async |ctx| {
 10 | |         ctx.spawn(async move {
 11 | |             *var_ref += 1;
 12 | |         })
 13 | |     })
-   | |_____- returning this value requires that `var` is borrowed for `'static`
-14 |       .await
-15 |   }
-   |   - `var` dropped here while still borrowed
+14 | |     .await
+   | |__________^ expected `()`, found `Result<(), JobError>`
+   |
+   = note: expected unit type `()`
+                   found enum `Result<(), JobError>`
+help: consider using `Result::expect` to unwrap the `Result<(), JobError>` value, panicking if the value is a `Result::Err`
+   |
+14 |     .await.expect("REASON")
+   |           +++++++++++++++++

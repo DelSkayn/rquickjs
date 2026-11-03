@@ -63,7 +63,7 @@ use future::WithFuture;
 /// }).await;
 /// assert_eq!(some_var,2);
 ///
-/// rt.idle().await
+/// rt.idle().await.unwrap()
 /// # }
 /// ```
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
@@ -175,6 +175,8 @@ impl AsyncContext {
 
     /// A entry point for manipulating and using JavaScript objects and scripts.
     ///
+    /// A failed job stops the driver and is returned as [`crate::JobError`].
+    ///
     /// # Example
     ///
     /// ```
@@ -191,7 +193,7 @@ impl AsyncContext {
     /// }
     ///
     /// let ctx = AsyncContext::full(&rt).await.unwrap();
-    /// ctx.async_with(async |ctx|{
+    /// ctx.async_with(async |ctx| {
     ///
     ///     let delay = Function::new(ctx.clone(),Async(delay))
     ///         .unwrap()
@@ -205,7 +207,7 @@ impl AsyncContext {
     ///             // do something
     ///         })
     ///     "#).unwrap();
-    /// }).await;
+    /// }).await.unwrap();
     /// # }
     /// ```
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
@@ -245,7 +247,9 @@ unsafe impl Sync for AsyncContext {}
 
 #[cfg(test)]
 mod test {
-    use crate::{AsyncContext, AsyncRuntime};
+    #![allow(unused_must_use)]
+
+    use crate::{AsyncContext, AsyncRuntime, Function};
 
     #[tokio::test]
     async fn base_asyc_context() {
@@ -253,6 +257,65 @@ mod test {
         let ctx = AsyncContext::builder().build_async(&rt).await.unwrap();
         ctx.async_with(async |ctx| {
             ctx.globals();
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn async_with_drain_skips_caught_panic() {
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+        ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+
+            ctx.eval::<(), _>("queueMicrotask(() => { try { rustPanic(); } catch (e) {} });")
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(() => { throw 1; });")
+                .unwrap();
+
+            tokio::task::yield_now().await;
+
+            assert!(!ctx.has_exception());
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn async_with_resumes_pending_panic() {
+        use std::panic::AssertUnwindSafe;
+
+        use futures_rs::future::FutureExt;
+
+        let rt = AsyncRuntime::new().unwrap();
+        let ctx = AsyncContext::full(&rt).await.unwrap();
+
+        let res = AssertUnwindSafe(ctx.async_with(async |ctx| {
+            ctx.globals()
+                .set(
+                    "rustPanic",
+                    Function::new(ctx.clone(), || -> i32 { panic!("rust boom") }),
+                )
+                .unwrap();
+            ctx.eval::<(), _>("queueMicrotask(rustPanic);").unwrap();
+
+            tokio::task::yield_now().await;
+        }))
+        .catch_unwind()
+        .await;
+
+        let payload = res.expect_err("the driver should have resumed the stashed panic");
+        assert_eq!(*payload.downcast_ref::<&str>().unwrap(), "rust boom");
+
+        ctx.async_with(async |ctx| {
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
         })
         .await;
     }
