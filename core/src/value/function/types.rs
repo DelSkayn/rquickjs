@@ -185,5 +185,6 @@ type_impls! {
     FuncArg<T>(T): into_inner From AsRef AsMut Deref DerefMut;
     Opt<T>(Option<T>): into_inner From AsRef AsMut Deref DerefMut;
     Rest<T>(Vec<T>): into_inner From AsRef AsMut Deref DerefMut;
+    Null<T>(Option<T>): into_inner From AsRef AsMut Deref DerefMut;
     Flat<T>(T): into_inner From AsRef AsMut Deref DerefMut;
 }
