@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use indexmap::IndexMap;
 
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
@@ -131,7 +131,7 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
     let prefix = config.prefix.unwrap_or_else(|| BASE_PREFIX.to_string());
     let crate_name = format_ident!("{}", config.crate_.map(Ok).unwrap_or_else(crate_ident)?);
 
-    let mut accessors = HashMap::new();
+    let mut accessors = IndexMap::new();
     let mut functions = Vec::new();
     let mut props = Vec::new();
     let mut constructor: Option<Method> = None;
@@ -302,4 +302,34 @@ pub(crate) fn expand(options: OptionList<ImplOption>, item: ItemImpl) -> Result<
     };
 
     Ok(res)
+}
+
+#[cfg(test)]
+mod deterministic_tests {
+    use super::*;
+
+    fn expansion() -> String {
+        let options = syn::parse2(quote!(crate = "rquickjs")).unwrap();
+        let item = syn::parse_quote! {
+            impl Example {
+                #[qjs(get)]
+                pub fn zeta(&self) -> u32 { 1 }
+                #[qjs(get)]
+                pub fn alpha(&self) -> u32 { 2 }
+                #[qjs(get)]
+                pub fn mu(&self) -> u32 { 3 }
+                #[qjs(get)]
+                pub fn beta(&self) -> u32 { 4 }
+            }
+        };
+        expand(options, item).unwrap().to_string()
+    }
+
+    #[test]
+    fn deterministic_accessor_expansion() {
+        let expected = expansion();
+        for _ in 0..32 {
+            assert_eq!(expansion(), expected);
+        }
+    }
 }
