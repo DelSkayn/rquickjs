@@ -3,27 +3,26 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
-use core::{ptr::NonNull, result::Result as StdResult, task::Poll};
-#[cfg(feature = "std")]
-use std::println;
-
+#[cfg(feature = "parallel")]
+use core::ptr::NonNull;
+use core::{result::Result as StdResult, task::Poll};
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Sender};
 
 use async_lock::Mutex;
 
 use super::{
-    opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
-    InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    job_error::JobError, opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll,
+    spawner::DriveFuture, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
 #[cfg(feature = "parallel")]
+use crate::qjs;
+#[cfg(feature = "parallel")]
 use crate::util::{AssertSendFuture, AssertSyncFuture};
-use crate::{
-    context::AsyncContext, qjs, result::AsyncJobException, util::ManualPoll, Ctx, Exception, Result,
-};
+use crate::{util::ManualPoll, Result};
 
 #[derive(Debug)]
 pub(crate) struct InnerRuntime {
@@ -259,34 +258,30 @@ impl AsyncRuntime {
         lock.runtime.is_job_pending() || !lock.runtime.get_opaque().spawner_is_empty()
     }
 
-    /// Execute first pending job
+    /// Run all futures and jobs in the runtime until all are finished.
     ///
-    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
+    /// Returns the first failed job's exception as a [`JobError`]. Calling this
+    /// again continues with the jobs left in the queue. A Rust panic raised
+    /// inside a job is resumed at the failure site.
     #[inline]
-    pub async fn execute_pending_job(&self) -> StdResult<bool, AsyncJobException> {
-        let mut lock = self.inner.lock().await;
+    pub async fn idle(&self) -> StdResult<(), JobError> {
+        let lock = self.inner.lock().await;
         lock.runtime.update_stack_top();
         lock.runtime.drain_pending_free();
+        unsafe { lock.runtime.get_opaque().drain_job_errors() };
 
-        let f = ManualPoll::new(|cx| {
-            let job_res = lock.runtime.execute_pending_job().map_err(|e| {
-                let ptr = NonNull::new(e)
-                    .expect("executing pending job returned a null context on error");
-                // JS_ExecutePendingJob returns a borrowed context pointer;
-                // dup it so AsyncContext can own a reference.
-                unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
-                AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
-            })?;
-
-            if job_res {
-                return Poll::Ready(Ok(true));
+        let f = ManualPoll::new(|cx| loop {
+            match lock.runtime.execute_pending_job() {
+                Ok(false) => {}
+                Ok(true) => continue,
+                Err(err) => return Poll::Ready(Err(err)),
             }
 
             match lock.runtime.get_opaque().poll(cx) {
-                SchedularPoll::ShouldYield => Poll::Pending,
-                SchedularPoll::Empty => Poll::Ready(Ok(false)),
-                SchedularPoll::Pending => Poll::Ready(Ok(false)),
-                SchedularPoll::PendingProgress => Poll::Ready(Ok(true)),
+                SchedularPoll::ShouldYield => return Poll::Pending,
+                SchedularPoll::Empty => return Poll::Ready(Ok(())),
+                SchedularPoll::Pending => return Poll::Pending,
+                SchedularPoll::PendingProgress => {}
             }
         });
 
@@ -296,60 +291,12 @@ impl AsyncRuntime {
         f.await
     }
 
-    /// Run all futures and jobs in the runtime until all are finished.
-    #[inline]
-    pub async fn idle(&self) {
-        let mut lock = self.inner.lock().await;
-        lock.runtime.update_stack_top();
-        lock.runtime.drain_pending_free();
-
-        let f = ManualPoll::new(|cx| {
-            loop {
-                let pending = lock.runtime.execute_pending_job().map_err(|e| {
-                    let ptr = NonNull::new(e)
-                        .expect("executing pending job returned a null context on error");
-                    // JS_ExecutePendingJob returns a borrowed context pointer;
-                    // dup it so AsyncContext can own a reference.
-                    unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
-                    AsyncJobException(unsafe { AsyncContext::from_raw(ptr, self.clone()) })
-                });
-                match pending {
-                    Err(e) => {
-                        // SAFETY: Runtime is already locked so creating a context is safe.
-                        let ctx = unsafe { Ctx::from_ptr(e.0 .0.ctx().as_ptr()) };
-                        let err = ctx.catch();
-                        if let Some(_x) = err.clone().into_object().and_then(Exception::from_object)
-                        {
-                            // TODO do something better with errors.
-                            #[cfg(feature = "std")]
-                            println!("error executing job: {}", _x);
-                        } else {
-                            #[cfg(feature = "std")]
-                            println!("error executing job: {:?}", err);
-                        }
-                    }
-                    Ok(true) => continue,
-                    Ok(false) => {}
-                }
-
-                match lock.runtime.get_opaque().poll(cx) {
-                    SchedularPoll::ShouldYield => return Poll::Pending,
-                    SchedularPoll::Empty => return Poll::Ready(()),
-                    SchedularPoll::Pending => return Poll::Pending,
-                    SchedularPoll::PendingProgress => {}
-                }
-            }
-        });
-
-        #[cfg(feature = "parallel")]
-        let f = unsafe { AssertSendFuture::assert(AssertSyncFuture::assert(f)) };
-
-        f.await
-    }
-
-    /// Returns a future that completes when the runtime is dropped.
-    /// If the future is polled it will drive futures spawned inside the runtime completing them
-    /// even if runtime is currently not in use.
+    /// Returns a future that drives futures spawned inside the runtime even when
+    /// the runtime is not otherwise in use.
+    ///
+    /// The future resolves with `Ok(())` when the runtime is dropped, or with the
+    /// first failed job's exception as [`JobError`]. Poll it again to continue
+    /// driving the remaining queue.
     pub fn drive(&self) -> DriveFuture {
         DriveFuture::new(self.weak())
     }
@@ -407,7 +354,7 @@ mod test {
         ctx.async_with(async |ctx|{
             let res: i32 = ctx.eval("1 + 1").unwrap();
             assert_eq!(res,2i32);
-        }).await;
+        }).await.unwrap();
     });
 
     async_test_case!(sleep_closure => (_rt,ctx){
@@ -420,7 +367,7 @@ mod test {
             tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
             ctx.globals().set("foo","bar").unwrap();
             *a_ref += 1;
-        }).await;
+        }).await.unwrap();
         assert_eq!(a,2);
     });
 
@@ -448,7 +395,7 @@ mod test {
                 number_clone.store(1,Ordering::SeqCst);
                 done_clone.notify_one();
             });
-        }).await;
+        }).await.unwrap();
         // Task is blocked on gate, so value is definitely still 0.
         assert_eq!(number.load(Ordering::SeqCst),0);
         // Unblock the task and wait for it to complete.
@@ -469,7 +416,7 @@ mod test {
                 tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
             });
-        }).await;
+        }).await.unwrap();
         assert_eq!(number.load(Ordering::SeqCst),0);
         tokio::time::sleep(Duration::from_secs_f64(0.01)).await;
         assert_eq!(number.load(Ordering::SeqCst),0);
@@ -487,9 +434,9 @@ mod test {
                 tokio::task::yield_now().await;
                 number_clone.store(1,Ordering::SeqCst);
             });
-        }).await;
+        }).await.unwrap();
         assert_eq!(number.load(Ordering::SeqCst),0);
-        rt.idle().await;
+        rt.idle().await.unwrap();
         assert_eq!(number.load(Ordering::SeqCst),1);
 
     });
@@ -526,7 +473,7 @@ mod test {
             });
             tokio::time::timeout(Duration::from_millis(500), rx).await.unwrap().unwrap();
             tokio::time::timeout(Duration::from_millis(500), rx2).await.unwrap().unwrap();
-        }).await;
+        }).await.unwrap();
 
     });
 
@@ -595,11 +542,67 @@ mod test {
             };
 
         })
-        .await;
+        .await.unwrap();
 
-        rt.idle().await;
+        rt.idle().await.unwrap();
 
         assert_eq!(COUNT.load(Ordering::Relaxed),2);
+    });
+
+    async_test_case!(idle_returns_failed_job => (rt, ctx) {
+        ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('idle failure'); })").unwrap();
+        }).await.unwrap();
+
+        let err = rt.idle().await.unwrap_err();
+        ctx.with(|ctx| {
+            ctx.globals().set("err", err.into_value(&ctx).unwrap()).unwrap();
+            assert_eq!(ctx.eval::<std::string::String, _>("err.message").unwrap(), "idle failure");
+        }).await;
+    });
+
+    async_test_case!(async_with_returns_failed_job => (rt, ctx) {
+        let err = ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('with failure'); })").unwrap();
+            tokio::task::yield_now().await;
+        }).await.unwrap_err();
+
+        ctx.with(|ctx| {
+            ctx.globals().set("err", err.into_value(&ctx).unwrap()).unwrap();
+            assert_eq!(ctx.eval::<std::string::String, _>("err.message").unwrap(), "with failure");
+        }).await;
+    });
+
+    async_test_case!(drive_returns_failed_job => (rt, ctx) {
+        ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('drive failure'); })").unwrap();
+        }).await.unwrap();
+
+        let err = rt.drive().await.unwrap_err();
+        ctx.with(|ctx| {
+            ctx.globals().set("err", err.into_value(&ctx).unwrap()).unwrap();
+            assert_eq!(ctx.eval::<std::string::String, _>("err.message").unwrap(), "drive failure");
+        }).await;
+    });
+
+    async_test_case!(reentering_idle_continues_the_queue => (rt, ctx) {
+        ctx.async_with(async |ctx| {
+            ctx.eval::<(), _>(
+                "queueMicrotask(() => { throw new Error('one'); });\
+                 queueMicrotask(() => { globalThis.done = 1; });",
+            ).unwrap();
+        }).await.unwrap();
+
+        let first = rt.idle().await.unwrap_err();
+        // The next drain releases unread exceptions, so consume this one first.
+        ctx.with(|ctx| {
+            ctx.globals().set("err", first.into_value(&ctx).unwrap()).unwrap();
+        }).await;
+        rt.idle().await.unwrap();
+        ctx.with(|ctx| {
+            assert_eq!(ctx.eval::<std::string::String, _>("err.message").unwrap(), "one");
+            assert_eq!(ctx.eval::<i32, _>("globalThis.done").unwrap(), 1);
+        }).await;
     });
 
     async_test_case!(interrupt_handler_idle => (rt, ctx) {
@@ -624,8 +627,9 @@ mod test {
 
         // This previously caused an assertion failure in gc_decref_child
         // due to the interrupt handler corrupting reference counts during
-        // pending job execution.
-        rt.idle().await;
+        // pending job execution. The interrupt may fail a job, so the result
+        // is intentionally ignored.
+        let _ = rt.idle().await;
     });
 
     #[cfg(feature = "parallel")]
@@ -644,11 +648,12 @@ mod test {
         let rt = AsyncRuntime::new().unwrap();
 
         std::mem::drop(assert_is_sync(rt.idle()));
-        std::mem::drop(assert_is_sync(rt.execute_pending_job()));
         std::mem::drop(assert_is_sync(rt.drive()));
 
         std::mem::drop(assert_is_send(rt.idle()));
-        std::mem::drop(assert_is_send(rt.execute_pending_job()));
         std::mem::drop(assert_is_send(rt.drive()));
+
+        fn assert_job_error_is_send<T: Send>() {}
+        assert_job_error_is_send::<JobError>();
     }
 }

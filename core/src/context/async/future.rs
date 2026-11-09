@@ -3,6 +3,7 @@ use core::{
     future::Future,
     mem::{self, ManuallyDrop},
     pin::Pin,
+    result::Result as StdResult,
     task::{ready, Context, Poll},
 };
 
@@ -10,7 +11,7 @@ use async_lock::futures::Lock;
 
 use crate::{
     markers::ParallelSend,
-    runtime::{schedular::SchedularPoll, InnerRuntime},
+    runtime::{job_error::JobError, schedular::SchedularPoll, InnerRuntime},
     AsyncContext, Ctx,
 };
 
@@ -62,12 +63,12 @@ where
     F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend + 'a,
     R: ParallelSend + 'static,
 {
-    type Output = R;
+    type Output = StdResult<R, JobError>;
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         // Implementation ensures we don't break pin guarantees.
         let this = unsafe { self.get_unchecked_mut() };
 
-        let mut lock = loop {
+        let lock = loop {
             // We don't move the lock_state as long as it is pending
             if let LockState::Pending(ref mut fut) = &mut this.lock_state {
                 // SAFETY: Sound as we don't move future while it is pending.
@@ -88,6 +89,7 @@ where
         };
 
         lock.runtime.update_stack_top();
+        unsafe { lock.runtime.get_opaque().drain_job_errors() };
 
         // At this point we have locked the runtime so we start running the actual future
         // we can move this memory since the future is boxed and thus movable.
@@ -107,7 +109,8 @@ where
             let mut made_progress = false;
 
             if let Poll::Ready(x) = future.as_mut().poll(cx) {
-                break Poll::Ready(x);
+                drop(future);
+                break Poll::Ready(Ok(x));
             };
 
             let opaque = lock.runtime.get_opaque();
@@ -132,15 +135,25 @@ where
                 }
             };
 
+            let mut job_error = None;
             loop {
                 match lock.runtime.execute_pending_job() {
                     Ok(false) => break,
                     Ok(true) => made_progress = true,
-                    Err(_ctx) => {
-                        // TODO figure out what to do with a job error.
-                        made_progress = true;
+                    Err(err) => {
+                        job_error = Some(err);
+                        break;
                     }
                 }
+            }
+
+            // The failed job may have been the one that would have settled the
+            // promise the closure awaits, so cancel the closure and report it.
+            if let Some(err) = job_error {
+                // Drop the closure while the runtime lock is still held: it may
+                // own JavaScript values that must be freed under the lock.
+                drop(future);
+                break Poll::Ready(Err(err));
             }
 
             // If no work could be done we should yield back.

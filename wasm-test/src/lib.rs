@@ -24,7 +24,7 @@ thread_local! {
 
 fn eval_json(src: &str) -> String {
     ENGINE.with(|cell| {
-        let (runtime, context) = cell.get_or_init(|| {
+        let (_, context) = cell.get_or_init(|| {
             let runtime = Runtime::new().unwrap();
             // JS_DEFAULT_STACK_SIZE (1MB) equals the wasm shadow stack, so the
             // default `stack_top - 1MB` underflows: always set this on wasm.
@@ -45,12 +45,10 @@ fn eval_json(src: &str) -> String {
                 Err(err) => format!("ERR:stringify: {err}"),
             },
         });
-        // drain the microtask queue so promise continuations observably run.
-        while runtime.is_job_pending() {
-            if runtime.execute_pending_job().is_err() {
-                break;
-            }
-        }
+        // Drain the microtask queue so promise continuations observably run.
+        // A failed job stops the drain; its exception is released by the next
+        // drain or at teardown.
+        let _ = context.with(|ctx| ctx.drain_jobs());
         out
     })
 }

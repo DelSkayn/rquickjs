@@ -122,6 +122,15 @@ impl<'js> Promise<'js> {
                     // The rejection is surfaced as an `Err`, so it is no longer unhandled.
                     qjs::JS_PromiseMarkAsHandled(self.ctx().as_ptr(), self.as_js_value());
                     let v = qjs::JS_PromiseResult(self.ctx().as_ptr(), self.as_js_value());
+                    // A Rust callback that panics inside a promise reaction rejects
+                    // the promise with the unforgeable exception sentinel. Resume
+                    // the original panic instead of leaving it armed for a later,
+                    // unrelated host call.
+                    if qjs::JS_VALUE_GET_NORM_TAG(v) == qjs::JS_TAG_EXCEPTION {
+                        if let Some(payload) = self.ctx().get_opaque().take_panic() {
+                            crate::util::resume_unwind(payload);
+                        }
+                    }
                     qjs::JS_Throw(self.ctx().as_ptr(), v);
                 };
                 Some(Err(Error::Exception))
@@ -133,17 +142,24 @@ impl<'js> Promise<'js> {
     ///
     /// If blocking on the promise would result in blocking, i.e. when the job queue runs out of
     /// jobs before the promise can be resolved, this function returns [`Error::WouldBlock`]
-    /// indicating that no more work can be done at the moment.
+    /// indicating that no more work can be done at the moment. If a job fails, its exception
+    /// is rethrown and can be retrieved with [`Ctx::catch`].
     ///
     /// This function only drives the quickjs job queue, futures are not polled.
     pub fn finish<T: FromJs<'js>>(&self) -> Result<T> {
+        unsafe { self.ctx().get_opaque().drain_job_errors() };
         loop {
             if let Some(x) = self.result() {
                 return x;
             }
 
-            if !self.ctx.execute_pending_job() {
-                return Err(Error::WouldBlock);
+            match self.ctx().try_execute_pending_job() {
+                Ok(true) => continue,
+                Ok(false) => return Err(Error::WouldBlock),
+                Err(err) => {
+                    let value = err.into_value(self.ctx())?;
+                    return Err(self.ctx().throw(value));
+                }
             }
         }
     }
@@ -442,6 +458,7 @@ mod test {
             }
         })
         .await
+        .unwrap()
     }
 
     #[cfg(feature = "futures")]
@@ -512,6 +529,7 @@ mod test {
                 .unwrap()
         })
         .await
+        .unwrap()
     }
 
     #[test]
@@ -542,7 +560,7 @@ mod test {
             resolve.call::<_, ()>(("FOO",)).unwrap();
             assert_eq!(promise.state(), PromiseState::Resolved);
 
-            while ctx.execute_pending_job() {}
+            ctx.drain_jobs().unwrap();
 
             assert!(DID_EXECUTE.load(Ordering::SeqCst));
         })
@@ -572,6 +590,7 @@ mod test {
             assert_eq!(promise.into_future::<i32>().await.catch(&ctx).unwrap(), 42);
         })
         .await
+        .unwrap()
     }
 
     #[cfg(feature = "futures")]
@@ -587,10 +606,11 @@ mod test {
         .await;
         let ctx = AsyncContext::full(&rt).await.unwrap();
 
-        ctx.async_with(async |ctx| {
-            let func = ctx
-                .eval::<Function, _>(
-                    r"
+        let _ = ctx
+            .async_with(async |ctx| {
+                let func = ctx
+                    .eval::<Function, _>(
+                        r"
                     (function(){
                         return new Promise((resolve) => {
                             while(true){}
@@ -598,14 +618,14 @@ mod test {
                         })
                     })
                     ",
-                )
-                .catch(&ctx)
-                .unwrap();
-            let promise: Promise = func.call(()).catch(&ctx).unwrap();
-            let result = promise.into_future::<i32>().await;
-            assert!(result.is_err(), "should fail due to interrupt");
-        })
-        .await
+                    )
+                    .catch(&ctx)
+                    .unwrap();
+                let promise: Promise = func.call(()).catch(&ctx).unwrap();
+                let result = promise.into_future::<i32>().await;
+                assert!(result.is_err(), "should fail due to interrupt");
+            })
+            .await;
     }
 
     #[test]
@@ -652,7 +672,8 @@ mod test {
             let res = promise.into_future::<()>().await.catch(&ctx);
             assert!(matches!(res, Err(CaughtError::Value(v)) if v.as_int() == Some(7)));
         })
-        .await;
+        .await
+        .unwrap();
 
         assert_eq!(*events.lock().unwrap(), [(Some(7), false), (Some(7), true)]);
     }

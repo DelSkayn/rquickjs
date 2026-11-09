@@ -9,16 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- `Ctx::execute_pending_job` is replaced by `Ctx::drain_jobs`, which drains the queue and returns `Result<(), JobError>` instead of `bool`. `Runtime::execute_pending_job`, `AsyncRuntime::execute_pending_job`, `JobException` and `AsyncJobException` are removed.
+- `AsyncContext::async_with`, `AsyncRuntime::idle` and `AsyncRuntime::drive` now return `Result<_, JobError>`.
+
 ### Added
 
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
+- Added `JobError`, a `Send` handle to a failed job's exception. `JobError::into_value(&ctx)` takes the exception out of the runtime with a context from that runtime; an unread error is released by the next drain.
 
 ### Changed
+
+- Every API that runs jobs now reports a failed job instead of dropping its exception. Drains stop at the first failure; calling them again continues with the remaining queue.
+- `Promise::finish` rethrows a failed job's exception instead of returning `Error::WouldBlock`.
+- A Rust panic raised inside a job is resumed at the failure site instead of being turned into a JavaScript value.
 
 ### Deprecated
 
 ### Removed
+
+- Removed `JobException` and `AsyncJobException`.
 
 ### Fixed
 
@@ -30,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Atom::to_value` returns a symbol if the atom represents a symbol, instead of always returning a JS string
 - Fixed converting an invalid JS `Date` into `SystemTime` or `chrono::DateTime` returning the Unix epoch instead of an error
 - Fixed build failures on armhf and other platforms with no native 64-bit atomics.
+- Failed jobs' exceptions are no longer lost: they are caught at the moment the job fails and retained until the `JobError` handle is used or dropped.
+- The runtime lock is no longer left poisoned when a Rust panic unwinds out of a `Context::with` closure.
 
 ### Security
 
