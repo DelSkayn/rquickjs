@@ -7,9 +7,8 @@ use super::{
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{qjs, result::JobException, Context, Mut, Ref, Result, Weak};
+use crate::{Mut, Ref, Result, Weak};
 use alloc::{ffi::CString, vec::Vec};
-use core::{ptr::NonNull, result::Result as StdResult};
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Sender};
 
@@ -209,22 +208,6 @@ impl Runtime {
     pub fn is_job_pending(&self) -> bool {
         self.inner.lock().is_job_pending()
     }
-
-    /// Execute first pending job
-    ///
-    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    #[inline]
-    pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        let mut lock = self.inner.lock();
-        lock.update_stack_top();
-        lock.execute_pending_job().map_err(|e| {
-            let ptr = NonNull::new(e).expect("QuickJS returned null ptr for job error");
-            // JS_ExecutePendingJob returns a borrowed context pointer;
-            // dup it so Context can own a reference.
-            unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
-            JobException(unsafe { Context::from_raw(ptr, self.clone()) })
-        })
-    }
 }
 
 // Since all functions which use runtime are behind a mutex
@@ -284,28 +267,6 @@ mod test {
 
         ctx1.with(|_| {
             drop(ctx2);
-        });
-    }
-
-    #[test]
-    fn job_error_context_reuses_the_existing_opaque() {
-        let rt = Runtime::new().unwrap();
-        let ctx = crate::Context::full(&rt).unwrap();
-        ctx.with(|ctx| {
-            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('boom'); })")
-                .unwrap();
-        });
-
-        // `execute_pending_job` wraps the failing context via `from_raw`. It
-        // must not install a second `ContextOpaque` on that context, and the
-        // returned handle must still be usable and balance its context ref.
-        let err = rt.execute_pending_job().unwrap_err();
-        err.0.with(|ctx| {
-            let obj = ctx.catch().into_object().unwrap();
-            assert_eq!(
-                obj.get::<_, std::string::String>("message").unwrap(),
-                "boom"
-            );
         });
     }
 

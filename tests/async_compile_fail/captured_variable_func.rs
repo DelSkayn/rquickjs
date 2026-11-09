@@ -11,7 +11,7 @@ pub async fn test() {
             *var_ref += 1;
         })
     })
-    .await
+    .await.unwrap();
 }
 
 fn main() {}

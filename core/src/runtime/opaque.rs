@@ -1,10 +1,11 @@
 use crate::{
     class::{self},
-    qjs, Ctx, Error, JsLifetime, Value,
+    qjs, Ctx, Error, JsLifetime, Persistent, Value,
 };
 
 use super::{
     exotic::ExoticMethodsHolder,
+    job_error::{Entry as JobErrorEntry, JobError},
     userdata::{UserDataGuard, UserDataMap},
     InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
 };
@@ -48,6 +49,10 @@ pub(crate) struct RuntimeOpaque<'js> {
 
     userdata: UserDataMap,
 
+    /// The most recent failed-job exception, kept until a newer failure or
+    /// teardown. Every access is under the runtime lock.
+    job_error: UnsafeCell<Option<JobErrorEntry>>,
+
     #[cfg(feature = "futures")]
     spawner: Option<UnsafeCell<Spawner>>,
 
@@ -72,6 +77,8 @@ impl<'js> RuntimeOpaque<'js> {
             exotic_class_id: qjs::JS_INVALID_CLASS_ID,
 
             userdata: UserDataMap::default(),
+
+            job_error: UnsafeCell::new(None),
 
             _marker: PhantomData,
 
@@ -238,6 +245,43 @@ impl<'js> RuntimeOpaque<'js> {
         self.panic.take()
     }
 
+    /// Record a failed job's exception, replacing and freeing any previous one.
+    ///
+    /// # Safety
+    /// The caller must hold the runtime lock; the slot holds a live JS value.
+    pub(crate) unsafe fn capture_job_error<'a>(
+        &self,
+        id: u64,
+        ctx: &Ctx<'a>,
+        value: Value<'a>,
+    ) -> JobError {
+        let entry = JobErrorEntry {
+            id,
+            value: Persistent::save(ctx, value),
+        };
+        let old = (*self.job_error.get()).replace(entry);
+        // Drop after the borrow ends: a finalizer may re-enter `Opaque`.
+        drop(old);
+        JobError { id }
+    }
+
+    /// Clone a retained exception out of the runtime.
+    ///
+    /// # Safety
+    /// The caller must hold the runtime lock; the slot holds a live JS value.
+    pub(crate) unsafe fn take_job_error<'a>(
+        &self,
+        id: u64,
+        ctx: &Ctx<'a>,
+    ) -> crate::Result<Value<'a>> {
+        let slot = &*self.job_error.get();
+        let entry = slot.as_ref().ok_or(Error::JobErrorUnavailable)?;
+        if entry.id != id {
+            return Err(Error::JobErrorUnavailable);
+        }
+        entry.value.clone().restore(ctx)
+    }
+
     pub fn get_class_id(&self) -> qjs::JSClassID {
         self.class_id
     }
@@ -258,6 +302,8 @@ impl<'js> RuntimeOpaque<'js> {
         self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
+        let stale = self.job_error.get_mut().take();
+        drop(stale);
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();

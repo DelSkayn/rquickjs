@@ -12,7 +12,7 @@ pub async fn test() {
         }));
         ctx.globals().set("t", func).unwrap();
     })
-    .await
+    .await.unwrap();
 }
 
 fn main() {}
