@@ -14,7 +14,7 @@ pub async fn test() {
                 })
                 .await
         })
-        .await
+        .await;
 }
 
 fn main() {}

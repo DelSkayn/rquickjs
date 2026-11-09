@@ -37,7 +37,10 @@ impl<T: ?Sized> Mut<T> {
 
         #[cfg(feature = "parallel")]
         {
-            self.0.lock().unwrap()
+            // A Rust panic can unwind out of a `Context::with` closure while the
+            // lock is held. QuickJS keeps its own exception state, so a poisoned
+            // lock must not make the runtime unusable afterwards.
+            self.0.lock().unwrap_or_else(|e| e.into_inner())
         }
     }
 
@@ -49,7 +52,11 @@ impl<T: ?Sized> Mut<T> {
 
         #[cfg(feature = "parallel")]
         {
-            self.0.try_lock().ok()
+            match self.0.try_lock() {
+                Ok(guard) => Some(guard),
+                Err(std::sync::TryLockError::Poisoned(e)) => Some(e.into_inner()),
+                Err(std::sync::TryLockError::WouldBlock) => None,
+            }
         }
     }
 }
