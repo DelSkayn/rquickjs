@@ -1,7 +1,8 @@
 //! QuickJS runtime related types.
 
 use super::{
-    opaque::Opaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
+    opaque::RuntimeOpaque, raw::RawRuntime, InterruptHandler, MemoryUsage, PromiseHook,
+    RejectionTracker,
 };
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
@@ -19,7 +20,7 @@ use std::sync::mpsc::{self, Sender};
 pub struct WeakRuntime {
     inner: Weak<Mut<RawRuntime>>,
     #[cfg(feature = "parallel")]
-    pending_free: Sender<NonNull<qjs::JSContext>>,
+    pending_free: Sender<crate::context::owner::OwnedContext>,
 }
 
 impl WeakRuntime {
@@ -37,7 +38,7 @@ impl WeakRuntime {
 pub struct Runtime {
     pub(crate) inner: Ref<Mut<RawRuntime>>,
     #[cfg(feature = "parallel")]
-    pub(crate) pending_free: Sender<NonNull<qjs::JSContext>>,
+    pub(crate) pending_free: Sender<crate::context::owner::OwnedContext>,
 }
 
 impl Runtime {
@@ -48,7 +49,7 @@ impl Runtime {
     /// # Features
     /// *If the `"rust-alloc"` feature is enabled the Rust's global allocator will be used in favor of libc's one.*
     pub fn new() -> Result<Self> {
-        let opaque = Opaque::new();
+        let opaque = RuntimeOpaque::new();
         #[cfg(feature = "parallel")]
         let (pending_free, pending_free_recv) = mpsc::channel();
         let rt = unsafe {
@@ -72,7 +73,7 @@ impl Runtime {
     where
         A: Allocator + 'static,
     {
-        let opaque = Opaque::new();
+        let opaque = RuntimeOpaque::new();
         #[cfg(feature = "parallel")]
         let (pending_free, pending_free_recv) = mpsc::channel();
         let rt = unsafe {
@@ -283,6 +284,28 @@ mod test {
 
         ctx1.with(|_| {
             drop(ctx2);
+        });
+    }
+
+    #[test]
+    fn job_error_context_reuses_the_existing_opaque() {
+        let rt = Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('boom'); })")
+                .unwrap();
+        });
+
+        // `execute_pending_job` wraps the failing context via `from_raw`. It
+        // must not install a second `ContextOpaque` on that context, and the
+        // returned handle must still be usable and balance its context ref.
+        let err = rt.execute_pending_job().unwrap_err();
+        err.0.with(|ctx| {
+            let obj = ctx.catch().into_object().unwrap();
+            assert_eq!(
+                obj.get::<_, std::string::String>("message").unwrap(),
+                "boom"
+            );
         });
     }
 

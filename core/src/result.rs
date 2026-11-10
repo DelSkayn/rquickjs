@@ -88,6 +88,8 @@ pub enum Error {
     ClassBorrow(BorrowError),
     /// An error happened while trying to borrow a Rust function.
     FunctionBorrow(BorrowError),
+    /// Tried to create a rust defined class with a prototype which depends on itself.
+    RecursivePrototype,
     /// An exception raised by QuickJS itself.
     /// The actual JavaScript value can be retrieved by calling [`Ctx::catch`].
     ///
@@ -456,6 +458,9 @@ impl Display for Error {
                 "Error borrowing function: ".fmt(f)?;
                 x.fmt(f)?;
             }
+            Error::RecursivePrototype => {
+                "Error creating a class prototype depends on itself.".fmt(f)?
+            }
             Error::WouldBlock => "Error blocking on a promise resulted in a dead lock".fmt(f)?,
             Error::UserData(x) => x.fmt(f)?,
             Error::AsSlice(x) => {
@@ -676,7 +681,7 @@ impl<'js> Ctx<'js> {
         match crate::util::catch_unwind(f) {
             Ok(x) => x,
             Err(e) => unsafe {
-                self.get_opaque().set_panic(e);
+                self.get_runtime_opaque().set_panic(e);
                 qjs::JS_Throw(self.as_ptr(), qjs::JS_MKVAL(qjs::JS_TAG_EXCEPTION, 0));
                 err_val
             },
@@ -707,7 +712,7 @@ impl<'js> Ctx<'js> {
         if qjs::JS_VALUE_GET_NORM_TAG(js_val) != qjs::JS_TAG_EXCEPTION {
             Ok(js_val)
         } else {
-            if let Some(x) = self.get_opaque().take_panic() {
+            if let Some(x) = self.get_runtime_opaque().take_panic() {
                 crate::util::resume_unwind(x);
             }
             Err(Error::Exception)
@@ -719,7 +724,7 @@ impl<'js> Ctx<'js> {
     pub(crate) fn raise_exception(&self) -> Error {
         // Safety
         unsafe {
-            if let Some(x) = self.get_opaque().take_panic() {
+            if let Some(x) = self.get_runtime_opaque().take_panic() {
                 crate::util::resume_unwind(x);
             }
             Error::Exception

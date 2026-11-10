@@ -1,41 +1,6 @@
-use super::{
-    intrinsic,
-    owner::{ContextOwner, DropContext},
-    ContextBuilder, Intrinsic,
-};
-use crate::{qjs, Ctx, Error, Result, Runtime};
+use super::{intrinsic, owner::ContextOwner, ContextBuilder, Intrinsic};
+use crate::{context::opaque::ContextOpaque, qjs, Ctx, Error, Result, Runtime};
 use core::{mem, ptr::NonNull};
-
-impl DropContext for Runtime {
-    unsafe fn drop_context(&self, ctx: NonNull<qjs::JSContext>) {
-        //TODO
-        let guard = match self.inner.try_lock() {
-            Some(x) => x,
-            None => {
-                // `RefCell` is neither `Send` nor `Sync`, so a failed
-                // `try_borrow_mut` is always this same thread and freeing
-                // directly is safe.
-                #[cfg(not(feature = "parallel"))]
-                {
-                    unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-                    return;
-                }
-                #[cfg(feature = "parallel")]
-                {
-                    self.pending_free
-                        .send(ctx)
-                        .expect("runtime should be alive while contexts life");
-                    return;
-                }
-            }
-        };
-        guard.update_stack_top();
-        unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-        guard.drain_pending_free();
-        // Explicitly drop the guard to ensure it is valid during the entire use of runtime
-        mem::drop(guard);
-    }
-}
 
 /// A single execution context with its own global variables and stack.
 ///
@@ -51,7 +16,7 @@ impl Context {
     /// The context must also have valid reference count, one which can be decremented when this
     /// object is dropped without going negative.
     pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: Runtime) -> Self {
-        Context(ContextOwner::new(ctx, rt))
+        Context(ContextOwner::from_raw(ctx, rt))
     }
 
     pub fn as_raw(&self) -> NonNull<qjs::JSContext> {
@@ -75,7 +40,7 @@ impl Context {
         // rquickjs assumes the base objects exist, so we allways need to add this.
         unsafe { qjs::JS_AddIntrinsicBaseObjects(ctx.as_ptr()) };
         unsafe { I::add_intrinsic(ctx) };
-        let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
+        let res = unsafe { ContextOwner::new(ctx, ContextOpaque::new(), runtime.clone()) };
         mem::drop(guard);
 
         Ok(Context(res))
@@ -88,7 +53,7 @@ impl Context {
         let guard = runtime.inner.lock();
         let ctx = NonNull::new(unsafe { qjs::JS_NewContext(guard.rt.as_ptr()) })
             .ok_or(Error::Allocation)?;
-        let res = unsafe { ContextOwner::new(ctx, runtime.clone()) };
+        let res = unsafe { ContextOwner::new(ctx, ContextOpaque::new(), runtime.clone()) };
         // Explicitly drop the guard to ensure it is valid during the entire use of runtime
         mem::drop(guard);
 
