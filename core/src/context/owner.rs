@@ -1,29 +1,57 @@
 use alloc::boxed::Box;
 use core::{mem, ptr::NonNull};
 
-use crate::{context::opaque::ContextOpaque, qjs};
+use crate::{context::opaque::ContextOpaque, qjs, Ref};
 
 pub struct OwnedContext {
     ctx: NonNull<qjs::JSContext>,
+    /// Whether this handle owns the `ContextOpaque` installed on `ctx`.
+    /// `from_raw` wraps a context whose opaque belongs to another `Context`.
+    owns_opaque: bool,
 }
 
 impl OwnedContext {
     pub fn new(ctx: NonNull<qjs::JSContext>, opaque: ContextOpaque) -> Self {
-        assert!(unsafe { qjs::JS_GetContextOpaque(ctx.as_ptr()) }.is_null(), "Tried to create a rust quickjs context from a context which was already contained an opaque pointer");
+        debug_assert!(
+            unsafe { qjs::JS_GetContextOpaque(ctx.as_ptr()) }.is_null(),
+            "Tried to create a rust quickjs context from a context which already contained an opaque pointer"
+        );
 
         let opaque = Box::into_raw(Box::new(opaque));
 
         unsafe { qjs::JS_SetContextOpaque(ctx.as_ptr(), opaque.cast()) };
 
-        OwnedContext { ctx }
+        OwnedContext {
+            ctx,
+            owns_opaque: true,
+        }
+    }
+
+    /// Wrap an existing rquickjs context. A fresh opaque is installed only when
+    /// the context does not have one yet; otherwise its original owner keeps it.
+    ///
+    /// # Safety
+    /// `ctx` must have a reference count which can be decremented on drop.
+    pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>) -> Self {
+        if qjs::JS_GetContextOpaque(ctx.as_ptr()).is_null() {
+            Self::new(ctx, ContextOpaque::new())
+        } else {
+            OwnedContext {
+                ctx,
+                owns_opaque: false,
+            }
+        }
     }
 }
 
 impl Drop for OwnedContext {
     fn drop(&mut self) {
         unsafe {
-            let _ =
-                Box::from_raw(qjs::JS_GetContextOpaque(self.ctx.as_ptr()).cast::<ContextOpaque>());
+            if self.owns_opaque {
+                mem::drop(Box::from_raw(
+                    qjs::JS_GetContextOpaque(self.ctx.as_ptr()).cast::<ContextOpaque>(),
+                ));
+            }
             qjs::JS_FreeContext(self.ctx.as_ptr());
         }
     }
@@ -98,89 +126,63 @@ impl DropContext for crate::AsyncRuntime {
     }
 }
 
+/// Struct in charge of dropping contexts when they go out of scope.
+///
+/// The context is shared through `Ref`, so only the last handle frees the C
+/// context, and it does so through `DropContext` while the runtime lock is
+/// held. `Option` lets `Drop` take the `Ref` out of `&mut self` without an
+/// `unsafe` `ManuallyDrop`.
+#[derive(Clone)]
+pub(crate) struct ContextOwner<R: DropContext> {
+    ctx: Option<Ref<OwnedContext>>,
+    pub(crate) rt: R,
+}
+
+impl<R: DropContext> ContextOwner<R> {
+    pub unsafe fn new(ctx: NonNull<qjs::JSContext>, opaque: ContextOpaque, rt: R) -> Self {
+        Self {
+            ctx: Some(Ref::new(OwnedContext::new(ctx, opaque))),
+            rt,
+        }
+    }
+
+    /// # Safety
+    /// `ctx` must have a reference count which can be decremented on drop.
+    pub(crate) unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: R) -> Self {
+        Self {
+            ctx: Some(Ref::new(OwnedContext::from_raw(ctx))),
+            rt,
+        }
+    }
+
+    pub(crate) fn ctx(&self) -> NonNull<qjs::JSContext> {
+        self.ctx
+            .as_ref()
+            .expect("context owner is already dropped")
+            .ctx
+    }
+
+    pub(crate) fn rt(&self) -> &R {
+        &self.rt
+    }
+}
+
+// Access to the underlying QuickJS context is protected by the runtime lock,
+// so sharing this pointer between threads is sound as long as callers go
+// through `ContextOwner`.
 #[cfg(feature = "parallel")]
-mod impls {
-    use super::*;
-    use alloc::sync::Arc;
-    use core::mem::ManuallyDrop;
+unsafe impl Send for OwnedContext {}
+#[cfg(feature = "parallel")]
+unsafe impl Sync for OwnedContext {}
+#[cfg(feature = "parallel")]
+unsafe impl<R: Send + DropContext> Send for ContextOwner<R> {}
 
-    /// Struct in charge of dropping contexts when they go out of scope
-    #[derive(Clone)]
-    pub(crate) struct ContextOwner<R: DropContext> {
-        pub(crate) ctx: ManuallyDrop<Arc<OwnedContext>>,
-        pub(crate) rt: R,
-    }
-
-    impl<R: DropContext> ContextOwner<R> {
-        pub unsafe fn new(ctx: NonNull<qjs::JSContext>, opaque: ContextOpaque, rt: R) -> Self {
-            Self {
-                ctx: ManuallyDrop::new(Arc::new(OwnedContext::new(ctx, opaque))),
-                rt,
-            }
-        }
-
-        pub(crate) fn ctx(&self) -> NonNull<qjs::JSContext> {
-            self.ctx.ctx
-        }
-
-        pub(crate) fn rt(&self) -> &R {
-            &self.rt
-        }
-    }
-
-    unsafe impl Send for OwnedContext {}
-    unsafe impl Sync for OwnedContext {}
-
-    unsafe impl<R: Send + DropContext> Send for ContextOwner<R> {}
-
-    impl<R: DropContext> Drop for ContextOwner<R> {
-        fn drop(&mut self) {
-            let inner = unsafe { ManuallyDrop::take(&mut self.ctx) };
-            if let Some(inner) = Arc::into_inner(inner) {
+impl<R: DropContext> Drop for ContextOwner<R> {
+    fn drop(&mut self) {
+        if let Some(inner) = self.ctx.take() {
+            if let Some(inner) = Ref::into_inner(inner) {
                 unsafe { self.rt.drop_context(inner) }
             }
         }
     }
 }
-
-#[cfg(not(feature = "parallel"))]
-mod impls {
-    use super::*;
-    use alloc::rc::Rc;
-    use core::mem::ManuallyDrop;
-
-    /// Struct in charge of dropping contexts when they go out of scope
-    #[derive(Clone)]
-    pub(crate) struct ContextOwner<R: DropContext> {
-        ctx: ManuallyDrop<alloc::rc::Rc<OwnedContext>>,
-        pub(crate) rt: R,
-    }
-
-    impl<R: DropContext> ContextOwner<R> {
-        pub unsafe fn new(ctx: NonNull<qjs::JSContext>, opaque: ContextOpaque, rt: R) -> Self {
-            Self {
-                ctx: ManuallyDrop::new(Rc::new(OwnedContext::new(ctx, opaque))),
-                rt,
-            }
-        }
-
-        pub(crate) fn ctx(&self) -> NonNull<qjs::JSContext> {
-            self.ctx.ctx
-        }
-
-        pub(crate) fn rt(&self) -> &R {
-            &self.rt
-        }
-    }
-
-    impl<R: DropContext> Drop for ContextOwner<R> {
-        fn drop(&mut self) {
-            let inner = unsafe { ManuallyDrop::take(&mut self.ctx) };
-            if let Some(inner) = Rc::into_inner(inner) {
-                unsafe { self.rt.drop_context(inner) }
-            }
-        }
-    }
-}
-
-pub(crate) use impls::*;

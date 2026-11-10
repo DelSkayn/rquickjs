@@ -16,7 +16,7 @@ impl Context {
     /// The context must also have valid reference count, one which can be decremented when this
     /// object is dropped without going negative.
     pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: Runtime) -> Self {
-        Context(ContextOwner::new(ctx, ContextOpaque::new(), rt))
+        Context(ContextOwner::from_raw(ctx, rt))
     }
 
     pub fn as_raw(&self) -> NonNull<qjs::JSContext> {

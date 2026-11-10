@@ -91,7 +91,7 @@ impl AsyncContext {
     /// The context must also have valid reference count, one which can be decremented when this
     /// object is dropped without going negative.
     pub unsafe fn from_raw(ctx: NonNull<qjs::JSContext>, rt: AsyncRuntime) -> Self {
-        AsyncContext(ContextOwner::new(ctx, ContextOpaque::new(), rt))
+        AsyncContext(ContextOwner::from_raw(ctx, rt))
     }
 
     /// Creates a base context with only the required functions registered.

@@ -150,8 +150,9 @@ impl RawRuntime {
     ///
     /// Caller must hold the runtime lock, or otherwise have exclusive access, as during `Drop`.
     pub(crate) fn drain_pending_free(&self) {
+        // Dropping a received `OwnedContext` releases its C context.
         #[cfg(feature = "parallel")]
-        while let Ok(_) = self.pending_free.try_recv() {}
+        while self.pending_free.try_recv().is_ok() {}
     }
 
     pub unsafe fn new(

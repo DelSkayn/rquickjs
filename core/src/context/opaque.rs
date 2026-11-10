@@ -27,11 +27,7 @@ impl<'js> ContextOpaque<'js> {
     }
 
     pub fn from_context_ptr<'a>(ptr: NonNull<qjs::JSContext>) -> &'a Self {
-        unsafe {
-            qjs::JS_GetContextOpaque(ptr.as_ptr())
-                .cast::<Self>()
-                .as_ref_unchecked()
-        }
+        unsafe { &*qjs::JS_GetContextOpaque(ptr.as_ptr()).cast::<Self>() }
     }
 
     pub fn get_or_insert_prototype<C: JsClass<'js>>(
@@ -60,15 +56,15 @@ impl<'js> ContextOpaque<'js> {
             match C::prototype(ctx) {
                 Ok(Some(proto)) => {
                     (*self.prototypes.get()).insert(id, Prototype::Some(proto.clone()));
-                    return Ok(Some(proto));
+                    Ok(Some(proto))
                 }
                 Ok(None) => {
                     (*self.prototypes.get()).insert(id, Prototype::None);
-                    return Ok(None);
+                    Ok(None)
                 }
                 Err(e) => {
                     (*self.prototypes.get()).remove(&id);
-                    return Err(e);
+                    Err(e)
                 }
             }
         }

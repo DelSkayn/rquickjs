@@ -288,6 +288,28 @@ mod test {
     }
 
     #[test]
+    fn job_error_context_reuses_the_existing_opaque() {
+        let rt = Runtime::new().unwrap();
+        let ctx = crate::Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('boom'); })")
+                .unwrap();
+        });
+
+        // `execute_pending_job` wraps the failing context via `from_raw`. It
+        // must not install a second `ContextOpaque` on that context, and the
+        // returned handle must still be usable and balance its context ref.
+        let err = rt.execute_pending_job().unwrap_err();
+        err.0.with(|ctx| {
+            let obj = ctx.catch().into_object().unwrap();
+            assert_eq!(
+                obj.get::<_, std::string::String>("message").unwrap(),
+                "boom"
+            );
+        });
+    }
+
+    #[test]
     #[cfg(feature = "parallel")]
     fn context_parked_by_other_thread_is_still_freed() {
         use std::sync::{Arc, Barrier};
