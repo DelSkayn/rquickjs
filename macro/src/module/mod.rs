@@ -1,4 +1,4 @@
-use std::collections::{hash_map::Entry, HashMap};
+use indexmap::{map::Entry, IndexMap};
 
 use crate::{
     attrs::{take_attributes, OptionList},
@@ -17,7 +17,7 @@ pub(crate) use config::*;
 pub(crate) struct JsModule {
     pub config: ModuleConfig,
     pub name: Ident,
-    pub declaration: HashMap<String, (Span, TokenStream)>,
+    pub declaration: IndexMap<String, (Span, TokenStream)>,
 }
 
 impl JsModule {
@@ -25,7 +25,7 @@ impl JsModule {
         JsModule {
             config,
             name: item.ident.clone(),
-            declaration: HashMap::new(),
+            declaration: IndexMap::new(),
         }
     }
 
@@ -456,4 +456,36 @@ pub(crate) fn expand(options: OptionList<ModuleOption>, mut item: ItemMod) -> Re
         #item
     };
     Ok(res)
+}
+
+#[cfg(test)]
+mod deterministic_tests {
+    use super::*;
+
+    #[test]
+    fn deterministic_module_exports_follow_declaration_order() {
+        for _ in 0..32 {
+            let item = syn::parse_quote!(
+                mod example {}
+            );
+            let mut module = JsModule::new(ModuleConfig::default(), &item);
+            for name in ["zeta", "alpha", "mu", "beta"] {
+                module.export(name.to_owned(), Span::call_site(), quote!(#name));
+            }
+            assert_eq!(
+                module.expand_declarations().to_string(),
+                quote! {
+                    _declare.declare("zeta")?;
+                    _declare.declare("alpha")?;
+                    _declare.declare("mu")?;
+                    _declare.declare("beta")?;
+                }
+                .to_string()
+            );
+            assert_eq!(
+                module.expand_exports().to_string(),
+                quote!("zeta" "alpha" "mu" "beta").to_string()
+            );
+        }
+    }
 }
