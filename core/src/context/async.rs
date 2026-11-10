@@ -60,10 +60,10 @@ use future::WithFuture;
 ///         })
 ///         print("after");
 ///     "#).unwrap();
-/// }).await;
+/// }).await.unwrap();
 /// assert_eq!(some_var,2);
 ///
-/// rt.idle().await
+/// rt.idle().await.unwrap()
 /// # }
 /// ```
 #[cfg_attr(feature = "doc-cfg", doc(cfg(feature = "futures")))]
@@ -205,9 +205,14 @@ impl AsyncContext {
     ///             // do something
     ///         })
     ///     "#).unwrap();
-    /// }).await;
+    /// }).await.unwrap();
     /// # }
     /// ```
+    ///
+    /// Returns `Result<R, JobError>`: if a queued job throws, the closure is
+    /// cancelled and the failure is returned. Use
+    /// [`JobError::into_value`](crate::JobError::into_value) with a context from
+    /// this runtime to retrieve the exception.
     pub fn async_with<F, R>(&self, f: F) -> WithFuture<F, R>
     where
         F: for<'js> AsyncFnOnce(Ctx<'js>) -> R + ParallelSend,
@@ -254,7 +259,8 @@ mod test {
         ctx.async_with(async |ctx| {
             ctx.globals();
         })
-        .await;
+        .await
+        .unwrap();
     }
 
     #[tokio::test]

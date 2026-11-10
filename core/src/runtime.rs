@@ -2,6 +2,7 @@
 
 mod base;
 mod exotic;
+pub(crate) mod job_error;
 pub(crate) mod opaque;
 pub(crate) mod raw;
 mod userdata;
@@ -17,6 +18,7 @@ pub use spawner::DriveFuture;
 
 use alloc::boxed::Box;
 pub use base::{Runtime, WeakRuntime};
+pub use job_error::JobError;
 pub use userdata::{UserDataError, UserDataGuard};
 
 #[cfg(feature = "futures")]

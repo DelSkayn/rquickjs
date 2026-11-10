@@ -29,7 +29,7 @@ mod util;
 mod value;
 pub(crate) use safe_ref::*;
 pub mod runtime;
-pub use runtime::Runtime;
+pub use runtime::{JobError, Runtime};
 pub mod context;
 pub use context::{Context, Ctx};
 pub mod class;

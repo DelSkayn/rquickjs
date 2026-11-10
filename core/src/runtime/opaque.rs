@@ -5,6 +5,7 @@ use crate::{
 
 use super::{
     exotic::ExoticMethodsHolder,
+    job_error::{Entry as JobErrorEntry, JobError, JobErrors},
     userdata::{UserDataGuard, UserDataMap},
     InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker, UserDataError,
 };
@@ -56,6 +57,10 @@ pub(crate) struct Opaque<'js> {
 
     userdata: UserDataMap,
 
+    /// Exceptions of failed jobs, kept alive until a token takes them out.
+    /// Every access is under the runtime lock, so no lock of its own is needed.
+    job_errors: UnsafeCell<JobErrors>,
+
     #[cfg(feature = "futures")]
     spawner: Option<UnsafeCell<Spawner>>,
 
@@ -82,6 +87,8 @@ impl<'js> Opaque<'js> {
             prototypes: UnsafeCell::new(HashMap::new()),
 
             userdata: UserDataMap::default(),
+
+            job_errors: UnsafeCell::new(JobErrors::default()),
 
             _marker: PhantomData,
 
@@ -248,6 +255,32 @@ impl<'js> Opaque<'js> {
         self.panic.take()
     }
 
+    /// Record a failed job's exception.
+    ///
+    /// # Safety
+    /// The caller must hold the runtime lock; the table holds live JS values.
+    pub(crate) unsafe fn capture_job_error<'a>(&self, ctx: &Ctx<'a>, value: Value<'a>) -> JobError {
+        (*self.job_errors.get()).capture(ctx, value)
+    }
+
+    /// Take a retained exception out of the table.
+    ///
+    /// # Safety
+    /// The caller must hold the runtime lock; the table holds live JS values.
+    pub(crate) unsafe fn take_job_error(&self, id: u64) -> crate::Result<JobErrorEntry> {
+        (*self.job_errors.get()).take(id)
+    }
+
+    /// Release unread exceptions at the start of a drain.
+    ///
+    /// # Safety
+    /// The caller must hold the runtime lock.
+    pub(crate) unsafe fn drain_job_errors(&self) {
+        let stale = (*self.job_errors.get()).take_all();
+        // Drop after the borrow ends: a finalizer may re-enter `Opaque`.
+        drop(stale);
+    }
+
     pub fn get_class_id(&self) -> qjs::JSClassID {
         self.class_id
     }
@@ -285,9 +318,12 @@ impl<'js> Opaque<'js> {
         self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
-        self.prototypes.get_mut().clear();
+        let stale = self.job_errors.get_mut().take_all();
+        drop(stale);
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();
+        // Destructors above can register class prototypes, so free them last.
+        self.prototypes.get_mut().clear();
     }
 }

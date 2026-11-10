@@ -14,7 +14,11 @@ use crate::{
     Ctx, Error, Result, Value,
 };
 
-use super::{opaque::Opaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker};
+use super::{
+    job_error::{self, JobError},
+    opaque::Opaque,
+    InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker,
+};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;
@@ -250,18 +254,11 @@ impl RawRuntime {
         (unsafe { qjs::JS_IsJobPending(self.rt.as_ptr()) } as i32) != 0
     }
 
-    pub fn execute_pending_job(&mut self) -> StdResult<bool, *mut qjs::JSContext> {
-        let mut ctx_ptr = mem::MaybeUninit::<*mut qjs::JSContext>::uninit();
-        let result = unsafe { qjs::JS_ExecutePendingJob(self.rt.as_ptr(), ctx_ptr.as_mut_ptr()) };
-        if result == 0 {
-            // no jobs executed
-            return Ok(false);
-        }
-        if result == 1 {
-            // single job executed
-            return Ok(true);
-        }
-        Err(unsafe { ctx_ptr.assume_init() })
+    /// Execute a single pending job, retaining a failed job's exception.
+    ///
+    /// The caller holds the runtime lock.
+    pub fn execute_pending_job(&self) -> StdResult<bool, JobError> {
+        unsafe { job_error::execute_pending_job(self.rt.as_ptr()) }
     }
 
     #[cfg(feature = "loader")]

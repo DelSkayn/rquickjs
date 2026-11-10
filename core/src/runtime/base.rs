@@ -6,9 +6,12 @@ use super::{
 use crate::allocator::Allocator;
 #[cfg(feature = "loader")]
 use crate::loader::{Loader, Resolver};
-use crate::{qjs, result::JobException, Context, Mut, Ref, Result, Weak};
+#[cfg(feature = "parallel")]
+use crate::qjs;
+use crate::{Mut, Ref, Result, Weak};
 use alloc::{ffi::CString, vec::Vec};
-use core::{ptr::NonNull, result::Result as StdResult};
+#[cfg(feature = "parallel")]
+use core::ptr::NonNull;
 #[cfg(feature = "parallel")]
 use std::sync::mpsc::{self, Sender};
 
@@ -207,22 +210,6 @@ impl Runtime {
     #[inline]
     pub fn is_job_pending(&self) -> bool {
         self.inner.lock().is_job_pending()
-    }
-
-    /// Execute first pending job
-    ///
-    /// Returns true when job was executed or false when queue is empty or error when exception thrown under execution.
-    #[inline]
-    pub fn execute_pending_job(&self) -> StdResult<bool, JobException> {
-        let mut lock = self.inner.lock();
-        lock.update_stack_top();
-        lock.execute_pending_job().map_err(|e| {
-            let ptr = NonNull::new(e).expect("QuickJS returned null ptr for job error");
-            // JS_ExecutePendingJob returns a borrowed context pointer;
-            // dup it so Context can own a reference.
-            unsafe { qjs::JS_DupContext(ptr.as_ptr()) };
-            JobException(unsafe { Context::from_raw(ptr, self.clone()) })
-        })
     }
 }
 

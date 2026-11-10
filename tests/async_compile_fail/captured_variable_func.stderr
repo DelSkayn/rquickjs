@@ -12,6 +12,6 @@ error[E0597]: `var` does not live long enough
 12 | |         })
 13 | |     })
    | |_____- returning this value requires that `var` is borrowed for `'static`
-14 |       .await
+14 |       .await.unwrap();
 15 |   }
    |   - `var` dropped here while still borrowed

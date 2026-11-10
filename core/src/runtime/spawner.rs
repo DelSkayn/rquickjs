@@ -1,4 +1,5 @@
 use super::{
+    job_error::JobError,
     schedular::{Schedular, SchedularPoll},
     AsyncWeakRuntime, InnerRuntime,
 };
@@ -7,6 +8,7 @@ use alloc::vec::Vec;
 use core::{
     future::Future,
     pin::Pin,
+    result::Result as StdResult,
     task::{ready, Context, Poll, Waker},
 };
 
@@ -76,16 +78,16 @@ impl DriveFuture {
 }
 
 impl Future for DriveFuture {
-    type Output = ();
+    type Output = StdResult<(), JobError>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut core::task::Context<'_>) -> Poll<Self::Output> {
         // Safety: We manually ensure that pinned values remained properly pinned.
         let this = unsafe { self.get_unchecked_mut() };
         loop {
-            let mut lock = match this.state {
+            let lock = match this.state {
                 DriveFutureState::Initial => {
                     let Some(_runtime) = this.rt.try_ref() else {
-                        return Poll::Ready(());
+                        return Poll::Ready(Ok(()));
                     };
 
                     let lock_future = _runtime.inner.lock_arc();
@@ -112,14 +114,18 @@ impl Future for DriveFuture {
             lock.runtime.update_stack_top();
 
             lock.runtime.get_opaque().listen(cx.waker().clone());
+            unsafe { lock.runtime.get_opaque().drain_job_errors() };
 
             loop {
-                // TODO: Handle error.
-                if let Ok(true) = lock.runtime.execute_pending_job() {
-                    continue;
+                match lock.runtime.execute_pending_job() {
+                    Ok(true) => continue,
+                    Ok(false) => {}
+                    Err(err) => {
+                        this.state = DriveFutureState::Initial;
+                        return Poll::Ready(Err(err));
+                    }
                 }
 
-                // TODO: Handle error.
                 match lock.runtime.get_opaque().poll(cx) {
                     SchedularPoll::ShouldYield | SchedularPoll::Empty | SchedularPoll::Pending => {
                         break

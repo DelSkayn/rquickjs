@@ -5,7 +5,7 @@ use alloc::{boxed::Box, ffi::CString, vec::Vec};
 use core::{
     any::Any,
     ffi::{c_char, CStr},
-    mem::{self, MaybeUninit},
+    mem,
     ptr::NonNull,
     result::Result as StdResult,
 };
@@ -18,8 +18,9 @@ use crate::AsyncContext;
 use crate::{
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserDataError, UserDataGuard},
-    Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
+    runtime::{job_error, opaque::Opaque, UserDataError, UserDataGuard},
+    Atom, Error, FromJs, Function, IntoJs, JobError, JsLifetime, Object, Promise, Result, String,
+    Value,
 };
 
 use super::Context;
@@ -394,25 +395,29 @@ impl<'js> Ctx<'js> {
         })
     }
 
-    /// Executes a quickjs job.
+    /// Run pending jobs until the queue is empty.
     ///
-    /// Returns wether a job was actually executed.
-    /// If this function returned false, no job was pending.
-    pub fn execute_pending_job(&self) -> bool {
-        let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
-        let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
-        let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
-        if res < 0 {
-            // A negative result means the job threw, and `JS_ExecutePendingJob`
-            // leaves the exception pending on the context it ran in (`*ptr`,
-            // which need not be `self` in a multi-context runtime) instead of
-            // surfacing it here. Drain it so it can't be mistaken for a real
-            // exception later by unrelated code that checks for one (e.g. the
-            // module loader's "is a module already loaded" check).
-            let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
-            ctx.catch();
+    /// Stops at the first job that throws and returns its exception as a
+    /// [`JobError`]; calling this again continues with the jobs left in the queue.
+    /// Use [`JobError::into_value`](crate::JobError::into_value) to take the
+    /// exception out of the runtime.
+    /// A Rust panic raised inside a job is resumed at the failure site.
+    pub fn drain_jobs(&self) -> StdResult<(), JobError> {
+        let rt = unsafe { qjs::JS_GetRuntime(self.as_ptr()) };
+        unsafe { self.get_opaque().drain_job_errors() };
+        loop {
+            match unsafe { job_error::execute_pending_job(rt) } {
+                Ok(false) => return Ok(()),
+                Ok(true) => {}
+                Err(err) => return Err(err),
+            }
         }
-        res != 0
+    }
+
+    /// Single job step, used by [`Promise::finish`](crate::Promise::finish).
+    pub(crate) fn try_execute_pending_job(&self) -> StdResult<bool, JobError> {
+        let rt = unsafe { qjs::JS_GetRuntime(self.as_ptr()) };
+        unsafe { job_error::execute_pending_job(rt) }
     }
 
     pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
@@ -543,7 +548,7 @@ mod test {
     }
 
     #[test]
-    fn execute_pending_job_clears_exception_from_failed_job() {
+    fn drain_jobs_clears_exception_from_failed_job() {
         use crate::{Context, Runtime};
 
         let runtime = Runtime::new().unwrap();
@@ -553,10 +558,10 @@ mod test {
             ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('boom'); });")
                 .unwrap();
 
-            // Run it: the job throws, but that must not leave a pending
-            // exception on the context for unrelated code to trip over later.
-            while ctx.execute_pending_job() {}
-
+            // The failing job's exception is caught into the runtime's
+            // job-error table, so no stale exception is left pending for
+            // unrelated code to trip over later.
+            let _ = ctx.drain_jobs().unwrap_err();
             assert!(!ctx.has_exception());
 
             // The context must still be perfectly usable afterwards.
