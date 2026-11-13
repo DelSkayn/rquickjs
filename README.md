@@ -92,6 +92,7 @@ See below for a list of supported platforms.
 | aarch64-apple-darwin           |          ✅          |     ❌     |            ✅            |
 | wasm32-wasip1                  |          ✅          |     ✅     |            ✅            |
 | wasm32-wasip2                  |          ✅          |     ✅     |            ✅            |
+| wasm32-wasip3                  |          ✅          |     ❌     |            ✅            |
 | wasm32-unknown-unknown         |          ✅          |     ✅     |            ✅            |
 | other                          |          ❌          |     ❌     |         Unknown          |
 
