@@ -257,15 +257,7 @@ impl<'js> Value<'js> {
     /// Create a new number value
     #[inline]
     pub fn new_number(ctx: Ctx<'js>, value: f64) -> Self {
-        let int = value as i32;
-        #[allow(clippy::float_cmp)]
-        // This is safe and fast in that case
-        let value = if value == int as f64 {
-            qjs::JS_MKVAL(qjs::JS_TAG_INT, int)
-        } else {
-            qjs::JS_NewFloat64(value)
-        };
-        Self { ctx, value }
+        Self::new_float(ctx, value)
     }
 
     /// Try get any number from value
@@ -917,6 +909,14 @@ mod test {
                     }
                 }
             }
+        });
+    }
+
+    #[test]
+    fn new_number_keeps_negative_zero() {
+        test_with(|ctx| {
+            let neg_zero: Value = ctx.eval("-0").unwrap();
+            assert!(Value::new_number(ctx, -0.0).same_value(&neg_zero));
         });
     }
 
