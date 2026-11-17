@@ -13,6 +13,6 @@ error[E0597]: `var` does not live long enough
 13 | |         ctx.globals().set("t", func).unwrap();
 14 | |     })
    | |_____- returning this value requires that `var` is borrowed for `'static`
-15 |       .await
+15 |       .await.unwrap();
 16 |   }
    |   - `var` dropped here while still borrowed
