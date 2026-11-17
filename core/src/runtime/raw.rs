@@ -14,7 +14,9 @@ use crate::{
     Ctx, Error, Result, Value,
 };
 
-use super::{opaque::Opaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker};
+use super::{
+    opaque::RuntimeOpaque, InterruptHandler, PromiseHook, PromiseHookType, RejectionTracker,
+};
 
 const DUMP_BYTECODE_FINAL: u64 = 0x01;
 const DUMP_BYTECODE_PASS2: u64 = 0x02;
@@ -124,7 +126,7 @@ pub(crate) struct RawRuntime {
     // rather than a `Mutex<Vec<_>>` so a panic elsewhere can never poison it
     // and silently strand a context; mirrors `AsyncRuntime`'s `pending_free`.
     #[cfg(feature = "parallel")]
-    pub(crate) pending_free: Receiver<NonNull<qjs::JSContext>>,
+    pub(crate) pending_free: Receiver<crate::context::owner::OwnedContext>,
 }
 
 #[cfg(feature = "parallel")]
@@ -135,7 +137,7 @@ impl Drop for RawRuntime {
         self.drain_pending_free();
         unsafe {
             let ptr = qjs::JS_GetRuntimeOpaque(self.rt.as_ptr());
-            let mut opaque: Box<Opaque> = Box::from_raw(ptr as *mut _);
+            let mut opaque: Box<RuntimeOpaque> = Box::from_raw(ptr as *mut _);
             opaque.clear();
             qjs::JS_FreeRuntime(self.rt.as_ptr());
             mem::drop(opaque);
@@ -148,15 +150,14 @@ impl RawRuntime {
     ///
     /// Caller must hold the runtime lock, or otherwise have exclusive access, as during `Drop`.
     pub(crate) fn drain_pending_free(&self) {
+        // Dropping a received `OwnedContext` releases its C context.
         #[cfg(feature = "parallel")]
-        while let Ok(ctx) = self.pending_free.try_recv() {
-            unsafe { qjs::JS_FreeContext(ctx.as_ptr()) }
-        }
+        while self.pending_free.try_recv().is_ok() {}
     }
 
     pub unsafe fn new(
-        opaque: Opaque<'static>,
-        #[cfg(feature = "parallel")] pending_free: Receiver<NonNull<qjs::JSContext>>,
+        opaque: RuntimeOpaque<'static>,
+        #[cfg(feature = "parallel")] pending_free: Receiver<crate::context::owner::OwnedContext>,
     ) -> Result<Self> {
         #[cfg(not(feature = "rust-alloc"))]
         return Self::new_base(
@@ -176,8 +177,8 @@ impl RawRuntime {
 
     #[allow(dead_code)]
     pub unsafe fn new_base(
-        mut opaque: Opaque<'static>,
-        #[cfg(feature = "parallel")] pending_free: Receiver<NonNull<qjs::JSContext>>,
+        mut opaque: RuntimeOpaque<'static>,
+        #[cfg(feature = "parallel")] pending_free: Receiver<crate::context::owner::OwnedContext>,
     ) -> Result<Self> {
         let rt = qjs::JS_NewRuntime();
 
@@ -202,9 +203,9 @@ impl RawRuntime {
     }
 
     pub unsafe fn new_with_allocator<A>(
-        mut opaque: Opaque<'static>,
+        mut opaque: RuntimeOpaque<'static>,
         allocator: A,
-        #[cfg(feature = "parallel")] pending_free: Receiver<NonNull<qjs::JSContext>>,
+        #[cfg(feature = "parallel")] pending_free: Receiver<crate::context::owner::OwnedContext>,
     ) -> Result<Self>
     where
         A: Allocator + 'static,
@@ -242,7 +243,7 @@ impl RawRuntime {
         }
     }
 
-    pub fn get_opaque<'js>(&self) -> &Opaque<'js> {
+    pub fn get_opaque<'js>(&self) -> &RuntimeOpaque<'js> {
         unsafe { &*(qjs::JS_GetRuntimeOpaque(self.rt.as_ptr()) as *mut _) }
     }
 
@@ -343,7 +344,7 @@ impl RawRuntime {
             parent: rquickjs_sys::JSValue,
             opaque: *mut ::core::ffi::c_void,
         ) {
-            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+            let opaque = NonNull::new_unchecked(opaque).cast::<RuntimeOpaque>();
 
             let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
                 let ctx = Ctx::from_ptr(ctx);
@@ -401,7 +402,7 @@ impl RawRuntime {
             is_handled: bool,
             opaque: *mut ::core::ffi::c_void,
         ) {
-            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+            let opaque = NonNull::new_unchecked(opaque).cast::<RuntimeOpaque>();
 
             let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {
                 let ctx = Ctx::from_ptr(ctx);
@@ -437,7 +438,7 @@ impl RawRuntime {
             opaque: *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int {
             // This should be safe as the value is set below to a non-null pointer.
-            let opaque = NonNull::new_unchecked(opaque).cast::<Opaque>();
+            let opaque = NonNull::new_unchecked(opaque).cast::<RuntimeOpaque>();
 
             let should_interrupt = {
                 let catch_unwind = crate::util::catch_unwind(AssertUnwindSafe(move || {

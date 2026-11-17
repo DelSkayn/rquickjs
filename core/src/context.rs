@@ -9,6 +9,7 @@ pub(crate) mod owner;
 mod r#async;
 #[cfg(feature = "multi-ctx")]
 mod multi_with_impl;
+mod opaque;
 
 /// A trait for using multiple contexts at the same time.
 #[cfg(feature = "multi-ctx")]

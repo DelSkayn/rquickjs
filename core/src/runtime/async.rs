@@ -13,7 +13,7 @@ use std::sync::mpsc::{self, Sender};
 use async_lock::Mutex;
 
 use super::{
-    opaque::Opaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
+    opaque::RuntimeOpaque, raw::RawRuntime, schedular::SchedularPoll, spawner::DriveFuture,
     InterruptHandler, MemoryUsage, PromiseHook, RejectionTracker,
 };
 use crate::allocator::Allocator;
@@ -41,7 +41,7 @@ unsafe impl Send for InnerRuntime {}
 pub struct AsyncWeakRuntime {
     inner: Weak<Mutex<InnerRuntime>>,
     #[cfg(feature = "parallel")]
-    pending_free: Sender<NonNull<qjs::JSContext>>,
+    pending_free: Sender<crate::context::owner::OwnedContext>,
 }
 
 impl AsyncWeakRuntime {
@@ -61,7 +61,7 @@ pub struct AsyncRuntime {
     // use Arc instead of Ref so we can use OwnedLock
     pub(crate) inner: Arc<Mutex<InnerRuntime>>,
     #[cfg(feature = "parallel")]
-    pub(crate) pending_free: Sender<NonNull<qjs::JSContext>>,
+    pub(crate) pending_free: Sender<crate::context::owner::OwnedContext>,
 }
 
 // Since all functions which use runtime are behind a mutex
@@ -89,7 +89,7 @@ impl AsyncRuntime {
     // Annoying false positive clippy lint
     #[allow(clippy::arc_with_non_send_sync)]
     pub fn new() -> Result<Self> {
-        let opaque = Opaque::with_spawner();
+        let opaque = RuntimeOpaque::with_spawner();
 
         #[cfg(feature = "parallel")]
         let (pending_free, pending_free_recv) = mpsc::channel();
@@ -117,7 +117,7 @@ impl AsyncRuntime {
     where
         A: Allocator + 'static,
     {
-        let opaque = Opaque::with_spawner();
+        let opaque = RuntimeOpaque::with_spawner();
 
         #[cfg(feature = "parallel")]
         let (pending_free, pending_free_recv) = mpsc::channel();
