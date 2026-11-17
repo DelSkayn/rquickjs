@@ -1,6 +1,6 @@
 use crate::{
-    class::{self, ffi::VTable, JsClass},
-    qjs, Ctx, Error, JsLifetime, Object, Value,
+    class::{self},
+    qjs, Ctx, Error, JsLifetime, Value,
 };
 
 use super::{
@@ -10,17 +10,11 @@ use super::{
 };
 use alloc::boxed::Box;
 use core::{
-    any::{Any, TypeId},
+    any::Any,
     cell::{Cell, UnsafeCell},
     marker::PhantomData,
     ptr,
 };
-
-#[cfg(feature = "std")]
-use std::collections::{hash_map::Entry, HashMap};
-
-#[cfg(not(feature = "std"))]
-use hashbrown::{hash_map::Entry, HashMap};
 
 #[cfg(feature = "futures")]
 use super::{schedular::SchedularPoll, spawner::Spawner};
@@ -32,7 +26,7 @@ use core::{
 };
 
 /// Opaque book keeping data for Rust.
-pub(crate) struct Opaque<'js> {
+pub(crate) struct RuntimeOpaque<'js> {
     /// Used to carry a panic if a callback triggered one.
     panic: Cell<Option<Box<dyn Any + Send + 'static>>>,
 
@@ -52,8 +46,6 @@ pub(crate) struct Opaque<'js> {
     /// The class id for exotic classes
     exotic_class_id: qjs::JSClassID,
 
-    prototypes: UnsafeCell<HashMap<TypeId, Option<Object<'js>>>>,
-
     userdata: UserDataMap,
 
     #[cfg(feature = "futures")]
@@ -64,9 +56,9 @@ pub(crate) struct Opaque<'js> {
     _marker: PhantomData<&'js ()>,
 }
 
-impl<'js> Opaque<'js> {
+impl<'js> RuntimeOpaque<'js> {
     pub fn new() -> Self {
-        Opaque {
+        RuntimeOpaque {
             panic: Cell::new(None),
 
             promise_hook: UnsafeCell::new(None),
@@ -78,8 +70,6 @@ impl<'js> Opaque<'js> {
             class_id: qjs::JS_INVALID_CLASS_ID,
             callable_class_id: qjs::JS_INVALID_CLASS_ID,
             exotic_class_id: qjs::JS_INVALID_CLASS_ID,
-
-            prototypes: UnsafeCell::new(HashMap::new()),
 
             userdata: UserDataMap::default(),
 
@@ -94,7 +84,7 @@ impl<'js> Opaque<'js> {
 
     #[cfg(feature = "futures")]
     pub fn with_spawner() -> Self {
-        let mut this = Opaque::new();
+        let mut this = RuntimeOpaque::new();
         this.spawner = Some(UnsafeCell::new(Spawner::new()));
         this
     }
@@ -260,23 +250,6 @@ impl<'js> Opaque<'js> {
         self.exotic_class_id
     }
 
-    pub fn get_or_insert_prototype<C: JsClass<'js>>(
-        &self,
-        ctx: &Ctx<'js>,
-    ) -> Result<Option<Object<'js>>, Error> {
-        unsafe {
-            let vtable = VTable::get::<C>();
-            let id = vtable.id();
-            match (*self.prototypes.get()).entry(id) {
-                Entry::Occupied(x) => Ok(x.get().clone()),
-                Entry::Vacant(x) => {
-                    let proto = C::prototype(ctx)?;
-                    Ok(x.insert(proto).clone())
-                }
-            }
-        }
-    }
-
     /// Cleans up all the internal state.
     ///
     /// Called before dropping the runtime to ensure that we drop everything before freeing the
@@ -285,7 +258,6 @@ impl<'js> Opaque<'js> {
         self.rejection_tracker.get_mut().take();
         self.interrupt_handler.get_mut().take();
         self.panic.take();
-        self.prototypes.get_mut().clear();
         #[cfg(feature = "futures")]
         self.spawner.take();
         self.userdata.clear();

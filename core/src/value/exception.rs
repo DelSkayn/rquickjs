@@ -1,6 +1,6 @@
 use alloc::string::String;
 use core::mem::{self, MaybeUninit};
-use core::{error::Error as ErrorTrait, ffi::CStr, fmt};
+use core::{error::Error as ErrorTrait, fmt};
 
 use crate::{atom::PredefinedAtom, convert::Coerced, qjs, Ctx, Error, Object, Result, Value};
 
@@ -21,9 +21,6 @@ impl fmt::Debug for Exception<'_> {
             .finish()
     }
 }
-
-pub(crate) static ERROR_FORMAT_STR: &CStr =
-    unsafe { CStr::from_bytes_with_nul_unchecked("%s\0".as_bytes()) };
 
 /// Writes as many characters of `str` as will fit into `buf`, followed by a nul byte.
 ///
@@ -124,11 +121,7 @@ impl<'js> Exception<'js> {
         let mut buffer = [MaybeUninit::uninit(); 256];
         truncate_cstr_into(&mut buffer, message);
         unsafe {
-            let res = qjs::JS_ThrowSyntaxError(
-                ctx.as_ptr(),
-                ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_mut_ptr(),
-            );
+            let res = qjs::JS_ThrowSyntaxError(ctx.as_ptr(), c"%s".as_ptr(), buffer.as_mut_ptr());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -139,11 +132,7 @@ impl<'js> Exception<'js> {
         let mut buffer = [MaybeUninit::uninit(); 256];
         truncate_cstr_into(&mut buffer, message);
         unsafe {
-            let res = qjs::JS_ThrowTypeError(
-                ctx.as_ptr(),
-                ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_mut_ptr(),
-            );
+            let res = qjs::JS_ThrowTypeError(ctx.as_ptr(), c"%s".as_ptr(), buffer.as_mut_ptr());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -154,11 +143,8 @@ impl<'js> Exception<'js> {
         let mut buffer = [MaybeUninit::uninit(); 256];
         truncate_cstr_into(&mut buffer, message);
         unsafe {
-            let res = qjs::JS_ThrowReferenceError(
-                ctx.as_ptr(),
-                ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_mut_ptr(),
-            );
+            let res =
+                qjs::JS_ThrowReferenceError(ctx.as_ptr(), c"%s".as_ptr(), buffer.as_mut_ptr());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -169,11 +155,7 @@ impl<'js> Exception<'js> {
         let mut buffer = [MaybeUninit::uninit(); 256];
         truncate_cstr_into(&mut buffer, message);
         unsafe {
-            let res = qjs::JS_ThrowRangeError(
-                ctx.as_ptr(),
-                ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_mut_ptr(),
-            );
+            let res = qjs::JS_ThrowRangeError(ctx.as_ptr(), c"%s".as_ptr(), buffer.as_mut_ptr());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -184,11 +166,7 @@ impl<'js> Exception<'js> {
         let mut buffer = [MaybeUninit::uninit(); 256];
         truncate_cstr_into(&mut buffer, message);
         unsafe {
-            let res = qjs::JS_ThrowInternalError(
-                ctx.as_ptr(),
-                ERROR_FORMAT_STR.as_ptr(),
-                buffer.as_mut_ptr(),
-            );
+            let res = qjs::JS_ThrowInternalError(ctx.as_ptr(), c"%s".as_ptr(), buffer.as_mut_ptr());
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);
         }
         Error::Exception
@@ -204,7 +182,7 @@ impl<'js> Exception<'js> {
             let res = qjs::JS_ThrowDOMException(
                 ctx.as_ptr(),
                 name_buffer.as_ptr().cast(),
-                ERROR_FORMAT_STR.as_ptr(),
+                c"%s".as_ptr(),
                 message_buffer.as_mut_ptr(),
             );
             debug_assert_eq!(qjs::JS_VALUE_GET_NORM_TAG(res), qjs::JS_TAG_EXCEPTION);

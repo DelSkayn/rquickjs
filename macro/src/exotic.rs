@@ -169,12 +169,16 @@ impl ExoticMethod {
             // We need to look at the original signature for this
             sig.inputs.iter().nth(1).is_some_and(|arg| {
                 if let syn::FnArg::Typed(pat_type) = arg {
-                    if let Type::Path(type_path) = &*pat_type.ty {
-                        type_path
-                            .path
-                            .segments
-                            .last()
-                            .is_some_and(|seg| seg.ident == "Ctx")
+                    if let Type::Reference(reference) = &*pat_type.ty {
+                        if let Type::Path(type_path) = &*reference.elem {
+                            type_path
+                                .path
+                                .segments
+                                .last()
+                                .is_some_and(|seg| seg.ident == "Ctx")
+                        } else {
+                            false
+                        }
                     } else {
                         false
                     }

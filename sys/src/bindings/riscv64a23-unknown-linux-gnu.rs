@@ -1491,6 +1491,9 @@ unsafe extern "C" {
     pub fn JS_IsPromise(val: JSValue) -> bool;
 }
 unsafe extern "C" {
+    pub fn JS_PromiseMarkAsHandled(ctx: *mut JSContext, promise: JSValue);
+}
+unsafe extern "C" {
     pub fn JS_NewSettledPromise(ctx: *mut JSContext, is_reject: bool, value: JSValue) -> JSValue;
 }
 unsafe extern "C" {

@@ -1,0 +1,18 @@
+[package]
+name = "rquickjs-wasm-test"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "wasm32-unknown-unknown smoke harness for rquickjs, driven by wasm-test/runner.ts"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+rquickjs = { path = "..", default-features = false, features = ["rust-alloc"] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+
+[workspace]

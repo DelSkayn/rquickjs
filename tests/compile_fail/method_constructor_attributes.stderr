@@ -1,0 +1,5 @@
+error: a constructor's property attributes can't be set.
+  --> tests/compile_fail/method_constructor_attributes.rs:12:5
+   |
+12 |     #[qjs(constructor, enumerable)]
+   |     ^

@@ -4,7 +4,7 @@ use syn::{Error, Result};
 
 use crate::common::{Case, GET_PREFIX, SET_PREFIX};
 
-use super::method::Method;
+use super::method::{Attributes, Method};
 
 pub struct JsAccessor {
     get: Option<Method>,
@@ -31,14 +31,7 @@ impl JsAccessor {
             return Err(error);
         }
         if let Some(set) = self.set.as_ref() {
-            if set.config.r#static != method.config.r#static {
-                let mut error = Error::new(
-                    method.attr_span,
-                    "getter and setter for the same property must agree on `static`.",
-                );
-                error.combine(Error::new(set.attr_span, "setter defined here."));
-                return Err(error);
-            }
+            check_getter_setter_attributes(&method, set)?;
         }
         self.get = Some(method);
         Ok(())
@@ -55,14 +48,7 @@ impl JsAccessor {
             return Err(error);
         }
         if let Some(get) = self.get.as_ref() {
-            if get.config.r#static != method.config.r#static {
-                let mut error = Error::new(
-                    method.attr_span,
-                    "getter and setter for the same property must agree on `static`.",
-                );
-                error.combine(Error::new(get.attr_span, "getter defined here."));
-                return Err(error);
-            }
+            check_getter_setter_attributes(get, &method)?;
         }
         self.set = Some(method);
         Ok(())
@@ -98,90 +84,85 @@ impl JsAccessor {
         res
     }
 
+    /// The attributes of the accessor property. A getter and setter describe
+    /// one property, so an attribute either of them sets applies to both.
+    fn attributes(&self) -> Attributes {
+        let get = self.get.as_ref().map(|g| &g.config);
+        let set = self.set.as_ref().map(|s| &s.config);
+        let attribute = |f: fn(&super::method::MethodConfig) -> Option<bool>| {
+            get.and_then(f).or_else(|| set.and_then(f)).unwrap_or(false)
+        };
+        Attributes {
+            configurable: attribute(|c| c.configurable),
+            enumerable: attribute(|c| c.enumerable),
+            writable: false,
+        }
+    }
+
     pub fn expand_apply_to(
         &self,
         lib_crate: &Ident,
         object_name: &Ident,
         case: Option<Case>,
     ) -> TokenStream {
-        match (self.get.as_ref(), self.set.as_ref()) {
+        let attributes = self.attributes().expand();
+        let (name, accessor) = match (self.get.as_ref(), self.set.as_ref()) {
             (Some(get), Some(set)) => {
-                let configurable = get.config.configurable || set.config.configurable;
-                let enumerable = get.config.enumerable || set.config.enumerable;
-
-                let name = get.name(case);
-
-                let configurable = if configurable {
-                    quote!(.configurable())
-                } else {
-                    Default::default()
-                };
-                let enumerable = if enumerable {
-                    quote!(.enumerable())
-                } else {
-                    Default::default()
-                };
                 let get_name = get.function.expand_carry_type_name(GET_PREFIX);
                 let set_name = set.function.expand_carry_type_name(SET_PREFIX);
-                quote! {#object_name.prop(#name,
-                        #lib_crate::object::Accessor::new(#get_name,#set_name)
-                        #configurable
-                        #enumerable
-                )?;}
+                (
+                    get.name(case),
+                    quote!(#lib_crate::object::Accessor::new(#get_name, #set_name)),
+                )
             }
             (Some(get), None) => {
-                let configurable = get.config.configurable;
-                let enumerable = get.config.enumerable;
-
-                let name = get.name(case);
-
-                let configurable = if configurable {
-                    quote!(.configurable())
-                } else {
-                    Default::default()
-                };
-                let enumerable = if enumerable {
-                    quote!(.enumerable())
-                } else {
-                    Default::default()
-                };
                 let get_name = get.function.expand_carry_type_name(GET_PREFIX);
-                quote! {#object_name.prop(#name,
-                        #lib_crate::object::Accessor::new_get(#get_name)
-                        #configurable
-                        #enumerable
-                )?;}
+                (
+                    get.name(case),
+                    quote!(#lib_crate::object::Accessor::new_get(#get_name)),
+                )
             }
             (None, Some(set)) => {
-                let configurable = set.config.configurable;
-                let enumerable = set.config.enumerable;
-
-                let name = set.name(case);
-
-                let configurable = if configurable {
-                    quote!(.configurable())
-                } else {
-                    Default::default()
-                };
-                let enumerable = if enumerable {
-                    quote!(.enumerable())
-                } else {
-                    Default::default()
-                };
-
-                let set_name = set.function.expand_carry_type_name(GET_PREFIX);
-                quote! {#object_name.prop(#name,
-                        #lib_crate::object::Accessor::new_set(#set_name)
-                        #configurable
-                        #enumerable
-                )?;}
+                let set_name = set.function.expand_carry_type_name(SET_PREFIX);
+                (
+                    set.name(case),
+                    quote!(#lib_crate::object::Accessor::new_set(#set_name)),
+                )
             }
-            (None, None) => TokenStream::new(),
-        }
+            (None, None) => return TokenStream::new(),
+        };
+        quote! {#object_name.prop(#name, #accessor #attributes)?;}
     }
 
     pub fn expand_apply_to_proto(&self, lib_crate: &Ident, case: Option<Case>) -> TokenStream {
         let proto = Ident::new("_proto", proc_macro2::Span::call_site());
         self.expand_apply_to(lib_crate, &proto, case)
     }
+}
+
+/// Reject conflicting attributes on the getter and setter for the same property
+fn check_getter_setter_attributes(get: &Method, set: &Method) -> Result<()> {
+    for (attribute, disagree) in [
+        ("static", get.config.r#static != set.config.r#static),
+        (
+            "configurable",
+            matches!((get.config.configurable, set.config.configurable), (Some(a), Some(b)) if a != b),
+        ),
+        (
+            "enumerable",
+            matches!((get.config.enumerable, set.config.enumerable), (Some(a), Some(b)) if a != b),
+        ),
+    ] {
+        if disagree {
+            let mut error = Error::new(
+                set.attr_span,
+                format_args!(
+                    "getter and setter for the same property must agree on `{attribute}`."
+                ),
+            );
+            error.combine(Error::new(get.attr_span, "getter defined here."));
+            return Err(error);
+        }
+    }
+    Ok(())
 }

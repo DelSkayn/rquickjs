@@ -4,7 +4,7 @@ use core::future::Future;
 use alloc::{boxed::Box, ffi::CString, vec::Vec};
 use core::{
     any::Any,
-    ffi::CStr,
+    ffi::{c_char, CStr},
     mem::{self, MaybeUninit},
     ptr::NonNull,
     result::Result as StdResult,
@@ -16,9 +16,10 @@ use std::{fs, path::Path, string::String as StdString};
 #[cfg(feature = "futures")]
 use crate::AsyncContext;
 use crate::{
+    context::opaque::ContextOpaque,
     markers::Invariant,
     qjs,
-    runtime::{opaque::Opaque, UserDataError, UserDataGuard},
+    runtime::{opaque::RuntimeOpaque, UserDataError, UserDataGuard},
     Atom, Error, FromJs, Function, IntoJs, JsLifetime, Object, Promise, Result, String, Value,
 };
 
@@ -139,16 +140,18 @@ impl<'js> Ctx<'js> {
         file_name: &CStr,
         flag: i32,
     ) -> Result<qjs::JSValue> {
-        let src = source.into();
+        let mut src: Vec<u8> = source.into();
         let len = src.len();
-        let src = CString::new(src)?;
+        // JS_Eval requires the input to be null-terminated,
+        // but internal \0 bytes are allowed
+        src.push(0);
 
         #[cfg(feature = "parallel")]
         qjs::JS_UpdateStackTop(qjs::JS_GetRuntime(self.ctx.as_ptr()));
 
         let val = qjs::JS_Eval(
             self.ctx.as_ptr(),
-            src.as_ptr(),
+            src.as_ptr().cast::<c_char>(),
             len as _,
             file_name.as_ptr(),
             flag,
@@ -400,11 +403,25 @@ impl<'js> Ctx<'js> {
         let mut ptr = MaybeUninit::<*mut qjs::JSContext>::uninit();
         let rt = unsafe { qjs::JS_GetRuntime(self.ctx.as_ptr()) };
         let res = unsafe { qjs::JS_ExecutePendingJob(rt, ptr.as_mut_ptr()) };
+        if res < 0 {
+            // A negative result means the job threw, and `JS_ExecutePendingJob`
+            // leaves the exception pending on the context it ran in (`*ptr`,
+            // which need not be `self` in a multi-context runtime) instead of
+            // surfacing it here. Drain it so it can't be mistaken for a real
+            // exception later by unrelated code that checks for one (e.g. the
+            // module loader's "is a module already loaded" check).
+            let ctx = unsafe { Self::from_ptr(ptr.assume_init()) };
+            ctx.catch();
+        }
         res != 0
     }
 
-    pub(crate) unsafe fn get_opaque(&self) -> &Opaque<'js> {
-        Opaque::from_runtime_ptr(qjs::JS_GetRuntime(self.ctx.as_ptr()))
+    pub(crate) unsafe fn get_runtime_opaque(&self) -> &RuntimeOpaque<'js> {
+        RuntimeOpaque::from_runtime_ptr(qjs::JS_GetRuntime(self.ctx.as_ptr()))
+    }
+
+    pub(crate) unsafe fn get_context_opaque(&self) -> &ContextOpaque<'js> {
+        ContextOpaque::from_context_ptr(self.ctx)
     }
 
     /// Spawn future using configured async runtime
@@ -414,7 +431,7 @@ impl<'js> Ctx<'js> {
     where
         F: Future<Output = ()> + 'js,
     {
-        unsafe { self.get_opaque().push(future) }
+        unsafe { self.get_runtime_opaque().push(future) }
     }
 
     /// Create a new `Ctx` from a pointer to the context and a invariant lifetime.
@@ -477,7 +494,7 @@ impl<'js> Ctx<'js> {
         U: JsLifetime<'js>,
         U::Changed<'static>: Any,
     {
-        unsafe { self.get_opaque().insert_userdata(data) }
+        unsafe { self.get_runtime_opaque().insert_userdata(data) }
     }
 
     /// Remove the userdata of the given type from the userdata storage.
@@ -489,7 +506,7 @@ impl<'js> Ctx<'js> {
         U: JsLifetime<'js>,
         U::Changed<'static>: Any,
     {
-        unsafe { self.get_opaque().remove_userdata() }
+        unsafe { self.get_runtime_opaque().remove_userdata() }
     }
 
     /// Retrieves a borrow to the userdata of the given type from the userdata storage.
@@ -500,7 +517,7 @@ impl<'js> Ctx<'js> {
         U: JsLifetime<'js>,
         U::Changed<'static>: Any,
     {
-        unsafe { self.get_opaque().get_userdata() }
+        unsafe { self.get_runtime_opaque().get_userdata() }
     }
 
     /// Returns the pointer to the C library context.
@@ -528,6 +545,29 @@ mod test {
             let func: Function = module.get("default").unwrap();
             func.call::<(), Promise>(()).unwrap();
         });
+    }
+
+    #[test]
+    fn execute_pending_job_clears_exception_from_failed_job() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            // Schedule a job that throws when it runs.
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('boom'); });")
+                .unwrap();
+
+            // Run it: the job throws, but that must not leave a pending
+            // exception on the context for unrelated code to trip over later.
+            while ctx.execute_pending_job() {}
+
+            assert!(!ctx.has_exception());
+
+            // The context must still be perfectly usable afterwards.
+            let sum: i32 = ctx.eval("1 + 1").unwrap();
+            assert_eq!(sum, 2);
+        })
     }
 
     #[test]
@@ -727,6 +767,18 @@ mod test {
 
         ctx.with(|ctx| {
             ctx.remove_userdata::<MyUserData>().unwrap().unwrap();
+        })
+    }
+
+    #[test]
+    fn eval_null_byte() {
+        use crate::{Context, Runtime};
+
+        let runtime = Runtime::new().unwrap();
+        let ctx = Context::full(&runtime).unwrap();
+        ctx.with(|ctx| {
+            let res: String = ctx.eval("\"hi\0there\"").unwrap();
+            assert_eq!(res, "hi\0there");
         })
     }
 }

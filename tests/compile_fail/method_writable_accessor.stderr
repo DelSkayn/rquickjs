@@ -1,0 +1,5 @@
+error: writable can't be set for getters and setters.
+  --> tests/compile_fail/method_writable_accessor.rs:12:5
+   |
+12 |     #[qjs(get, writable)]
+   |     ^

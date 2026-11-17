@@ -9,11 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
-- Removed unused trait `StaticJsFunction`.
-
 ### Added
 
-- Added `Exception::throw_dom`, `PredefinedAtom::DOMException`, and `intrinsic::DOMException`.
+- `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
+- Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 
 ### Changed
 
@@ -23,9 +22,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- Fixed `Params::is_constructor` to return the suggested value instead of `false`.
+- Fixed nondeterministic module export and method accessor ordering in procedural macro output
+- Fixed building `rquickjs-sys` with plain clang on Windows MSVC targets (`CC=clang`): the C flags now follow the compiler rather than the target
+- Fixed `Ctx::eval` and other related methods returning a `String contained internal null bytes` error when JS source contains null bytes
+- Fixed `#[rquickjs::methods]` failing to compile a setter with no matching getter
+- Fixed `Promise::result` and `Promise::into_future` leaving an already rejected promise unhandled, which made the host promise rejection tracker report a false unhandled rejection
+- Fixed exotic classes freeing the value passed to `exotic_set_property` twice
+- `Atom::to_value` returns a symbol if the atom represents a symbol, instead of always returning a JS string
+- Fixed converting an invalid JS `Date` into `SystemTime` or `chrono::DateTime` returning the Unix epoch instead of an error
+- Fixed build failures on armhf and other platforms with no native 64-bit atomics.
+- Fixed `Value::new_number` turning `-0.0` into `+0.0`
 
 ### Security
+
+## [0.14.0] - 2026-09-17
+
+### Breaking Changes
+
+- Removed unused trait `StaticJsFunction`.
+
+### Added
+
+- Added `Exception::throw_dom`, `PredefinedAtom::DOMException`, and `intrinsic::DOMException`.
+- Support for `wasm32-unknown-unknown` from [@mrchantey]
+
+### Fixed
+
+- Fixed `Params::is_constructor` to return the suggested value instead of `false`.
+- Fixed `ExoticMethod` to fix type checking for `&Ctx`
+- Fixed `Ctx::execute_pending_job` treating a job that threw the same as one that ran successfully, leaving the exception pending on the runtime instead of clearing it.
+- Fixed `Object::instance_of` leaving a pending exception on the runtime when the checked object isn't an instance of the given Rust class.
 
 ## [0.13.0] - 2026-09-07
 

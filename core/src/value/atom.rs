@@ -137,9 +137,13 @@ impl<'js> Atom<'js> {
         }
     }
 
-    /// Convert the atom to a JavaScript value.
+    /// Convert the atom to a JavaScript value, which will be either a [String] or a [Symbol][crate::Symbol].
     pub fn to_value(&self) -> Result<Value<'js>> {
-        self.to_js_string().map(|String(value)| value)
+        unsafe {
+            let val = qjs::JS_AtomToValue(self.ctx.as_ptr(), self.atom);
+            let val = self.ctx.handle_exception(val)?;
+            Ok(Value::from_js_value(self.ctx.clone(), val))
+        }
     }
 
     pub(crate) unsafe fn from_atom_val(ctx: Ctx<'js>, val: qjs::JSAtom) -> Self {
@@ -167,5 +171,48 @@ impl<'js> Drop for Atom<'js> {
         unsafe {
             qjs::JS_FreeAtom(self.ctx.as_ptr(), self.atom);
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::*;
+    #[test]
+    fn to_value() {
+        test_with(|ctx| {
+            let local_symbol = Symbol::new(ctx.clone()).unwrap();
+            for (atom, expected) in [
+                (
+                    Atom::from_bool(ctx.clone(), false).unwrap(),
+                    String::from_str(ctx.clone(), "false").unwrap().into(),
+                ),
+                (
+                    Atom::from_u32(ctx.clone(), 123).unwrap(),
+                    String::from_str(ctx.clone(), "123").unwrap().into(),
+                ),
+                (
+                    Atom::from_f64(ctx.clone(), 123.4).unwrap(),
+                    String::from_str(ctx.clone(), "123.4").unwrap().into(),
+                ),
+                (
+                    Atom::from_predefined(ctx.clone(), atom::PredefinedAtom::New),
+                    String::from_str(ctx.clone(), "new").unwrap().into(),
+                ),
+                (
+                    Atom::from_predefined(ctx.clone(), atom::PredefinedAtom::SymbolToStringTag),
+                    ctx.eval("Symbol.toStringTag").unwrap(),
+                ),
+                (
+                    Atom::from_value(ctx.clone(), &local_symbol).unwrap(),
+                    local_symbol.into(),
+                ),
+            ] {
+                let to_value = atom.to_value().unwrap();
+                assert!(
+                    to_value.strict_eq(&expected),
+                    "{to_value:?} != {expected:?}",
+                );
+            }
+        });
     }
 }
