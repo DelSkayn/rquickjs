@@ -1656,6 +1656,9 @@ unsafe extern "C" {
     ) -> ::core::ffi::c_int;
 }
 unsafe extern "C" {
+    pub fn JS_DiscardPendingJobs(rt: *mut JSRuntime) -> size_t;
+}
+unsafe extern "C" {
     pub fn JS_IsJobPending(rt: *mut JSRuntime) -> bool;
 }
 unsafe extern "C" {
