@@ -73,6 +73,9 @@
 //! - `indexmap` adds [`FromJs`]/[`IntoJs`] implementations for [`IndexSet`](`indexmap::IndexSet`)
 //! and [`IndexMap`](`indexmap_rs::IndexMap`)
 //!
+//! - `serde` adds `serde::Serialize` and `serde::Deserialize` implementations for [`Coerced`],
+//! both of which are transparent and behave exactly like the wrapped value.
+//!
 //! ## Bindings
 //!
 //! The bindings are pre-generated for the following platforms:
