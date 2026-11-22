@@ -94,3 +94,17 @@ where
 /// A helper type for turning a tuple into a JavaScript array.
 /// Implements [`IntoJs`] and [`FromJs`] for tuples of various lengths
 pub struct List<T>(pub T);
+
+#[cfg(feature = "serde")]
+impl<T: serde::Serialize> serde::Serialize for Coerced<T> {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error> {
+        self.0.serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T: serde::Deserialize<'de>> serde::Deserialize<'de> for Coerced<T> {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> std::result::Result<Self, D::Error> {
+        T::deserialize(deserializer).map(Coerced)
+    }
+}
