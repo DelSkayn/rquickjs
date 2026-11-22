@@ -50,12 +50,13 @@ full = [
   "dyn-load",
   "either",
   "indexmap",
+  "serde",
   "macro",
   "phf",
 ]
 
 # A version of full designed for wasm32-wasip1 and wasm32-wasip2 (simply excludes dyn-load)
-full-wasi = ["std", "chrono", "loader", "either", "indexmap", "macro", "phf"]
+full-wasi = ["std", "chrono", "loader", "either", "indexmap", "serde", "macro", "phf"]
 
 # Almost all features excluding "parallel"
 full-async = ["full", "futures"]

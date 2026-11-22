@@ -13,8 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
+- `Coerced<T>` implements `serde::Serialize` and `serde::Deserialize` when the new `serde` feature is enabled. Both impls are transparent: they serialize and deserialize exactly like the wrapped `T`, without adding any coercion of their own.
 
 ### Changed
+
+- The `full` and `full-wasi` features now enable `serde`.
 
 ### Deprecated
 
