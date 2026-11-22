@@ -468,7 +468,8 @@ impl<'js> Ctx<'js> {
         let stack_level = core::ffi::c_int::try_from(stack_level).unwrap();
         let atom = unsafe { qjs::JS_GetScriptOrModuleName(self.as_ptr(), stack_level) };
         #[allow(clippy::useless_conversion)] //needed for multi platform binding support
-        if qjs::__JS_ATOM_NULL == atom.try_into().unwrap() {
+        let atom_val: u32 = atom.try_into().unwrap();
+        if qjs::__JS_ATOM_NULL == atom_val {
             unsafe { qjs::JS_FreeAtom(self.as_ptr(), atom) };
             return None;
         }

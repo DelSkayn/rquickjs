@@ -600,7 +600,7 @@ mod test {
                 let globs = ctx.globals();
                 globs.set("ts", ts.into_js(&ctx).unwrap()).unwrap();
                 let res: i64 = ctx.eval("ts.getTime()").unwrap();
-                assert_eq!(-(millis as i64), res as _);
+                assert_eq!(-(millis as i64), res);
             });
         }
     }
