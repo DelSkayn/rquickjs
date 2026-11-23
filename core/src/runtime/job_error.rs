@@ -2,10 +2,11 @@
 //!
 //! QuickJS keeps a failing job's exception in a runtime-wide slot that the next
 //! job can overwrite or consume. Every drain therefore catches the exception
-//! immediately and keeps one copy in the runtime. [`JobError`] is a `Send`
-//! token for that copy; [`JobError::into_value`] clones it out with a context
-//! from the same runtime.
+//! immediately and keeps a copy in the runtime. [`JobError`] is a `Send` token
+//! for that copy; [`JobError::into_value`] clones it out with a context from
+//! the same runtime.
 
+use alloc::collections::VecDeque;
 use core::{
     fmt,
     mem::MaybeUninit,
@@ -14,10 +15,52 @@ use core::{
 };
 
 use super::opaque::RuntimeOpaque;
-use crate::{qjs, Ctx, Persistent, Result, Value};
+use crate::{qjs, Ctx, Error, Persistent, Result, Value};
 
 /// Process-wide ids so a token can never resolve to another runtime's error.
 static NEXT_JOB_ERROR_ID: AtomicU64 = AtomicU64::new(0);
+
+/// Retain enough failures that concurrently driven contexts can each keep one.
+/// The oldest is evicted once the queue is full, so memory stays bounded.
+pub(crate) const MAX_JOB_ERRORS: usize = 32;
+
+/// Bounded FIFO of failed-job exceptions.
+///
+/// Every access happens while the runtime lock is held, so this needs no lock
+/// of its own.
+#[derive(Default)]
+pub(crate) struct JobErrors {
+    entries: VecDeque<Entry>,
+}
+
+impl JobErrors {
+    /// Push a failure, returning an evicted entry for the caller to drop after
+    /// the borrow of `self` ends (a finalizer may re-enter `Opaque`).
+    pub(crate) fn push(&mut self, entry: Entry) -> Option<Entry> {
+        let evicted = if self.entries.len() == MAX_JOB_ERRORS {
+            self.entries.pop_front()
+        } else {
+            None
+        };
+        self.entries.push_back(entry);
+        evicted
+    }
+
+    /// Clone the exception with the given id out of the queue.
+    pub(crate) fn get<'js>(&self, id: u64, ctx: &Ctx<'js>) -> Result<Value<'js>> {
+        let entry = self
+            .entries
+            .iter()
+            .find(|e| e.id == id)
+            .ok_or(Error::JobErrorUnavailable)?;
+        entry.value.clone().restore(ctx)
+    }
+
+    /// Move every entry out before `JS_FreeRuntime`.
+    pub(crate) fn take_all(&mut self) -> VecDeque<Entry> {
+        core::mem::take(&mut self.entries)
+    }
+}
 
 /// A failed job's exception, kept inside its runtime.
 ///
@@ -26,10 +69,9 @@ static NEXT_JOB_ERROR_ID: AtomicU64 = AtomicU64::new(0);
 /// and `AsyncRuntime::drive`.
 ///
 /// The token carries no JavaScript value and is `Send`: the exception stays in
-/// its runtime until a newer job fails or the runtime is dropped. Only the most
-/// recent failure is available; older tokens return
-/// [`Error::JobErrorUnavailable`]. The value is cloned on extraction, so a
-/// token can be used more than once.
+/// its runtime until it is evicted by an older-first FIFO (holding up to
+/// [`MAX_JOB_ERRORS`](MAX_JOB_ERRORS) failures) or the runtime is dropped.
+/// The value is cloned on extraction, so a token can be used more than once.
 #[derive(Clone)]
 pub struct JobError {
     pub(crate) id: u64,
@@ -57,21 +99,21 @@ impl JobError {
     /// `ctx` must belong to the runtime the job ran in — not necessarily the
     /// same context. Ids are process-wide unique, so a context from another
     /// runtime cannot resolve to a different exception; [`Error::JobErrorUnavailable`]
-    /// is returned instead. It is also returned if a newer job has failed, or
-    /// the runtime was dropped.
+    /// is returned instead. It is also returned if the failure was evicted
+    /// from the bounded FIFO, or the runtime was dropped.
     pub fn into_value<'js>(&self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
         // SAFETY: a `Ctx` is only usable while the runtime lock is held, which
-        // is what guards the runtime-owned slot.
+        // is what guards the runtime-owned queue.
         unsafe { ctx.get_runtime_opaque().take_job_error(self.id, ctx) }
     }
 }
 
-/// The single retained exception. Replaced, and thus freed, on the next failure.
+/// One retained exception.
 pub(crate) struct Entry {
     pub(crate) id: u64,
     // SAFETY: `Persistent` erases the runtime borrow to `'static`. The entry is
-    // dropped in `RuntimeOpaque::clear` before `JS_FreeRuntime`, and `restore`
-    // rebinds a clone to a live `Ctx` from the same runtime.
+    // dropped in `RuntimeOpaque::clear` or on eviction, before `JS_FreeRuntime`,
+    // and `restore` rebinds a clone to a live `Ctx` from the same runtime.
     pub(crate) value: Persistent<Value<'static>>,
 }
 
@@ -163,7 +205,7 @@ mod test {
     }
 
     #[test]
-    fn a_newer_failure_replaces_an_unread_one() {
+    fn multiple_failures_are_all_retained() {
         let rt = Runtime::new().unwrap();
         let ctx = Context::full(&rt).unwrap();
         ctx.with(|ctx| {
@@ -175,10 +217,7 @@ mod test {
 
             let first = ctx.drain_jobs().unwrap_err();
             let second = ctx.drain_jobs().unwrap_err();
-            assert!(matches!(
-                first.into_value(&ctx),
-                Err(Error::JobErrorUnavailable)
-            ));
+            assert_eq!(message_of(&ctx, &first), "first");
             assert_eq!(message_of(&ctx, &second), "second");
         });
     }
@@ -302,6 +341,36 @@ mod test {
                 err.into_value(&ctx),
                 Err(Error::JobErrorUnavailable)
             ));
+        });
+    }
+
+    #[test]
+    fn oldest_errors_are_evicted_from_the_fifo() {
+        let rt = Runtime::new().unwrap();
+        let ctx = Context::full(&rt).unwrap();
+        ctx.with(|ctx| {
+            let mut errors = Vec::new();
+            for i in 0..super::MAX_JOB_ERRORS {
+                ctx.eval::<(), _>(format!(
+                    "queueMicrotask(() => {{ throw new Error('e{i}'); }})"
+                ))
+                .unwrap();
+                errors.push(ctx.drain_jobs().unwrap_err());
+            }
+            // All retained so far.
+            assert_eq!(message_of(&ctx, &errors[0]), "e0");
+
+            ctx.eval::<(), _>("queueMicrotask(() => { throw new Error('new'); })")
+                .unwrap();
+            let newest = ctx.drain_jobs().unwrap_err();
+
+            // The oldest was evicted, the rest survived.
+            assert!(matches!(
+                errors[0].into_value(&ctx),
+                Err(Error::JobErrorUnavailable)
+            ));
+            assert_eq!(message_of(&ctx, &errors[1]), "e1");
+            assert_eq!(message_of(&ctx, &newest), "new");
         });
     }
 
