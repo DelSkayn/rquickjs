@@ -291,7 +291,7 @@ impl<'js> Constructor<'js> {
 
 #[cfg(test)]
 mod test {
-    use crate::{prelude::*, *};
+    use crate::{function::Args, prelude::*, *};
     use approx::assert_abs_diff_eq as assert_approx_eq;
 
     #[test]
@@ -447,6 +447,69 @@ mod test {
             let c: Value = g.get("called").unwrap();
             assert_eq!(c.type_of(), Type::Bool);
         });
+    }
+
+    /// Calls `defer(f, this, n)` for `n` in `0..=6`, where `f` records the `this` and arguments
+    /// it is called with, then checks that the `n`th deferred call received `this` and `1..=n`.
+    fn check_deferred_calls(defer: impl for<'js> Fn(&Function<'js>, &Object<'js>, usize)) {
+        test_with(|ctx| {
+            let f: Function = ctx
+                .eval("var calls = []; (function (...args) { calls.push([this, ...args]); })")
+                .unwrap();
+            let this = Object::new(ctx.clone()).unwrap();
+            for n in 0..=6 {
+                defer(&f, &this, n);
+            }
+            while ctx.execute_pending_job() {}
+
+            let calls: Vec<Vec<Value>> = ctx.globals().get("calls").unwrap();
+            assert_eq!(calls.len(), 7);
+            for (n, call) in calls.iter().enumerate() {
+                assert_eq!(call[0], *this.as_value());
+                let args: Vec<i32> = call[1..].iter().map(|v| v.as_int().unwrap()).collect();
+                assert_eq!(args, (1..=n as i32).collect::<Vec<_>>());
+            }
+        })
+    }
+
+    #[test]
+    fn call_js_fn_with_0_to_6_args_deferred() {
+        check_deferred_calls(|f, this, n| {
+            let this = This(this.clone());
+            match n {
+                0 => f.defer((this,)),
+                1 => f.defer((this, 1)),
+                2 => f.defer((this, 1, 2)),
+                3 => f.defer((this, 1, 2, 3)),
+                4 => f.defer((this, 1, 2, 3, 4)),
+                5 => f.defer((this, 1, 2, 3, 4, 5)),
+                6 => f.defer((this, 1, 2, 3, 4, 5, 6)),
+                _ => unreachable!(),
+            }
+            .unwrap()
+        });
+    }
+
+    #[test]
+    fn call_js_fn_with_0_to_6_sized_args_deferred() {
+        check_deferred_calls(|f, this, n| {
+            let mut args = Args::new(f.ctx().clone(), n);
+            args.this(this.clone()).unwrap();
+            args.push_args(1..=n as i32).unwrap();
+            f.defer_arg(args).unwrap();
+        });
+    }
+
+    #[test]
+    fn call_js_fn_with_more_args_than_reserved() {
+        test_with(|ctx| {
+            let f: Function = ctx.eval("(...args) => args").unwrap();
+            let objs: Vec<Object> = (0..6).map(|_| Object::new(ctx.clone()).unwrap()).collect();
+            let mut args = Args::new(ctx.clone(), 2);
+            args.push_args(objs.iter().cloned()).unwrap();
+            let res: Vec<Object> = f.call_arg(args).unwrap();
+            assert_eq!(res, objs);
+        })
     }
 
     fn test() {
