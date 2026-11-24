@@ -434,7 +434,7 @@ impl RawRuntime {
     /// exception and return control flow to the caller.
     pub unsafe fn set_interrupt_handler(&mut self, handler: Option<InterruptHandler>) {
         unsafe extern "C" fn interrupt_handler_trampoline(
-            _rt: *mut qjs::JSRuntime,
+            _ctx: *mut qjs::JSContext,
             opaque: *mut ::core::ffi::c_void,
         ) -> ::core::ffi::c_int {
             // This should be safe as the value is set below to a non-null pointer.
