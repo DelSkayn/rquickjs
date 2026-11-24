@@ -433,7 +433,12 @@ impl<'js> Module<'js, Declared> {
             let base_name_c_str =
                 qjs::JS_AtomToCStringLen(ctx.as_ptr(), null_mut(), base_name.atom);
 
-            let res = qjs::JS_LoadModule(ctx.as_ptr(), base_name_c_str, specifier.as_ptr());
+            let res = qjs::JS_LoadModule(
+                ctx.as_ptr(),
+                base_name_c_str,
+                specifier.as_ptr(),
+                qjs::JS_UNDEFINED,
+            );
 
             qjs::JS_FreeCString(ctx.as_ptr(), base_name_c_str);
 
