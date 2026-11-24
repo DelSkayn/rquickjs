@@ -272,8 +272,14 @@ impl<'js> Module<'js, Declared> {
             qjs::JS_VALUE_GET_TAG(module_val)
         });
         let module_ptr = unsafe {
-            NonNull::new(qjs::JS_VALUE_GET_PTR(module_val).cast()).ok_or(Error::Unknown)?
+            NonNull::new(qjs::JS_VALUE_GET_PTR(module_val).cast()).ok_or_else(|| {
+                qjs::JS_FreeValue(ctx.as_ptr(), module_val);
+                Error::Unknown
+            })?
         };
+        // The module is owned by the context's module list; the value only
+        // holds an extra reference that we must release.
+        unsafe { qjs::JS_FreeValue(ctx.as_ptr(), module_val) };
         unsafe { Ok(Module::from_ptr(ctx, module_ptr)) }
     }
 
@@ -347,8 +353,15 @@ impl<'js> Module<'js, Declared> {
         };
         let module = ctx.handle_exception(module)?;
         debug_assert_eq!(qjs::JS_TAG_MODULE, unsafe { qjs::JS_VALUE_GET_TAG(module) });
-        let module_ptr =
-            unsafe { NonNull::new(qjs::JS_VALUE_GET_PTR(module).cast()).ok_or(Error::Unknown)? };
+        let module_ptr = unsafe {
+            NonNull::new(qjs::JS_VALUE_GET_PTR(module).cast()).ok_or_else(|| {
+                qjs::JS_FreeValue(ctx.as_ptr(), module);
+                Error::Unknown
+            })?
+        };
+        // The module is owned by the context's module list; the value only
+        // holds an extra reference that we must release.
+        unsafe { qjs::JS_FreeValue(ctx.as_ptr(), module) };
         unsafe { Ok(Module::from_ptr(ctx, module_ptr)) }
     }
 
