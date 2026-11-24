@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Added `String::to_string_lossy()` to convert strings containing invalid UTF-8 using replacement characters.
+- Added `String::to_string_lossy()` and `Atom::to_string_lossy()` to convert strings containing invalid UTF-8 using replacement characters.
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 - Shipped pre-generated `rquickjs-sys` bindings for `wasm32-wasip3`, so the target builds without the `bindgen` feature.
