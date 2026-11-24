@@ -58,20 +58,23 @@ impl<'js> Args<'js> {
 
     /// Add an argument to the list.
     pub fn push_arg<T: IntoJs<'js>>(&mut self, arg: T) -> Result<()> {
-        let v = arg.into_js(&self.ctx)?;
+        let v = arg.into_js(&self.ctx)?.into_js_value();
 
         match self.args {
             ArgsSlice::Stack {
                 ref mut slice,
                 ref mut offset,
-            } => {
-                if *offset >= 8 {
-                    panic!("pushed more arguments than num_args returned");
-                }
-                slice[*offset as usize] = v.into_js_value();
+            } if (*offset as usize) < ARGS_ON_STACK => {
+                slice[*offset as usize] = v;
                 *offset += 1;
             }
-            ArgsSlice::Heap(ref mut h) => h.push(v.into_js_value()),
+            ArgsSlice::Stack { slice, offset } => {
+                let mut heap = Vec::with_capacity(ARGS_ON_STACK * 2);
+                heap.extend_from_slice(&slice[..offset as usize]);
+                heap.push(v);
+                self.args = ArgsSlice::Heap(heap);
+            }
+            ArgsSlice::Heap(ref mut h) => h.push(v),
         }
 
         Ok(())
