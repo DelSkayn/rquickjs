@@ -9,8 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+- `CString` now defaults to WTF-8 with byte access only. Call `validate()` or use `CString<'js, Utf8>` to access `str`.
+
 ### Added
 
+- Added `String::to_string_lossy()` to convert strings containing invalid UTF-8 using replacement characters.
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 - Shipped pre-generated `rquickjs-sys` bindings for `wasm32-wasip3`, so the target builds without the `bindgen` feature.
