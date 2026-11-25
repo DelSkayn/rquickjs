@@ -1,6 +1,6 @@
 //! JavaScript array types.
 
-use crate::{atom::PredefinedAtom, qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
+use crate::{qjs, Ctx, FromJs, IntoJs, Object, Result, Value};
 use core::{iter::FusedIterator, marker::PhantomData};
 
 use super::convert::FromIteratorJs;
@@ -30,11 +30,10 @@ impl<'js> Array<'js> {
     pub fn len(&self) -> usize {
         let ctx = self.ctx();
         let value = self.0.as_js_value();
-        unsafe {
-            let val = qjs::JS_GetProperty(ctx.as_ptr(), value, PredefinedAtom::Length as _);
-            assert!(qjs::JS_IsInt(val));
-            qjs::JS_VALUE_GET_INT(val) as _
-        }
+        let mut len: i64 = 0;
+        let res = unsafe { qjs::JS_GetLength(ctx.as_ptr(), value, &mut len) };
+        assert!(res >= 0, "getting the length of an array should not fail");
+        len as _
     }
 
     /// Returns whether a JavaScript array is empty.
@@ -181,6 +180,24 @@ where
 mod test {
 
     use crate::*;
+    #[test]
+    fn len_above_i32_max() {
+        test_with(|ctx| {
+            let val: Array = ctx
+                .eval(
+                    r#"
+                let a = [];
+                a.length = 2 ** 32 - 1;
+                a
+                "#,
+                )
+                .unwrap();
+            assert_eq!(val.len(), 4_294_967_295);
+            assert!(!val.is_empty());
+            assert!(!ctx.has_exception());
+        });
+    }
+
     #[test]
     fn from_javascript() {
         test_with(|ctx| {
