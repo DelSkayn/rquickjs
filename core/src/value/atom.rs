@@ -1,8 +1,8 @@
 //!  QuickJS atom functionality.
 
 use crate::{qjs, Ctx, Error, Result, String, Value};
-use alloc::string::{String as StdString, ToString as _};
-use core::{ffi::CStr, hash::Hash, ptr::null_mut};
+use alloc::string::String as StdString;
+use core::hash::Hash;
 
 mod predefined;
 pub use predefined::PredefinedAtom;
@@ -110,22 +110,15 @@ impl<'js> Atom<'js> {
         unsafe { Atom::from_atom_val(ctx, predefined as qjs::JSAtom) }
     }
 
-    /// Convert the atom to a JavaScript string.
+    /// Convert the atom to a Rust string.
     pub fn to_string(&self) -> Result<StdString> {
-        unsafe {
-            let c_str = qjs::JS_AtomToCStringLen(self.ctx.as_ptr(), null_mut(), self.atom);
-            if c_str.is_null() {
-                // Might not ever happen but I am not 100% sure
-                // so just incase check it.
-                qjs::JS_FreeCString(self.ctx.as_ptr(), c_str);
-                return Err(Error::Unknown);
-            }
-            let bytes = CStr::from_ptr(c_str).to_bytes();
-            // Safety: QuickJS should return valid utf8 so this should be safe.
-            let res = core::str::from_utf8_unchecked(bytes).to_string();
-            qjs::JS_FreeCString(self.ctx.as_ptr(), c_str);
-            Ok(res)
-        }
+        self.to_js_string()?.to_string()
+    }
+
+    /// Convert the atom to a Rust string, replacing invalid UTF-8 sequences
+    /// with the Unicode replacement character (`U+FFFD`).
+    pub fn to_string_lossy(&self) -> Result<StdString> {
+        self.to_js_string()?.to_string_lossy()
     }
 
     /// Convert the atom to a JavaScript string.
@@ -177,6 +170,42 @@ impl<'js> Drop for Atom<'js> {
 #[cfg(test)]
 mod test {
     use crate::*;
+    #[test]
+    fn to_string() {
+        test_with(|ctx| {
+            for text in ["", "hello", "hello\0😀"] {
+                let atom = Atom::from_str(ctx.clone(), text).unwrap();
+                assert_eq!(atom.to_string().unwrap(), text);
+            }
+            let atom = Atom::from_u32(ctx.clone(), 123).unwrap();
+            assert_eq!(atom.to_string().unwrap(), "123");
+
+            for source in [r#""\ud800""#, r#""\udfff""#] {
+                let value: Value = ctx.eval(source).unwrap();
+                let atom = Atom::from_value(ctx.clone(), &value).unwrap();
+                assert!(matches!(atom.to_string(), Err(Error::Utf8(_))));
+            }
+        });
+    }
+
+    #[test]
+    fn to_string_lossy() {
+        test_with(|ctx| {
+            for text in ["", "hello", "hello\0😀"] {
+                let atom = Atom::from_str(ctx.clone(), text).unwrap();
+                assert_eq!(atom.to_string_lossy().unwrap(), text);
+            }
+            let atom = Atom::from_u32(ctx.clone(), 123).unwrap();
+            assert_eq!(atom.to_string_lossy().unwrap(), "123");
+
+            for source in [r#""\ud800""#, r#""\udfff""#] {
+                let value: Value = ctx.eval(source).unwrap();
+                let atom = Atom::from_value(ctx.clone(), &value).unwrap();
+                assert_eq!(atom.to_string_lossy().unwrap(), "���");
+            }
+        });
+    }
+
     #[test]
     fn to_value() {
         test_with(|ctx| {

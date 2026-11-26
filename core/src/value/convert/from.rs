@@ -1,6 +1,6 @@
 use crate::{
     convert::List, Array, CString, Ctx, Error, FromAtom, FromJs, Object, Result, StdString, String,
-    Type, Value,
+    Type, Utf8, Value,
 };
 use alloc::{
     boxed::Box,
@@ -64,6 +64,12 @@ impl<'js> FromJs<'js> for char {
 impl<'js> FromJs<'js> for CString<'js> {
     fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
         String::from_value(value)?.to_cstring()
+    }
+}
+
+impl<'js> FromJs<'js> for CString<'js, Utf8> {
+    fn from_js(_ctx: &Ctx<'js>, value: Value<'js>) -> Result<Self> {
+        String::from_value(value)?.to_cstring()?.validate()
     }
 }
 

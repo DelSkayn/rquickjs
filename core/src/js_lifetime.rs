@@ -1,6 +1,6 @@
 use crate::{
-    atom, value::Constructor, Array, Atom, BigInt, CString, Exception, Function, Module, Object,
-    Promise, Proxy, String, Symbol, Value,
+    atom, value::Constructor, Array, Atom, BigInt, CString, CStringEncoding, Exception, Function,
+    Module, Object, Promise, Proxy, String, Symbol, Value,
 };
 
 /// The trait which signifies a type using the rquickjs `'js` lifetime trick for maintaining safety around Javascript values.
@@ -97,7 +97,6 @@ outlive_impls! {
     Value,
     Symbol,
     String,
-    CString,
     Object,
     Array,
     BigInt,
@@ -107,6 +106,10 @@ outlive_impls! {
     Proxy,
     Exception,
     Atom,
+}
+
+unsafe impl<'js, E: CStringEncoding> JsLifetime<'js> for CString<'js, E> {
+    type Changed<'to> = CString<'to, E>;
 }
 
 macro_rules! impl_outlive{
