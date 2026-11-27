@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Breaking Changes
 
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.15.0] - 2026-11-27
+
+### Breaking Changes
+
 - `Ctx::execute_pending_job` is replaced by `Ctx::drain_jobs`, which drains the queue and returns `Result<(), JobError>` instead of `bool`. `Runtime::execute_pending_job`, `AsyncRuntime::execute_pending_job`, `JobException` and `AsyncJobException` are removed.
 - `AsyncContext::async_with`, `AsyncRuntime::idle` and `AsyncRuntime::drive` now return `Result<_, JobError>`.
 - `CString` now defaults to WTF-8 with byte access only. Call `validate()` or use `CString<'js, Utf8>` to access `str`.
@@ -26,8 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every API that runs jobs now reports a failed job instead of dropping its exception. Drains stop at the first failure; calling them again continues with the remaining queue.
 - `Promise::finish` rethrows a failed job's exception instead of returning `Error::WouldBlock`.
 - A Rust panic raised inside a job is resumed at the failure site instead of being turned into a JavaScript value.
-
-### Deprecated
 
 ### Removed
 
@@ -48,8 +62,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failed jobs' exceptions are no longer lost: they are caught at the moment the job fails and retained until the `JobError` handle is used or dropped.
 - The runtime lock is no longer left poisoned when a Rust panic unwinds out of a `Context::with` closure.
 - Fixed `Function::defer` panicking with 3 or 4 arguments, and `Args` panicking when more arguments are pushed than it was created with
-
-### Security
 
 ## [0.14.0] - 2026-09-17
 
