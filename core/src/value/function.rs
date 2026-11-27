@@ -441,7 +441,7 @@ mod test {
             assert_eq!(c.type_of(), Type::Undefined);
         });
         assert!(rt.is_job_pending());
-        rt.execute_pending_job().unwrap();
+        ctx.with(|ctx| ctx.drain_jobs().unwrap());
         ctx.with(|ctx| {
             let g = ctx.globals();
             let c: Value = g.get("called").unwrap();
@@ -460,7 +460,7 @@ mod test {
             for n in 0..=6 {
                 defer(&f, &this, n);
             }
-            while ctx.execute_pending_job() {}
+            ctx.drain_jobs().unwrap();
 
             let calls: Vec<Vec<Value>> = ctx.globals().get("calls").unwrap();
             assert_eq!(calls.len(), 7);
