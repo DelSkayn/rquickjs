@@ -28,12 +28,23 @@ pub(crate) const MAX_JOB_ERRORS: usize = 32;
 ///
 /// Every access happens while the runtime lock is held, so this needs no lock
 /// of its own.
-#[derive(Default)]
 pub(crate) struct JobErrors {
     entries: VecDeque<Entry>,
 }
 
+impl Default for JobErrors {
+    fn default() -> Self {
+        Self::with_capacity(MAX_JOB_ERRORS)
+    }
+}
+
 impl JobErrors {
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            entries: VecDeque::with_capacity(capacity),
+        }
+    }
+
     /// Push a failure, returning an evicted entry for the caller to drop after
     /// the borrow of `self` ends (a finalizer may re-enter `Opaque`).
     pub(crate) fn push(&mut self, entry: Entry) -> Option<Entry> {
