@@ -1,8 +1,8 @@
 use crate::{
     convert::{IteratorJs, List},
     value::Constructor,
-    Array, CString, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult, StdString, String,
-    Value,
+    Array, CString, CStringEncoding, Ctx, Error, IntoAtom, IntoJs, Object, Result, StdResult,
+    StdString, String, Value,
 };
 use alloc::{
     boxed::Box,
@@ -62,15 +62,15 @@ impl<'js> IntoJs<'js> for char {
     }
 }
 
-impl<'js> IntoJs<'js> for CString<'js> {
+impl<'js, E: CStringEncoding> IntoJs<'js> for CString<'js, E> {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
-        String::from_str(ctx.clone(), self.as_str()).map(|String(value)| value)
+        self.to_value(ctx)
     }
 }
 
-impl<'js> IntoJs<'js> for &CString<'js> {
+impl<'js, E: CStringEncoding> IntoJs<'js> for &CString<'js, E> {
     fn into_js(self, ctx: &Ctx<'js>) -> Result<Value<'js>> {
-        String::from_str(ctx.clone(), self.as_str()).map(|String(value)| value)
+        self.to_value(ctx)
     }
 }
 

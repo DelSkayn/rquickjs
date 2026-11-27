@@ -24,7 +24,7 @@ pub use module::{Module, WriteOptions, WriteOptionsEndianness};
 pub use object::{Filter, Object};
 pub use promise::Promise;
 pub use proxy::Proxy;
-pub use string::{CString, String};
+pub use string::{CString, CStringEncoding, String, Utf8, Wtf8};
 pub use symbol::Symbol;
 
 pub mod array_buffer;

@@ -134,10 +134,12 @@ check(
 );
 
 // ------------------------------------------------------------- memory limit
+// QuickJS makes OOM uncatchable from JS, so the host sees the error rather
+// than the script's catch handler. The engine must remain usable afterwards.
 const bomb = evalJs(
   "try { const arr = []; while (true) arr.push(new Array(65536).fill(1)); } catch (e) { 'contained: ' + e.message }",
 );
-check("memory-limit", bomb.startsWith('OK:"contained: '), bomb.split("\n")[0]);
+check("memory-limit", bomb.startsWith("ERR:Error: out of memory"), bomb.split("\n")[0]);
 
 // the engine is still usable after every limit fired.
 check("still-alive", evalJs("1 + 1") === "OK:2", evalJs("1 + 1"));

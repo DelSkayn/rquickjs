@@ -11,9 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `Ctx::execute_pending_job` is replaced by `Ctx::drain_jobs`, which drains the queue and returns `Result<(), JobError>` instead of `bool`. `Runtime::execute_pending_job`, `AsyncRuntime::execute_pending_job`, `JobException` and `AsyncJobException` are removed.
 - `AsyncContext::async_with`, `AsyncRuntime::idle` and `AsyncRuntime::drive` now return `Result<_, JobError>`.
+- `CString` now defaults to WTF-8 with byte access only. Call `validate()` or use `CString<'js, Utf8>` to access `str`.
 
 ### Added
 
+- Added `String::to_string_lossy()` and `Atom::to_string_lossy()` to convert strings containing invalid UTF-8 using replacement characters.
 - `#[rquickjs::methods]` accepts `enumerable`, `configurable`, and `writable` on functions, and `= false` to disable default attributes
 - Added `Value::loose_eq`, `Value::strict_eq`, `Value::same_value`, and `Value::same_value_zero` which map to the various concepts of equality exposed by QuickJS.
 - Shipped pre-generated `rquickjs-sys` bindings for `wasm32-wasip3`, so the target builds without the `bindgen` feature.
@@ -45,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed `Value::new_number` turning `-0.0` into `+0.0`
 - Failed jobs' exceptions are no longer lost: they are caught at the moment the job fails and retained until the `JobError` handle is used or dropped.
 - The runtime lock is no longer left poisoned when a Rust panic unwinds out of a `Context::with` closure.
+- Fixed `Function::defer` panicking with 3 or 4 arguments, and `Args` panicking when more arguments are pushed than it was created with
 
 ### Security
 

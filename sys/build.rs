@@ -216,6 +216,16 @@ fn main() {
         let flag = format!("-isystem{}", vendor_include.display());
         builder.flag(&flag);
         bindgen_cflags.push(flag);
+
+        // quickjs now includes <fcntl.h> unconditionally; the vendored wasi-libc
+        // headers have no such header and no O_* flags are used under EMSCRIPTEN.
+        println!("cargo:rerun-if-changed=wasm-shim/include");
+        let shim_include = Path::new("wasm-shim/include")
+            .canonicalize()
+            .expect("wasm-shim/include is missing");
+        let flag = format!("-isystem{}", shim_include.display());
+        builder.flag(&flag);
+        bindgen_cflags.push(flag);
     }
 
     for file in source_files.iter().chain(header_files.iter()) {

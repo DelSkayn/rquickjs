@@ -7,6 +7,7 @@
 // keeps the corresponding wasi-libc member (and its wasi imports) out of the
 // link entirely.
 #include <assert.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -39,6 +40,25 @@ struct tm *localtime_r(const time_t *restrict t, struct tm *restrict tm) {
     (void)t;
     memset(tm, 0, sizeof(*tm));
     return tm;
+}
+
+// QuickJS seeds its hash tables and Math.random from OS entropy. The clock is
+// the only authority available here, so mix it with xorshift64* instead of
+// pulling in wasi-libc's random_get import.
+int getentropy(void *buffer, size_t length) {
+    static uint64_t state;
+    if (!state) {
+        state = (uint64_t)__rquickjs_host_now_us() | 1;
+    }
+    uint8_t *out = (uint8_t *)buffer;
+    while (length > 0) {
+        state ^= state >> 12;
+        state ^= state << 25;
+        state ^= state >> 27;
+        *out++ = (uint8_t)((state * 2685821657736338717ULL) >> 56);
+        length--;
+    }
+    return 0;
 }
 
 _Noreturn void abort(void) { __builtin_trap(); }
